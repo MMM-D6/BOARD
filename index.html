@@ -80,6 +80,11 @@
   #hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
     font-size:13px;opacity:.32;line-height:2;pointer-events:none;z-index:5}
   body.hidecur,body.hidecur *{cursor:none !important}
+  .card.lk .ring{border-style:dashed}
+  .card.lk .rs{display:none !important}
+  #marq{position:fixed;z-index:30;display:none;border:1px solid var(--sel);
+    background:rgba(125,125,125,.13);border-radius:2px;pointer-events:none}
+  #stage.space{cursor:grab}
   #status{position:fixed;right:14px;bottom:12px;z-index:40;font:400 11px/1.7 "IBM Plex Mono",monospace;
     opacity:.32;pointer-events:none;text-align:right}
   #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:95;
@@ -89,6 +94,7 @@
 </style>
 
 <div id="stage"><div id="world"><svg id="links"></svg><div id="cards"></div></div></div>
+<div id="marq"></div>
 <div id="hint"></div>
 <div id="status"></div>
 <div id="toast"></div>
@@ -119,11 +125,13 @@ const T={
   reverse:"Reverse direction",delLink:"Delete connector",
   exitPresentation:"Exit presentation",prev:"Prev",next:"Next",overview:"Overview",
   fullscreen:"Full screen",exitFullscreen:"Leave full screen",
+  group:"Group selection",ungroup:"Ungroup",lockGroup:"Lock group",unlockGroup:"Unlock group",
+  lockedNote:"This group is locked",defaultText:"Default text style…",defTitle:"Default text style",
   tsTitle:"Text style",font:"Font",size:"Size",weight:"Weight",tracking:"Tracking",leading:"Leading",
   alignRow:"Align",colourRow:"Colour",applyAll:"Apply to every card",appliedAll:"Applied to every card",
   clickTarget:"Click another card to connect. Esc to cancel.",
   placeholder:"Add text",newText:"Text",
-  hint:"Empty canvas<br>Press Ctrl / Cmd + V to paste an image, or drop one in<br>Right click anywhere for the menu",
+  hint:"Empty canvas<br>Press Ctrl / Cmd + V to paste an image, or drop one in<br>Right click anywhere for the menu<br>Drag to select, hold Space or Alt to pan",
   lockOn:"Presentation lock is on. Click a card to zoom in.",
   savedTo:"Saved to",saveNamePrompt:"File name",noHandle:"Choose a file with Save as first",
   bg:["Off white","Light grey","Mid grey","White","Warm sand","Deep green","Black"],
@@ -147,11 +155,13 @@ const T={
   reverse:"反转方向",delLink:"删除连线",
   exitPresentation:"退出演示",prev:"上一个",next:"下一个",overview:"总览",
   fullscreen:"全屏显示",exitFullscreen:"退出全屏",
+  group:"编组",ungroup:"取消编组",lockGroup:"锁定该组",unlockGroup:"解锁该组",
+  lockedNote:"该组已锁定",defaultText:"默认文字格式…",defTitle:"默认文字格式",
   tsTitle:"文字样式",font:"字体",size:"字号",weight:"字重",tracking:"字距",leading:"行距",
   alignRow:"对齐",colourRow:"颜色",applyAll:"应用到全部卡片",appliedAll:"已应用到全部卡片",
   clickTarget:"点击另一张卡片完成连线，Esc 取消",
   placeholder:"添加文字",newText:"文字",
-  hint:"空白画布<br>Ctrl / Cmd + V 粘贴图片，或直接拖入图片<br>右键任意位置打开菜单",
+  hint:"空白画布<br>Ctrl / Cmd + V 粘贴图片，或直接拖入图片<br>右键任意位置打开菜单<br>空白处拖动为框选，按住空格或 Alt 拖动为平移",
   lockOn:"已进入演示锁定，点击卡片可放大聚焦",
   savedTo:"已保存到",saveNamePrompt:"文件名",noHandle:"请先用另存为选择文件",
   bg:["米白","浅灰","中灰","纯白","暖沙","深绿","深黑"],
@@ -183,17 +193,27 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* ================= state ================= */
 const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",italic:false,color:"#111111"};
 const DEFLINK={kind:"curve",dash:false,arrow:"end",w:1.4,color:"#8A8A85"};
-let S={bg:"#F4F4F2",cards:[],links:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",focusClick:false};
-let sel=[], selLink=null, editing=false, linkFrom=null, lock=false;
+let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",focusClick:false};
+let sel=[], selLink=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
 let undo=[], redo=[], mouse={x:innerWidth/2,y:innerHeight/2}, focusIdx=-1;
 const card=id=>S.cards.find(c=>c.id===id);
+const groupOf=id=>(S.groups||[]).find(g=>g.ids.includes(id));
+const isLocked=id=>{const g=groupOf(id);return !!(g&&g.locked)};
+const expand=ids=>{const out=new Set();
+  ids.forEach(i=>{const g=groupOf(i);(g?g.ids:[i]).forEach(x=>{if(card(x))out.add(x)})});
+  return [...out]};
+const freeSel=()=>sel.filter(i=>!isLocked(i));
+function cleanGroups(){
+  S.groups=(S.groups||[]).map(g=>({...g,ids:g.ids.filter(i=>card(i))})).filter(g=>g.ids.length>1);
+}
 const size={};
-function snap(){undo.push(JSON.stringify({cards:S.cards,links:S.links}));if(undo.length>50)undo.shift();redo=[]}
+function snap(){undo.push(JSON.stringify({cards:S.cards,links:S.links,groups:S.groups}));if(undo.length>50)undo.shift();redo=[]}
 function applyUndo(stack,other){
   if(!stack.length)return;
-  other.push(JSON.stringify({cards:S.cards,links:S.links}));
-  const p=JSON.parse(stack.pop());S.cards=p.cards;S.links=p.links;sel=[];selLink=null;render();save();
+  other.push(JSON.stringify({cards:S.cards,links:S.links,groups:S.groups}));
+  const p=JSON.parse(stack.pop());S.cards=p.cards;S.links=p.links;S.groups=p.groups||[];
+  sel=[];selLink=null;render();save();
 }
 
 /* ================= storage ================= */
@@ -330,7 +350,7 @@ function isDark(h){if(!h||h[0]!=="#")return false;
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
-  el.className="card"+(sel.includes(c.id)?" sel":"");
+  el.className="card"+(sel.includes(c.id)?" sel":"")+(isLocked(c.id)?" lk":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
   if(c.src){
@@ -351,12 +371,12 @@ function makeCard(c){
 
   const ring=document.createElement("div");ring.className="ring";el.appendChild(ring);
   const rs=document.createElement("div");rs.className="rs";
-  rs.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();startResize(e,c)});
+  rs.addEventListener("pointerdown",e=>{if(lock||isLocked(c.id))return;e.stopPropagation();startResize(e,c)});
   el.appendChild(rs);
   [["t","50%","0%"],["b","50%","100%"],["l","0%","50%"],["r","100%","50%"]].forEach(([k,L,TP])=>{
     const d=document.createElement("div");d.className="port";d.dataset.side=k;
     d.style.left=L;d.style.top=TP;d.style.transform="translate(-50%,-50%)";
-    d.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();startLink(e,c,k)});
+    d.addEventListener("pointerdown",e=>{if(lock||isLocked(c.id))return;e.stopPropagation();startLink(e,c,k)});
     el.appendChild(d);
   });
 
@@ -366,8 +386,11 @@ function makeCard(c){
     if(editing&&cap.isContentEditable)return;
     e.stopPropagation();
     if(linkFrom){finishLinkClick(c);return}
-    if(e.shiftKey){sel.includes(c.id)?sel=sel.filter(i=>i!==c.id):sel.push(c.id)}
-    else if(!sel.includes(c.id))sel=[c.id];
+    const ids=expand([c.id]);
+    if(e.shiftKey){
+      if(ids.every(i=>sel.includes(i)))sel=sel.filter(i=>!ids.includes(i));
+      else sel=[...new Set([...sel,...ids])];
+    }else if(!ids.every(i=>sel.includes(i)))sel=[...ids];
     selLink=null;paintSel();
     startMove(e,()=>{if(S.focusClick&&!e.shiftKey)focusCard(c)});
   });
@@ -388,6 +411,7 @@ function measure(){document.querySelectorAll(".card").forEach(el=>{
   size[el.dataset.id]={w:el.offsetWidth,h:el.offsetHeight}})}
 function editText(c){
   if(lock)return;
+  if(isLocked(c.id)){toast(t("lockedNote"));return}
   const el=document.querySelector(`.card[data-id="${c.id}"] .cap`);if(!el)return;
   editing=true;el.contentEditable="true";el.focus();
   const r=document.createRange();r.selectNodeContents(el);
@@ -472,7 +496,8 @@ function finishLinkClick(c){
 function startMove(e,onClick){
   if(lock)return;
   snap();
-  const list=sel.map(card).filter(Boolean).map(o=>({o,x:o.x,y:o.y}));
+  const list=freeSel().map(card).filter(Boolean).map(o=>({o,x:o.x,y:o.y}));
+  if(!list.length){if(sel.length)toast(t("lockedNote"));return}
   const sx=e.clientX,sy=e.clientY;let moved=false;
   const mv=ev=>{
     let dx=(ev.clientX-sx)/cam.z,dy=(ev.clientY-sy)/cam.z;
@@ -488,6 +513,7 @@ function startMove(e,onClick){
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
 function startResize(e,c){
+  if(isLocked(c.id))return;
   snap();const sx=e.clientX,ow=c.w;
   const el=document.querySelector(`.card[data-id="${c.id}"]`);
   const mv=ev=>{c.w=Math.round(clamp(ow+(ev.clientX-sx)/cam.z,60,3000));
@@ -546,14 +572,45 @@ stage.addEventListener("pointerdown",e=>{
   closeMenus();
   if(linkFrom){linkFrom=null;stage.style.cursor="";toast("")}
   if(e.button===2)return;
-  if(sel.length||selLink){sel=[];selLink=null;paintSel()}
   if(lock&&e.detail===2){fit();return}
+  const wantPan=lock||e.button===1||spaceDown||e.altKey;
+  if(wantPan){startPan(e);return}
+  startMarquee(e);
+});
+function startPan(e){
   stage.classList.add("pan");
   const sx=e.clientX,sy=e.clientY,ox=tgt.x,oy=tgt.y;
   const mv=ev=>{camTo(ox+ev.clientX-sx,oy+ev.clientY-sy,tgt.z,true)};
   const up=()=>{stage.classList.remove("pan");removeEventListener("pointermove",mv);removeEventListener("pointerup",up)};
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
-});
+}
+function startMarquee(e){
+  const add=e.shiftKey,base=add?[...sel]:[];
+  if(!add&&(sel.length||selLink)){sel=[];selLink=null;paintSel()}
+  const sx=e.clientX,sy=e.clientY,box=$("marq");let moved=false;
+  const mv=ev=>{
+    const x=Math.min(sx,ev.clientX),y=Math.min(sy,ev.clientY);
+    const w=Math.abs(ev.clientX-sx),h=Math.abs(ev.clientY-sy);
+    if(w+h>4)moved=true;
+    if(!moved)return;
+    box.style.display="block";
+    Object.assign(box.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+    const a=toW(x,y),b=toW(x+w,y+h);
+    const hit=S.cards.filter(c=>{
+      if(isLocked(c.id))return false;
+      const ch=size[c.id]?.h||c.w;
+      return c.x+c.w>a.x&&c.x<b.x&&c.y+ch>a.y&&c.y<b.y;
+    }).map(c=>c.id);
+    sel=[...new Set([...base,...expand(hit)])];
+    paintSel();
+  };
+  const up=()=>{
+    box.style.display="none";
+    removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    if(!moved&&!add&&sel.length){sel=[];paintSel()}
+  };
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+}
 stage.addEventListener("wheel",e=>{
   e.preventDefault();
   const pad=e.deltaX!==0||(e.deltaMode===0&&Math.abs(e.deltaY)<16);
@@ -563,8 +620,11 @@ stage.addEventListener("wheel",e=>{
 stage.addEventListener("contextmenu",e=>{e.preventDefault();
   lock?lockMenu(e.clientX,e.clientY):boardMenu(e.clientX,e.clientY)});
 stage.addEventListener("dblclick",e=>{if(lock||e.target.closest(".card"))return;addText(toW(e.clientX,e.clientY))});
+addEventListener("keyup",e=>{if(e.key===" "){spaceDown=false;stage.classList.remove("space")}});
+addEventListener("blur",()=>{spaceDown=false;stage.classList.remove("space")});
 addEventListener("keydown",e=>{
   const k=e.key.toLowerCase();
+  if(e.key===" "&&!editing&&!e.target.isContentEditable&&!lock){spaceDown=true;stage.classList.add("space")}
   if((e.metaKey||e.ctrlKey)&&k==="s"){e.preventDefault();saveNow();return}
   if(editing||e.target.isContentEditable){if(e.key==="Escape")document.activeElement.blur();return}
   if(lock){
@@ -577,13 +637,14 @@ addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?applyUndo(redo,undo):applyUndo(undo,redo);return}
   if((e.metaKey||e.ctrlKey)&&k==="a"){e.preventDefault();sel=S.cards.map(c=>c.id);paintSel();return}
   if((e.metaKey||e.ctrlKey)&&k==="d"){e.preventDefault();dupe();return}
+  if((e.metaKey||e.ctrlKey)&&k==="g"){e.preventDefault();e.shiftKey?ungroup():makeGroup();return}
   if(e.key==="Escape"){closeMenus();sel=[];selLink=null;linkFrom=null;stage.style.cursor="";toast("");paintSel()}
   if(e.key==="Backspace"||e.key==="Delete"){if(sel.length||selLink){e.preventDefault();del()}}
   if(k==="f")fit();
   if(k==="0")camTo(tgt.x,tgt.y,1);
   if(k==="t"&&sel.length)openText(mouse.x,mouse.y);
   if(sel.length&&e.key.startsWith("Arrow")){e.preventDefault();const d=e.shiftKey?10:1;
-    sel.map(card).forEach(c=>{if(e.key==="ArrowUp")c.y-=d;if(e.key==="ArrowDown")c.y+=d;
+    freeSel().map(card).filter(Boolean).forEach(c=>{if(e.key==="ArrowUp")c.y-=d;if(e.key==="ArrowDown")c.y+=d;
       if(e.key==="ArrowLeft")c.x-=d;if(e.key==="ArrowRight")c.x+=d});
     render();save()}
 });
@@ -592,12 +653,14 @@ addEventListener("keydown",e=>{
 function del(){
   if(lock)return;snap();
   if(selLink){S.links=S.links.filter(l=>l.id!==selLink);selLink=null}
-  if(sel.length){S.links=S.links.filter(l=>!sel.includes(l.a)&&!sel.includes(l.b));
-    S.cards=S.cards.filter(c=>!sel.includes(c.id));sel=[]}
-  render();save();
+  const kill=freeSel();
+  if(kill.length){S.links=S.links.filter(l=>!kill.includes(l.a)&&!kill.includes(l.b));
+    S.cards=S.cards.filter(c=>!kill.includes(c.id));sel=[]}
+  else if(sel.length)toast(t("lockedNote"));
+  cleanGroups();render();save();
 }
 function dupe(){if(!sel.length||lock)return;snap();
-  const ns=[];sel.map(card).filter(Boolean).forEach(c=>{
+  const ns=[];freeSel().map(card).filter(Boolean).forEach(c=>{
     const n={...JSON.parse(JSON.stringify(c)),id:uid(),x:c.x+30,y:c.y+30};S.cards.push(n);ns.push(n.id)});
   sel=ns;render();save();
 }
@@ -606,8 +669,9 @@ function order(dir){if(!sel.length)return;snap();
   S.cards=dir>0?[...rest,...picked]:[...picked,...rest];render();save();
 }
 function align(mode){
-  if(sel.length<2)return;snap();
-  const cs=sel.map(card).filter(Boolean),hh=c=>size[c.id]?.h||c.w;
+  if(freeSel().length<2){if(sel.length)toast(t("lockedNote"));return}
+  snap();
+  const cs=freeSel().map(card).filter(Boolean),hh=c=>size[c.id]?.h||c.w;
   if(mode==="left"){const v=Math.min(...cs.map(c=>c.x));cs.forEach(c=>c.x=v)}
   if(mode==="right"){const v=Math.max(...cs.map(c=>c.x+c.w));cs.forEach(c=>c.x=v-c.w)}
   if(mode==="cx"){const v=cs.reduce((a,c)=>a+c.x+c.w/2,0)/cs.length;cs.forEach(c=>c.x=Math.round(v-c.w/2))}
@@ -617,6 +681,24 @@ function align(mode){
   if(mode==="rowgap"){cs.sort((a,b)=>a.x-b.x);let x=cs[0].x;cs.forEach(c=>{c.x=Math.round(x);x+=c.w+40})}
   if(mode==="colgap"){cs.sort((a,b)=>a.y-b.y);let y=cs[0].y;cs.forEach(c=>{c.y=Math.round(y);y+=hh(c)+40})}
   render();save();
+}
+function makeGroup(){
+  const ids=expand(sel).filter(i=>!isLocked(i));
+  if(ids.length<2)return;
+  snap();
+  S.groups=(S.groups||[]).filter(g=>!g.ids.some(i=>ids.includes(i)));
+  S.groups.push({id:uid(),ids,locked:false});
+  sel=ids;render();save();
+}
+function ungroup(){
+  const gs=[...new Set(sel.map(i=>groupOf(i)).filter(Boolean))];
+  if(!gs.length)return;snap();
+  S.groups=S.groups.filter(g=>!gs.includes(g));render();save();
+}
+function setGroupLock(v){
+  const gs=[...new Set(sel.map(i=>groupOf(i)).filter(Boolean))];
+  if(!gs.length)return;snap();
+  gs.forEach(g=>g.locked=v);render();save();
 }
 function toast(x){const e=$("toast");if(!x){e.classList.remove("on");return}
   e.textContent=x;e.classList.add("on");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("on"),2600)}
@@ -697,6 +779,7 @@ function boardMenu(x,y){
     {label:t("canvasColor"),sub:[{head:t("colour")},...BG.map((c,i)=>({label:t("bg")[i],check:S.bg===c,
       on:()=>{S.bg=c;S.textDef.color=isDark(c)?"#EFEFEC":"#111111";render();save()}}))]},
     {label:t("language"),sub:langItems()},
+    {label:t("defaultText"),on:()=>openText(x,y,"default")},
     "-",
     {label:t("save")+(fileName?" ("+fileName+")":""),key:"⌘S",on:saveNow},
     {label:t("saveAs"),on:pickFile},
@@ -727,6 +810,13 @@ function cardMenu(x,y){
     const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
     inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,(d,w,h)=>{snap();one.src=d;one.ar=h/w;render();save()})};
     inp.click()}});
+  const gs=[...new Set(sel.map(i=>groupOf(i)).filter(Boolean))];
+  if(expand(sel).length>1&&!gs.length)items.push({label:t("group"),key:"⌘G",on:makeGroup});
+  if(gs.length){
+    items.push({label:t("ungroup"),key:"⇧⌘G",on:ungroup});
+    items.push(gs.every(g=>g.locked)?{label:t("unlockGroup"),on:()=>setGroupLock(false)}
+                                     :{label:t("lockGroup"),on:()=>setGroupLock(true)});
+  }
   if(sel.length>1)items.push({label:t("alignDistribute"),sub:[
     {head:t("align")},
     {label:t("alLeft"),on:()=>align("left")},{label:t("alCX"),on:()=>align("cx")},{label:t("alRight"),on:()=>align("right")},
@@ -771,17 +861,21 @@ function linkMenu(x,y){
 
 /* ================= text panel ================= */
 function targets(){return sel.map(card).filter(Boolean)}
-function newStyle(){return {...DEF,color:isDark(S.bg)?"#EFEFEC":"#111111"}}
-function curStyle(){const c=targets()[0];return {...S.textDef,...(c?.s||{})}}
+function newStyle(){return {...DEF,color:isDark(S.bg)?"#EFEFEC":"#111111",...S.textDef}}
+function curStyle(){if(styleMode==="default")return {...DEF,...S.textDef};
+  const c=targets()[0];return {...DEF,...S.textDef,...(c?.s||{})}}
 function setStyle(k,v){
-  targets().forEach(c=>{c.s={...DEF,...S.textDef,...(c.s||{})};c.s[k]=v});
+  if(styleMode==="default"){S.textDef={...DEF,...S.textDef,[k]:v};render();save();return}
+  targets().filter(c=>!isLocked(c.id)).forEach(c=>{c.s={...DEF,...S.textDef,...(c.s||{})};c.s[k]=v});
   render();save();
 }
-function openText(x,y){
-  if(lock||!targets().length)return;
+function openText(x,y,mode){
+  styleMode=mode==="default"?"default":"sel";
+  if(lock)return;
+  if(styleMode==="sel"&&!targets().length)return;
   const p=$("pop"),s=curStyle();
   p.innerHTML=`
-    <div class="hd"><b>${t("tsTitle")}${targets().length>1?" ("+targets().length+")":""}</b><button id="pcx">×</button></div>
+    <div class="hd"><b>${styleMode==="default"?t("defTitle"):t("tsTitle")+(targets().length>1?" ("+targets().length+")":"")}</b><button id="pcx">×</button></div>
     <div class="row"><label>${t("font")}</label><select id="f">${FONTS.map(f=>`<option value="${f[0]}" ${s.family===f[0]?"selected":""}>${famName(f[0])}</option>`).join("")}</select></div>
     <div class="row"><label>${t("size")}</label><input id="sz" type="range" min="8" max="72" step="1" value="${s.size}"><span class="val" id="szv">${s.size}</span></div>
     <div class="row"><label>${t("weight")}</label><div class="seg" id="wt">${[300,400,500,700].map(w=>`<button data-v="${w}" class="${+s.weight===w?"on":""}">${w}</button>`).join("")}</div></div>
@@ -811,7 +905,7 @@ function openText(x,y){
   g("co").onclick=e=>{const b=e.target.closest("button");if(b&&b.dataset.v)setStyle("color",b.dataset.v)};
   g("cc").oninput=e=>setStyle("color",e.target.value);
   g("allb").onclick=()=>{const s2=curStyle();snap();
-    S.cards.forEach(c=>c.s={...s2});S.textDef={...S.textDef,...s2};
+    S.cards.forEach(c=>{if(!isLocked(c.id))c.s={...s2}});S.textDef={...S.textDef,...s2};
     render();save();toast(t("appliedAll"))};
 }
 addEventListener("pointerdown",e=>{
@@ -823,7 +917,7 @@ addEventListener("pointerdown",e=>{
 $("jsonfile").onchange=e=>{const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
   r.onload=()=>{try{const d=JSON.parse(r.result);
-    if(d&&d.cards){snap();S={...S,...d};S.links=S.links||[];sel=[];
+    if(d&&d.cards){snap();S={...S,...d};S.links=S.links||[];S.groups=S.groups||[];sel=[];
       LANG=S.lang||LANG;fileName=f.name;fileHandle=null;fileOK=false;render();fit(true);save()}}
     catch(err){alert("Cannot read this file")}};
   r.readAsText(f);e.target.value=""};
@@ -831,7 +925,7 @@ $("jsonfile").onchange=e=>{const f=e.target.files[0];if(!f)return;
 /* ================= boot ================= */
 (async()=>{
   const saved=await loadState();
-  if(saved&&saved.cards){S={...S,...saved};S.links=S.links||[];
+  if(saved&&saved.cards){S={...S,...saved};S.links=S.links||[];S.groups=S.groups||[];
     S.linkDef={...DEFLINK,...(saved.linkDef||{})};S.textDef={...DEF,...(saved.textDef||{})}}
   LANG=S.lang||"en";
   try{const h=await kvGet(FH);
