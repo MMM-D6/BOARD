@@ -510,7 +510,7 @@ function shrink(file,cb){
 }
 function addImage(d,w,h,p,quiet){
   const W=Math.min(340,w);
-  const c={id:uid(),src:d,ar:h/w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:{}};
+  const c={id:uid(),src:d,ar:h/w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
   S.cards.push(c);if(!quiet){sel=[c.id];selLink=null}render();save();return c;
 }
 function addImages(files,p){
@@ -520,7 +520,7 @@ function addImages(files,p){
 }
 function addText(p){
   if(lock)return;snap();
-  const c={id:uid(),src:null,x:Math.round(p.x-140),y:Math.round(p.y-14),w:280,text:t("newText"),s:{}};
+  const c={id:uid(),src:null,x:Math.round(p.x-140),y:Math.round(p.y-14),w:280,text:t("newText"),s:newStyle()};
   S.cards.push(c);sel=[c.id];render();save();
   setTimeout(()=>editText(c),30);
 }
@@ -535,7 +535,7 @@ addEventListener("paste",e=>{
   if(img){e.preventDefault();snap();shrink(img.getAsFile(),(d,w,h)=>addImage(d,w,h,p));return}
   const txt=e.clipboardData?.getData("text/plain");
   if(txt&&txt.trim()){e.preventDefault();snap();
-    const c={id:uid(),src:null,x:Math.round(p.x-160),y:Math.round(p.y-16),w:320,text:txt.trim(),s:{}};
+    const c={id:uid(),src:null,x:Math.round(p.x-160),y:Math.round(p.y-16),w:320,text:txt.trim(),s:newStyle()};
     S.cards.push(c);sel=[c.id];render();save()}
 });
 
@@ -771,13 +771,17 @@ function linkMenu(x,y){
 
 /* ================= text panel ================= */
 function targets(){return sel.map(card).filter(Boolean)}
+function newStyle(){return {...DEF,color:isDark(S.bg)?"#EFEFEC":"#111111"}}
 function curStyle(){const c=targets()[0];return {...S.textDef,...(c?.s||{})}}
-function setStyle(k,v){targets().forEach(c=>{c.s=c.s||{};c.s[k]=v});S.textDef[k]=v;render();save()}
+function setStyle(k,v){
+  targets().forEach(c=>{c.s={...DEF,...S.textDef,...(c.s||{})};c.s[k]=v});
+  render();save();
+}
 function openText(x,y){
   if(lock||!targets().length)return;
   const p=$("pop"),s=curStyle();
   p.innerHTML=`
-    <div class="hd"><b>${t("tsTitle")}</b><button id="pcx">×</button></div>
+    <div class="hd"><b>${t("tsTitle")}${targets().length>1?" ("+targets().length+")":""}</b><button id="pcx">×</button></div>
     <div class="row"><label>${t("font")}</label><select id="f">${FONTS.map(f=>`<option value="${f[0]}" ${s.family===f[0]?"selected":""}>${famName(f[0])}</option>`).join("")}</select></div>
     <div class="row"><label>${t("size")}</label><input id="sz" type="range" min="8" max="72" step="1" value="${s.size}"><span class="val" id="szv">${s.size}</span></div>
     <div class="row"><label>${t("weight")}</label><div class="seg" id="wt">${[300,400,500,700].map(w=>`<button data-v="${w}" class="${+s.weight===w?"on":""}">${w}</button>`).join("")}</div></div>
@@ -807,7 +811,8 @@ function openText(x,y){
   g("co").onclick=e=>{const b=e.target.closest("button");if(b&&b.dataset.v)setStyle("color",b.dataset.v)};
   g("cc").oninput=e=>setStyle("color",e.target.value);
   g("allb").onclick=()=>{const s2=curStyle();snap();
-    S.cards.forEach(c=>c.s={...s2});S.textDef={...S.textDef,...s2};render();save();toast(t("appliedAll"))};
+    S.cards.forEach(c=>c.s={...s2});S.textDef={...S.textDef,...s2};
+    render();save();toast(t("appliedAll"))};
 }
 addEventListener("pointerdown",e=>{
   if(!e.target.closest("#pop")&&!e.target.closest("#menu")&&!e.target.closest("#submenu"))
