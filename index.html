@@ -198,6 +198,8 @@ const T={
   unbind:"Unbind from file",unbound:"No file bound now. Use Save as to bind one.",
   boundTo:"Bound to",noBound:"not bound",emptyGuard:"Board is empty, auto write paused",
   mergeJSON:"Merge in a file…",mergedIn:"Cards merged in:",badFile:"Cannot read this file",
+  errParse:"The file is not valid JSON.",errShape:"No card list found in this file.",
+  errRead:"The file could not be read from disk.",errImport:"Import stopped with an error:",
   scope:"Include",scopeAll:"Whole board",scopeSel:"Selection only",fmtJson:"Board file",
   needSel:"Select something first",manual:"Manual",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF view",fmtJpg:"JPG",
@@ -250,6 +252,8 @@ const T={
   unbind:"解除文件绑定",unbound:"已解除绑定，用另存为可重新指定文件。",
   boundTo:"当前文件",noBound:"未绑定文件",emptyGuard:"画布为空，已暂停自动写回",
   mergeJSON:"合并导入…",mergedIn:"已并入卡片：",badFile:"文件无法解析",
+  errParse:"文件内容不是有效的 JSON。",errShape:"文件里没有找到卡片列表。",
+  errRead:"无法从磁盘读取该文件。",errImport:"导入中断，错误信息：",
   scope:"范围",scopeAll:"整个画布",scopeSel:"仅选中内容",fmtJson:"画布文件",
   needSel:"请先选中内容",manual:"使用说明",
   fmt:"格式",fmtWord:"Word",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG",
@@ -322,8 +326,8 @@ let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
 let undo=[], redo=[], mouse={x:innerWidth/2,y:innerHeight/2}, focusIdx=-1;
 const card=id=>S.cards.find(c=>c.id===id);
 const IMG=new Map();
-const srcOf=c=>c.ih?(IMG.get(c.ih)||""):(c.src||"");
-const hOf=c=>c.h||hOf(c);
+const srcOf=c=>(c.ih&&IMG.get(c.ih))||c.src||"";
+const hOf=c=>c.h||size[c.id]?.h||c.w;
 async function hashStr(str){
   try{
     const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(str));
@@ -333,8 +337,12 @@ async function hashStr(str){
 }
 async function putImg(dataURL){
   const h=await hashStr(dataURL);
-  if(!IMG.has(h)){IMG.set(h,dataURL);await kvPut("img:"+h,dataURL)}
-  return h;
+  if(!IMG.has(h)){
+    IMG.set(h,dataURL);
+    const ok=await kvPut("img:"+h,dataURL);
+    if(!ok)return {h,ok:false};
+  }
+  return {h,ok:true};
 }
 async function loadImgs(cards){
   const need=[...new Set(cards.map(c=>c.ih).filter(x=>x&&!IMG.has(x)))];
@@ -342,7 +350,12 @@ async function loadImgs(cards){
 }
 async function migrateInline(cards){
   for(const c of cards){
-    if(c.src&&!c.ih){c.ih=await putImg(c.src);delete c.src}
+    if(!c.src||c.ih)continue;
+    try{
+      const {h,ok}=await putImg(c.src);
+      c.ih=h;
+      if(ok)delete c.src;          // 存盘成功才丢掉内联副本
+    }catch(e){/* 保留 c.src，图片照样能显示 */}
   }
 }
 const groupOf=id=>(S.groups||[]).find(g=>g.ids.includes(id));
@@ -367,12 +380,28 @@ function applyUndo(stack,other){
 
 /* ================= storage ================= */
 const DB="boardmin",KEY="state",FH="filehandle";
-function idb(){return new Promise(r=>{const q=indexedDB.open(DB,1);
-  q.onupgradeneeded=()=>q.result.createObjectStore("kv");q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)})}
+let dbP=null;
+function idb(){
+  if(dbP)return dbP;
+  dbP=new Promise(r=>{
+    let q;try{q=indexedDB.open(DB,1)}catch(e){return r(null)}
+    q.onupgradeneeded=()=>{try{q.result.createObjectStore("kv")}catch(e){}};
+    q.onsuccess=()=>{q.result.onclose=()=>{dbP=null};r(q.result)};
+    q.onerror=()=>{dbP=null;r(null)};
+    q.onblocked=()=>r(null);
+  });
+  return dbP;
+}
 function kvGet(k){return new Promise(async r=>{const db=await idb();if(!db)return r(null);
   try{const q=db.transaction("kv").objectStore("kv").get(k);q.onsuccess=()=>r(q.result);q.onerror=()=>r(null)}catch(e){r(null)}})}
-function kvPut(k,v){return new Promise(async r=>{const db=await idb();if(!db)return r(0);
-  try{db.transaction("kv","readwrite").objectStore("kv").put(v,k);r(1)}catch(e){r(0)}})}
+function kvPut(k,v){return new Promise(async r=>{
+  const db=await idb();if(!db)return r(0);
+  try{
+    const tx=db.transaction("kv","readwrite");
+    tx.objectStore("kv").put(v,k);
+    tx.oncomplete=()=>r(1);tx.onerror=()=>r(0);tx.onabort=()=>r(0);
+  }catch(e){r(0)}
+})}
 async function loadState(){
   const v=await kvGet(KEY);if(v)return v;
   try{const l=localStorage.getItem("boardmin");return l?JSON.parse(l):null}catch(e){return null}
@@ -403,11 +432,29 @@ function bundle(list){
     links:S.links.filter(l=>ids.has(l.a)&&ids.has(l.b)),
     groups:(S.groups||[]).map(g=>({...g,ids:g.ids.filter(i=>ids.has(i))})).filter(g=>g.ids.length>1)};
 }
+function normCard(c){
+  const o={...c};
+  o.id=o.id||uid();
+  o.x=Number.isFinite(+o.x)?+o.x:0;
+  o.y=Number.isFinite(+o.y)?+o.y:0;
+  o.w=Number.isFinite(+o.w)&&+o.w>20?+o.w:300;
+  if(o.h!=null&&!Number.isFinite(+o.h))delete o.h;
+  if(o.ar!=null&&!(+o.ar>0))delete o.ar;
+  o.text=typeof o.text==="string"?o.text:"";
+  o.s=(o.s&&typeof o.s==="object")?o.s:{};
+  if(o.level&&![1,2,3].includes(+o.level))delete o.level;
+  o.tags=Array.isArray(o.tags)?o.tags.filter(x=>typeof x==="string"):[];
+  return o;
+}
 async function absorb(data,merge){
-  const cards=(data.cards||[]).map(c=>({...c}));
+  const cards=(data.cards||[]).map(normCard);
   await migrateInline(cards);
   if(!merge){
-    S={...S,...data,cards,links:data.links||[],groups:data.groups||[]};
+    const ids0=new Set(cards.map(c=>c.id));
+    S={...S,...data,cards,
+      links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>({...l,id:l.id||uid()})),
+      groups:(data.groups||[]).filter(g=>g&&Array.isArray(g.ids))
+        .map(g=>({...g,id:g.id||uid(),ids:g.ids.filter(i=>ids0.has(i))})).filter(g=>g.ids.length>1)};
     await loadImgs(cards);return cards.length;
   }
   const map={},b=bbox(),ox=b?b.x+b.w+120:0,oy=b?b.y:0;
@@ -415,9 +462,10 @@ async function absorb(data,merge){
   cards.forEach(c=>{const nid=uid();map[c.id]=nid;c.id=nid;
     c.x=Math.round(c.x-nb.x+ox);c.y=Math.round(c.y-nb.y+oy)});
   S.cards=S.cards.concat(cards);
-  (data.links||[]).forEach(l=>{if(map[l.a]&&map[l.b])
+  (data.links||[]).forEach(l=>{if(l&&map[l.a]&&map[l.b])
     S.links.push({...l,id:uid(),a:map[l.a],b:map[l.b]})});
-  (data.groups||[]).forEach(g=>{const ids=g.ids.map(i=>map[i]).filter(Boolean);
+  (data.groups||[]).forEach(g=>{if(!g||!Array.isArray(g.ids))return;
+    const ids=g.ids.map(i=>map[i]).filter(Boolean);
     if(ids.length>1)S.groups.push({...g,id:uid(),ids})});
   await loadImgs(cards);
   return cards.length;
@@ -506,8 +554,13 @@ function camTo(x,y,z,snapNow){tgt={x,y,z};if(snapNow){cam={x,y,z};applyCam();dra
 function bbox(list){
   const cs=list||S.cards;
   if(!cs.length)return null;
-  const x=Math.min(...cs.map(c=>c.x)),y=Math.min(...cs.map(c=>c.y));
-  const xe=Math.max(...cs.map(c=>c.x+c.w)),ye=Math.max(...cs.map(c=>c.y+hOf(c)));
+  let x=Infinity,y=Infinity,xe=-Infinity,ye=-Infinity;
+  for(const c of cs){
+    const cx=+c.x||0,cy=+c.y||0,cw=+c.w||0,ch=hOf(c)||0;
+    if(cx<x)x=cx; if(cy<y)y=cy;
+    if(cx+cw>xe)xe=cx+cw; if(cy+ch>ye)ye=cy+ch;
+  }
+  if(!isFinite(x))return null;
   return{x,y,w:xe-x,h:ye-y};
 }
 function boxTo(b,pad,maxZ,now){
@@ -536,7 +589,13 @@ function step(d){
 }
 
 /* ================= render ================= */
+let rendering=false;
 function render(){
+  if(rendering)return;
+  rendering=true;
+  try{renderNow()}finally{rendering=false}
+}
+function renderNow(){
   document.body.style.background=S.bg;
   const dark=isDark(S.bg);
   document.body.classList.toggle("lock",lock);
@@ -572,7 +631,11 @@ function makeCard(c){
     lineHeight:s.lh,letterSpacing:s.spacing+"em",textAlign:s.align,color:s.color,
     fontStyle:s.italic?"italic":"normal",marginTop:(csrc?10:0)+"px"});
   cap.addEventListener("input",()=>{c.text=cap.innerText;measure();drawLinksSoon();save()});
-  cap.addEventListener("blur",()=>{c.text=cap.innerText;cap.contentEditable="false";editing=false;save();render()});
+  cap.addEventListener("blur",()=>{
+    if(!cap.isContentEditable)return;
+    c.text=cap.innerText;cap.contentEditable="false";editing=false;save();
+    if(!rendering)render();
+  });
   cap.addEventListener("pointerdown",e=>{if(cap.isContentEditable)e.stopPropagation()});
   el.appendChild(cap);
 
@@ -848,8 +911,8 @@ function shrink(file,cb){
 async function addImage(d,w,h,p,quiet){
   const cap=S.imgMax||360;
   const W=Math.round(w*Math.min(1,cap/Math.max(w,h)));
-  const ih=await putImg(d);
-  const c={id:uid(),ih,ar:h/w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
+  const r=await putImg(d);
+  const c={id:uid(),ih:r.h,...(r.ok?{}:{src:d}),ar:h/w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
   S.cards.push(c);if(!quiet){sel=[c.id];selLink=null}render();save();return c;
 }
 function addImages(files,p){
@@ -987,11 +1050,13 @@ function align(mode){
   if(freeSel().length<2){if(sel.length)toast(t("lockedNote"));return}
   snap();
   const cs=freeSel().map(card).filter(Boolean),hh=hOf;
-  if(mode==="left"){const v=Math.min(...cs.map(c=>c.x));cs.forEach(c=>c.x=v)}
-  if(mode==="right"){const v=Math.max(...cs.map(c=>c.x+c.w));cs.forEach(c=>c.x=v-c.w)}
+  const mn=f=>cs.reduce((a,c)=>Math.min(a,f(c)),Infinity);
+  const mx=f=>cs.reduce((a,c)=>Math.max(a,f(c)),-Infinity);
+  if(mode==="left"){const v=mn(c=>c.x);cs.forEach(c=>c.x=v)}
+  if(mode==="right"){const v=mx(c=>c.x+c.w);cs.forEach(c=>c.x=v-c.w)}
   if(mode==="cx"){const v=cs.reduce((a,c)=>a+c.x+c.w/2,0)/cs.length;cs.forEach(c=>c.x=Math.round(v-c.w/2))}
-  if(mode==="top"){const v=Math.min(...cs.map(c=>c.y));cs.forEach(c=>c.y=v)}
-  if(mode==="bottom"){const v=Math.max(...cs.map(c=>c.y+hh(c)));cs.forEach(c=>c.y=Math.round(v-hh(c)))}
+  if(mode==="top"){const v=mn(c=>c.y);cs.forEach(c=>c.y=v)}
+  if(mode==="bottom"){const v=mx(c=>c.y+hh(c));cs.forEach(c=>c.y=Math.round(v-hh(c)))}
   if(mode==="cy"){const v=cs.reduce((a,c)=>a+c.y+hh(c)/2,0)/cs.length;cs.forEach(c=>c.y=Math.round(v-hh(c)/2))}
   if(mode==="rowgap"){cs.sort((a,b)=>a.x-b.x);let x=cs[0].x;cs.forEach(c=>{c.x=Math.round(x);x+=c.w+40})}
   if(mode==="colgap"){cs.sort((a,b)=>a.y-b.y);let y=cs[0].y;cs.forEach(c=>{c.y=Math.round(y);y+=hh(c)+40})}
@@ -1773,7 +1838,9 @@ function cardMenu(x,y){
   ];
   if(one&&srcOf(one))items.push({label:t("replaceImage"),on:()=>{
     const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
-    inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,async(d,w,h)=>{snap();one.ih=await putImg(d);delete one.src;one.ar=h/w;render();save()})};
+    inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,async(d,w,h)=>{snap();
+      const r=await putImg(d);one.ih=r.h;if(r.ok)delete one.src;else one.src=d;
+      one.ar=h/w;render();save()})};
     inp.click()}});
   const gs=[...new Set(sel.map(i=>groupOf(i)).filter(Boolean))];
   if(expand(sel).length>1&&!gs.length)items.push({label:t("group"),key:"⌘G",on:makeGroup});
@@ -1885,17 +1952,28 @@ addEventListener("pointerdown",e=>{
 /* ================= import ================= */
 function readJSON(f,merge){
   const r=new FileReader();
+  r.onerror=()=>alert(t("badFile")+"\n"+t("errRead"));
   r.onload=async()=>{
+    let d;
+    try{d=JSON.parse(r.result)}
+    catch(err){alert(t("badFile")+"\n"+t("errParse"));return}
+    if(!d||!Array.isArray(d.cards)){alert(t("badFile")+"\n"+t("errShape"));return}
+    let stage="snapshot",n=0;
     try{
-      const d=JSON.parse(r.result);
-      if(!d||!d.cards)throw 0;
       snap();
-      const n=await absorb(d,merge);
-      sel=[];
+      stage="absorb";      n=await absorb(d,merge);
+      stage="select";      sel=[];selLink=null;
       if(!merge){LANG=S.lang||LANG;fileName=f.name;fileHandle=null;fileOK=false}
-      render();fit(true);save();
+      stage="render";      render();
+      stage="fit";         fit(true);
+      stage="save";        save();
       toast((merge?t("mergedIn"):t("savedTo"))+" "+n);
-    }catch(err){alert(t("badFile"))}
+    }catch(err){
+      console.error("import failed at stage: "+stage,err);
+      const frame=((err&&err.stack)||"").split("\n").slice(0,4).join("\n");
+      alert(t("errImport")+"\n["+stage+"] "+((err&&err.message)||err)+"\n\n"+frame);
+      try{render()}catch(e){}
+    }
   };
   r.readAsText(f);
 }
