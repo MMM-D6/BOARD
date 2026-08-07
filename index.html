@@ -43,6 +43,7 @@
   /* presentation lock */
   body.lock .port,body.lock .rs,body.lock .ring{display:none !important}
   body.lock .card{cursor:zoom-in}
+  body:not(.lock) .card img{cursor:zoom-in}
   body.lock .card .cap:empty:before{content:""}
 
   .menu{position:fixed;z-index:80;min-width:190px;padding:5px;border-radius:10px;
@@ -62,6 +63,22 @@
     background:var(--panel);color:var(--pfg);border:1px solid var(--pline);
     box-shadow:0 16px 44px rgba(0,0,0,.2);display:none;font-size:12.5px}
   .pop.on{display:block}
+  .pop.wide{width:312px}
+  .pop .sec{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
+    opacity:.4;margin:14px 0 7px}
+  .pop .sec:first-of-type{margin-top:10px}
+  .pop .grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .pop .grid button,.pop .pair button{height:32px;border:1px solid var(--pline);background:none;
+    border-radius:7px;cursor:pointer;font-size:12.5px;white-space:nowrap;padding:0 4px}
+  .pop .grid button.on,.pop .pair button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+  .pop .grid button:disabled,.pop .pair button:disabled{opacity:.3;cursor:default}
+  .pop .pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .pop .trio{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
+  .pop .opt{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:12.5px;cursor:pointer}
+  .pop .opt input{accent-color:var(--pfg);width:14px;height:14px;margin:0}
+  .pop .go{width:100%;height:36px;margin-top:16px;border:none;border-radius:8px;cursor:pointer;
+    background:var(--pfg);color:var(--panel);font-size:13px;letter-spacing:.02em}
+  .pop .go:hover{opacity:.88}
   .pop .hd{display:flex;align-items:center;margin:0 0 10px}
   .pop .hd b{font:500 12px/1 "IBM Plex Sans",sans-serif;letter-spacing:.02em}
   .pop .hd button{margin-left:auto;border:none;background:none;cursor:pointer;opacity:.45;font-size:15px;padding:0 2px}
@@ -191,6 +208,9 @@ const T={
   level:"Heading level",lvNone:"Body text",lv1:"Heading 1",lv2:"Heading 2",lv3:"Heading 3",
   exportDoc:"Export…",expTitle:"Export",expName:"Document title",
   grpEn:"Latin",grpZh:"Chinese",
+  zoomTo:"Zoom to this",
+  focusMode:"Click to zoom",fcOff:"Off",fcSecond:"Second click on a selected card",fcSingle:"Any single click",
+  focusEdit:"Zoom in when editing text",focusKeyHint:"Press Z to zoom on the selection",
   linkView:"Connector display",lvAll:"Always visible",lvFocus:"Focus on hover",lvOff:"Hidden",
   linkLabel:"Note marker",llDot:"Dot only",llText:"Short label",llNone:"None",
   linkNote:"Note on this connector…",noteTitle:"Connector note",notePh:"What does this link mean",
@@ -202,7 +222,8 @@ const T={
   errRead:"The file could not be read from disk.",errImport:"Import stopped with an error:",
   scope:"Include",scopeAll:"Whole board",scopeSel:"Selection only",fmtJson:"Board file",
   needSel:"Select something first",manual:"Manual",
-  fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF view",fmtJpg:"JPG",
+  expOpts:"Options",
+  fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   scale:"Scale",expPrint:"The print dialog opens. Choose Save as PDF.",expShot:"Rendering the canvas…",
   expImg:"Include images",expTags:"Include tags",expRef:"Cross references",expTable:"Relation appendix",
   expGo:"Export",expWork:"Building the document…",expDone:"Document exported",
@@ -245,6 +266,9 @@ const T={
   level:"层级",lvNone:"正文",lv1:"一级标题",lv2:"二级标题",lv3:"三级标题",
   exportDoc:"导出…",expTitle:"导出",expName:"文档标题",
   grpEn:"英文",grpZh:"中文",
+  zoomTo:"放大居中",
+  focusMode:"点击聚焦",fcOff:"关闭",fcSecond:"再次点击已选中的卡片",fcSingle:"任意单击",
+  focusEdit:"编辑文字时自动放大",focusKeyHint:"按 Z 聚焦到当前选中",
   linkView:"连线显示",lvAll:"始终显示",lvFocus:"聚焦时显示",lvOff:"隐藏",
   linkLabel:"批注标记",llDot:"仅圆点",llText:"简短标签",llNone:"不显示",
   linkNote:"连线备注…",noteTitle:"连线备注",notePh:"这条关联意味着什么",
@@ -256,7 +280,8 @@ const T={
   errRead:"无法从磁盘读取该文件。",errImport:"导入中断，错误信息：",
   scope:"范围",scopeAll:"整个画布",scopeSel:"仅选中内容",fmtJson:"画布文件",
   needSel:"请先选中内容",manual:"使用说明",
-  fmt:"格式",fmtWord:"Word",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG",
+  expOpts:"包含内容",
+  fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   scale:"倍率",expPrint:"打印窗口已打开，目标选择另存为 PDF 即可。",expShot:"正在渲染画布…",
   expImg:"包含图片",expTags:"包含标签",expRef:"生成交叉引用",expTable:"附录关系表",
   expGo:"导出",expWork:"正在生成文档…",expDone:"文档已导出",
@@ -320,7 +345,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* ================= state ================= */
 const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",italic:false,color:"#111111"};
 const DEFLINK={kind:"curve",dash:false,arrow:"end",w:1.4,color:"#8A8A85"};
-let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",focusClick:false,imgMax:360,work:false,findMode:"all",linkView:"focus",linkLabel:"dot"};
+let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",focusClick:"second",focusEdit:true,imgMax:360,work:false,findMode:"all",linkView:"focus",linkLabel:"dot"};
 let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
 let undo=[], redo=[], mouse={x:innerWidth/2,y:innerHeight/2}, focusIdx=-1;
@@ -419,10 +444,11 @@ function datePrefix(){
   const d=new Date(),p=n=>String(n).padStart(2,"0");
   return p(d.getFullYear()%100)+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
 }
-const hasDate=n=>/^\d{2}-\d{2}-\d{2}-/.test(n||"");
+const hasDate=n=>/^\d{2}-\d{2}-\d{2}[-_ ]/.test(n||"");
 function stampName(base,ext){
   let b=(base||"board").replace(/\.(json|docx?|pdf|jpe?g)$/i,"").trim()||"board";
-  b=b.replace(/^\d{2}-\d{2}-\d{2}-/,"");
+  while(/^\d{2}-\d{2}-\d{2}[-_ ]\s*/.test(b))b=b.replace(/^\d{2}-\d{2}-\d{2}[-_ ]\s*/,"");
+  b=b.trim()||"board";
   return datePrefix()+"-"+b+(ext||"");
 }
 function bundle(list){
@@ -569,12 +595,29 @@ function boxTo(b,pad,maxZ,now){
   camTo(-(b.x+b.w/2)*z,-(b.y+b.h/2)*z,z,now);
 }
 function fit(now){focusIdx=-1;boxTo(bbox(),170,1.6,now)}
-function focusCard(c){
-  clearTimeout(cullT);syncCards();measure();
-  const h=hOf(c);
-  boxTo({x:c.x,y:c.y,w:c.w,h},lock?110:150,1);
-  focusIdx=S.cards.indexOf(c);
+function fcMode(){
+  const v=S.focusClick;
+  if(v===true)return "second";
+  if(v===false||v==null)return "off";
+  return v;
 }
+let camBack=null,focusKey=null,fcTimer=null;
+function focusOn(list,noToggle){
+  const cs=(list||[]).filter(Boolean);
+  if(!cs.length){fit();return}
+  clearTimeout(cullT);syncCards();measure();
+  const key=cs.map(c=>c.id).sort().join(",");
+  if(!noToggle&&focusKey===key&&camBack){          // 再触发一次 = 退回
+    camTo(camBack.x,camBack.y,camBack.z);
+    camBack=null;focusKey=null;return;
+  }
+  if(focusKey!==key)camBack={...tgt};              // 记住来时的视角
+  focusKey=key;
+  boxTo(bbox(cs),lock?110:150,1);
+  focusIdx=cs.length===1?S.cards.indexOf(cs[0]):-1;
+}
+function focusSel(){focusOn(sel.map(card).filter(Boolean))}
+function focusCard(c){focusOn([c],true)}
 function zoomAt(f,cx,cy){
   const nz=clamp(tgt.z*f,.06,6),ox=cx-innerWidth/2,oy=cy-innerHeight/2;
   camTo(ox-(ox-tgt.x)*(nz/tgt.z),oy-(oy-tgt.y)*(nz/tgt.z),nz,true);
@@ -668,17 +711,29 @@ function makeCard(c){
     e.stopPropagation();
     if(linkFrom){finishLinkClick(c);return}
     const ids=expand([c.id]);
+    const wasSel=ids.every(i=>sel.includes(i));
     if(e.shiftKey){
       if(ids.every(i=>sel.includes(i)))sel=sel.filter(i=>!ids.includes(i));
       else sel=[...new Set([...sel,...ids])];
     }else if(!ids.every(i=>sel.includes(i)))sel=[...ids];
     selLink=null;paintSel();
-    startMove(e,()=>{if(S.focusClick&&!e.shiftKey)focusCard(c)});
+    startMove(e,()=>{
+      if(e.shiftKey)return;
+      const m=fcMode();
+      if(m!=="single"&&!(m==="second"&&wasSel))return;
+      clearTimeout(fcTimer);                       // 等一拍，看看是不是双击
+      fcTimer=setTimeout(()=>focusOn([c]),240);
+    });
   });
   el.addEventListener("pointerenter",()=>{hoverId=c.id;if(S.linkView==="focus")drawLinksSoon()});
   el.addEventListener("pointerleave",()=>{if(hoverId===c.id){hoverId=null;
     if(S.linkView==="focus")drawLinksSoon()}});
-  el.addEventListener("dblclick",e=>{if(lock)return;e.stopPropagation();editText(c)});
+  el.addEventListener("dblclick",e=>{
+    if(lock)return;e.stopPropagation();
+    clearTimeout(fcTimer);                          // 双击就是编辑，镜头不动
+    if(e.target.tagName==="IMG")focusOn([c]);       // 图片上双击 = 放大居中
+    else editText(c);
+  });
   el.addEventListener("contextmenu",e=>{
     e.preventDefault();e.stopPropagation();
     if(lock){lockMenu(e.clientX,e.clientY);return}
@@ -727,6 +782,7 @@ function measure(){
 function editText(c){
   if(lock)return;
   if(isLocked(c.id)){toast(t("lockedNote"));return}
+  if(S.focusEdit&&cam.z<0.92)focusCard(c);
   const el=nodes.get(c.id)?.querySelector(".cap");if(!el)return;
   editing=true;el.contentEditable="true";el.focus();
   const r=document.createRange();r.selectNodeContents(el);
@@ -830,6 +886,7 @@ function drawMarks(svg,list){
 }
 function openLinkNote(l,x,y){
   if(lock)return;
+  $("pop").classList.remove("wide");
   const p=$("pop");
   p.innerHTML=`
     <div class="hd"><b>${t("noteTitle")}</b><button id="pcx">\u00D7</button></div>
@@ -954,6 +1011,7 @@ stage.addEventListener("pointerdown",e=>{
   startMarquee(e);
 });
 function startPan(e){
+  clearTimeout(fcTimer);
   stage.classList.add("pan");
   const sx=e.clientX,sy=e.clientY,ox=tgt.x,oy=tgt.y;
   const mv=ev=>{camTo(ox+ev.clientX-sx,oy+ev.clientY-sy,tgt.z,true)};
@@ -1019,6 +1077,7 @@ addEventListener("keydown",e=>{
   if(e.key==="Escape"){closeMenus();sel=[];selLink=null;linkFrom=null;stage.style.cursor="";toast("");paintSel()}
   if(e.key==="Backspace"||e.key==="Delete"){if(sel.length||selLink){e.preventDefault();del()}}
   if(k==="f")fit();
+  if(k==="z"&&!e.metaKey&&!e.ctrlKey)focusSel();
   if(k==="0")camTo(tgt.x,tgt.y,1);
   if(k==="t"&&sel.length)openText(mouse.x,mouse.y);
   if(sel.length&&e.key.startsWith("Arrow")){e.preventDefault();const d=e.shiftKey?10:1;
@@ -1392,27 +1451,34 @@ function openExport(x,y){
   const p=$("pop");
   p.innerHTML=`
     <div class="hd"><b>${t("expTitle")}</b><button id="pcx">\u00D7</button></div>
-    <div class="row"><label>${t("fmt")}</label><div class="seg" id="exf">
+    <div class="sec">${t("fmt")}</div>
+    <div class="grid" id="exf">
       ${[["word","fmtWord"],["pdfdoc","fmtPdfDoc"],["pdfview","fmtPdfView"],["jpg","fmtJpg"],["json","fmtJson"]]
-        .map(([v,k],i)=>`<button data-v="${v}" class="${i===0?"on":""}" style="font-size:11px;padding:0 2px">${t(k)}</button>`).join("")}
-    </div></div>
-    <div class="row"><label>${t("scope")}</label><div class="seg" id="exsc">
-      <button data-v="all" class="on">${t("scopeAll")}</button>
-      <button data-v="sel" ${sel.length?"":"disabled style=opacity:.35"}>${t("scopeSel")}</button>
-    </div></div>
-    <input class="ti" id="exn" placeholder="${t("expName")}" value="${esc(stampName(fileName||"Board"))}" spellcheck="false">
-    <div id="exdoc">
-      <div class="row"><label style="width:auto"><input type="checkbox" id="ex1" checked> ${t("expImg")}</label></div>
-      <div class="row"><label style="width:auto"><input type="checkbox" id="ex2" checked> ${t("expTags")}</label></div>
-      <div class="row"><label style="width:auto"><input type="checkbox" id="ex3" checked> ${t("expRef")}</label></div>
-      <div class="row"><label style="width:auto"><input type="checkbox" id="ex4"> ${t("expTable")}</label></div>
+        .map(([v,k],i)=>`<button data-v="${v}" class="${i===0?"on":""}"${i===4?' style="grid-column:1 / -1"':""}>${t(k)}</button>`).join("")}
     </div>
-    <div id="eximg" style="display:none"><div class="row"><label>${t("scale")}</label>
-      <div class="seg" id="exs">${[1,2,3].map(v=>`<button data-v="${v}" class="${v===2?"on":""}">${v}x</button>`).join("")}</div></div></div>
-    <div class="row"><button class="mi" id="exgo" style="justify-content:center;border:1px solid var(--pline)">${t("expGo")}</button></div>`;
-  place(p,Math.min(x,innerWidth-270),Math.min(y,innerHeight-300));
+    <div class="sec">${t("scope")}</div>
+    <div class="pair" id="exsc">
+      <button data-v="all" class="on">${t("scopeAll")}</button>
+      <button data-v="sel" ${sel.length?"":"disabled"}>${t("scopeSel")}</button>
+    </div>
+    <div class="sec">${t("expName")}</div>
+    <input class="ti" id="exn" value="${esc(stampName(fileName||"Board"))}" spellcheck="false">
+    <div id="exdoc">
+      <div class="sec">${t("expOpts")}</div>
+      <label class="opt"><input type="checkbox" id="ex1" checked> ${t("expImg")}</label>
+      <label class="opt"><input type="checkbox" id="ex2" checked> ${t("expTags")}</label>
+      <label class="opt"><input type="checkbox" id="ex3" checked> ${t("expRef")}</label>
+      <label class="opt"><input type="checkbox" id="ex4"> ${t("expTable")}</label>
+    </div>
+    <div id="eximg" style="display:none">
+      <div class="sec">${t("scale")}</div>
+      <div class="trio" id="exs">${[1,2,3].map(v=>`<button data-v="${v}" class="${v===2?"on":""}">${v}x</button>`).join("")}</div>
+    </div>
+    <button class="go" id="exgo">${t("expGo")}</button>`;
+  p.classList.add("wide");
+  place(p,Math.min(x,innerWidth-330),Math.min(y,innerHeight-470));
   p.classList.add("on");
-  p.querySelector("#pcx").onclick=()=>p.classList.remove("on");
+  p.querySelector("#pcx").onclick=()=>{p.classList.remove("on","wide")};
   p.querySelector("#exn").addEventListener("keydown",e=>e.stopPropagation());
   let fmt="word",scale=2,scope=sel.length?"sel":"all";
   const scb=p.querySelector("#exsc");
@@ -1430,7 +1496,7 @@ function openExport(x,y){
     const o={fmt,scale,scope,title:stampName(p.querySelector("#exn").value.trim()||"Board"),
       img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
       refs:p.querySelector("#ex3").checked,table:p.querySelector("#ex4").checked};
-    p.classList.remove("on");
+    p.classList.remove("on","wide");
     toast(o.fmt==="jpg"||o.fmt==="pdfview"?t("expShot"):t("expWork"));
     setTimeout(()=>doExport(o),60);
   };
@@ -1628,6 +1694,7 @@ function setCardTags(c,list){
     .filter(x=>!inText.has(x));
 }
 function openTags(x,y){
+  $("pop").classList.remove("wide");
   const cs=targets().filter(c=>!isLocked(c.id));
   if(lock||!cs.length)return;
   const p=$("pop");
@@ -1774,7 +1841,13 @@ function boardMenu(x,y){
     {label:t("zoom100"),key:"0",on:()=>camTo(tgt.x,tgt.y,1)},
     {label:t("search"),key:"⌘F",on:()=>showFind(true)},
     {label:t("workMode"),check:S.work,on:()=>setWork(!S.work)},
-    {label:t("clickFocus"),check:S.focusClick,on:()=>{S.focusClick=!S.focusClick;save()}},
+    {label:t("focusMode"),key:"Z",sub:[
+      {head:t("focusMode")},
+      ...[["off","fcOff"],["second","fcSecond"],["single","fcSingle"]].map(([v,k2])=>({label:t(k2),
+        check:fcMode()===v,on:()=>{S.focusClick=v;save()}})),
+      {head:t("focusKeyHint")},
+      {label:t("focusEdit"),check:!!S.focusEdit,on:()=>{S.focusEdit=!S.focusEdit;save()}}
+    ]},
     {label:t("imgSize"),sub:[
       {head:t("imgSize")},
       ...[220,280,360,460,600,760].map(v=>({label:v+" "+t("px"),check:(S.imgMax||360)===v,
@@ -1829,6 +1902,7 @@ function cardMenu(x,y){
   const items=[
     {label:t("editText"),key:t("dbl"),on:()=>one&&editText(one)},
     {label:t("textStyle"),key:"T",on:()=>openText(x,y)},
+    {label:t("zoomTo"),key:"Z",on:focusSel},
     {label:t("tagsMenu"),on:()=>openTags(x,y)},
     {label:t("level"),sub:[{head:t("level")},
       ...[[0,"lvNone"],[1,"lv1"],[2,"lv2"],[3,"lv3"]].map(([v,k])=>({label:t(k),
@@ -1904,6 +1978,7 @@ function setStyle(k,v){
   render();save();
 }
 function openText(x,y,mode){
+  $("pop").classList.remove("wide");
   styleMode=mode==="default"?"default":"sel";
   if(lock)return;
   if(styleMode==="sel"&&!targets().length)return;
