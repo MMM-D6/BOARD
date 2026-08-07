@@ -4,7 +4,7 @@
 <title>Board</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;1,6..96,400&family=Cormorant+Garamond:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Instrument+Serif:ital@0;1&family=Space+Grotesk:wght@300;400;500;700&family=Noto+Sans+SC:wght@300;400;500;700&family=Noto+Serif+SC:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@300;400;500;600;700&family=Bodoni+Moda:ital,opsz,wght@0,6..96,400;0,6..96,500;0,6..96,700;1,6..96,400&family=Bricolage+Grotesque:opsz,wght@12..96,300;12..96,400;12..96,600;12..96,700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,400&family=IBM+Plex+Mono:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&family=Instrument+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:ital,wght@0,400;0,500;1,400&family=Literata:ital,opsz,wght@0,7..72,300;0,7..72,400;0,7..72,500;0,7..72,700;1,7..72,400&family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Schibsted+Grotesk:ital,wght@0,300;0,400;0,500;0,700;1,400&family=Space+Grotesk:wght@300;400;500;700&family=Spectral:ital,wght@0,300;0,400;0,500;0,600;1,400&family=Syne:wght@400;500;600;700&display=swap" rel="stylesheet">
 
 <style>
   *{box-sizing:border-box}
@@ -82,6 +82,63 @@
   body.hidecur,body.hidecur *{cursor:none !important}
   .card.lk .ring{border-style:dashed}
   .card.lk .rs{display:none !important}
+  #find{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:70;display:none;
+    align-items:center;gap:8px;padding:6px 10px;border-radius:9px;background:var(--panel);
+    color:var(--pfg);border:1px solid var(--pline);box-shadow:0 8px 26px rgba(0,0,0,.13)}
+  #find.on{display:flex}
+  #find .m{border:1px solid var(--pline);background:none;border-radius:6px;height:22px;
+    padding:0 8px;font-size:11px;cursor:pointer;opacity:.75}
+  #find input{width:214px;height:24px;border:none;background:none;font-size:13px}
+  #find input::placeholder{opacity:.35}
+  #find .n{font:400 11px/1 "IBM Plex Mono",monospace;opacity:.45;min-width:44px;text-align:right}
+  #find .x{border:none;background:none;cursor:pointer;opacity:.4;font-size:15px;padding:0 2px}
+  body.lock #find{display:none !important}
+  body.finding .card.nomatch{opacity:.12}
+  .card.hit .ring{position:absolute;inset:calc(-8px * var(--iz));border-radius:3px;pointer-events:none;
+    border:calc(1.5px * var(--iz)) dashed var(--sel);opacity:.7}
+  .card .lvl{position:absolute;left:0;top:calc(-16px * var(--iz));opacity:.38;
+    font:500 calc(9px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
+  body.lock .card .lvl{display:none}
+  .card .tags{margin-top:7px;display:flex;flex-wrap:wrap;gap:5px}
+  .card .tg{font:400 .68em/1.5 "IBM Plex Mono",monospace;padding:1px 7px;border-radius:99px;
+    border:1px solid currentColor;opacity:.42;cursor:pointer}
+  .card .tg:hover{opacity:.8}
+  body.lock .card .tags{display:none}
+  .pop .chips{display:flex;flex-wrap:wrap;gap:5px;max-height:132px;overflow:auto;margin:4px 0 2px}
+  .pop .chips button{border:1px solid var(--pline);background:none;border-radius:99px;
+    padding:3px 9px;font-size:11.5px;cursor:pointer}
+  .pop .chips button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+  .pop .ti{width:100%;height:30px;border:1px solid var(--pline);background:none;
+    border-radius:7px;padding:0 8px;font-size:12.5px}
+  .pop .note{font-size:11px;opacity:.42;margin:8px 0 0;line-height:1.5}
+  #man{position:fixed;inset:0;z-index:120;display:none;background:rgba(0,0,0,.28);
+    backdrop-filter:blur(3px)}
+  #man.on{display:flex;align-items:center;justify-content:center}
+  #man .win{width:min(920px,92vw);height:min(660px,88vh);display:flex;border-radius:13px;
+    overflow:hidden;background:var(--panel);color:var(--pfg);border:1px solid var(--pline);
+    box-shadow:0 24px 70px rgba(0,0,0,.3)}
+  #man .side{width:250px;flex:none;border-right:1px solid var(--pline);overflow:auto;padding:10px 8px 24px}
+  #man .side .ltr{font:500 10px/1 "IBM Plex Mono",monospace;letter-spacing:.16em;opacity:.35;
+    padding:12px 10px 6px}
+  #man .side button{display:block;width:100%;text-align:left;border:none;background:none;
+    padding:7px 10px;border-radius:7px;cursor:pointer;font-size:13px}
+  #man .side button:hover{background:var(--phi)}
+  #man .side button.on{background:var(--pfg);color:var(--panel)}
+  #man .side button i{font-style:normal;opacity:.3;font-size:10px;margin-left:6px;
+    font-family:"IBM Plex Mono",monospace}
+  #man .body{flex:1;overflow:auto;padding:26px 30px 40px}
+  #man .body h3{margin:0 0 4px;font-size:19px;font-weight:600;letter-spacing:.01em}
+  #man .body .py{font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.35;letter-spacing:.14em;
+    text-transform:uppercase;margin-bottom:16px}
+  #man .body p{margin:0 0 11px;font-size:13.5px;line-height:1.75}
+  #man .body ul{margin:0 0 11px;padding-left:18px;font-size:13.5px;line-height:1.75}
+  #man .body li{margin:3px 0}
+  #man .body kbd{font:400 11.5px/1 "IBM Plex Mono",monospace;border:1px solid var(--pline);
+    border-radius:4px;padding:2px 5px;margin:0 1px}
+  #man .body .tip{border-left:2px solid var(--pline);padding:2px 0 2px 12px;opacity:.72;
+    font-size:12.5px;line-height:1.7;margin:14px 0 0}
+  #man .cx{position:absolute;right:calc(50% - min(460px,46vw) + 14px);top:calc(50% - min(330px,44vh) + 10px);
+    border:none;background:none;color:var(--pfg);font-size:20px;cursor:pointer;opacity:.45;z-index:2}
   #marq{position:fixed;z-index:30;display:none;border:1px solid var(--sel);
     background:rgba(125,125,125,.13);border-radius:2px;pointer-events:none}
   #stage.space{cursor:grab}
@@ -94,6 +151,9 @@
 </style>
 
 <div id="stage"><div id="world"><svg id="links"></svg><div id="cards"></div></div></div>
+<div id="find"><button class="m" id="findm"></button><input id="findq" spellcheck="false" list="taglist"><span class="n" id="findn"></span><button class="x" id="findx">×</button></div>
+<datalist id="taglist"></datalist>
+<div id="man"><div class="win"><div class="side" id="manside"></div><div class="body" id="manbody"></div></div><button class="cx" id="manx">×</button></div>
 <div id="marq"></div>
 <div id="hint"></div>
 <div id="status"></div>
@@ -103,6 +163,7 @@
 <div class="pop" id="pop"></div>
 <input type="file" id="imgfile" accept="image/*" multiple hidden>
 <input type="file" id="jsonfile" accept="application/json" hidden>
+<input type="file" id="mergefile" accept="application/json" hidden>
 
 <script>
 /* ================= i18n ================= */
@@ -123,8 +184,31 @@ const T={
   arrow:"Arrow",arrNone:"No arrow",arrEnd:"One way",arrBoth:"Both ways",
   colour:"Colour",cGray:"Grey",cBlack:"Black",cWhite:"White",cRed:"Red",cBlue:"Blue",cGreen:"Green",
   reverse:"Reverse direction",delLink:"Delete connector",
-  exitPresentation:"Exit presentation",prev:"Prev",next:"Next",overview:"Overview",
+  exitPresentation:"Exit presentation",prev:"Prev",next:"Next",
   fullscreen:"Full screen",exitFullscreen:"Leave full screen",
+  workMode:"Work mode",search:"Search…",searchPh:"Search notes",noHit:"no match",
+  modeAll:"Text",modeTag:"Tag",searchTagPh:"Search tags",
+  level:"Heading level",lvNone:"Body text",lv1:"Heading 1",lv2:"Heading 2",lv3:"Heading 3",
+  exportDoc:"Export…",expTitle:"Export",expName:"Document title",
+  grpEn:"Latin",grpZh:"Chinese",
+  linkView:"Connector display",lvAll:"Always visible",lvFocus:"Focus on hover",lvOff:"Hidden",
+  linkLabel:"Note marker",llDot:"Dot only",llText:"Short label",llNone:"None",
+  linkNote:"Note on this connector…",noteTitle:"Connector note",notePh:"What does this link mean",
+  newBoard:"New board",confirmNew:"Start a new board? The current one stays in its file.",
+  unbind:"Unbind from file",unbound:"No file bound now. Use Save as to bind one.",
+  boundTo:"Bound to",noBound:"not bound",emptyGuard:"Board is empty, auto write paused",
+  mergeJSON:"Merge in a file…",mergedIn:"Cards merged in:",badFile:"Cannot read this file",
+  scope:"Include",scopeAll:"Whole board",scopeSel:"Selection only",fmtJson:"Board file",
+  needSel:"Select something first",manual:"Manual",
+  fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF view",fmtJpg:"JPG",
+  scale:"Scale",expPrint:"The print dialog opens. Choose Save as PDF.",expShot:"Rendering the canvas…",
+  expImg:"Include images",expTags:"Include tags",expRef:"Cross references",expTable:"Relation appendix",
+  expGo:"Export",expWork:"Building the document…",expDone:"Document exported",
+  relSee:"See",relFrom:"From",relTable:"Relations",relPlain:"related to",relAgainst:"contrasts with",
+  relCite:"extends",relSupport:"supports",relBoth:"mutual",
+  tagsMenu:"Tags…",tagTitle:"Tags",tagsPh:"tag1, tag2",allTags:"Tags on this board",tagHint:"Also picks up #tag written in the text",
+  imgSize:"Image size on import",fitSel:"Resize selected images to this",
+  fitAllImg:"Resize every image to this",px:"px",
   group:"Group selection",ungroup:"Ungroup",lockGroup:"Lock group",unlockGroup:"Unlock group",
   lockedNote:"This group is locked",defaultText:"Default text style…",defTitle:"Default text style",
   tsTitle:"Text style",font:"Font",size:"Size",weight:"Weight",tracking:"Tracking",leading:"Leading",
@@ -133,9 +217,8 @@ const T={
   placeholder:"Add text",newText:"Text",
   hint:"Empty canvas<br>Press Ctrl / Cmd + V to paste an image, or drop one in<br>Right click anywhere for the menu<br>Drag to select, hold Space or Alt to pan",
   lockOn:"Presentation lock is on. Click a card to zoom in.",
-  savedTo:"Saved to",saveNamePrompt:"File name",noHandle:"Choose a file with Save as first",
-  bg:["Off white","Light grey","Mid grey","White","Warm sand","Deep green","Black"],
-  fonts:["Plex Sans","Space Grotesk","Archivo","Bodoni Moda","Instrument Serif","Cormorant","SC Sans","SC Serif","Plex Mono"]
+  savedTo:"Saved to",saveNamePrompt:"File name",
+  bg:["Off white","Light grey","Mid grey","White","Warm sand","Deep green","Black"]
  },
  zh:{
   insertImage:"插入图片…",insertText:"插入文字",dbl:"双击",selectAll:"全选",
@@ -153,8 +236,31 @@ const T={
   arrow:"箭头",arrNone:"无箭头",arrEnd:"单向箭头",arrBoth:"双向箭头",
   colour:"颜色",cGray:"灰",cBlack:"黑",cWhite:"白",cRed:"红",cBlue:"蓝",cGreen:"绿",
   reverse:"反转方向",delLink:"删除连线",
-  exitPresentation:"退出演示",prev:"上一个",next:"下一个",overview:"总览",
+  exitPresentation:"退出演示",prev:"上一个",next:"下一个",
   fullscreen:"全屏显示",exitFullscreen:"退出全屏",
+  workMode:"工作模式",search:"搜索…",searchPh:"搜索笔记",noHit:"无匹配",
+  modeAll:"全文",modeTag:"标签",searchTagPh:"搜索标签",
+  level:"层级",lvNone:"正文",lv1:"一级标题",lv2:"二级标题",lv3:"三级标题",
+  exportDoc:"导出…",expTitle:"导出",expName:"文档标题",
+  grpEn:"英文",grpZh:"中文",
+  linkView:"连线显示",lvAll:"始终显示",lvFocus:"聚焦时显示",lvOff:"隐藏",
+  linkLabel:"批注标记",llDot:"仅圆点",llText:"简短标签",llNone:"不显示",
+  linkNote:"连线备注…",noteTitle:"连线备注",notePh:"这条关联意味着什么",
+  newBoard:"新建画布",confirmNew:"新建一张空白画布？当前内容仍保留在它的文件里。",
+  unbind:"解除文件绑定",unbound:"已解除绑定，用另存为可重新指定文件。",
+  boundTo:"当前文件",noBound:"未绑定文件",emptyGuard:"画布为空，已暂停自动写回",
+  mergeJSON:"合并导入…",mergedIn:"已并入卡片：",badFile:"文件无法解析",
+  scope:"范围",scopeAll:"整个画布",scopeSel:"仅选中内容",fmtJson:"画布文件",
+  needSel:"请先选中内容",manual:"使用说明",
+  fmt:"格式",fmtWord:"Word",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG",
+  scale:"倍率",expPrint:"打印窗口已打开，目标选择另存为 PDF 即可。",expShot:"正在渲染画布…",
+  expImg:"包含图片",expTags:"包含标签",expRef:"生成交叉引用",expTable:"附录关系表",
+  expGo:"导出",expWork:"正在生成文档…",expDone:"文档已导出",
+  relSee:"参见",relFrom:"来自",relTable:"关联总览",relPlain:"关联",relAgainst:"对立",
+  relCite:"延伸",relSupport:"印证",relBoth:"互为关联",
+  tagsMenu:"标签…",tagTitle:"标签",tagsPh:"标签1, 标签2",allTags:"画布中已有标签",tagHint:"正文里写的 #标签 也会自动识别",
+  imgSize:"导入图片尺寸",fitSel:"把选中图片调成该尺寸",
+  fitAllImg:"把所有图片调成该尺寸",px:"px",
   group:"编组",ungroup:"取消编组",lockGroup:"锁定该组",unlockGroup:"解锁该组",
   lockedNote:"该组已锁定",defaultText:"默认文字格式…",defTitle:"默认文字格式",
   tsTitle:"文字样式",font:"字体",size:"字号",weight:"字重",tracking:"字距",leading:"行距",
@@ -163,9 +269,8 @@ const T={
   placeholder:"添加文字",newText:"文字",
   hint:"空白画布<br>Ctrl / Cmd + V 粘贴图片，或直接拖入图片<br>右键任意位置打开菜单<br>空白处拖动为框选，按住空格或 Alt 拖动为平移",
   lockOn:"已进入演示锁定，点击卡片可放大聚焦",
-  savedTo:"已保存到",saveNamePrompt:"文件名",noHandle:"请先用另存为选择文件",
-  bg:["米白","浅灰","中灰","纯白","暖沙","深绿","深黑"],
-  fonts:["无衬线 Plex","Space Grotesk","Archivo","衬线 Bodoni","Instrument Serif","Cormorant","中文黑体","中文宋体","等宽 Mono"]
+  savedTo:"已保存到",saveNamePrompt:"文件名",
+  bg:["米白","浅灰","中灰","纯白","暖沙","深绿","深黑"]
  }
 };
 let LANG="en";
@@ -173,18 +278,36 @@ const t=k=>(T[LANG]&&T[LANG][k])!==undefined?T[LANG][k]:(T.en[k]||k);
 
 /* ================= constants ================= */
 const FONTS=[
-  ["sans",'"IBM Plex Sans","Noto Sans SC",sans-serif'],
-  ["grotesk",'"Space Grotesk","Noto Sans SC",sans-serif'],
-  ["archivo",'"Archivo","Noto Sans SC",sans-serif'],
-  ["serif",'"Bodoni Moda","Noto Serif SC",serif'],
-  ["instrument",'"Instrument Serif","Noto Serif SC",serif'],
-  ["cormorant",'"Cormorant Garamond","Noto Serif SC",serif'],
-  ["hei",'"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif'],
-  ["song",'"Noto Serif SC","Songti SC","SimSun",serif'],
-  ["mono",'"IBM Plex Mono","Noto Sans SC",monospace']
+  ["sans",'"IBM Plex Sans","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"en","IBM Plex Sans"],
+  ["instrsans",'"Instrument Sans","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"en","Instrument Sans"],
+  ["schibsted",'"Schibsted Grotesk","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"en","Schibsted Grotesk"],
+  ["archivo",'"Archivo","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"en","Archivo"],
+  ["grotesk",'"Space Grotesk","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"en","Space Grotesk"],
+  ["bricolage",'"Bricolage Grotesque","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"en","Bricolage Grotesque"],
+  ["syne",'"Syne","PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"en","Syne"],
+  ["ebgaramond",'"EB Garamond","Songti SC","SimSun","STSong",serif',"en","EB Garamond"],
+  ["cormorant",'"Cormorant Garamond","Songti SC","SimSun","STSong",serif',"en","Cormorant Garamond"],
+  ["spectral",'"Spectral","Songti SC","SimSun","STSong",serif',"en","Spectral"],
+  ["newsreader",'"Newsreader","Songti SC","SimSun","STSong",serif',"en","Newsreader"],
+  ["literata",'"Literata","Songti SC","SimSun","STSong",serif',"en","Literata"],
+  ["instrument",'"Instrument Serif","Songti SC","SimSun","STSong",serif',"en","Instrument Serif"],
+  ["playfair",'"Playfair Display","Songti SC","SimSun","STSong",serif',"en","Playfair Display"],
+  ["serif",'"Bodoni Moda","Songti SC","SimSun","STSong",serif',"en","Bodoni Moda"],
+  ["fraunces",'"Fraunces","Songti SC","SimSun","STSong",serif',"en","Fraunces"],
+  ["mono",'"IBM Plex Mono","PingFang SC","Microsoft YaHei","Hiragino Sans GB",monospace',"en","IBM Plex Mono"],
+  ["jetbrains",'"JetBrains Mono","PingFang SC","Microsoft YaHei","Hiragino Sans GB",monospace',"en","JetBrains Mono"],
+  ["pingfang",'"PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"zh","苹方 / 微软雅黑","PingFang / YaHei"],
+  ["heiti",'"Heiti SC","STHeiti","SimHei",sans-serif',"zh","黑体","Heiti"],
+  ["yuanti",'"Yuanti SC","Hiragino Sans GB","PingFang SC",sans-serif',"zh","圆体","Yuanti"],
+  ["hei",'"PingFang SC","Microsoft YaHei","Hiragino Sans GB",sans-serif',"zh","黑体（默认）","System Hei"],
+  ["songti",'"Songti SC","SimSun","STSong",serif',"zh","宋体","Songti"],
+  ["song",'"Songti SC","SimSun","STSong",serif',"zh","宋体（默认）","System Song"],
+  ["kaiti",'"Kaiti SC","KaiTi","STKaiti",serif',"zh","楷体","Kaiti"],
+  ["fangsong",'"FangSong","STFangsong","SimSun",serif',"zh","仿宋","FangSong"]
 ];
 const famCSS=k=>(FONTS.find(f=>f[0]===k)||FONTS[0])[1];
-const famName=k=>{const i=FONTS.findIndex(f=>f[0]===k);return t("fonts")[i<0?0:i]};
+const famName=k=>{const f=FONTS.find(x=>x[0]===k)||FONTS[0];
+  return LANG==="zh"?f[3]:(f[4]||f[3])};
 const BG=["#F4F4F2","#EDEDE8","#E4E4E0","#FFFFFF","#F6EFE7","#1E2220","#161616"];
 const uid=()=>Math.random().toString(36).slice(2,9);
 const $=s=>document.getElementById(s);
@@ -193,11 +316,35 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* ================= state ================= */
 const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",italic:false,color:"#111111"};
 const DEFLINK={kind:"curve",dash:false,arrow:"end",w:1.4,color:"#8A8A85"};
-let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",focusClick:false};
-let sel=[], selLink=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
+let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",focusClick:false,imgMax:360,work:false,findMode:"all",linkView:"focus",linkLabel:"dot"};
+let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
 let undo=[], redo=[], mouse={x:innerWidth/2,y:innerHeight/2}, focusIdx=-1;
 const card=id=>S.cards.find(c=>c.id===id);
+const IMG=new Map();
+const srcOf=c=>c.ih?(IMG.get(c.ih)||""):(c.src||"");
+const hOf=c=>c.h||hOf(c);
+async function hashStr(str){
+  try{
+    const h=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(str));
+    return [...new Uint8Array(h)].slice(0,10).map(x=>x.toString(16).padStart(2,"0")).join("");
+  }catch(e){let a=5381;for(let i=0;i<str.length;i++)a=((a<<5)+a+str.charCodeAt(i))>>>0;
+    return "f"+a.toString(16)+str.length.toString(16)}
+}
+async function putImg(dataURL){
+  const h=await hashStr(dataURL);
+  if(!IMG.has(h)){IMG.set(h,dataURL);await kvPut("img:"+h,dataURL)}
+  return h;
+}
+async function loadImgs(cards){
+  const need=[...new Set(cards.map(c=>c.ih).filter(x=>x&&!IMG.has(x)))];
+  for(const h of need){const v=await kvGet("img:"+h);if(v)IMG.set(h,v)}
+}
+async function migrateInline(cards){
+  for(const c of cards){
+    if(c.src&&!c.ih){c.ih=await putImg(c.src);delete c.src}
+  }
+}
 const groupOf=id=>(S.groups||[]).find(g=>g.ids.includes(id));
 const isLocked=id=>{const g=groupOf(id);return !!(g&&g.locked)};
 const expand=ids=>{const out=new Set();
@@ -208,11 +355,13 @@ function cleanGroups(){
   S.groups=(S.groups||[]).map(g=>({...g,ids:g.ids.filter(i=>card(i))})).filter(g=>g.ids.length>1);
 }
 const size={};
-function snap(){undo.push(JSON.stringify({cards:S.cards,links:S.links,groups:S.groups}));if(undo.length>50)undo.shift();redo=[]}
+function packState(){return JSON.stringify({groups:S.groups,links:S.links,cards:S.cards})}
+function unpackState(str){return JSON.parse(str)}
+function snap(){undo.push(packState());if(undo.length>40)undo.shift();redo=[]}
 function applyUndo(stack,other){
   if(!stack.length)return;
-  other.push(JSON.stringify({cards:S.cards,links:S.links,groups:S.groups}));
-  const p=JSON.parse(stack.pop());S.cards=p.cards;S.links=p.links;S.groups=p.groups||[];
+  other.push(packState());
+  const p=unpackState(stack.pop());S.cards=p.cards;S.links=p.links;S.groups=p.groups||[];
   sel=[];selLink=null;render();save();
 }
 
@@ -236,28 +385,68 @@ let st;const save=()=>{clearTimeout(st);st=setTimeout(async()=>{
 },400)};
 
 /* ================= named file ================= */
-let fileHandle=null,fileName=null,fileOK=false;
+let fileHandle=null,fileName=null,fileOK=false,dirHandle=null;
+function datePrefix(){
+  const d=new Date(),p=n=>String(n).padStart(2,"0");
+  return p(d.getFullYear()%100)+"-"+p(d.getMonth()+1)+"-"+p(d.getDate());
+}
+const hasDate=n=>/^\d{2}-\d{2}-\d{2}-/.test(n||"");
+function stampName(base,ext){
+  let b=(base||"board").replace(/\.(json|docx?|pdf|jpe?g)$/i,"").trim()||"board";
+  b=b.replace(/^\d{2}-\d{2}-\d{2}-/,"");
+  return datePrefix()+"-"+b+(ext||"");
+}
+function bundle(list){
+  const cards=(list||S.cards).map(c=>{const o={...c};if(o.ih){o.src=IMG.get(o.ih)||"";delete o.ih}return o});
+  const ids=new Set(cards.map(c=>c.id));
+  return {...S,cards,
+    links:S.links.filter(l=>ids.has(l.a)&&ids.has(l.b)),
+    groups:(S.groups||[]).map(g=>({...g,ids:g.ids.filter(i=>ids.has(i))})).filter(g=>g.ids.length>1)};
+}
+async function absorb(data,merge){
+  const cards=(data.cards||[]).map(c=>({...c}));
+  await migrateInline(cards);
+  if(!merge){
+    S={...S,...data,cards,links:data.links||[],groups:data.groups||[]};
+    await loadImgs(cards);return cards.length;
+  }
+  const map={},b=bbox(),ox=b?b.x+b.w+120:0,oy=b?b.y:0;
+  const nb=bbox(cards)||{x:0,y:0};
+  cards.forEach(c=>{const nid=uid();map[c.id]=nid;c.id=nid;
+    c.x=Math.round(c.x-nb.x+ox);c.y=Math.round(c.y-nb.y+oy)});
+  S.cards=S.cards.concat(cards);
+  (data.links||[]).forEach(l=>{if(map[l.a]&&map[l.b])
+    S.links.push({...l,id:uid(),a:map[l.a],b:map[l.b]})});
+  (data.groups||[]).forEach(g=>{const ids=g.ids.map(i=>map[i]).filter(Boolean);
+    if(ids.length>1)S.groups.push({...g,id:uid(),ids})});
+  await loadImgs(cards);
+  return cards.length;
+}
 function statusBar(){
-  $("status").textContent=Math.round(cam.z*100)+"%";
+  const z=Math.round(cam.z*100)+"%";
+  $("status").innerHTML=(S.work&&!lock&&fileName?esc(fileName)+"<br>":"")+z;
 }
 async function pickFile(){
   if(window.showSaveFilePicker){
     try{
-      fileHandle=await showSaveFilePicker({suggestedName:(fileName||"board")+(/\.json$/i.test(fileName||"")?"":".json"),
-        types:[{description:"Board file",accept:{"application/json":[".json"]}}]});
+      const opt={suggestedName:stampName(fileName||"board",".json"),
+        types:[{description:"Board file",accept:{"application/json":[".json"]}}]};
+      if(fileHandle)opt.startIn=fileHandle;
+      fileHandle=await showSaveFilePicker(opt);
       fileName=fileHandle.name;fileOK=true;await kvPut(FH,fileHandle);
       await writeFile();statusBar();
     }catch(e){}
     return;
   }
-  const n=prompt(t("saveNamePrompt"),fileName||"board");
+  const n=prompt(t("saveNamePrompt"),stampName(fileName||"board"));
   if(!n)return;fileName=/\.json$/i.test(n)?n:n+".json";download();statusBar();
 }
-function download(){
-  const b=new Blob([JSON.stringify(S,null,1)],{type:"application/json"});
-  const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=fileName||"board.json";a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
-  toast(t("savedTo")+" "+(fileName||"board.json"));
+function download(data,name){
+  const b=new Blob([JSON.stringify(data||bundle(),null,1)],{type:"application/json"});
+  const fn=name||fileName||"board.json";
+  const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=fn;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+  toast(t("savedTo")+" "+fn);
 }
 async function writeFile(quiet){
   if(!fileHandle)return false;
@@ -267,10 +456,23 @@ async function writeFile(quiet){
       if(p!=="granted"){p=await fileHandle.requestPermission({mode:"readwrite"});if(p!=="granted"){fileOK=false;return false}}
     }
     const w=await fileHandle.createWritable();
-    await w.write(JSON.stringify(S,null,1));await w.close();
+    await w.write(JSON.stringify(bundle(),null,1));await w.close();
     fileOK=true;if(!quiet)toast(t("savedTo")+" "+fileName);
     return true;
   }catch(e){fileOK=false;return false}
+}
+async function unbind(quiet){
+  fileHandle=null;fileName=null;fileOK=false;
+  try{await kvPut(FH,null)}catch(e){}
+  statusBar();if(!quiet)toast(t("unbound"));
+}
+async function newBoard(){
+  if(S.cards.length&&!confirm(t("confirmNew")))return;
+  if(fileHandle&&S.cards.length)await writeFile(true);
+  snap();
+  S.cards=[];S.links=[];S.groups=[];sel=[];selLink=null;
+  await unbind(true);
+  camTo(0,0,1,true);render();save();
 }
 async function saveNow(){
   if(fileHandle){const ok=await writeFile();if(ok)return}
@@ -279,6 +481,7 @@ async function saveNow(){
 }
 let ft;function fileAutoSave(){
   if(!fileHandle||!fileOK)return;
+  if(!S.cards.length){toast(t("emptyGuard"));return}
   clearTimeout(ft);ft=setTimeout(()=>writeFile(true),1200);
 }
 
@@ -286,12 +489,13 @@ let ft;function fileAutoSave(){
 function loop(){
   const k=.22,dx=tgt.x-cam.x,dy=tgt.y-cam.y,dz=tgt.z-cam.z;
   if(Math.abs(dx)>.05||Math.abs(dy)>.05||Math.abs(dz)>.0004){
-    cam.x+=dx*k;cam.y+=dy*k;cam.z+=dz*k;applyCam();drawLinks();
+    cam.x+=dx*k;cam.y+=dy*k;cam.z+=dz*k;applyCam();
   }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
 function applyCam(){
+  cullSoon();
   const w=$("world");
   w.style.transform=`translate(${cam.x}px,${cam.y}px) scale(${cam.z})`;
   w.style.setProperty("--iz",1/cam.z);
@@ -299,10 +503,11 @@ function applyCam(){
 }
 const toW=(x,y)=>({x:(x-innerWidth/2-cam.x)/cam.z,y:(y-innerHeight/2-cam.y)/cam.z});
 function camTo(x,y,z,snapNow){tgt={x,y,z};if(snapNow){cam={x,y,z};applyCam();drawLinks()}}
-function bbox(){
-  if(!S.cards.length)return null;
-  const x=Math.min(...S.cards.map(c=>c.x)),y=Math.min(...S.cards.map(c=>c.y));
-  const xe=Math.max(...S.cards.map(c=>c.x+c.w)),ye=Math.max(...S.cards.map(c=>c.y+(size[c.id]?.h||c.w)));
+function bbox(list){
+  const cs=list||S.cards;
+  if(!cs.length)return null;
+  const x=Math.min(...cs.map(c=>c.x)),y=Math.min(...cs.map(c=>c.y));
+  const xe=Math.max(...cs.map(c=>c.x+c.w)),ye=Math.max(...cs.map(c=>c.y+hOf(c)));
   return{x,y,w:xe-x,h:ye-y};
 }
 function boxTo(b,pad,maxZ,now){
@@ -312,7 +517,8 @@ function boxTo(b,pad,maxZ,now){
 }
 function fit(now){focusIdx=-1;boxTo(bbox(),170,1.6,now)}
 function focusCard(c){
-  const h=size[c.id]?.h||c.w;
+  clearTimeout(cullT);syncCards();measure();
+  const h=hOf(c);
   boxTo({x:c.x,y:c.y,w:c.w,h},lock?110:150,1);
   focusIdx=S.cards.indexOf(c);
 }
@@ -339,9 +545,9 @@ function render(){
   document.body.style.setProperty("--pfg",dark?"#EFEFEC":"#111");
   document.body.style.setProperty("--pline",dark?"rgba(255,255,255,.16)":"rgba(0,0,0,.12)");
   document.body.style.setProperty("--phi",dark?"rgba(255,255,255,.09)":"rgba(0,0,0,.06)");
-  const box=$("cards");box.innerHTML="";
-  S.cards.forEach(c=>box.appendChild(makeCard(c)));
-  measure();drawLinks();statusBar();
+  nodes.forEach(el=>el.remove());nodes.clear();
+  syncCards();
+  measure();drawLinks();statusBar();paintFind();refreshTagList();syncFindMode();
   $("hint").innerHTML=(S.cards.length||lock)?"":t("hint");
 }
 function isDark(h){if(!h||h[0]!=="#")return false;
@@ -353,8 +559,9 @@ function makeCard(c){
   el.className="card"+(sel.includes(c.id)?" sel":"")+(isLocked(c.id)?" lk":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
-  if(c.src){
-    const im=document.createElement("img");im.src=c.src;im.draggable=false;
+  const csrc=srcOf(c);
+  if(csrc){
+    const im=document.createElement("img");im.src=csrc;im.draggable=false;
     if(c.ar)im.style.aspectRatio=`1 / ${c.ar}`;
     im.onload=()=>{if(!c.ar)c.ar=im.naturalHeight/im.naturalWidth;measure();drawLinks()};
     el.appendChild(im);
@@ -363,12 +570,23 @@ function makeCard(c){
   cap.spellcheck=false;cap.dataset.ph=t("placeholder");
   Object.assign(cap.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",fontWeight:s.weight,
     lineHeight:s.lh,letterSpacing:s.spacing+"em",textAlign:s.align,color:s.color,
-    fontStyle:s.italic?"italic":"normal",marginTop:(c.src?10:0)+"px"});
-  cap.addEventListener("input",()=>{c.text=cap.innerText;measure();drawLinks();save()});
+    fontStyle:s.italic?"italic":"normal",marginTop:(csrc?10:0)+"px"});
+  cap.addEventListener("input",()=>{c.text=cap.innerText;measure();drawLinksSoon();save()});
   cap.addEventListener("blur",()=>{c.text=cap.innerText;cap.contentEditable="false";editing=false;save();render()});
   cap.addEventListener("pointerdown",e=>{if(cap.isContentEditable)e.stopPropagation()});
   el.appendChild(cap);
 
+  if(c.level){const lb=document.createElement("div");lb.className="lvl";
+    lb.textContent="H"+c.level;lb.style.color=s.color;el.appendChild(lb)}
+  const tg=cardTags(c);
+  if(tg.length){
+    const tw=document.createElement("div");tw.className="tags";
+    tw.style.color=s.color;tw.style.fontSize=Math.max(9,s.size*.78)+"px";
+    tg.forEach(x=>{const b=document.createElement("span");b.className="tg";b.textContent="#"+x;
+      b.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();searchTag(x)});
+      tw.appendChild(b)});
+    el.appendChild(tw);
+  }
   const ring=document.createElement("div");ring.className="ring";el.appendChild(ring);
   const rs=document.createElement("div");rs.className="rs";
   rs.addEventListener("pointerdown",e=>{if(lock||isLocked(c.id))return;e.stopPropagation();startResize(e,c)});
@@ -394,6 +612,9 @@ function makeCard(c){
     selLink=null;paintSel();
     startMove(e,()=>{if(S.focusClick&&!e.shiftKey)focusCard(c)});
   });
+  el.addEventListener("pointerenter",()=>{hoverId=c.id;if(S.linkView==="focus")drawLinksSoon()});
+  el.addEventListener("pointerleave",()=>{if(hoverId===c.id){hoverId=null;
+    if(S.linkView==="focus")drawLinksSoon()}});
   el.addEventListener("dblclick",e=>{if(lock)return;e.stopPropagation();editText(c)});
   el.addEventListener("contextmenu",e=>{
     e.preventDefault();e.stopPropagation();
@@ -403,16 +624,47 @@ function makeCard(c){
   });
   return el;
 }
+const nodes=new Map();
+const CULL={m:700};
+const MARGIN=700;
+function viewRect(m){
+  const a=toW(0,0),b=toW(innerWidth,innerHeight),p=m===undefined?CULL.m:Math.max(m,CULL.m);
+  return {x:a.x-p,y:a.y-p,x2:b.x+p,y2:b.y+p};
+}
+const inRect=(c,r)=>c.x+c.w>r.x&&c.x<r.x2&&c.y+hOf(c)>r.y&&c.y<r.y2;
+function syncCards(){
+  const box=$("cards"),r=viewRect(),want=new Set();
+  S.cards.forEach(c=>{if(inRect(c,r))want.add(c.id)});
+  nodes.forEach((el,id)=>{if(!want.has(id)){
+    if(hoverId===id)hoverId=null;el.remove();nodes.delete(id)}});
+  S.cards.forEach(c=>{
+    if(!want.has(c.id)||nodes.has(c.id))return;
+    const el=makeCard(c);box.appendChild(el);nodes.set(c.id,el);
+  });
+}
+let cullT;
+function cullSoon(){clearTimeout(cullT);cullT=setTimeout(()=>{
+  const before=nodes.size;syncCards();
+  if(nodes.size!==before){measure();paintFind()}
+  drawLinks();
+},110)}
 function paintSel(){
-  document.querySelectorAll(".card").forEach(el=>el.classList.toggle("sel",sel.includes(el.dataset.id)));
+  nodes.forEach((el,id)=>el.classList.toggle("sel",sel.includes(id)));
   drawLinks();
 }
-function measure(){document.querySelectorAll(".card").forEach(el=>{
-  size[el.dataset.id]={w:el.offsetWidth,h:el.offsetHeight}})}
+function measure(){
+  const live=new Set(S.cards.map(c=>c.id));
+  Object.keys(size).forEach(k=>{if(!live.has(k))delete size[k]});
+  document.querySelectorAll(".card").forEach(el=>{
+    const h=el.offsetHeight;
+    size[el.dataset.id]={w:el.offsetWidth,h};
+    const c=card(el.dataset.id);if(c&&c.h!==h)c.h=h;
+  });
+}
 function editText(c){
   if(lock)return;
   if(isLocked(c.id)){toast(t("lockedNote"));return}
-  const el=document.querySelector(`.card[data-id="${c.id}"] .cap`);if(!el)return;
+  const el=nodes.get(c.id)?.querySelector(".cap");if(!el)return;
   editing=true;el.contentEditable="true";el.focus();
   const r=document.createRange();r.selectNodeContents(el);
   const s=getSelection();s.removeAllRanges();s.addRange(r);
@@ -421,12 +673,12 @@ function editText(c){
 /* ================= connectors ================= */
 const OF=20000;
 function anchor(c,side){
-  const h=size[c.id]?.h||c.w,w=c.w;
+  const h=hOf(c),w=c.w;
   return{t:{x:c.x+w/2,y:c.y},b:{x:c.x+w/2,y:c.y+h},
     l:{x:c.x,y:c.y+h/2},r:{x:c.x+w,y:c.y+h/2}}[side];
 }
 function autoSides(a,b){
-  const ah=size[a.id]?.h||a.w,bh=size[b.id]?.h||b.w;
+  const ah=hOf(a),bh=hOf(b);
   const ac={x:a.x+a.w/2,y:a.y+ah/2},bc={x:b.x+b.w/2,y:b.y+bh/2};
   return Math.abs(bc.x-ac.x)>Math.abs(bc.y-ac.y)
     ?[bc.x>ac.x?"r":"l",bc.x>ac.x?"l":"r"]
@@ -446,11 +698,18 @@ function pathOf(p1,p2,s1,s2,kind){
   const c2=H(s2)?{x:b.x+(s2==="r"?d:-d),y:b.y}:{x:b.x,y:b.y+(s2==="b"?d:-d)};
   return `M${a.x} ${a.y} C${c1.x} ${c1.y}, ${c2.x} ${c2.y}, ${b.x} ${b.y}`;
 }
+let dlPend=false;
+function drawLinksSoon(){if(dlPend)return;dlPend=true;
+  requestAnimationFrame(()=>{dlPend=false;drawLinks()})}
 function drawLinks(){
   S.links=S.links.filter(l=>card(l.a)&&card(l.b));
-  let defs="",out="";const seen={};
+  let defs="",out="";const seen={},r=viewRect(MARGIN),mark=[];
   S.links.forEach(l=>{
-    const A=card(l.a),B=card(l.b),au=autoSides(A,B);
+    const A=card(l.a),B=card(l.b);
+    const lx=Math.min(A.x,B.x),ly=Math.min(A.y,B.y);
+    const lx2=Math.max(A.x+A.w,B.x+B.w),ly2=Math.max(A.y+hOf(A),B.y+hOf(B));
+    if(lx2<r.x||lx>r.x2||ly2<r.y||ly>r.y2)return;
+    const au=autoSides(A,B);
     const s1=l.sa||au[0],s2=l.sb||au[1];
     const d=pathOf(anchor(A,s1),anchor(B,s2),s1,s2,l.kind||"curve");
     const col=l.color||"#8A8A85",id="m"+col.replace(/[^a-z0-9]/gi,"");
@@ -460,16 +719,68 @@ function drawLinks(){
     const me=(ar==="end"||ar==="both")?`marker-end="url(#${id})"`:"";
     const ms=(ar==="both")?`marker-start="url(#${id})"`:"";
     const w=l.w||1.4,on=selLink===l.id&&!lock;
-    out+=`<path d="${d}" stroke="${col}" stroke-width="${on?w+1.4:w}" stroke-linejoin="round" stroke-linecap="round" ${l.dash?`stroke-dasharray="${w*4.5} ${w*3.5}"`:""} ${me} ${ms}/>`;
-    if(!lock)out+=`<path class="hit" d="${d}" data-link="${l.id}"/>`;
+    const live=sel.includes(l.a)||sel.includes(l.b)||hoverId===l.a||hoverId===l.b||selLink===l.id;
+    const dim=S.linkView==="focus"&&!live;
+    out+=`<path class="ln" data-link="${l.id}" d="${d}" stroke="${col}" stroke-opacity="${dim?.13:1}" stroke-width="${on?w+1.4:w}" stroke-linejoin="round" stroke-linecap="round" ${l.dash?`stroke-dasharray="${w*4.5} ${w*3.5}"`:""} ${dim?"":me} ${dim?"":ms}/>`;
+    if(!lock&&S.linkView!=="off")out+=`<path class="hit" d="${d}" data-link="${l.id}">${l.note?`<title>${esc(l.note)}</title>`:""}</path>`;
+    if(!dim&&l.note&&S.linkLabel!=="none")mark.push(l);
   });
   const svg=$("links");
+  if(S.linkView==="off"){svg.innerHTML="";return}
   svg.innerHTML=`<defs>${defs}</defs>`+out;
+  if(mark.length)drawMarks(svg,mark);
   svg.querySelectorAll(".hit").forEach(p=>{
     p.addEventListener("pointerdown",e=>{e.stopPropagation();selLink=p.dataset.link;sel=[];paintSel()});
     p.addEventListener("contextmenu",e=>{e.preventDefault();e.stopPropagation();
       selLink=p.dataset.link;sel=[];paintSel();linkMenu(e.clientX,e.clientY)});
   });
+}
+function drawMarks(svg,list){
+  const iz=1/cam.z,ns="http://www.w3.org/2000/svg";
+  const g=document.createElementNS(ns,"g");
+  list.forEach(l=>{
+    const p=svg.querySelector(`.ln[data-link="${l.id}"]`);if(!p)return;
+    let m;try{m=p.getPointAtLength(p.getTotalLength()/2)}catch(e){return}
+    const col=l.color||"#8A8A85";
+    const c=document.createElementNS(ns,"circle");
+    c.setAttribute("cx",m.x);c.setAttribute("cy",m.y);c.setAttribute("r",5*iz);
+    c.setAttribute("fill",col);c.setAttribute("stroke",S.bg);c.setAttribute("stroke-width",2*iz);
+    c.style.cursor="pointer";c.dataset.link=l.id;
+    c.addEventListener("pointerdown",e=>{e.stopPropagation();selLink=l.id;sel=[];
+      openLinkNote(l,e.clientX,e.clientY)});
+    const ti=document.createElementNS(ns,"title");ti.textContent=l.note;c.appendChild(ti);
+    g.appendChild(c);
+    if(S.linkLabel==="text"){
+      const tx=document.createElementNS(ns,"text");
+      tx.setAttribute("x",m.x+9*iz);tx.setAttribute("y",m.y+4*iz);
+      tx.setAttribute("font-size",11*iz);tx.setAttribute("fill",isDark(S.bg)?"#DDD":"#333");
+      tx.setAttribute("stroke",S.bg);tx.setAttribute("stroke-width",3.5*iz);
+      tx.setAttribute("paint-order","stroke");tx.style.pointerEvents="none";
+      tx.setAttribute("font-family",'"IBM Plex Sans","PingFang SC",sans-serif');
+      const one=(l.note||"").split(/\n/)[0];
+      tx.textContent=one.length>22?one.slice(0,22)+"\u2026":one;
+      g.appendChild(tx);
+    }
+  });
+  g.style.pointerEvents="auto";
+  svg.appendChild(g);
+}
+function openLinkNote(l,x,y){
+  if(lock)return;
+  const p=$("pop");
+  p.innerHTML=`
+    <div class="hd"><b>${t("noteTitle")}</b><button id="pcx">\u00D7</button></div>
+    <textarea class="ti" id="lnote" rows="4" placeholder="${t("notePh")}"
+      style="height:96px;padding:8px;line-height:1.6;resize:none">${esc(l.note||"")}</textarea>`;
+  place(p,Math.min(x,innerWidth-270),Math.min(y,innerHeight-200));
+  p.classList.add("on");
+  const ta=p.querySelector("#lnote");
+  ta.addEventListener("keydown",e=>e.stopPropagation());
+  const apply=()=>{const v=ta.value.trim();
+    if((l.note||"")!==v){snap();if(v)l.note=v;else delete l.note;drawLinks();save()}};
+  ta.addEventListener("blur",apply);
+  p.querySelector("#pcx").onclick=()=>{apply();p.classList.remove("on")};
+  setTimeout(()=>ta.focus(),30);
 }
 function startLink(e,c,side){
   const svg=$("links");
@@ -504,9 +815,9 @@ function startMove(e,onClick){
     if(Math.abs(dx)+Math.abs(dy)>1)moved=true;
     if(ev.shiftKey){Math.abs(dx)>Math.abs(dy)?dy=0:dx=0}
     list.forEach(({o,x,y})=>{o.x=Math.round(x+dx);o.y=Math.round(y+dy);
-      const el=document.querySelector(`.card[data-id="${o.id}"]`);
+      const el=nodes.get(o.id);
       if(el){el.style.left=o.x+"px";el.style.top=o.y+"px"}});
-    drawLinks();
+    drawLinksSoon();
   };
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
     if(!moved){undo.pop();onClick&&onClick()}else save()};
@@ -515,9 +826,9 @@ function startMove(e,onClick){
 function startResize(e,c){
   if(isLocked(c.id))return;
   snap();const sx=e.clientX,ow=c.w;
-  const el=document.querySelector(`.card[data-id="${c.id}"]`);
+  const el=nodes.get(c.id);
   const mv=ev=>{c.w=Math.round(clamp(ow+(ev.clientX-sx)/cam.z,60,3000));
-    el.style.width=c.w+"px";measure();drawLinks()};
+    el.style.width=c.w+"px";measure();drawLinksSoon()};
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);save()};
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
@@ -534,9 +845,11 @@ function shrink(file,cb){
     im.src=fr.result};
   fr.readAsDataURL(file);
 }
-function addImage(d,w,h,p,quiet){
-  const W=Math.min(340,w);
-  const c={id:uid(),src:d,ar:h/w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
+async function addImage(d,w,h,p,quiet){
+  const cap=S.imgMax||360;
+  const W=Math.round(w*Math.min(1,cap/Math.max(w,h)));
+  const ih=await putImg(d);
+  const c={id:uid(),ih,ar:h/w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
   S.cards.push(c);if(!quiet){sel=[c.id];selLink=null}render();save();return c;
 }
 function addImages(files,p){
@@ -598,7 +911,7 @@ function startMarquee(e){
     const a=toW(x,y),b=toW(x+w,y+h);
     const hit=S.cards.filter(c=>{
       if(isLocked(c.id))return false;
-      const ch=size[c.id]?.h||c.w;
+      const ch=hOf(c);
       return c.x+c.w>a.x&&c.x<b.x&&c.y+ch>a.y&&c.y<b.y;
     }).map(c=>c.id);
     sel=[...new Set([...base,...expand(hit)])];
@@ -624,8 +937,10 @@ addEventListener("keyup",e=>{if(e.key===" "){spaceDown=false;stage.classList.rem
 addEventListener("blur",()=>{spaceDown=false;stage.classList.remove("space")});
 addEventListener("keydown",e=>{
   const k=e.key.toLowerCase();
+  if(e.key==="Escape"&&$("man").classList.contains("on")){$("man").classList.remove("on");return}
   if(e.key===" "&&!editing&&!e.target.isContentEditable&&!lock){spaceDown=true;stage.classList.add("space")}
   if((e.metaKey||e.ctrlKey)&&k==="s"){e.preventDefault();saveNow();return}
+  if((e.metaKey||e.ctrlKey)&&k==="f"&&!lock){e.preventDefault();showFind(true);return}
   if(editing||e.target.isContentEditable){if(e.key==="Escape")document.activeElement.blur();return}
   if(lock){
     if(e.key==="Escape"){setLock(false);return}
@@ -671,7 +986,7 @@ function order(dir){if(!sel.length)return;snap();
 function align(mode){
   if(freeSel().length<2){if(sel.length)toast(t("lockedNote"));return}
   snap();
-  const cs=freeSel().map(card).filter(Boolean),hh=c=>size[c.id]?.h||c.w;
+  const cs=freeSel().map(card).filter(Boolean),hh=hOf;
   if(mode==="left"){const v=Math.min(...cs.map(c=>c.x));cs.forEach(c=>c.x=v)}
   if(mode==="right"){const v=Math.max(...cs.map(c=>c.x+c.w));cs.forEach(c=>c.x=v-c.w)}
   if(mode==="cx"){const v=cs.reduce((a,c)=>a+c.x+c.w/2,0)/cs.length;cs.forEach(c=>c.x=Math.round(v-c.w/2))}
@@ -680,6 +995,35 @@ function align(mode){
   if(mode==="cy"){const v=cs.reduce((a,c)=>a+c.y+hh(c)/2,0)/cs.length;cs.forEach(c=>c.y=Math.round(v-hh(c)/2))}
   if(mode==="rowgap"){cs.sort((a,b)=>a.x-b.x);let x=cs[0].x;cs.forEach(c=>{c.x=Math.round(x);x+=c.w+40})}
   if(mode==="colgap"){cs.sort((a,b)=>a.y-b.y);let y=cs[0].y;cs.forEach(c=>{c.y=Math.round(y);y+=hh(c)+40})}
+  render();save();
+}
+function sizeImages(all){
+  const cap=S.imgMax||360;
+  const list=(all?S.cards:freeSel().map(card).filter(Boolean)).filter(c=>srcOf(c));
+  if(!list.length)return;
+  snap();
+  list.forEach(c=>{if(isLocked(c.id))return;
+    const ar=c.ar||1;
+    c.w=Math.round(ar>=1?cap/ar:cap);
+  });
+  render();save();
+}
+const LVSCALE={1:[2.1,700],2:[1.55,600],3:[1.22,500]};
+function levelStyle(v){
+  const base={...DEF,...S.textDef};
+  if(!v)return {size:base.size,weight:base.weight,spacing:base.spacing};
+  const [k,w]=LVSCALE[v];
+  return {size:Math.round(base.size*k),weight:w,
+    spacing:Math.max(-0.02,+(base.spacing-(v===1?0.02:v===2?0.012:0.006)).toFixed(3))};
+}
+function setLevel(v){
+  const cs=targets().filter(c=>!isLocked(c.id));if(!cs.length)return;
+  snap();
+  const ls=levelStyle(v);
+  cs.forEach(c=>{
+    if(v)c.level=v;else delete c.level;
+    c.s={...DEF,...S.textDef,...(c.s||{}),...ls};
+  });
   render();save();
 }
 function makeGroup(){
@@ -708,8 +1052,600 @@ function setLock(v){
   lock=v;sel=[];selLink=null;editing=false;linkFrom=null;closeMenus();
   $("pop").classList.remove("on");
   render();
-  if(v){toast(t("lockOn"));fit();goFS();idle()}
-  else{toast("");clearTimeout(idleT);document.body.classList.remove("hidecur");if(isFS())exitFS()}
+  if(v){toast(t("lockOn"));fit();goFS();idle();$("findq").value="";runFind()}
+  else{toast("");clearTimeout(idleT);document.body.classList.remove("hidecur");if(isFS())exitFS();
+    if(S.work)$("find").classList.add("on")}
+}
+
+/* ================= 中文说明书 ================= */
+const MANUAL=[
+ ["保存与文件","BAOCUN",`
+  <p>画布内容自动存在浏览器本地，关掉页面不会丢。要生成一份真正的文件，用右键菜单的<b>另存为</b>选择位置和文件名。</p>
+  <p>绑定文件之后，每次改动都会在一秒左右自动写回同一个文件，不需要反复操作。也可以随时按 <kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> 立刻保存。菜单里的保存项会显示当前文件名，方便确认写的是哪一份。</p>
+  <p>文件名自动带日期前缀，格式为 <b>年-月-日</b>，例如 <i>26-08-07-notes.json</i>。重新另存为时前缀会更新成当天日期，不会层层叠加。</p>
+  <p><b>绑定与解绑</b>：菜单保存区顶部始终显示当前绑定的文件名，工作模式下右下角也会显示。开新画布用<b>新建画布</b>，它会先把当前内容写回原文件再解绑，因此不会误覆盖。<b>解除文件绑定</b>可随时停止自动写回。清空画布会自动解绑。</p>
+  <p>另有一道保险：画布为空时自动写回会暂停，避免把空白状态覆盖进已有文件。</p>
+  <p class="tip">Chrome 和 Edge 支持直接写回原文件，另存为时会从上次的位置打开。Safari 与 Firefox 不支持，会退回成下载同名文件的方式。</p>`],
+
+ ["部分导出","BUFENDAOCHU",`
+  <p>导出面板顶部的<b>范围</b>可选整个画布或仅选中内容。选中状态下打开面板时会自动切到仅选中。</p>
+  <p>和编组配合使用最顺手：把一章的材料编成一组，点组内任意一张即选中整组，右键<b>导出…</b>就能单独导出这一章，四种格式都支持。</p>
+  <p>格式列表里还有<b>画布文件</b>一项，把选中部分导出成独立的 json，可以拆分大文件，或分享某一部分给别人。导出的片段只包含两端都在选中范围内的连线。</p>`],
+
+ ["备份策略","BEIFEN",`
+  <p>三层保险，从近到远：浏览器本地自动保存是第一层，绑定的工作文件是第二层，把该文件放进 iCloud、Dropbox 或 OneDrive 的同步目录是第三层，顺带获得云端历史版本。</p>
+  <p>重要节点建议手动<b>另存为</b>一个带日期的副本，比如 <i>notes-0410.json</i>，作为里程碑快照。</p>
+  <p>本地存储已申请持久化权限，浏览器不会在磁盘紧张时自动清理这份数据，但仍不建议只依赖它。</p>`],
+
+ ["合并导入","HEBINGDAORU",`
+  <p>右键菜单的<b>合并导入…</b>把另一个 json 并入当前画布，不覆盖已有内容。</p>
+  <p>并入的内容会整体放在现有内容右侧，间隔一百二十像素，保持其内部的相对布局、连线、编组和标签。所有编号会重新生成，因此不会和已有内容冲突，同一个文件重复并入也不会互相覆盖。</p>
+  <p class="tip">适合把分散在多个小文件里的笔记逐步汇拢成一个总库，也适合从他人处接收片段。并入后按 <kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 可整体撤销。</p>`],
+
+ ["编组","BIANZU",`
+  <p>多选之后右键选择<b>编组</b>，或按 <kbd>Ctrl/Cmd</kbd> + <kbd>G</kbd>。编组后点击组内任意一张即选中整组，拖动时组内相对位置保持不变。</p>
+  <p>取消编组用 <kbd>Shift</kbd> + <kbd>Ctrl/Cmd</kbd> + <kbd>G</kbd>，或从右键菜单选择。</p>
+  <p class="tip">适合把一篇文献的图、摘要、评注绑在一起整体挪动。</p>`],
+
+ ["标签","BIAOQIAN",`
+  <p>两种录入方式，可以混用，系统会自动去重。</p>
+  <ul>
+    <li>在卡片正文里直接写 <b>#方法论</b>，自动识别，中英文都支持</li>
+    <li>右键选<b>标签…</b>，在面板里输入，逗号或空格分隔</li>
+  </ul>
+  <p>标签面板下半部分列出画布上所有已有标签及使用次数，点击即可加减，避免同一概念出现多种写法。多选卡片时可批量打同一组标签。</p>
+  <p>标签显示在文字下方，点击任意标签直接跳到该标签的检索结果。演示模式下自动隐藏。</p>
+  <p class="tip">建议分两层用：主题词（#具身认知）靠正文顺手写，流程状态（#待读 #已精读）用面板批量改。</p>`],
+
+ ["层级标题","CENGJI",`
+  <p>右键菜单的<b>层级</b>可把卡片设为一级、二级、三级标题，默认是正文。设定后会自动套用一套排印规则：字号依次为基准的 2.1、1.55、1.22 倍，字重 700、600、500，字距递减。</p>
+  <p>倍数相对<b>默认文字格式</b>里设的基准字号计算，改基准后重新点一次层级即可刷新。设完之后仍可单独微调，不会被覆盖。</p>
+  <p>层级决定导出文档的标题结构和章节编号，是导出功能的骨架。</p>`],
+
+ ["撤销与重做","CHEXIAO",`
+  <p><kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 撤销，加 <kbd>Shift</kbd> 重做。保留最近 40 步。</p>
+  <p class="tip">删除、批量对齐、统一图片尺寸这类一次影响很多卡片的操作都可以撤销，放心用。</p>`],
+
+ ["导出","DAOCHU",`
+  <p>右键菜单的<b>导出…</b>提供四种格式：</p>
+  <ul>
+    <li><b>Word</b>：真正的 docx，图片以二进制嵌入，标题映射到 Word 内置样式，导航窗格和自动目录可用</li>
+    <li><b>PDF 文档</b>：与 Word 同结构，A4 排版，走打印窗口另存为 PDF，文字可选中可检索</li>
+    <li><b>PDF 画面</b>：整块画布按当前布局渲染成整页图，保留连线和位置关系</li>
+    <li><b>JPG</b>：同上但直接下载图片，可选 1x 到 3x 倍率</li>
+  </ul>
+  <p>文档类导出可勾选是否包含图片、标签、交叉引用、附录关系表。</p>
+  <p class="tip">画面类导出的取景是所有卡片的外接矩形加留白，与当前视角无关，导出前不必调整视图。</p>`],
+
+ ["导入","DAORU",`
+  <p>右键菜单的<b>导入文件…</b>打开之前保存的 json，会替换当前画布内容。打开后建议立刻执行一次<b>另存为</b>重新绑定，之后才能继续自动写回。</p>
+  <p>如果想保留当前内容并把另一个文件加进来，用<b>合并导入…</b>而不是这一项。</p>`],
+
+ ["底色","DISE",`
+  <p>右键菜单的<b>画布底色</b>提供七种。选深色时，界面面板和默认文字颜色会自动切换成浅色系，不需要手动调。</p>`],
+
+ ["对齐与分布","DUIQI",`
+  <p>选中两张以上卡片后，右键菜单出现<b>对齐与分布</b>：左对齐、水平居中、右对齐、顶对齐、垂直居中、底对齐，以及横向和纵向等距排列。</p>
+  <p class="tip">导出前用等距排列把同一层级的卡片理成整齐的行或列，导出顺序会更符合预期。</p>`],
+
+ ["大文件与性能","DAWENJIAN",`
+  <p>程序按承载数千张卡片设计，采取了三项措施：</p>
+  <ul>
+    <li>只渲染视野内及周边一屏的卡片，其余不进入页面，卡片总数不影响流畅度</li>
+    <li>连线同样只绘制视野内的，并且每帧最多重绘一次</li>
+    <li>图片单独存放并按内容去重，画布数据本身只有几十 KB，同一张图重复使用不会多占空间</li>
+  </ul>
+  <p>因此可以放心把整个博士阶段的笔记放进一个文件。真正的上限来自图片总量，几百张图属于正常范围。</p>
+  <p class="tip">若某天感觉迟滞，先看图片数量而非卡片数量，必要时用<b>导入图片尺寸</b>统一压缩显示尺寸，或把已完结的章节用部分导出拆成独立文件归档。</p>`],
+
+ ["复制","FUZHI",`
+  <p><kbd>Ctrl/Cmd</kbd> + <kbd>D</kbd> 复制选中卡片，副本偏移三十像素放置。锁定组内的卡片会被跳过。</p>`],
+
+ ["工作模式","GONGZUOMOSHI",`
+  <p>右键菜单勾选后，顶部常驻一条搜索条，适合做文献笔记时反复检索。这个开关随文件保存，下次打开保持。</p>
+  <p>不开启时界面完全空白，需要搜索时按 <kbd>Ctrl/Cmd</kbd> + <kbd>F</kbd> 临时唤出。</p>`],
+
+ ["交叉引用","JIAOCHAYINYONG",`
+  <p>导出文档时勾选此项，每条连线都会在正文中生成对应的引用行：起点卡片下方出现「→ 参见 §2.1（摘要）」，终点卡片下方出现「← 来自 §1.3」。</p>
+  <p>连线颜色被译成关系类型：灰为一般关联，红为对立，蓝为延伸，绿为印证。所以调线色时最好按语义而非按美观。</p>
+  <p class="tip">画布是图结构，文档是线性结构。交叉引用让每条边在文中出现两次，从任意一处都能追下去，不打乱叙述顺序。</p>`],
+
+ ["聚焦","JUJIAO",`
+  <p>点击卡片自动放大居中，最大放到 100%，不会放过头。</p>
+  <p>演示模式下默认开启，点哪张看哪张。编辑模式下默认关闭，避免与拖动冲突，需要时在右键菜单勾选<b>点击卡片自动放大居中</b>。</p>`],
+
+ ["框选","KUANGXUAN",`
+  <p>空白处按住左键拖出选框，范围内卡片全部选中。按住 <kbd>Shift</kbd> 拖动则在已有选择上追加。</p>
+  <p>可以和 <kbd>Shift</kbd> 点选混用：先框一片，再点掉不要的，或再框另一片加进来。锁定组会被自动跳过。</p>`],
+
+ ["快捷键","KUAIJIEJIAN",`
+  <ul>
+    <li><kbd>Ctrl/Cmd</kbd> + <kbd>V</kbd> 粘贴图片　<kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> 保存</li>
+    <li><kbd>Ctrl/Cmd</kbd> + <kbd>F</kbd> 搜索　<kbd>Ctrl/Cmd</kbd> + <kbd>A</kbd> 全选</li>
+    <li><kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 撤销　<kbd>Ctrl/Cmd</kbd> + <kbd>D</kbd> 复制</li>
+    <li><kbd>Ctrl/Cmd</kbd> + <kbd>G</kbd> 编组　加 <kbd>Shift</kbd> 取消编组</li>
+    <li><kbd>T</kbd> 文字样式　<kbd>F</kbd> 适应画面　<kbd>0</kbd> 缩放归位</li>
+    <li><kbd>Delete</kbd> 删除　<kbd>Esc</kbd> 取消选择或退出演示</li>
+    <li>方向键微移一像素，加 <kbd>Shift</kbd> 移十像素</li>
+  </ul>`],
+
+ ["连线备注","LIANXIANBEIZHU",`
+  <p>右键点在线上选<b>连线备注…</b>，可以写下这条关联意味着什么。</p>
+  <p>写了备注的连线，中点会出现一个实心小圆点。悬停显示完整内容，点击圆点直接打开编辑框。内容默认不占画面，所以备注再多也不会把画布变成一团字。</p>
+  <p>需要通览时，把<b>连线显示</b>里的批注标记切到<b>简短标签</b>，第一行文字会显示在线上；切到<b>不显示</b>则连圆点也隐藏。</p>
+  <p>备注会写进导出的文档，附在对应的交叉引用行后面，附录关系表里也有独立一列。</p>`],
+
+ ["连线显示","LIANXIANXIANSHI",`
+  <p>右键空白处的<b>连线显示</b>控制连线的可见程度，用来解决线多了干扰阅读的问题。</p>
+  <ul>
+    <li><b>聚焦时显示</b>（默认）：所有线常态压得很淡，鼠标悬停或选中某张卡片时，与它相关的线才亮起</li>
+    <li><b>始终显示</b>：全部保持完整不透明度</li>
+    <li><b>隐藏</b>：完全不画，数据仍然保留</li>
+  </ul>
+  <p class="tip">一个想法关联很多条时，聚焦显示尤其有用：点中枢纽卡片，它的全部关联一次亮出，其余全暗，比在线团里找线头快得多。</p>`],
+
+ ["连线","LIANXIAN",`
+  <p>鼠标悬停卡片时四边出现小圆点，从圆点拖到另一张卡片即可连线。也可用右键的<b>从这里连线</b>，再点目标。</p>
+  <p>右键点在线上可调整：线型（曲线、折线、直线）、实线或虚线、粗细、箭头（无、单向、双向）、颜色、反转方向、删除。</p>
+  <p>右键空白处的<b>默认连线样式</b>决定新连线的初始外观。</p>`],
+
+ ["平移与缩放","PINGYI",`
+  <p>平移：按住空格拖动、按住 <kbd>Alt</kbd> 拖动、或中键拖动。左键拖空白处是框选，不是平移。</p>
+  <p>缩放：滚轮或触控板捏合，以光标位置为中心。<kbd>F</kbd> 适应全部内容，<kbd>0</kbd> 回到 100%。</p>`],
+
+ ["全屏","QUANPING",`
+  <p>右键菜单的<b>全屏显示</b>去掉浏览器所有外壳。进入演示模式时会自动全屏，退出时自动还原。</p>
+  <p class="tip">想双击图标就直接进入无边框窗口，可以做一个用 --app 参数启动 Chrome 的快捷方式。</p>`],
+
+ ["删除","SHANCHU",`
+  <p>选中后按 <kbd>Delete</kbd> 或 <kbd>Backspace</kbd>。删除卡片时与之相连的连线一并移除。锁定组内的内容不受影响。</p>`],
+
+ ["搜索","SOUSUO",`
+  <p><kbd>Ctrl/Cmd</kbd> + <kbd>F</kbd> 唤出，或开启工作模式让它常驻。左侧小按钮切换两种范围：</p>
+  <ul>
+    <li><b>全文</b>：正文和标签一起搜</li>
+    <li><b>标签</b>：只匹配标签，支持前缀部分匹配，输「方法」能命中 #方法论</li>
+  </ul>
+  <p>输入即时过滤，命中项加虚线框，其余淡出但保留位置，画布结构依然可见。回车逐个跳转并居中，<kbd>Shift</kbd> + 回车反向。输入框带自动补全。</p>`],
+
+ ["锁定","SUODING",`
+  <p>选中一个组后右键<b>锁定该组</b>。锁定后这组卡片完全冻结：不能拖动、不能改大小、不能改格式、不能编辑文字、不能删除，连接点不再出现，框选时自动跳过，选中框显示为虚线。</p>
+  <p>唯一还能生效的操作是点中它再右键解锁。</p>
+  <p class="tip">适合锁住已经定稿的框架，避免整理其他内容时误碰。</p>`],
+
+ ["图片尺寸","TUPIANCHICUN",`
+  <p>右键菜单的<b>导入图片尺寸</b>限制新图的<b>长边</b>上限，横图竖图因此视觉体量一致。可选 220 到 760，默认 360。数值是 100% 缩放时的实际像素。</p>
+  <p>子菜单底部两项可以给已有图片补救：把选中图片调成该尺寸，或把所有图片调成该尺寸。只影响图片卡，纯文字卡不动。</p>
+  <p class="tip">只改显示尺寸，不改底层数据，随时可调大调小，画质不损失。</p>`],
+
+ ["图片导入","TUPIANDAORU",`
+  <p>三种方式：<kbd>Ctrl/Cmd</kbd> + <kbd>V</kbd> 粘贴、直接把文件拖进页面、右键选<b>插入图片…</b>。支持一次多张。</p>
+  <p>图片落在鼠标位置，导入时统一压到长边 1600 像素存储，兼顾清晰度和文件体积。右键<b>替换图片…</b>可在保留文字和连线的前提下换图。</p>`],
+
+ ["文字编辑","WENZIBIANJI",`
+  <p>双击卡片下方文字区进入编辑，<kbd>Esc</kbd> 或点击别处退出。空白处双击新建纯文字卡。</p>
+  <p>粘贴纯文本时会自动创建一张文字卡。</p>`],
+
+ ["文字样式","WENZIYANGSHI",`
+  <p>选中后右键<b>文字样式…</b>或按 <kbd>T</kbd>。可调字体、字号、字重、字距、行距、对齐、斜体、颜色。</p>
+  <p>字体按英文和中文分两组，中文全部使用系统字体，零加载。选英文字体时中文自动回退到配套的苹方或宋体。</p>
+  <p>每张卡片持有独立样式，改动只影响选中项。多选可批量修改，面板标题会显示当前编辑几张。面板底部的<b>应用到全部卡片</b>用于一次统一。</p>`],
+
+ ["演示模式","YANSHIMOSHI",`
+  <p>右键菜单的<b>锁定演示模式</b>进入。此时不能拖动、编辑、删除，连接点和选中框全部隐藏，自动进入全屏，鼠标静止两秒多后光标隐藏。</p>
+  <p>操作全部走右键菜单：适应画面、下一个、上一个、语言、退出。键盘方向键或空格按位置顺序逐个聚焦，<kbd>F</kbd> 回总览，<kbd>Esc</kbd> 退出，双击空白处也回总览。</p>`],
+
+ ["语言","YUYAN",`
+  <p>右键菜单的 Language 可在英文和中文之间切换，界面、菜单、提示全部跟随。设定随文件保存。</p>
+  <p>本说明书只在中文界面下出现。</p>`],
+
+ ["默认文字格式","MOREN",`
+  <p>右键菜单 Language 下方的<b>默认文字格式</b>设定新建卡片的起始格式，不影响已有内容。</p>
+  <p>这里的字号同时是层级标题的计算基准。</p>`]
+];
+function manSorted(){return [...MANUAL].sort((a,b)=>a[1].localeCompare(b[1]))}
+function openManual(){
+  const box=$("man"),side=$("manside");
+  side.innerHTML="";
+  let letter="";
+  manSorted().forEach(([term,py],i)=>{
+    if(py[0]!==letter){letter=py[0];
+      const h=document.createElement("div");h.className="ltr";h.textContent=letter;side.appendChild(h)}
+    const b=document.createElement("button");
+    b.innerHTML=term+'<i>'+py.toLowerCase()+'</i>';
+    b.dataset.i=i;
+    b.onclick=()=>showManual(i);
+    side.appendChild(b);
+  });
+  box.classList.add("on");
+  showManual(0);
+}
+function showManual(i){
+  const list=manSorted(),it=list[i];if(!it)return;
+  $("manbody").innerHTML=`<h3>${it[0]}</h3><div class="py">${it[1].toLowerCase()}</div>${it[2]}`;
+  $("manbody").scrollTop=0;
+  $("manside").querySelectorAll("button").forEach(b=>b.classList.toggle("on",+b.dataset.i===i));
+}
+$("manx").onclick=()=>$("man").classList.remove("on");
+$("man").addEventListener("pointerdown",e=>{if(e.target.id==="man")$("man").classList.remove("on")});
+
+/* ================= 中文说明书 end ================= */
+
+/* ================= document export ================= */
+const RELMAP={"#8A8A85":"relPlain","#111111":"relPlain","#EFEFEC":"relPlain",
+  "#C0392B":"relAgainst","#2D6CDF":"relCite","#1F8A70":"relSupport"};
+function snippet(c,n){
+  const s=(c.text||"").replace(/\s+/g," ").trim();
+  if(!s)return srcOf(c)?"[image]":"[empty]";
+  return s.length>(n||28)?s.slice(0,n||28)+"…":s;
+}
+function docOrder(list){
+  const cs=[...(list||S.cards)].sort((a,b)=>a.y-b.y||a.x-b.x),rows=[],tol=70;
+  cs.forEach(c=>{const r=rows.find(r=>Math.abs(r.y-c.y)<tol);
+    if(r){r.items.push(c);r.y=Math.min(r.y,c.y)}else rows.push({y:c.y,items:[c]})});
+  rows.sort((a,b)=>a.y-b.y);
+  return rows.flatMap(r=>r.items.sort((a,b)=>a.x-b.x));
+}
+function buildTree(list){
+  const order=docOrder(list),stack=[],roots=[];
+  order.forEach(c=>{
+    const lv=c.level||0,node={c,lv,children:[],num:"",sec:""};
+    if(lv===0){const p=stack[stack.length-1];(p?p.node.children:roots).push(node);node.parent=p?p.node:null}
+    else{
+      while(stack.length&&stack[stack.length-1].lv>=lv)stack.pop();
+      const p=stack[stack.length-1];(p?p.node.children:roots).push(node);
+      node.parent=p?p.node:null;stack.push({lv,node});
+    }
+  });
+  const counters=[0,0,0];
+  const walk=(list)=>list.forEach(n=>{
+    if(n.lv){counters[n.lv-1]++;for(let i=n.lv;i<3;i++)counters[i]=0;
+      n.num=counters.slice(0,n.lv).join(".");n.sec=n.num}
+    else n.sec=n.parent?n.parent.sec:"";
+    walk(n.children);
+  });
+  walk(roots);
+  const flat=[];const flatten=l=>l.forEach(n=>{flat.push(n);flatten(n.children)});flatten(roots);
+  const byId={};flat.forEach(n=>byId[n.c.id]=n);
+  return {roots,flat,byId};
+}
+function refLabel(n){
+  const sec=n.num?("\u00A7"+n.num+" "):(n.sec?("\u00A7"+n.sec+" "):"");
+  return sec+snippet(n.c,26);
+}
+function relName(l){return t(RELMAP[l.color]||"relPlain")+(l.arrow==="both"?" / "+t("relBoth"):"")}
+function relationsFor(id,byId){
+  const out=[],inn=[];
+  S.links.forEach(l=>{
+    if(l.a===id&&byId[l.b])out.push({n:byId[l.b],l});
+    if(l.b===id&&byId[l.a])inn.push({n:byId[l.a],l});
+  });
+  return {out,inn};
+}
+function openExport(x,y){
+  if(lock)return;
+  const p=$("pop");
+  p.innerHTML=`
+    <div class="hd"><b>${t("expTitle")}</b><button id="pcx">\u00D7</button></div>
+    <div class="row"><label>${t("fmt")}</label><div class="seg" id="exf">
+      ${[["word","fmtWord"],["pdfdoc","fmtPdfDoc"],["pdfview","fmtPdfView"],["jpg","fmtJpg"],["json","fmtJson"]]
+        .map(([v,k],i)=>`<button data-v="${v}" class="${i===0?"on":""}" style="font-size:11px;padding:0 2px">${t(k)}</button>`).join("")}
+    </div></div>
+    <div class="row"><label>${t("scope")}</label><div class="seg" id="exsc">
+      <button data-v="all" class="on">${t("scopeAll")}</button>
+      <button data-v="sel" ${sel.length?"":"disabled style=opacity:.35"}>${t("scopeSel")}</button>
+    </div></div>
+    <input class="ti" id="exn" placeholder="${t("expName")}" value="${esc(stampName(fileName||"Board"))}" spellcheck="false">
+    <div id="exdoc">
+      <div class="row"><label style="width:auto"><input type="checkbox" id="ex1" checked> ${t("expImg")}</label></div>
+      <div class="row"><label style="width:auto"><input type="checkbox" id="ex2" checked> ${t("expTags")}</label></div>
+      <div class="row"><label style="width:auto"><input type="checkbox" id="ex3" checked> ${t("expRef")}</label></div>
+      <div class="row"><label style="width:auto"><input type="checkbox" id="ex4"> ${t("expTable")}</label></div>
+    </div>
+    <div id="eximg" style="display:none"><div class="row"><label>${t("scale")}</label>
+      <div class="seg" id="exs">${[1,2,3].map(v=>`<button data-v="${v}" class="${v===2?"on":""}">${v}x</button>`).join("")}</div></div></div>
+    <div class="row"><button class="mi" id="exgo" style="justify-content:center;border:1px solid var(--pline)">${t("expGo")}</button></div>`;
+  place(p,Math.min(x,innerWidth-270),Math.min(y,innerHeight-300));
+  p.classList.add("on");
+  p.querySelector("#pcx").onclick=()=>p.classList.remove("on");
+  p.querySelector("#exn").addEventListener("keydown",e=>e.stopPropagation());
+  let fmt="word",scale=2,scope=sel.length?"sel":"all";
+  const scb=p.querySelector("#exsc");
+  if(sel.length){[...scb.children].forEach(z=>z.classList.toggle("on",z.dataset.v==="sel"))}
+  scb.onclick=e=>{const b=e.target.closest("button");if(!b||b.disabled)return;
+    [...scb.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");scope=b.dataset.v};
+  p.querySelector("#exf").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+    [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");
+    fmt=b.dataset.v;const isImg=(fmt==="jpg"||fmt==="pdfview");
+    p.querySelector("#exdoc").style.display=(isImg||fmt==="json")?"none":"";
+    p.querySelector("#eximg").style.display=isImg?"":"none"};
+  p.querySelector("#exs").onclick=e=>{const b=e.target.closest("button");if(!b)return;
+    [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");scale=+b.dataset.v};
+  p.querySelector("#exgo").onclick=()=>{
+    const o={fmt,scale,scope,title:stampName(p.querySelector("#exn").value.trim()||"Board"),
+      img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
+      refs:p.querySelector("#ex3").checked,table:p.querySelector("#ex4").checked};
+    p.classList.remove("on");
+    toast(o.fmt==="jpg"||o.fmt==="pdfview"?t("expShot"):t("expWork"));
+    setTimeout(()=>doExport(o),60);
+  };
+}
+function exportSet(o){
+  if(o.scope!=="sel")return null;
+  const ids=new Set(expand(sel));
+  const list=S.cards.filter(c=>ids.has(c.id));
+  return list.length?list:null;
+}
+async function doExport(o){
+  const list=exportSet(o);
+  if(o.scope==="sel"&&!list){toast(t("needSel"));return}
+  if(o.fmt==="json"){download(bundle(list),o.title+".json");return}
+  if(o.fmt==="jpg"||o.fmt==="pdfview"){
+    try{
+      const cv=await captureCanvas(o.scale,list);
+      if(o.fmt==="jpg"){cv.toBlob(b=>dl(b,o.title+".jpg"),"image/jpeg",.93);toast(t("expDone"))}
+      else{printImage(cv.toDataURL("image/jpeg",.94),o.title);toast(t("expPrint"))}
+    }catch(e){toast("Capture failed")}
+    return;
+  }
+  const tree=buildTree(list);
+  if(o.fmt==="pdfdoc"){printHTML(docHTML(o,tree,true),o.title);toast(t("expPrint"));return}
+  try{const D=await loadDocx();await exportDocx(D,o,tree)}
+  catch(e){exportDocHTML(o,tree)}
+  toast(t("expDone"));
+}
+function loadDocx(){
+  if(window.docx)return Promise.resolve(window.docx);
+  return new Promise((res,rej)=>{
+    const el=document.createElement("script");
+    el.src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js";
+    el.onload=()=>window.docx?res(window.docx):rej();el.onerror=rej;
+    document.head.appendChild(el);
+    setTimeout(()=>{window.docx?res(window.docx):rej()},9000);
+  });
+}
+function imgDims(c,max){
+  const w=Math.min(max||430,Math.max(120,c.w));
+  return {w:Math.round(w),h:Math.round(w*(c.ar||0.66))};
+}
+async function exportDocx(D,o,tree){
+  const {Document,Packer,Paragraph,TextRun,ImageRun,HeadingLevel,AlignmentType}=D;
+  const HL=[null,HeadingLevel.HEADING_1,HeadingLevel.HEADING_2,HeadingLevel.HEADING_3];
+  const kids=[new Paragraph({text:o.title,heading:HeadingLevel.TITLE})];
+  tree.flat.forEach(n=>{
+    const c=n.c;
+    if(o.img&&srcOf(c)){
+      const d=imgDims(c);
+      try{kids.push(new Paragraph({children:[new ImageRun({
+        data:srcOf(c).split(",")[1],transformation:{width:d.w,height:d.h}})]}))}catch(e){}
+    }
+    const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
+    if(n.lv){kids.push(new Paragraph({text:(txt[0]||snippet(c)),heading:HL[n.lv]}));
+      txt.slice(1).forEach(z=>kids.push(new Paragraph({text:z})))}
+    else txt.forEach(z=>kids.push(new Paragraph({text:z})));
+    if(o.tags){const tg=cardTags(c);
+      if(tg.length)kids.push(new Paragraph({children:[new TextRun({
+        text:tg.map(x=>"#"+x).join("  "),italics:true,size:18,color:"888888"})]}))}
+    if(o.refs){
+      const r=relationsFor(c.id,tree.byId);
+      r.out.forEach(({n:m,l})=>kids.push(new Paragraph({children:[new TextRun({
+        text:"\u2192 "+t("relSee")+" "+refLabel(m)+"\uFF08"+relName(l)+"\uFF09"+(l.note?"  "+l.note.replace(/\n+/g," "):""),
+        italics:true,size:18,color:"777777"})]})));
+      r.inn.forEach(({n:m,l})=>{if(l.arrow!=="none"&&l.arrow!=="both")
+        kids.push(new Paragraph({children:[new TextRun({
+          text:"\u2190 "+t("relFrom")+" "+refLabel(m),italics:true,size:18,color:"999999"})]}))});
+    }
+  });
+  const links=S.links.filter(l=>tree.byId[l.a]&&tree.byId[l.b]);
+  if(o.table&&links.length){
+    kids.push(new Paragraph({text:t("relTable"),heading:HeadingLevel.HEADING_1}));
+    links.forEach(l=>{const a=tree.byId[l.a],b=tree.byId[l.b];if(!a||!b)return;
+      kids.push(new Paragraph({children:[new TextRun({
+        text:refLabel(a)+"  \u2192  "+refLabel(b)+"   \u00B7 "+relName(l)+(l.note?"   \u00B7 "+l.note.replace(/\n+/g," "):""),
+        size:20})]}))});
+  }
+  const doc=new Document({sections:[{children:kids}]});
+  const blob=await Packer.toBlob(doc);
+  dl(blob,o.title+".docx");
+}
+function esc(x){return (x||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
+function exportDocHTML(o,tree){
+  dl(new Blob(["\uFEFF"+docHTML(o,tree,false)],{type:"application/msword"}),o.title+".doc");
+}
+function printHTML(html,title){
+  const f=document.createElement("iframe");
+  f.style.cssText="position:fixed;right:0;bottom:0;width:1px;height:1px;opacity:0;border:0";
+  document.body.appendChild(f);
+  const d=f.contentDocument;d.open();d.write(html);d.close();
+  setTimeout(()=>{try{f.contentWindow.focus();f.contentWindow.print()}catch(e){}
+    setTimeout(()=>f.remove(),60000)},400);
+}
+function printImage(url,title){
+  printHTML(`<html><head><meta charset="utf-8"><title>${esc(title)}</title>
+    <style>@page{size:auto;margin:8mm}html,body{margin:0;padding:0}
+    img{width:100%;height:auto;display:block}</style></head>
+    <body><img src="${url}"></body></html>`,title);
+}
+async function captureCanvas(scale,list){
+  const b=bbox(list);if(!b)throw new Error("empty");
+  const keep=list?new Set(list.map(c=>c.id)):null;
+  const prevMargin=CULL.m,prevView=S.linkView,prevHover=hoverId,prevSel=sel,prevSelL=selLink;
+  CULL.m=1e7;S.linkView="all";hoverId=null;sel=[];selLink=null;
+  syncCards();measure();drawLinks();
+  const pad=60,W=Math.round(b.w+pad*2),H=Math.round(b.h+pad*2);
+  const wrap=document.createElement("div");
+  wrap.style.cssText=`position:fixed;left:-100000px;top:0;width:${W}px;height:${H}px;
+    overflow:hidden;background:${S.bg}`;
+  const inner=$("world").cloneNode(true);
+  inner.style.left="0";inner.style.top="0";
+  inner.style.transform=`translate(${-b.x+pad}px,${-b.y+pad}px)`;
+  inner.style.setProperty("--iz",1);
+  inner.querySelectorAll(".card").forEach(el=>el.classList.remove("sel","hit","nomatch"));
+  inner.querySelectorAll(".port,.rs,.ring,.lvl").forEach(el=>el.remove());
+  if(keep){
+    inner.querySelectorAll(".card").forEach(el=>{if(!keep.has(el.dataset.id))el.remove()});
+    const okL=new Set(S.links.filter(l=>keep.has(l.a)&&keep.has(l.b)).map(l=>l.id));
+    inner.querySelectorAll("[data-link]").forEach(el=>{if(!okL.has(el.dataset.link))el.remove()});
+  }
+  wrap.appendChild(inner);document.body.appendChild(wrap);
+  try{
+    const h2c=await loadH2C();
+    const cv=await h2c(wrap,{backgroundColor:S.bg,scale:scale||2,logging:false,useCORS:true,
+      width:W,height:H,windowWidth:W,windowHeight:H});
+    return cv;
+  }finally{wrap.remove();CULL.m=prevMargin;S.linkView=prevView;hoverId=prevHover;
+    sel=prevSel;selLink=prevSelL;syncCards();measure();drawLinks()}
+}
+function loadH2C(){
+  if(window.html2canvas)return Promise.resolve(window.html2canvas);
+  return new Promise((res,rej)=>{
+    const el=document.createElement("script");
+    el.src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+    el.onload=()=>window.html2canvas?res(window.html2canvas):rej();el.onerror=rej;
+    document.head.appendChild(el);setTimeout(()=>{window.html2canvas?res(window.html2canvas):rej()},9000);
+  });
+}
+function docHTML(o,tree,forPrint){
+  let h=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
+  <title>${esc(o.title)}</title>
+  <style>${forPrint?"@page{size:A4;margin:20mm}":""}
+  body{font-family:Calibri,"Noto Sans SC",sans-serif;line-height:1.5}
+  h1,h2,h3{page-break-after:avoid}img{page-break-inside:avoid}
+  .rel{color:#777;font-style:italic;font-size:9pt}.tg{color:#888;font-style:italic;font-size:9pt}
+  img{max-width:460px;height:auto}</style></head><body><h1>${esc(o.title)}</h1>`;
+  tree.flat.forEach(n=>{
+    const c=n.c;
+    if(o.img&&srcOf(c)){const d=imgDims(c);h+=`<p><img src="${srcOf(c)}" width="${d.w}" height="${d.h}"></p>`}
+    const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
+    if(n.lv){h+=`<h${n.lv+1}>${esc(txt[0]||snippet(c))}</h${n.lv+1}>`;
+      txt.slice(1).forEach(z=>h+=`<p>${esc(z)}</p>`)}
+    else txt.forEach(z=>h+=`<p>${esc(z)}</p>`);
+    if(o.tags){const tg=cardTags(c);if(tg.length)h+=`<p class="tg">${esc(tg.map(x=>"#"+x).join("  "))}</p>`}
+    if(o.refs){const r=relationsFor(c.id,tree.byId);
+      r.out.forEach(({n:m,l})=>h+=`<p class="rel">&#8594; ${esc(t("relSee")+" "+refLabel(m))}\uFF08${esc(relName(l))}\uFF09${l.note?"  "+esc(l.note.replace(/\n+/g," ")):""}</p>`);
+      r.inn.forEach(({n:m,l})=>{if(l.arrow!=="none"&&l.arrow!=="both")
+        h+=`<p class="rel">&#8592; ${esc(t("relFrom")+" "+refLabel(m))}</p>`});
+    }
+  });
+  const links2=S.links.filter(l=>tree.byId[l.a]&&tree.byId[l.b]);
+  if(o.table&&links2.length){
+    h+=`<h1>${esc(t("relTable"))}</h1><table border="1" cellspacing="0" cellpadding="5">`;
+    links2.forEach(l=>{const a=tree.byId[l.a],b=tree.byId[l.b];if(!a||!b)return;
+      h+=`<tr><td>${esc(refLabel(a))}</td><td>&#8594;</td><td>${esc(refLabel(b))}</td><td>${esc(relName(l))}</td><td>${esc((l.note||"").replace(/\n+/g," "))}</td></tr>`});
+    h+=`</table>`;
+  }
+  h+="</body></html>";
+  return h;
+}
+function dl(blob,name){
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ================= tags ================= */
+const TAGRE=/#([\p{L}\p{N}_\-]{1,40})/gu;
+function cardTags(c){
+  const out=new Set((c.tags||[]).map(x=>x.toLowerCase()));
+  (c.text||"").replace(TAGRE,(m,g)=>{out.add(g.toLowerCase());return m});
+  return [...out];
+}
+function allTags(){
+  const m=new Map();
+  S.cards.forEach(c=>cardTags(c).forEach(x=>m.set(x,(m.get(x)||0)+1)));
+  return [...m.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+}
+function refreshTagList(){
+  $("taglist").innerHTML=allTags().map(([x])=>`<option value="${x}">`).join("");
+}
+function setCardTags(c,list){
+  const inText=new Set();(c.text||"").replace(TAGRE,(m,g)=>{inText.add(g.toLowerCase());return m});
+  c.tags=[...new Set(list.map(x=>x.trim().replace(/^#/,"").toLowerCase()).filter(Boolean))]
+    .filter(x=>!inText.has(x));
+}
+function openTags(x,y){
+  const cs=targets().filter(c=>!isLocked(c.id));
+  if(lock||!cs.length)return;
+  const p=$("pop");
+  const cur=cs.length===1?cardTags(cs[0]):[];
+  p.innerHTML=`
+    <div class="hd"><b>${t("tagTitle")}${cs.length>1?" ("+cs.length+")":""}</b><button id="pcx">×</button></div>
+    <input class="ti" id="tgi" placeholder="${t("tagsPh")}" value="${esc(cur.join(", "))}" spellcheck="false">
+    <div class="mhd" style="padding:10px 0 2px">${t("allTags")}</div>
+    <div class="chips" id="tgc">${allTags().map(([x,n])=>
+      `<button data-v="${x}" class="${cur.includes(x)?"on":""}">${x} <span style="opacity:.45">${n}</span></button>`).join("")}</div>
+    <p class="note">${t("tagHint")}</p>`;
+  place(p,Math.min(x,innerWidth-270),Math.min(y,innerHeight-300));
+  p.classList.add("on");
+  const inp=p.querySelector("#tgi");
+  const apply=()=>{snap();const list=inp.value.split(/[,，\s]+/);
+    cs.forEach(c=>setCardTags(c,list));render();save();refreshTagList()};
+  p.querySelector("#pcx").onclick=()=>p.classList.remove("on");
+  inp.addEventListener("keydown",e=>{e.stopPropagation();if(e.key==="Enter"){e.preventDefault();apply()}});
+  inp.addEventListener("blur",apply);
+  p.querySelector("#tgc").onclick=e=>{
+    const b=e.target.closest("button");if(!b)return;
+    const v=b.dataset.v,parts=inp.value.split(/[,，\s]+/).map(z=>z.trim()).filter(Boolean);
+    const i=parts.indexOf(v);
+    if(i>=0)parts.splice(i,1);else parts.push(v);
+    inp.value=parts.join(", ");b.classList.toggle("on");apply();
+  };
+}
+function searchTag(x){
+  S.findMode="tag";$("find").classList.add("on");$("findq").value=x;syncFindMode();runFind();
+}
+
+/* ================= search ================= */
+let hits=[],hitIdx=-1;
+function findQ(){return $("findq").value.trim().toLowerCase()}
+function showFind(on){
+  const f=$("find");
+  if(on){f.classList.add("on");syncFindMode();$("findq").focus();$("findq").select()}
+  else{f.classList.remove("on");$("findq").value="";runFind()}
+  if(!on&&S.work&&!lock){f.classList.add("on")}
+}
+function syncFindMode(){
+  $("findm").textContent=S.findMode==="tag"?t("modeTag"):t("modeAll");
+  $("findq").placeholder=S.findMode==="tag"?t("searchTagPh"):t("searchPh");
+}
+$("findm").onclick=()=>{S.findMode=S.findMode==="tag"?"all":"tag";syncFindMode();runFind();save();$("findq").focus()};
+function runFind(){
+  const q=findQ().replace(/^#/,"");
+  hits=!q?[]:S.cards.filter(c=>S.findMode==="tag"
+    ? cardTags(c).some(x=>x.includes(q))
+    : ((c.text||"").toLowerCase().includes(q)||cardTags(c).some(x=>x.includes(q))));
+  if(!hits.some(c=>c===S.cards[hitIdx]))hitIdx=-1;
+  document.body.classList.toggle("finding",!!q);
+  paintFind();
+  $("findn").textContent=q?(hits.length?(Math.max(0,hits.indexOf(S.cards[hitIdx]))+1)+" / "+hits.length:t("noHit")):"";
+}
+function paintFind(){
+  const q=findQ(),ids=hits.map(c=>c.id);
+  document.querySelectorAll(".card").forEach(el=>{
+    const on=ids.includes(el.dataset.id);
+    el.classList.toggle("hit",!!q&&on);
+    el.classList.toggle("nomatch",!!q&&!on);
+  });
+}
+function stepHit(d){
+  if(!hits.length)return;
+  let i=hits.indexOf(S.cards[hitIdx]);
+  i=(i+d+hits.length*2)%hits.length;
+  const c=hits[i];hitIdx=S.cards.indexOf(c);
+  sel=[c.id];paintSel();focusCard(c);runFind();
+}
+$("findq").addEventListener("input",runFind);
+$("findq").addEventListener("keydown",e=>{
+  e.stopPropagation();
+  if(e.key==="Enter"){e.preventDefault();if(hits.length&&hitIdx<0)hitIdx=S.cards.indexOf(hits[0]),focusCard(hits[0]),sel=[hits[0].id],paintSel(),runFind();
+    else stepHit(e.shiftKey?-1:1)}
+  if(e.key==="Escape"){e.preventDefault();$("findq").value="";runFind();
+    if(!S.work)showFind(false);else $("findq").blur()}
+});
+$("findx").onclick=()=>{$("findq").value="";runFind();if(!S.work)showFind(false)};
+function setWork(v){
+  S.work=v;save();
+  const f=$("find");
+  if(v&&!lock)f.classList.add("on");else if(!v)showFind(false);
 }
 
 /* ================= full screen ================= */
@@ -771,20 +1707,45 @@ function boardMenu(x,y){
     {label:t("selectAll"),key:"⌘A",on:()=>{sel=S.cards.map(c=>c.id);paintSel()}},
     {label:t("fitView"),key:"F",on:()=>fit()},
     {label:t("zoom100"),key:"0",on:()=>camTo(tgt.x,tgt.y,1)},
+    {label:t("search"),key:"⌘F",on:()=>showFind(true)},
+    {label:t("workMode"),check:S.work,on:()=>setWork(!S.work)},
     {label:t("clickFocus"),check:S.focusClick,on:()=>{S.focusClick=!S.focusClick;save()}},
+    {label:t("imgSize"),sub:[
+      {head:t("imgSize")},
+      ...[220,280,360,460,600,760].map(v=>({label:v+" "+t("px"),check:(S.imgMax||360)===v,
+        on:()=>{S.imgMax=v;save()}})),
+      "-",
+      {label:t("fitSel"),on:()=>sizeImages(false)},
+      {label:t("fitAllImg"),on:()=>sizeImages(true)}
+    ]},
     "-",
     {label:t("presentation"),on:()=>setLock(true)},
     {label:isFS()?t("exitFullscreen"):t("fullscreen"),key:"F11",on:toggleFS},
+    {label:t("linkView"),sub:[
+      {head:t("linkView")},
+      ...[["all","lvAll"],["focus","lvFocus"],["off","lvOff"]].map(([v,k])=>({label:t(k),
+        check:S.linkView===v,on:()=>{S.linkView=v;drawLinks();save()}})),
+      {head:t("linkLabel")},
+      ...[["dot","llDot"],["text","llText"],["none","llNone"]].map(([v,k])=>({label:t(k),
+        check:S.linkLabel===v,on:()=>{S.linkLabel=v;drawLinks();save()}}))
+    ]},
     {label:t("linkDefaults"),sub:linkStyleItems(S.linkDef,()=>save())},
     {label:t("canvasColor"),sub:[{head:t("colour")},...BG.map((c,i)=>({label:t("bg")[i],check:S.bg===c,
       on:()=>{S.bg=c;S.textDef.color=isDark(c)?"#EFEFEC":"#111111";render();save()}}))]},
     {label:t("language"),sub:langItems()},
     {label:t("defaultText"),on:()=>openText(x,y,"default")},
+    ...(LANG==="zh"?[{label:t("manual"),on:openManual}]:[]),
     "-",
-    {label:t("save")+(fileName?" ("+fileName+")":""),key:"⌘S",on:saveNow},
+    {head:(fileName?t("boundTo")+"  "+fileName:t("noBound"))},
+    {label:t("save"),key:"⌘S",on:saveNow},
     {label:t("saveAs"),on:pickFile},
+    ...(fileHandle?[{label:t("unbind"),on:()=>unbind()}]:[]),
+    {label:t("newBoard"),on:newBoard},
     {label:t("importJSON"),on:()=>$("jsonfile").click()},
-    {label:t("clearAll"),danger:true,on:()=>{if(confirm(t("clearConfirm"))){snap();S.cards=[];S.links=[];sel=[];render();save()}}}
+    {label:t("mergeJSON"),on:()=>$("mergefile").click()},
+    {label:t("exportDoc"),on:()=>openExport(x,y)},
+    {label:t("clearAll"),danger:true,on:async()=>{if(confirm(t("clearConfirm"))){
+      snap();S.cards=[];S.links=[];S.groups=[];sel=[];await unbind(true);render();save();toast(t("unbound"))}}}
   ]);
 }
 function lockMenu(x,y){
@@ -803,12 +1764,16 @@ function cardMenu(x,y){
   const items=[
     {label:t("editText"),key:t("dbl"),on:()=>one&&editText(one)},
     {label:t("textStyle"),key:"T",on:()=>openText(x,y)},
+    {label:t("tagsMenu"),on:()=>openTags(x,y)},
+    {label:t("level"),sub:[{head:t("level")},
+      ...[[0,"lvNone"],[1,"lv1"],[2,"lv2"],[3,"lv3"]].map(([v,k])=>({label:t(k),
+        check:(card(sel[0])?.level||0)===v,on:()=>setLevel(v)}))]},
     "-",
     {label:t("linkFromHere"),on:()=>{linkFrom=sel[0];stage.style.cursor="crosshair";toast(t("clickTarget"))}}
   ];
-  if(one&&one.src)items.push({label:t("replaceImage"),on:()=>{
+  if(one&&srcOf(one))items.push({label:t("replaceImage"),on:()=>{
     const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
-    inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,(d,w,h)=>{snap();one.src=d;one.ar=h/w;render();save()})};
+    inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,async(d,w,h)=>{snap();one.ih=await putImg(d);delete one.src;one.ar=h/w;render();save()})};
     inp.click()}});
   const gs=[...new Set(sel.map(i=>groupOf(i)).filter(Boolean))];
   if(expand(sel).length>1&&!gs.length)items.push({label:t("group"),key:"⌘G",on:makeGroup});
@@ -823,6 +1788,7 @@ function cardMenu(x,y){
     {label:t("alTop"),on:()=>align("top")},{label:t("alCY"),on:()=>align("cy")},{label:t("alBottom"),on:()=>align("bottom")},
     "-",{label:t("rowGap"),on:()=>align("rowgap")},{label:t("colGap"),on:()=>align("colgap")}]});
   items.push("-",
+    {label:t("exportDoc"),on:()=>openExport(x,y)},
     {label:t("duplicate"),key:"⌘D",on:dupe},
     {label:t("toFront"),on:()=>order(1)},
     {label:t("toBack"),on:()=>order(-1)},
@@ -855,6 +1821,7 @@ function linkStyleItems(target,after){
 function linkMenu(x,y){
   const l=S.links.find(v=>v.id===selLink);if(!l)return;
   menuAt(x,y,[...linkStyleItems(l,()=>save()),"-",
+    {label:t("linkNote"),on:()=>openLinkNote(l,x,y)},
     {label:t("reverse"),on:()=>{snap();const a=l.a,sa=l.sa;l.a=l.b;l.b=a;l.sa=l.sb;l.sb=sa;drawLinks();save()}},
     {label:t("delLink"),danger:true,on:del}]);
 }
@@ -876,7 +1843,9 @@ function openText(x,y,mode){
   const p=$("pop"),s=curStyle();
   p.innerHTML=`
     <div class="hd"><b>${styleMode==="default"?t("defTitle"):t("tsTitle")+(targets().length>1?" ("+targets().length+")":"")}</b><button id="pcx">×</button></div>
-    <div class="row"><label>${t("font")}</label><select id="f">${FONTS.map(f=>`<option value="${f[0]}" ${s.family===f[0]?"selected":""}>${famName(f[0])}</option>`).join("")}</select></div>
+    <div class="row"><label>${t("font")}</label><select id="f">${["en","zh"].map(g=>`<optgroup label="${g==="en"?t("grpEn"):t("grpZh")}">`+
+      FONTS.filter(f=>f[2]===g).map(f=>`<option value="${f[0]}" ${s.family===f[0]?"selected":""} style="font-family:${f[1].replace(/"/g,"&quot;")}">${famName(f[0])}</option>`).join("")+
+      `</optgroup>`).join("")}</select></div>
     <div class="row"><label>${t("size")}</label><input id="sz" type="range" min="8" max="72" step="1" value="${s.size}"><span class="val" id="szv">${s.size}</span></div>
     <div class="row"><label>${t("weight")}</label><div class="seg" id="wt">${[300,400,500,700].map(w=>`<button data-v="${w}" class="${+s.weight===w?"on":""}">${w}</button>`).join("")}</div></div>
     <div class="row"><label>${t("tracking")}</label><input id="ls" type="range" min="-5" max="40" step="1" value="${Math.round(s.spacing*100)}"><span class="val" id="lsv">${s.spacing.toFixed(2)}</span></div>
@@ -914,24 +1883,40 @@ addEventListener("pointerdown",e=>{
 },true);
 
 /* ================= import ================= */
-$("jsonfile").onchange=e=>{const f=e.target.files[0];if(!f)return;
+function readJSON(f,merge){
   const r=new FileReader();
-  r.onload=()=>{try{const d=JSON.parse(r.result);
-    if(d&&d.cards){snap();S={...S,...d};S.links=S.links||[];S.groups=S.groups||[];sel=[];
-      LANG=S.lang||LANG;fileName=f.name;fileHandle=null;fileOK=false;render();fit(true);save()}}
-    catch(err){alert("Cannot read this file")}};
-  r.readAsText(f);e.target.value=""};
+  r.onload=async()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(!d||!d.cards)throw 0;
+      snap();
+      const n=await absorb(d,merge);
+      sel=[];
+      if(!merge){LANG=S.lang||LANG;fileName=f.name;fileHandle=null;fileOK=false}
+      render();fit(true);save();
+      toast((merge?t("mergedIn"):t("savedTo"))+" "+n);
+    }catch(err){alert(t("badFile"))}
+  };
+  r.readAsText(f);
+}
+$("jsonfile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,false);e.target.value=""};
+$("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.target.value=""};
 
 /* ================= boot ================= */
 (async()=>{
+  try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch(e){}
   const saved=await loadState();
   if(saved&&saved.cards){S={...S,...saved};S.links=S.links||[];S.groups=S.groups||[];
     S.linkDef={...DEFLINK,...(saved.linkDef||{})};S.textDef={...DEF,...(saved.textDef||{})}}
   LANG=S.lang||"en";
+  await migrateInline(S.cards);
+  await loadImgs(S.cards);
   try{const h=await kvGet(FH);
     if(h){fileHandle=h;fileName=h.name;
       if(h.queryPermission){const p=await h.queryPermission({mode:"readwrite"});fileOK=(p==="granted")}}}catch(e){}
   applyCam();render();
+  if(S.work&&!lock)$("find").classList.add("on");
+  syncFindMode();refreshTagList();
   if(S.cards.length)fit(true);
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{measure();drawLinks()});
   setTimeout(()=>{measure();drawLinks()},800);
