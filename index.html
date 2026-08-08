@@ -165,9 +165,12 @@
     font-size:12.5px;line-height:1.7;margin:14px 0 0}
   #man .cx{position:absolute;right:calc(50% - min(460px,46vw) + 14px);top:calc(50% - min(330px,44vh) + 10px);
     border:none;background:none;color:var(--pfg);font-size:20px;cursor:pointer;opacity:.45;z-index:2}
-  #bar{position:fixed;z-index:75;display:none;align-items:center;gap:3px;padding:4px 5px;
-    border-radius:9px;background:var(--panel);border:1px solid var(--pline);
-    box-shadow:0 8px 26px rgba(0,0,0,.16);white-space:nowrap;font-size:12.5px;color:var(--pfg)}
+  #bar{position:fixed;z-index:75;display:none;align-items:center;gap:3px;padding:3px 5px;
+    border-radius:9px;background:var(--glass);border:1px solid var(--glassline);
+    backdrop-filter:blur(9px) saturate(1.3);-webkit-backdrop-filter:blur(9px) saturate(1.3);
+    box-shadow:none;white-space:nowrap;font-size:12.5px;color:var(--pfg);
+    opacity:.62;transition:opacity .16s}
+  #bar:hover{opacity:1}
   #bar.on{display:flex}
   #bar button{height:24px;min-width:24px;padding:0 6px;border:none;background:none;border-radius:5px;
     cursor:pointer;color:inherit;font-size:12.5px;line-height:1}
@@ -678,6 +681,8 @@ function renderNow(){
   document.body.classList.toggle("lock",lock);
   document.body.style.setProperty("--sel",dark?"#EDEDEA":"#111");
   document.body.style.setProperty("--frame",dark?"#C9C9C4":"#5A5F66");
+  document.body.style.setProperty("--glass",dark?"rgba(30,30,30,.42)":"rgba(255,255,255,.42)");
+  document.body.style.setProperty("--glassline",dark?"rgba(255,255,255,.12)":"rgba(0,0,0,.08)");
   document.body.style.setProperty("--panel",dark?"#1B1B1B":"#fff");
   document.body.style.setProperty("--pfg",dark?"#EFEFEC":"#111");
   document.body.style.setProperty("--pline",dark?"rgba(255,255,255,.16)":"rgba(0,0,0,.12)");
