@@ -46,7 +46,7 @@
   .card .port{position:absolute;width:calc(7px * var(--iz));height:calc(7px * var(--iz));
     border-radius:50%;background:var(--frame);border:calc(1px * var(--iz)) solid #fff;
     transform:translate(-50%,-50%);opacity:0;cursor:crosshair;transition:opacity .12s,transform .12s;z-index:3}
-  .card:hover:not(.sel) .port{opacity:.85}
+  .card:hover .port{opacity:.85}
   .card .port:hover{opacity:1;transform:translate(-50%,-50%) scale(1.45)}
 
   /* presentation lock */
@@ -224,7 +224,7 @@ const T={
   insertImage:"Insert image…",insertText:"Insert text",dbl:"dbl",selectAll:"Select all",
   fitView:"Fit to view",zoom100:"Zoom 100%",linkDefaults:"Default connector style",
   canvasColor:"Canvas colour",language:"Language",presentation:"Presentation lock",
-  clickFocus:"Click to zoom on a card",save:"Save",saveAs:"Save as…",importJSON:"Import file…",
+save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   clearAll:"Clear canvas",clearConfirm:"Clear the whole canvas?",
   editText:"Edit text",textStyle:"Text style…",linkFromHere:"Connect from here",
   replaceImage:"Replace image…",alignDistribute:"Align and distribute",align:"Align",
@@ -252,8 +252,6 @@ const T={
   grpEn:"Latin",grpZh:"Chinese",
   clearFmt:"Clear",needTextSel:"Select some text first",textBar:"Text toolbar",
   zoomTo:"Zoom to this",
-  focusMode:"Click to zoom",fcOff:"Off",fcSecond:"Second click on a selected card",fcSingle:"Any single click",
-  focusEdit:"Zoom in when editing text",focusKeyHint:"Press Z to zoom on the selection",
   linkView:"Connector display",lvAll:"Always visible",lvFocus:"Focus on hover",lvOff:"Hidden",
   linkLabel:"Note marker",llDot:"Dot only",llText:"Short label",llNone:"None",
   linkNote:"Note on this connector…",noteTitle:"Connector note",notePh:"What does this link mean",
@@ -290,7 +288,7 @@ const T={
   insertImage:"插入图片…",insertText:"插入文字",dbl:"双击",selectAll:"全选",
   fitView:"适应画面",zoom100:"缩放 100%",linkDefaults:"默认连线样式",
   canvasColor:"画布底色",language:"语言 Language",presentation:"锁定演示模式",
-  clickFocus:"点击卡片自动放大居中",save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
+save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   clearAll:"清空画布",clearConfirm:"清空整个画布？",
   editText:"编辑文字",textStyle:"文字样式…",linkFromHere:"从这里连线",
   replaceImage:"替换图片…",alignDistribute:"对齐与分布",align:"对齐",
@@ -318,8 +316,6 @@ const T={
   grpEn:"英文",grpZh:"中文",
   clearFmt:"清除",needTextSel:"请先划选文字",textBar:"文字工具条",
   zoomTo:"放大居中",
-  focusMode:"点击聚焦",fcOff:"关闭",fcSecond:"再次点击已选中的卡片",fcSingle:"任意单击",
-  focusEdit:"编辑文字时自动放大",focusKeyHint:"按 Z 聚焦到当前选中",
   linkView:"连线显示",lvAll:"始终显示",lvFocus:"聚焦时显示",lvOff:"隐藏",
   linkLabel:"批注标记",llDot:"仅圆点",llText:"简短标签",llNone:"不显示",
   linkNote:"连线备注…",noteTitle:"连线备注",notePh:"这条关联意味着什么",
@@ -396,7 +392,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* ================= state ================= */
 const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",italic:false,color:"#111111"};
 const DEFLINK={kind:"curve",dash:false,arrow:"end",w:1.4,color:"#8A8A85"};
-let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",focusClick:"second",focusEdit:true,imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"focus",linkLabel:"dot"};
+let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"focus",linkLabel:"dot"};
 let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
 let undo=[], redo=[], mouse={x:innerWidth/2,y:innerHeight/2}, focusIdx=-1;
@@ -698,13 +694,7 @@ function boxTo(b,pad,maxZ,now){
   camTo(-(b.x+b.w/2)*z,-(b.y+b.h/2)*z,z,now);
 }
 function fit(now){focusIdx=-1;boxTo(bbox(),170,1.6,now)}
-function fcMode(){
-  const v=S.focusClick;
-  if(v===true)return "second";
-  if(v===false||v==null)return "off";
-  return v;
-}
-let camBack=null,focusKey=null,fcTimer=null;
+let camBack=null,focusKey=null;
 function focusOn(list,noToggle){
   const cs=(list||[]).filter(Boolean);
   if(!cs.length){fit();return}
@@ -856,29 +846,17 @@ function makeCard(c){
     e.stopPropagation();
     if(linkFrom){finishLinkClick(c);return}
     const ids=expand([c.id]);
-    const wasSel=ids.every(i=>sel.includes(i));
     if(e.shiftKey){
       if(ids.every(i=>sel.includes(i)))sel=sel.filter(i=>!ids.includes(i));
       else sel=[...new Set([...sel,...ids])];
     }else if(!ids.every(i=>sel.includes(i)))sel=[...ids];
     selLink=null;paintSel();
-    startMove(e,()=>{
-      if(e.shiftKey)return;
-      const m=fcMode();
-      if(m!=="single"&&!(m==="second"&&wasSel))return;
-      clearTimeout(fcTimer);                       // 等一拍，看看是不是双击
-      fcTimer=setTimeout(()=>focusOn([c]),240);
-    });
+    startMove(e);
   });
   el.addEventListener("pointerenter",()=>{hoverId=c.id;if(S.linkView==="focus")drawLinksSoon()});
   el.addEventListener("pointerleave",()=>{if(hoverId===c.id){hoverId=null;
     if(S.linkView==="focus")drawLinksSoon()}});
-  el.addEventListener("dblclick",e=>{
-    if(lock)return;e.stopPropagation();
-    clearTimeout(fcTimer);                          // 双击就是编辑，镜头不动
-    if(e.target.tagName==="IMG")focusOn([c]);       // 图片上双击 = 放大居中
-    else editText(c);
-  });
+  el.addEventListener("dblclick",e=>{if(lock)return;e.stopPropagation();editText(c)});
   el.addEventListener("contextmenu",e=>{
     e.preventDefault();e.stopPropagation();
     if(lock){lockMenu(e.clientX,e.clientY);return}
@@ -930,7 +908,6 @@ function measure(){
 function editText(c){
   if(lock)return;
   if(isLocked(c.id)){toast(t("lockedNote"));return}
-  if(S.focusEdit&&cam.z<0.92)focusCard(c);
   const el=nodes.get(c.id)?.querySelector(".cap");if(!el)return;
   editing=true;el.contentEditable="true";el.focus();
   const r=document.createRange();r.selectNodeContents(el);
@@ -1176,7 +1153,6 @@ stage.addEventListener("pointerdown",e=>{
   startMarquee(e);
 });
 function startPan(e){
-  clearTimeout(fcTimer);
   stage.classList.add("pan");
   const sx=e.clientX,sy=e.clientY,ox=tgt.x,oy=tgt.y;
   const mv=ev=>{camTo(ox+ev.clientX-sx,oy+ev.clientY-sy,tgt.z,true)};
@@ -1462,9 +1438,11 @@ const MANUAL=[
   <p>连线颜色被译成关系类型：灰为一般关联，红为对立，蓝为延伸，绿为印证。所以调线色时最好按语义而非按美观。</p>
   <p class="tip">画布是图结构，文档是线性结构。交叉引用让每条边在文中出现两次，从任意一处都能追下去，不打乱叙述顺序。</p>`],
 
- ["聚焦","JUJIAO",`
-  <p>点击卡片自动放大居中，最大放到 100%，不会放过头。</p>
-  <p>演示模式下默认开启，点哪张看哪张。编辑模式下默认关闭，避免与拖动冲突，需要时在右键菜单勾选<b>点击卡片自动放大居中</b>。</p>`],
+ ["放大居中","JUJIAO",`
+  <p>选中一张或多张卡片后按 <kbd>Z</kbd>，镜头框住整个选区，最大放到 100%，不会放过头。多选时按外接矩形取景，适合快速看清一组卡片的整体关系。</p>
+  <p>再按一次 <kbd>Z</kbd> 即退回原来的视角和缩放，所以放大是零成本的动作，看完就回，不会打断原本的浏览位置。右键菜单里也有<b>放大居中</b>入口。</p>
+  <p>编辑模式下点击卡片<b>不会</b>移动镜头。单击只做选中和起拖，双击只做文字编辑，镜头完全由你用 <kbd>Z</kbd> 控制。</p>
+  <p class="tip">演示锁定模式是另一套逻辑：那里点击卡片会直接放大聚焦，双击空白处回总览，方向键逐个浏览。</p>`],
 
  ["框选","KUANGXUAN",`
   <p>空白处按住左键拖出选框，范围内卡片全部选中。按住 <kbd>Shift</kbd> 拖动则在已有选择上追加。</p>
@@ -2387,13 +2365,7 @@ function viewItems(x,y){
     {label:t("readOrder"),sub:[{head:t("readOrder")},
       ...[["auto","roAuto"],["col","roCol"],["row","roRow"]].map(([v,k])=>({label:t(k),
         check:(S.readOrder||"auto")===v,on:()=>{S.readOrder=v;render();save()}}))]},
-    {label:t("focusMode"),key:"Z",sub:[
-      {head:t("focusMode")},
-      ...[["off","fcOff"],["second","fcSecond"],["single","fcSingle"]].map(([v,k2])=>({label:t(k2),
-        check:fcMode()===v,on:()=>{S.focusClick=v;save()}})),
-      {head:t("focusKeyHint")},
-      {label:t("focusEdit"),check:!!S.focusEdit,on:()=>{S.focusEdit=!S.focusEdit;save()}}
-    ]},
+    {label:t("zoomTo"),key:"Z",on:focusSel},
     {head:t("vwContent")},
     {label:t("linkView"),sub:[
       {head:t("linkView")},
