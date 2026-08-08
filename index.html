@@ -191,58 +191,70 @@
     font-size:12.5px;line-height:1.7;margin:14px 0 0}
   #man .cx{position:absolute;right:calc(50% - min(460px,46vw) + 14px);top:calc(50% - min(330px,44vh) + 10px);
     border:none;background:none;color:var(--pfg);font-size:20px;cursor:pointer;opacity:.45;z-index:2}
-  #bar{position:fixed;z-index:75;display:none;flex-direction:column;gap:3px;padding:5px 7px;
-    border-radius:11px;background:var(--glass);border:1px solid var(--glassline);
-    backdrop-filter:blur(9px) saturate(1.3);-webkit-backdrop-filter:blur(9px) saturate(1.3);
-    white-space:nowrap;font-size:12.5px;color:var(--pfg);opacity:.72;transition:opacity .16s}
-  #bar:hover{opacity:1}
+  #bar{position:fixed;z-index:75;display:none;align-items:center;gap:1px;padding:4px 5px;
+    border-radius:10px;background:var(--glass);border:1px solid var(--glassline);
+    backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
+    white-space:nowrap;font-size:12.5px;color:var(--pfg);
+    transition:background-color .16s,border-color .16s}
+  #bar:not(:hover):not(.open){background:var(--glassSoft);border-color:transparent}
+  #bar:not(:hover):not(.open) .ctl{opacity:.68}
   #bar.on{display:flex}
-  #bar .row2{display:flex;align-items:center;gap:2px;position:relative}
-  #bar .row2.r2{padding-top:4px;margin-top:1px;border-top:1px solid var(--glassline);opacity:.9}
-  #bar .grp{display:flex;align-items:center;gap:2px;padding:0 5px;border-radius:6px}
-  #bar .grp+.grp{margin-left:1px;box-shadow:-1px 0 0 var(--pline)}
-  #bar .grp:first-child{padding-left:1px}
-  #bar .grp:last-child{padding-right:1px}
-  #bar button{height:24px;min-width:24px;padding:0 6px;border:none;background:none;border-radius:5px;
-    cursor:pointer;color:inherit;font-size:12.5px;line-height:1}
-  #bar button:hover{background:var(--phi)}
-  #bar button.on{background:var(--pfg);color:var(--panel)}
-  #bar .lbl{opacity:.45;font-size:10.5px;margin:0 1px}
-  #bar .val{width:26px;text-align:right;opacity:.45;font:400 10px/1 "IBM Plex Mono",monospace}
-  #bar .fbtn{width:104px;max-width:104px;text-align:left;border:1px solid var(--pline);padding:0 7px;
-    font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #bar .flist{position:absolute;top:100%;left:0;margin-top:5px;z-index:3;display:none;
-    max-height:300px;overflow:auto;padding:5px;border-radius:9px;background:var(--panel);
-    border:1px solid var(--pline);box-shadow:0 14px 36px rgba(0,0,0,.2);min-width:170px}
-  #bar .flist.on{display:block}
-  #bar .flist button{display:block;width:100%;text-align:left;height:26px;font-size:13px}
-  #bar .szl{min-width:64px;max-height:250px}
-  #bar .szl button{text-align:center;font:400 12.5px/26px "IBM Plex Mono",monospace;height:26px}
-  #bar .flist .fgrp{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;
-    text-transform:uppercase;opacity:.4;padding:8px 8px 5px}
-  #bar .szi{min-width:30px;height:22px;padding:0 4px;text-align:center;border:1px solid var(--pline);
-    border-right:none;border-radius:5px 0 0 5px;font:400 12px/22px "IBM Plex Mono",monospace;
-    cursor:text;user-select:none}
-  #bar .szc{height:22px;min-width:15px;padding:0;border:1px solid var(--pline);border-radius:0 5px 5px 0;
-    font-size:8px;line-height:22px;opacity:.6}
-  #bar .szi.editing{border-color:var(--frame);background:var(--phi)}
-  #bar .spin{display:flex;flex-direction:column;gap:1px;margin-left:2px}
-  #bar .spin button{height:10px;min-width:14px;padding:0;font-size:7px;line-height:10px;
-    border:1px solid var(--pline);border-radius:3px;opacity:.7}
-  #bar .dot{width:14px;height:14px;min-width:14px;border-radius:50%;padding:0;border:1px solid var(--pline)}
-  #bar .hl{width:15px;height:15px;min-width:15px;border-radius:3px;padding:0;border:1px solid var(--pline)}
-  #bar .wt{display:flex;gap:3px}
-  #bar .wt{gap:0}
-  #bar .wt button{min-width:28px;height:22px;padding:0 3px;border:1px solid var(--pline);
-    border-radius:0;font-size:11px;margin-left:-1px}
-  #bar .wt button:first-child{border-radius:5px 0 0 5px;margin-left:0}
-  #bar .wt button:last-child{border-radius:0 5px 5px 0}
-  #bar .sld{width:62px;accent-color:var(--pfg);height:14px}
-  #bar .excl{display:flex;align-items:center;gap:4px;font-size:10.5px;opacity:.6;margin:0 3px;cursor:pointer}
-  #bar .excl input{width:12px;height:12px;margin:0;accent-color:var(--pfg)}
-  #bar .go2{border:1px solid var(--pline);border-radius:5px;height:22px;font-size:11.5px}
-  #bar button.al-left,#bar button.al-center,#bar button.al-right{min-width:24px;padding:0 4px}
-  #bar button.al-left svg,#bar button.al-center svg,#bar button.al-right svg{display:block;margin:0 auto}
+  #bar .cell{position:relative;display:flex;align-items:center}
+  #bar .ctl{height:26px;display:flex;align-items:center;gap:5px;padding:0 8px;border:none;
+    background:none;border-radius:7px;cursor:pointer;color:inherit;font-size:12.5px;line-height:1;
+    transition:background-color .12s,opacity .16s}
+  #bar .ctl:hover{background:var(--phi)}
+  #bar .ctl.on{background:var(--pfg);color:var(--panel)}
+  #bar .ctl.wide{min-width:104px;justify-content:space-between}
+  #bar .ctl .car{font-size:7px;opacity:.4;margin-left:1px}
+  #bar .ctl.on .car{opacity:.7}
+  #bar .cell.split{gap:0}
+  #bar .ctl.half{padding:0 6px 0 8px}
+  #bar .ctl.caret{padding:0 6px 0 2px}
+  #bar .cell.split:hover .ctl{background:var(--phi)}
+  #bar .ctl .sw{width:14px;height:14px;border-radius:50%;border:1px solid var(--pline);flex:none}
+  #bar .ctl .swb{width:14px;height:11px;border-radius:2px;border:1px solid var(--pline);flex:none}
+  #bar .div{width:1px;height:15px;background:var(--pline);margin:0 5px;flex:none;opacity:.7}
+  #bar .szi{min-width:26px;height:26px;padding:0 4px;text-align:center;border-radius:7px;
+    font:400 12px/26px "IBM Plex Mono",monospace;cursor:text;user-select:none}
+  #bar .szi:hover{background:var(--phi)}
+  #bar .szi.editing{background:var(--phi);box-shadow:inset 0 0 0 1px var(--frame)}
+  #bar .pp{position:absolute;top:100%;left:0;margin-top:7px;z-index:6;display:none;padding:7px;
+    border-radius:10px;background:var(--panel);border:1px solid var(--pline);
+    box-shadow:0 16px 40px rgba(0,0,0,.2);min-width:150px;white-space:normal}
+  #bar .pp.on{display:block}
+  #bar .pp.right{left:auto;right:0}
+  #bar .pp .hd2{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
+    opacity:.4;padding:6px 6px 6px}
+  #bar .pp .item{display:block;width:100%;height:27px;text-align:left;padding:0 9px;border:none;
+    background:none;border-radius:6px;cursor:pointer;color:inherit;font-size:13px}
+  #bar .pp .item:hover{background:var(--phi)}
+  #bar .pp .item.on{background:var(--pfg);color:var(--panel)}
+  #bar .pp .scroll{max-height:264px;overflow:auto}
+  #bar .pp .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:2px}
+  #bar .pp .grid button{height:28px;border:1px solid var(--pline);border-radius:6px;background:none;
+    cursor:pointer;color:inherit;font:400 12px/1 "IBM Plex Mono",monospace}
+  #bar .pp .grid button:hover{border-color:var(--frame)}
+  #bar .pp .grid button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+  #bar .pp .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:3px}
+  #bar .pp .chips button{height:26px;border-radius:6px;border:1px solid var(--pline);cursor:pointer;padding:0}
+  #bar .pp .chips button.on{box-shadow:0 0 0 2px var(--pfg) inset}
+  #bar .pp .rowp{display:flex;align-items:center;gap:8px;margin:7px 3px}
+  #bar .pp .rowp label{width:32px;flex:none;opacity:.5;font-size:11px}
+  #bar .pp .rowp input[type=range]{flex:1;accent-color:var(--pfg);height:15px}
+  #bar .pp .rowp .val{width:30px;text-align:right;opacity:.5;font:400 10.5px/1 "IBM Plex Mono",monospace}
+  #bar .pp .seg{display:flex;margin:3px 3px 8px}
+  #bar .pp .seg button{flex:1;height:26px;border:1px solid var(--pline);background:none;cursor:pointer;
+    color:inherit;font-size:11.5px;margin-left:-1px}
+  #bar .pp .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
+  #bar .pp .seg button:last-child{border-radius:0 6px 6px 0}
+  #bar .pp .seg button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+  #bar .pp .opt2{display:flex;align-items:center;gap:6px;font-size:11.5px;opacity:.75;
+    margin:2px 4px 9px;cursor:pointer}
+  #bar .pp .opt2 input{width:13px;height:13px;margin:0;accent-color:var(--pfg)}
+  #bar .pp .go{width:100%;height:30px;border:none;border-radius:7px;background:var(--pfg);
+    color:var(--panel);cursor:pointer;font-size:12.5px}
+  #bar .pp .note2{font-size:10.5px;opacity:.42;padding:5px 6px 2px;line-height:1.5}
   body.lock #bar{display:none !important}
   #marq{position:fixed;z-index:30;display:none;border:1px solid var(--sel);
     background:rgba(125,125,125,.13);border-radius:2px;pointer-events:none}
@@ -308,7 +320,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   level:"Heading level",lvNone:"Body text",lv1:"Heading 1",lv2:"Heading 2",lv3:"Heading 3",
   exportDoc:"Export…",expTitle:"Export",expName:"Document title",
   grpEn:"Latin",grpZh:"Chinese",
-  trackShort:"Track",leadShort:"Lead",
+  trackShort:"Track",leadShort:"Lead",hlNone:"No highlight",
+  unifyHint:"Style one card first, then apply it to every card of that level.",
   clearFmt:"Clear",unify:"Unify",unifyGo:"Apply to level",bodyShort:"Body",
   exclManual:"skip cards styled by hand",unifyDone:"Cards updated:",needTextSel:"Select some text first",textBar:"Text toolbar",
   zoomTo:"Zoom to this",
@@ -380,7 +393,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   level:"层级",lvNone:"正文",lv1:"一级标题",lv2:"二级标题",lv3:"三级标题",
   exportDoc:"导出…",expTitle:"导出",expName:"文档标题",
   grpEn:"英文",grpZh:"中文",
-  trackShort:"字距",leadShort:"行距",
+  trackShort:"字距",leadShort:"行距",hlNone:"取消高亮",
+  unifyHint:"先把一张卡片调好，再统一到该层级的全部卡片",
   clearFmt:"清除",unify:"分级统一",unifyGo:"统一该层级",bodyShort:"正文",
   exclManual:"跳过手动调整过的",unifyDone:"已统一卡片：",needTextSel:"请先划选文字",textBar:"文字工具条",
   zoomTo:"放大居中",
@@ -812,7 +826,8 @@ function renderNow(){
   document.body.classList.toggle("lock",lock);
   document.body.style.setProperty("--sel",dark?"#EDEDEA":"#111");
   document.body.style.setProperty("--frame",dark?"#C9C9C4":"#5A5F66");
-  document.body.style.setProperty("--glass",dark?"rgba(30,30,30,.42)":"rgba(255,255,255,.42)");
+  document.body.style.setProperty("--glass",dark?"rgba(28,28,28,.62)":"rgba(255,255,255,.62)");
+  document.body.style.setProperty("--glassSoft",dark?"rgba(28,28,28,.3)":"rgba(255,255,255,.3)");
   document.body.style.setProperty("--glassline",dark?"rgba(255,255,255,.12)":"rgba(0,0,0,.08)");
   document.body.style.setProperty("--fr",dark?"rgba(235,235,230,.45)":"rgba(60,66,72,.42)");
   document.body.style.setProperty("--frbg",dark?"rgba(255,255,255,.03)":"rgba(0,0,0,.018)");
@@ -1670,9 +1685,8 @@ const MANUAL=[
   <p>工具条从左到右依次是：</p>
   <ul>
     <li><b>B / I / U</b>：粗体、斜体、下划线，三个按钮会随光标位置亮起，显示当前状态</li>
-    <li><b>字号框</b>：点一下即可直接敲数字，回车生效，方向键上下微调，鼠标滚轮也可调。它不会夺走文字选区，所以划选一段文字后再调字号，改的就是那一段</li>
-    <li><b>六个圆点</b>：文字颜色，依次为黑、深灰、浅灰、红、蓝、绿</li>
-    <li><b>四个方块</b>：高亮标记，依次为黄、绿、蓝、粉。在已是该底色的文字上再点一次即取消高亮，换一种颜色则是替换</li>
+    <li><b>字号</b>：点数字直接敲新值，回车生效，方向键上下微调；右侧小三角展开常用档位。它不会夺走文字选区，所以划选一段文字后再调字号，改的就是那一段</li>
+    <li><b>文字颜色 / 荧光笔</b>：点色块即以当前颜色套用，右侧小三角展开色板换色。换过之后按钮记住新颜色，之后连续标记只需一击。荧光笔在同色文字上再点一次即取消</li>
     <li><b>清除</b>：去掉划选部分的全部格式，包括粗斜体、下划线、颜色、字号和底色</li>
   </ul>
   <p>双击进入编辑后划选文字再点按钮，只改那一段。如果没有划选任何文字，粗体、斜体、字号、颜色会退回作用于整张卡片，等同于文字样式面板；高亮则必须划选，因为整框高亮没有意义。</p>
@@ -2378,138 +2392,252 @@ function buildBar(){
   const b=$("bar");b.innerHTML="";
   if(!b._guard){
     b._guard=true;
-    // 捕获阶段只阻止默认行为（保住文字选区），不能阻断传播，否则控件自身的处理收不到
+    // 整条工具栏不夺取焦点，文字选区在任何点击下都保持
     b.addEventListener("pointerdown",e=>{
       stashRange();
       if(!e.target.closest('input[type=range]'))e.preventDefault();
     },true);
     b.addEventListener("pointerdown",e=>e.stopPropagation());
   }
-  const row=cls=>{const d=document.createElement("div");d.className="row2 "+(cls||"");b.appendChild(d);return d};
-  const grp=host=>{const d=document.createElement("div");d.className="grp";host.appendChild(d);return d};
-  const mk=(host,html,fn,cls,style)=>{
+  const div=()=>{const d=document.createElement("span");d.className="div";b.appendChild(d)};
+  const btn=(host,html,fn,cls)=>{
     const x=document.createElement("button");
-    x.innerHTML=html;if(cls)x.className=cls;if(style)x.setAttribute("style",style);
+    x.className="ctl"+(cls?" "+cls:"");x.innerHTML=html;
     x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-    x.addEventListener("click",e=>{e.stopPropagation();fn()});
+    x.addEventListener("click",e=>{e.stopPropagation();fn(x)});
     host.appendChild(x);return x;
   };
-  const lab=(host,txt)=>{const d=document.createElement("span");d.className="lbl";d.textContent=txt;host.appendChild(d)};
+  // 带浮层的控件：触发按钮 + 统一样式的浮层
+  const cellWith=(html,build,cls,side)=>{
+    const cell=document.createElement("div");cell.className="cell";b.appendChild(cell);
+    const pop=document.createElement("div");pop.className="pp"+(side==="right"?" right":"");
+    pop.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    const trig=btn(cell,html,()=>{
+      const wasOpen=pop.classList.contains("on");
+      closePops();
+      if(!wasOpen){
+        pop.innerHTML="";build(pop,()=>closePops());
+        pop.classList.remove("right");
+        pop.classList.add("on");
+        b.classList.add("open");trig.classList.add("on");
+        const r=pop.getBoundingClientRect();          // 超出右边界就改为右对齐
+        if(r.right>innerWidth-10)pop.classList.add("right");
+      }
+    },cls);
+    cell.appendChild(pop);
+    return {cell,pop,trig};
+  };
+  const car='<span class="car">\u25BE</span>';
 
-  /* ---------- 第一行 ---------- */
-  const r1=row();
-  const g1=grp(r1);
-  mk(g1,"<b>B</b>",()=>cmd("bold")).dataset.k="b";
-  mk(g1,"<i>I</i>",()=>cmd("italic")).dataset.k="i";
-  mk(g1,"<u>U</u>",()=>cmd("underline")).dataset.k="u";
+  /* 1. 字重与字形 */
+  btn(b,"<b>B</b>",()=>cmd("bold")).dataset.k="b";
+  btn(b,"<i>I</i>",()=>cmd("italic")).dataset.k="i";
+  btn(b,"<u>U</u>",()=>cmd("underline")).dataset.k="u";
+  div();
 
-  const g2=grp(r1);
-  const fbtn=mk(g2,"",()=>{$("szlist")?.classList.remove("on");toggleFontList()},"fbtn");
-  fbtn.id="fbtn";
-  const flist=document.createElement("div");flist.className="flist";flist.id="flist";
-  flist.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-  ["en","zh"].forEach(g=>{
-    const h=document.createElement("div");h.className="fgrp";
-    h.textContent=g==="en"?t("grpEn"):t("grpZh");flist.appendChild(h);
-    FONTS.filter(f=>f[2]===g).forEach(f=>{
-      const it=document.createElement("button");
-      it.textContent=famName(f[0]);it.style.fontFamily=f[1];it.dataset.v=f[0];
-      it.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-      it.addEventListener("click",e=>{e.stopPropagation();setFamily(f[0]);flist.classList.remove("on")});
-      flist.appendChild(it);
+  /* 2. 字体 */
+  const F=cellWith(`<span id="fbtn">Font</span>${car}`,(pop,close)=>{
+    const sc=document.createElement("div");sc.className="scroll";
+    const cur=curFamily();
+    ["en","zh"].forEach(g=>{
+      const h=document.createElement("div");h.className="hd2";
+      h.textContent=g==="en"?t("grpEn"):t("grpZh");sc.appendChild(h);
+      FONTS.filter(f=>f[2]===g).forEach(f=>{
+        const it=document.createElement("button");
+        it.className="item"+(cur===f[0]?" on":"");
+        it.textContent=famName(f[0]);it.style.fontFamily=f[1];
+        it.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+        it.addEventListener("click",e=>{e.stopPropagation();setFamily(f[0]);close()});
+        sc.appendChild(it);
+      });
     });
-  });
-  g2.appendChild(flist);
-  // 字号：只读显示 + 预设下拉 + 微调
-  const szi=document.createElement("span");
-  szi.className="szi";szi.id="szi";szi.textContent="15";
+    pop.appendChild(sc);
+  },"wide");
+
+  /* 3. 字号：数字可直接输入，下拉给常用档位 */
+  const szCell=document.createElement("div");szCell.className="cell";b.appendChild(szCell);
+  const szi=document.createElement("span");szi.className="szi";szi.id="szi";szi.textContent="15";
   szi.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation();
-    $("flist")?.classList.remove("on");beginSizeEdit()});
-  szi.addEventListener("wheel",e=>{e.preventDefault();setSize(curSize()+(e.deltaY<0?1:-1))},{passive:false});
-  g2.appendChild(szi);
-  const szc=mk(g2,"\u25BE",()=>{$("flist")?.classList.remove("on");
-    $("szlist").classList.toggle("on")},"szc");
-  const szlist=document.createElement("div");szlist.className="flist szl";szlist.id="szlist";
-  szlist.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-  [10,11,12,13,14,15,16,18,20,24,28,32,40,48,64,80].forEach(v=>{
-    const it=document.createElement("button");it.textContent=v;it.dataset.v=v;
-    it.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-    it.addEventListener("click",e=>{e.stopPropagation();setSize(v);szlist.classList.remove("on")});
-    szlist.appendChild(it);
+    closePops();beginSizeEdit()});
+  szCell.appendChild(szi);
+  const SZ=cellWith(car,(pop,close)=>{
+    const g=document.createElement("div");g.className="grid";
+    const cs=curSize();
+    [10,11,12,13,14,16,18,20,24,28,32,40,48,56,64,80].forEach(v=>{
+      const x=document.createElement("button");x.textContent=v;
+      if(v===cs)x.classList.add("on");
+      x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+      x.addEventListener("click",e=>{e.stopPropagation();setSize(v);close()});
+      g.appendChild(x);
+    });
+    pop.appendChild(g);
   });
-  g2.appendChild(szlist);
-  const spin=document.createElement("span");spin.className="spin";
-  [["\u25B4",1],["\u25BE",-1]].forEach(([ch,d])=>{
-    const x=document.createElement("button");x.textContent=ch;
-    x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-    x.addEventListener("click",e=>{e.stopPropagation();setSize(curSize()+d)});
-    spin.appendChild(x);
-  });
-  g2.appendChild(spin);
+  div();
 
-  const g3=grp(r1);
-  INK.forEach(v=>mk(g3,"",()=>setInkColor(v),"dot","background:"+v));
-  const g4=grp(r1);
-  HLS.forEach(v=>mk(g4,"",()=>setHighlight(v),"hl","background:"+v));
-  const g5=grp(r1);
-  mk(g5,t("clearFmt"),clearFmt);
+  /* 4. 文字颜色：直接点即套用当前色，小三角换色 */
+  {
+    const cell=document.createElement("div");cell.className="cell split";b.appendChild(cell);
+    btn(cell,`<span class="sw" id="inksw"></span>`,()=>setInkColor(lastInk()),"half");
+    const pop=document.createElement("div");pop.className="pp";
+    pop.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    const trig=btn(cell,car,()=>{
+      const was=pop.classList.contains("on");closePops();
+      if(was)return;
+      pop.innerHTML="";
+      const g=document.createElement("div");g.className="chips";
+      INK.forEach(v=>{
+        const x=document.createElement("button");x.style.background=v;
+        if(v.toLowerCase()===lastInk().toLowerCase())x.classList.add("on");
+        x.addEventListener("pointerdown",e2=>{e2.preventDefault();e2.stopPropagation()});
+        x.addEventListener("click",e2=>{e2.stopPropagation();
+          S.lastInk=v;save();setInkColor(v);closePops();syncBar()});
+        g.appendChild(x);
+      });
+      pop.appendChild(g);
+      pop.classList.remove("right");pop.classList.add("on");
+      b.classList.add("open");trig.classList.add("on");
+      if(pop.getBoundingClientRect().right>innerWidth-10)pop.classList.add("right");
+    },"caret");
+    cell.appendChild(pop);
+  }
 
-  /* ---------- 第二行 ---------- */
-  const r2=row("r2");
-  const h1=grp(r2);
-  const wt=document.createElement("span");wt.className="wt";wt.id="barwt";
-  [300,400,500,700].forEach(w=>{
-    const x=document.createElement("button");x.textContent=w;x.dataset.v=w;
-    x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-    x.addEventListener("click",e=>{e.stopPropagation();cardSnapStyle(()=>setStyle("weight",w));syncBar()});
-    wt.appendChild(x);
+  /* 5. 荧光笔：同上，再点一次取消 */
+  {
+    const cell=document.createElement("div");cell.className="cell split";b.appendChild(cell);
+    btn(cell,`<span class="swb" id="hlsw"></span>`,()=>setHighlight(lastHL()),"half");
+    const pop=document.createElement("div");pop.className="pp";
+    pop.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    const trig=btn(cell,car,()=>{
+      const was=pop.classList.contains("on");closePops();
+      if(was)return;
+      pop.innerHTML="";
+      const g=document.createElement("div");g.className="chips";
+      HLS.forEach(v=>{
+        const x=document.createElement("button");x.style.background=v;
+        if(v.toLowerCase()===lastHL().toLowerCase())x.classList.add("on");
+        x.addEventListener("pointerdown",e2=>{e2.preventDefault();e2.stopPropagation()});
+        x.addEventListener("click",e2=>{e2.stopPropagation();
+          S.lastHL=v;save();setHighlight(v);closePops();syncBar()});
+        g.appendChild(x);
+      });
+      pop.appendChild(g);
+      const it=document.createElement("button");it.className="item";it.textContent=t("hlNone");
+      it.addEventListener("pointerdown",e2=>{e2.preventDefault();e2.stopPropagation()});
+      it.addEventListener("click",e2=>{e2.stopPropagation();setHighlight("none");closePops()});
+      pop.appendChild(it);
+      pop.classList.remove("right");pop.classList.add("on");
+      b.classList.add("open");trig.classList.add("on");
+      if(pop.getBoundingClientRect().right>innerWidth-10)pop.classList.add("right");
+    },"caret");
+    cell.appendChild(pop);
+  }
+  div();
+
+  /* 6. 段落：对齐、字重、字距、行距 */
+  cellWith(`<span id="parlab">${alSvg("left")}</span>${car}`,(pop,close)=>{
+    const c=barCard();if(!c)return;
+    const st={...DEF,...S.textDef,...(c.s||{})};
+    const h=document.createElement("div");h.className="hd2";h.textContent=t("alignRow");
+    pop.appendChild(h);
+    const seg=document.createElement("div");seg.className="seg";
+    ["left","center","right"].forEach(v=>{
+      const x=document.createElement("button");x.innerHTML=alSvg(v);
+      if(st.align===v)x.classList.add("on");
+      x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+      x.addEventListener("click",e=>{e.stopPropagation();setAlign(v);
+        [...seg.children].forEach(z=>z.classList.remove("on"));x.classList.add("on")});
+      seg.appendChild(x);
+    });
+    pop.appendChild(seg);
+    const h2=document.createElement("div");h2.className="hd2";h2.textContent=t("weight");
+    pop.appendChild(h2);
+    const seg2=document.createElement("div");seg2.className="seg";
+    [300,400,500,700].forEach(w=>{
+      const x=document.createElement("button");x.textContent=w;
+      if(+st.weight===w)x.classList.add("on");
+      x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+      x.addEventListener("click",e=>{e.stopPropagation();cardSnapStyle(()=>setStyle("weight",w));
+        [...seg2.children].forEach(z=>z.classList.remove("on"));x.classList.add("on");syncBar()});
+      seg2.appendChild(x);
+    });
+    pop.appendChild(seg2);
+    const mkSld=(labText,min,max,step,val,fmt,fn)=>{
+      const r=document.createElement("div");r.className="rowp";
+      const l=document.createElement("label");l.textContent=labText;r.appendChild(l);
+      const i=document.createElement("input");i.type="range";i.min=min;i.max=max;i.step=step;i.value=val;
+      const v=document.createElement("span");v.className="val";v.textContent=fmt(val);
+      i.addEventListener("input",()=>{v.textContent=fmt(i.value);fn(+i.value)});
+      i.addEventListener("keydown",e=>e.stopPropagation());
+      r.appendChild(i);r.appendChild(v);pop.appendChild(r);
+    };
+    mkSld(t("trackShort"),-5,40,1,Math.round(st.spacing*100),x=>(x/100).toFixed(2),
+      x=>setStyle("spacing",x/100));
+    mkSld(t("leadShort"),90,260,5,Math.round(st.lh*100),x=>(x/100).toFixed(2),
+      x=>setStyle("lh",x/100));
   });
-  h1.appendChild(wt);
-  const h2=grp(r2);
-  const alIcon=v=>`<svg width="14" height="11" viewBox="0 0 14 11" fill="currentColor">`+
+
+  /* 7. 清除格式 */
+  btn(b,t("clearFmt"),clearFmt);
+  div();
+
+  /* 8. 分级统一 */
+  cellWith(`${t("unify")}${car}`,(pop,close)=>{
+    const h=document.createElement("div");h.className="hd2";h.textContent=t("unify");
+    pop.appendChild(h);
+    const seg=document.createElement("div");seg.className="seg";
+    let lv=0;
+    [[0,t("bodyShort")],[1,"H1"],[2,"H2"],[3,"H3"]].forEach(([v,txt],i)=>{
+      const x=document.createElement("button");x.textContent=txt;
+      if(i===0)x.classList.add("on");
+      x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+      x.addEventListener("click",e=>{e.stopPropagation();lv=v;
+        [...seg.children].forEach(z=>z.classList.remove("on"));x.classList.add("on")});
+      seg.appendChild(x);
+    });
+    pop.appendChild(seg);
+    const lab2=document.createElement("label");lab2.className="opt2";
+    lab2.innerHTML=`<input type="checkbox" checked><span>${t("exclManual")}</span>`;
+    pop.appendChild(lab2);
+    const go=document.createElement("button");go.className="go";go.textContent=t("unifyGo");
+    go.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    go.addEventListener("click",e=>{e.stopPropagation();
+      unifyLevel(lv,lab2.querySelector("input").checked);close()});
+    pop.appendChild(go);
+    const n=document.createElement("div");n.className="note2";n.textContent=t("unifyHint");
+    pop.appendChild(n);
+  },null,"right");
+}
+function alSvg(v){
+  return `<svg width="14" height="11" viewBox="0 0 14 11" fill="currentColor">`+
     [13,8,11].map((w,i)=>{const x=v==="left"?0:v==="right"?14-w:(14-w)/2;
       return `<rect x="${x}" y="${i*4.2}" width="${w}" height="1.7" rx=".8"/>`}).join("")+`</svg>`;
-  ["left","center","right"].forEach(v=>mk(h2,alIcon(v),()=>setAlign(v),"al-"+v));
-  const h3=grp(r2);
-  lab(h3,t("trackShort"));
-  const ls=document.createElement("input");ls.type="range";ls.className="sld";ls.id="barls";
-  ls.min="-5";ls.max="40";ls.step="1";
-  ls.addEventListener("input",()=>{setStyle("spacing",+ls.value/100);
-    $("barlsv").textContent=(+ls.value/100).toFixed(2)});
-  ls.addEventListener("keydown",e=>e.stopPropagation());
-  h3.appendChild(ls);
-  const lsv=document.createElement("span");lsv.className="val";lsv.id="barlsv";h3.appendChild(lsv);
-  lab(h3,t("leadShort"));
-  const lh=document.createElement("input");lh.type="range";lh.className="sld";lh.id="barlh";
-  lh.min="90";lh.max="260";lh.step="5";
-  lh.addEventListener("input",()=>{setStyle("lh",+lh.value/100);
-    $("barlhv").textContent=(+lh.value/100).toFixed(2)});
-  lh.addEventListener("keydown",e=>e.stopPropagation());
-  h3.appendChild(lh);
-  const lhv=document.createElement("span");lhv.className="val";lhv.id="barlhv";h3.appendChild(lhv);
-  const h4=grp(r2);
-  const lv=document.createElement("span");lv.className="wt";lv.id="barlv";
-  [[0,"lvNone"],[1,"lv1"],[2,"lv2"],[3,"lv3"]].forEach(([v,k])=>{
-    const x=document.createElement("button");x.textContent=v?("H"+v):t("bodyShort");x.dataset.v=v;
-    x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-    x.addEventListener("click",e=>{e.stopPropagation();
-      [...lv.children].forEach(z=>z.classList.remove("on"));x.classList.add("on")});
-    lv.appendChild(x);
-  });
-  lv.children[0].classList.add("on");
-  h4.appendChild(lv);
-  const excl=document.createElement("label");excl.className="excl";
-  excl.innerHTML=`<input type="checkbox" id="barexcl" checked><span>${t("exclManual")}</span>`;
-  excl.addEventListener("pointerdown",e=>e.stopPropagation());
-  h4.appendChild(excl);
-  mk(h4,t("unifyGo"),()=>{
-    const on=$("barlv").querySelector(".on");
-    unifyLevel(+(on?on.dataset.v:0),$("barexcl").checked);
-  },"go2");
 }
-function toggleFontList(){
-  const fl=$("flist");if(!fl)return;
-  fl.classList.toggle("on");
+function closePops(){
+  const b=$("bar");if(!b)return;
+  b.querySelectorAll(".pp.on").forEach(p=>p.classList.remove("on"));
+  b.querySelectorAll(".ctl.on").forEach(x=>{if(x.querySelector(".car"))x.classList.remove("on")});
+  b.classList.remove("open");
+}
+const lastInk=()=>S.lastInk||INK[0];
+const lastHL=()=>S.lastHL||HLS[0];
+function curInk(){
+  const r=textSel()||(validRange()?keepRange:null);
+  if(r){let n=r.startContainer;if(n.nodeType===3)n=n.parentNode;
+    const h=hex6(getComputedStyle(n).color);if(h)return "#"+h}
+  const c=barCard();
+  return c?({...DEF,...S.textDef,...(c.s||{})}).color:DEF.color;
+}
+function curFamily(){
+  const c=barCard();if(!c)return DEF.family;
+  const r=textSel()||(validRange()?keepRange:null);
+  if(r){
+    let n=r.startContainer;if(n.nodeType===3)n=n.parentNode;
+    const ff=getComputedStyle(n).fontFamily;
+    const first=x=>(x||"").split(",")[0].replace(/["']/g,"").trim();
+    const hit=FONTS.find(f=>first(ff)===first(f[1]));
+    if(hit)return hit[0];
+  }
+  return ({...DEF,...S.textDef,...(c.s||{})}).family;
 }
 function unifyLevel(lv,excludeManual){
   const c=barCard();if(!c)return;
@@ -2531,8 +2659,7 @@ function unifyLevel(lv,excludeManual){
 }
 function syncBar(){
   const b=$("bar"),c=barCard();
-  if(lock||!c||S.bar===false){b.classList.remove("on");
-    $("flist")?.classList.remove("on");$("szlist")?.classList.remove("on");return}
+  if(lock||!c||S.bar===false){b.classList.remove("on");closePops();return}
   if(!b.children.length)buildBar();
   const el=nodes.get(c.id);
   if(!el){b.classList.remove("on");return}
@@ -2547,35 +2674,15 @@ function syncBar(){
   const szi=b.querySelector("#szi");
   const cs2=curSize();
   if(szi&&!sizeEdit)szi.textContent=cs2;
-  const szl=$("szlist");
-  if(szl)[...szl.children].forEach(x=>x.classList.toggle("on",+x.dataset.v===+cs2));
   const st={...DEF,...S.textDef,...(c.s||{})};
   const fb=b.querySelector("#fbtn");
-  const wt=b.querySelector("#barwt");
-  if(wt)[...wt.children].forEach(x=>x.classList.toggle("on",+x.dataset.v===+st.weight));
-  const bls=b.querySelector("#barls"),blh=b.querySelector("#barlh");
-  if(bls&&document.activeElement!==bls){bls.value=Math.round(st.spacing*100);
-    b.querySelector("#barlsv").textContent=(+st.spacing).toFixed(2)}
-  if(blh&&document.activeElement!==blh){blh.value=Math.round(st.lh*100);
-    b.querySelector("#barlhv").textContent=(+st.lh).toFixed(2)}
-  const fsel=b.querySelector(".fsel");
-  if(fb){
-    const r=textSel()||(validRange()?keepRange:null);
-    let fam=null;
-    if(r){let n=r.startContainer;if(n.nodeType===3)n=n.parentNode;
-      const ff=getComputedStyle(n).fontFamily;
-      const hit=FONTS.find(f=>ff&&ff.split(",")[0].replace(/["']/g,"").trim()===
-        f[1].split(",")[0].replace(/["']/g,"").trim());
-      if(hit)fam=hit[0];
-    }
-    if(!fam)fam=st.family;
-    fb.textContent=famName(fam);
-    const fl=$("flist");
-    if(fl)[...fl.querySelectorAll("button")].forEach(x=>x.classList.toggle("on",x.dataset.v===fam));
-  }
-  const al=({...DEF,...S.textDef,...(c.s||{})}).align;
-  ["left","center","right"].forEach(v=>{
-    const btn=b.querySelector(".al-"+v);if(btn)btn.classList.toggle("on",al===v)});
+  if(fb)fb.textContent=famName(curFamily());
+  const isw=b.querySelector("#inksw");
+  if(isw)isw.style.background=lastInk();
+  const hsw=b.querySelector("#hlsw");
+  if(hsw)hsw.style.background=lastHL();
+  const par=b.querySelector("#parlab");
+  if(par)par.innerHTML=alSvg(st.align||"left");
   try{
     b.querySelector('[data-k="b"]').classList.toggle("on",document.queryCommandState("bold"));
     b.querySelector('[data-k="i"]').classList.toggle("on",document.queryCommandState("italic"));
@@ -2994,9 +3101,8 @@ function setStyle(k,v){
 addEventListener("pointerdown",e=>{
   if(!e.target.closest("#pop")&&!e.target.closest("#menu")&&!e.target.closest("#submenu"))
     $("pop").classList.remove("on");
-  if(!e.target.closest("#bar")){endSizeEdit(false);
-    $("flist")?.classList.remove("on");$("szlist")?.classList.remove("on")}
-  else if(!e.target.closest("#szi")&&!e.target.closest(".spin"))endSizeEdit(false);
+  if(!e.target.closest("#bar")){endSizeEdit(false);closePops()}
+  else if(!e.target.closest("#szi"))endSizeEdit(false);
 },true);
 
 /* ================= import ================= */
