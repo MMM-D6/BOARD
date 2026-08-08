@@ -179,6 +179,12 @@
   #bar button:hover{background:var(--phi)}
   #bar button.on{background:var(--pfg);color:var(--panel)}
   #bar .sep{width:1px;height:16px;background:var(--pline);margin:0 3px}
+  #bar .szi{width:34px;height:23px;text-align:center;border:1px solid var(--pline);
+    border-radius:5px;background:transparent;color:inherit;padding:0;
+    font:400 12px/1 "IBM Plex Mono",monospace;-moz-appearance:textfield}
+  #bar .szi::-webkit-outer-spin-button,#bar .szi::-webkit-inner-spin-button{
+    -webkit-appearance:none;margin:0}
+  #bar .szi:focus{outline:none;border-color:var(--frame)}
   #bar .dot{width:15px;height:15px;min-width:15px;border-radius:50%;padding:0;
     border:1px solid var(--pline)}
   #bar .hl{width:17px;height:17px;min-width:17px;border-radius:4px;padding:0;
@@ -1480,7 +1486,7 @@ const MANUAL=[
   <p>工具条从左到右依次是：</p>
   <ul>
     <li><b>B / I / U</b>：粗体、斜体、下划线，三个按钮会随光标位置亮起，显示当前状态</li>
-    <li><b>A− / A+</b>：以一像素为步长增减字号</li>
+    <li><b>字号框</b>：直接填数字回车生效，方向键上下可微调。有划选时只改那一段，没划选时改整张卡片</li>
     <li><b>六个圆点</b>：文字颜色，依次为黑、深灰、浅灰、红、蓝、绿</li>
     <li><b>四个方块</b>：高亮标记，依次为黄、绿、蓝、粉。在已是该底色的文字上再点一次即取消高亮，换一种颜色则是替换</li>
     <li><b>清除</b>：去掉划选部分的全部格式，包括粗斜体、下划线、颜色、字号和底色</li>
@@ -2006,6 +2012,39 @@ function replaceSelHTML(transform){
   return true;
 }
 function cardSnapStyle(fn){snap();fn()}
+let keepRange=null;
+function stashRange(){const r=textSel();keepRange=r?r.cloneRange():null}
+function restoreRange(){
+  if(!keepRange)return false;
+  const cap=capOf(barCard());if(!cap)return false;
+  cap.focus();
+  const sl=getSelection();sl.removeAllRanges();sl.addRange(keepRange);
+  return true;
+}
+function curSize(){
+  const r=textSel()||keepRange;
+  if(r){
+    let n=r.startContainer;if(n.nodeType===3)n=n.parentNode;
+    const v=parseFloat(getComputedStyle(n).fontSize);
+    if(v)return Math.round(v);
+  }
+  const c=barCard();
+  return c?Math.round(({...DEF,...S.textDef,...(c.s||{})}).size):15;
+}
+function setSize(px){
+  px=clamp(Math.round(px||0),8,200);
+  if(!px)return;
+  const ok=restoreRange()&&textSel();
+  if(!ok){const c=barCard();if(!c)return;cardSnapStyle(()=>setStyle("size",px));syncBar();return}
+  document.execCommand("styleWithCSS",false,true);
+  replaceSelHTML(box=>{
+    box.querySelectorAll("*").forEach(el=>{if(el.style)el.style.fontSize=""});
+    const span=document.createElement("span");span.style.fontSize=px+"px";
+    while(box.firstChild)span.appendChild(box.firstChild);
+    box.appendChild(span);
+  });
+  afterInline();
+}
 function afterInline(){
   const c=barCard(),cap=capOf(c);
   if(c&&cap){syncCap(c,cap);measure();drawLinksSoon();save()}
@@ -2058,22 +2097,6 @@ function setHighlight(v){
   }else document.execCommand("hiliteColor",false,v);
   afterInline();
 }
-function bumpSize(d){
-  const r=textSel();
-  if(!r){const c=barCard();if(!c)return;
-    const cur={...DEF,...S.textDef,...(c.s||{})};
-    cardSnapStyle(()=>setStyle("size",clamp(Math.round(cur.size+d),8,96)));return}
-  const node=r.startContainer.nodeType===1?r.startContainer:r.startContainer.parentNode;
-  const now=parseFloat(getComputedStyle(node).fontSize)||15;
-  const px=clamp(Math.round(now+d),8,96);
-  replaceSelHTML(box=>{
-    const span=document.createElement("span");
-    span.style.fontSize=px+"px";
-    while(box.firstChild)span.appendChild(box.firstChild);
-    box.appendChild(span);
-  });
-  afterInline();
-}
 function clearFmt(){
   if(!textSel()){const c=barCard();if(!c)return;
     snap();delete c.rich;c.s={...DEF,...S.textDef};render();save();return}
@@ -2097,15 +2120,31 @@ function buildBar(){
   mk("<i>I</i>",()=>cmd("italic")).dataset.k="i";
   mk("<u>U</u>",()=>cmd("underline")).dataset.k="u";
   sep();
-  mk("A\u2212",()=>bumpSize(-1));
-  mk("A+",()=>bumpSize(1));
+  const szi=document.createElement("input");
+  szi.className="szi";szi.id="szi";szi.type="text";szi.inputMode="numeric";szi.maxLength=3;
+  szi.addEventListener("pointerdown",e=>{e.stopPropagation();stashRange()});
+  szi.addEventListener("focus",()=>szi.select());
+  szi.addEventListener("keydown",e=>{
+    e.stopPropagation();
+    if(e.key==="Enter"){e.preventDefault();setSize(+szi.value);restoreRange();szi.blur()}
+    if(e.key==="ArrowUp"||e.key==="ArrowDown"){
+      e.preventDefault();
+      szi.value=clamp((+szi.value||curSize())+(e.key==="ArrowUp"?1:-1),8,200);
+      setSize(+szi.value);
+    }
+  });
+  szi.addEventListener("blur",()=>{
+    const v=+szi.value;
+    if(v&&v!==curSize())setSize(v);else szi.value=curSize();
+  });
+  b.appendChild(szi);
   sep();
   INK.forEach(v=>mk("",()=>setInkColor(v),"dot","background:"+v));
   sep();
   HLS.forEach(v=>mk("",()=>setHighlight(v),"hl","background:"+v));
   sep();
   mk(t("clearFmt"),clearFmt);
-  b.addEventListener("pointerdown",e=>e.stopPropagation());
+  b.addEventListener("pointerdown",e=>{e.stopPropagation();stashRange()});
 }
 function syncBar(){
   const b=$("bar"),c=barCard();
@@ -2119,6 +2158,8 @@ function syncBar(){
   b.style.left=clamp(r.left+r.width/2-bw/2,8,innerWidth-bw-8)+"px";
   const top=r.top-b.offsetHeight-12;
   b.style.top=(top<8?Math.min(r.bottom+12,innerHeight-40):top)+"px";
+  const szi=b.querySelector("#szi");
+  if(szi&&document.activeElement!==szi)szi.value=curSize();
   try{
     b.querySelector('[data-k="b"]').classList.toggle("on",document.queryCommandState("bold"));
     b.querySelector('[data-k="i"]').classList.toggle("on",document.queryCommandState("italic"));
