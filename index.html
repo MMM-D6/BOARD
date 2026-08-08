@@ -56,12 +56,14 @@
   body.lock .card .cap:empty:before{content:""}
 
   .menu{position:fixed;z-index:80;min-width:190px;padding:5px;border-radius:10px;
+    max-height:calc(100vh - 16px);overflow-y:auto;overscroll-behavior:contain;
+    scrollbar-width:thin;
     background:var(--panel);color:var(--pfg);border:1px solid var(--pline);
     box-shadow:0 14px 40px rgba(0,0,0,.18);display:none;font-size:13px}
   .menu.on{display:block}
   .mi{display:flex;align-items:center;gap:9px;width:100%;padding:7px 9px;border:none;background:none;
     border-radius:6px;cursor:pointer;text-align:left;white-space:nowrap}
-  .mi:hover{background:var(--phi)}
+  .mi:hover,.mi.open{background:var(--phi)}
   .mi .k{margin-left:auto;opacity:.4;font:400 10.5px/1 "IBM Plex Mono",monospace}
   .mi.dz{color:#C0392B}
   .msep{height:1px;background:var(--pline);margin:4px 5px}
@@ -232,6 +234,10 @@ const T={
   fullscreen:"Full screen",exitFullscreen:"Leave full screen",
   workMode:"Work mode",search:"Search…",searchPh:"Search notes",noHit:"no match",
   modeAll:"Text",modeTag:"Tag",searchTagPh:"Search tags",
+  fileMenu:"File",viewMenu:"View and settings",vwDisplay:"Interface",vwContent:"Canvas",
+  recent:"Recent files",recentNone:"Nothing yet",recentNewWin:"Open in a new window",
+  recentGone:"That file is no longer reachable",noPerm:"Permission was not granted",
+  newWindow:"New window",agoNow:"just now",agoMin:"m ago",agoHour:"h ago",agoDay:"d ago",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   roleHead:"Outside the sequence",roleApx:"Appendix",roleAside:"Other, not numbered",
@@ -294,6 +300,10 @@ const T={
   fullscreen:"全屏显示",exitFullscreen:"退出全屏",
   workMode:"工作模式",search:"搜索…",searchPh:"搜索笔记",noHit:"无匹配",
   modeAll:"全文",modeTag:"标签",searchTagPh:"搜索标签",
+  fileMenu:"文件",viewMenu:"视图与设置",vwDisplay:"界面",vwContent:"画布",
+  recent:"最近打开",recentNone:"暂无记录",recentNewWin:"在新窗口打开",
+  recentGone:"该文件已无法访问",noPerm:"未获得访问授权",
+  newWindow:"新建窗口",agoNow:"刚刚",agoMin:" 分钟前",agoHour:" 小时前",agoDay:" 天前",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   roleHead:"不参与排序",roleApx:"附录",roleAside:"其他（不编号）",
@@ -439,7 +449,11 @@ function applyUndo(stack,other){
 }
 
 /* ================= storage ================= */
-const DB="boardmin",KEY="state",FH="filehandle";
+const DB="boardmin";
+const QS=new URLSearchParams(location.search);
+const WID=QS.get("w")||"";
+const KEY=WID?("state:"+WID):"state";
+const FH=WID?("filehandle:"+WID):"filehandle";
 let dbP=null;
 function idb(){
   if(dbP)return dbP;
@@ -545,6 +559,7 @@ async function pickFile(){
       if(fileHandle)opt.startIn=fileHandle;
       fileHandle=await showSaveFilePicker(opt);
       fileName=fileHandle.name;fileOK=true;await kvPut(FH,fileHandle);
+      pushRecent(fileHandle,fileName);
       await writeFile();statusBar();
     }catch(e){}
     return;
@@ -568,10 +583,55 @@ async function writeFile(quiet){
     }
     const w=await fileHandle.createWritable();
     await w.write(JSON.stringify(bundle(),null,1));await w.close();
-    fileOK=true;if(!quiet)toast(t("savedTo")+" "+fileName);
+    fileOK=true;
+    if(!quiet){toast(t("savedTo")+" "+fileName);pushRecent(fileHandle,fileName)}
     return true;
   }catch(e){fileOK=false;return false}
 }
+let RECENTS=[];
+async function loadRecents(){
+  try{RECENTS=(await kvGet("recent"))||[]}catch(e){RECENTS=[]}
+  RECENTS.sort((a,b)=>b.ts-a.ts);
+}
+async function pushRecent(handle,name){
+  if(!handle)return;
+  let list=(await kvGet("recent"))||[];
+  for(const r of list){
+    try{const h=await kvGet("fh:"+r.id);
+      if(h&&handle.isSameEntry&&await handle.isSameEntry(h)){
+        r.ts=Date.now();r.name=name||r.name;
+        await kvPut("recent",list);await loadRecents();return;
+      }}catch(e){}
+  }
+  const id=uid();
+  await kvPut("fh:"+id,handle);
+  list.unshift({id,name:name||handle.name,ts:Date.now()});
+  const drop=list.slice(10);list=list.slice(0,10);
+  for(const d of drop)await kvPut("fh:"+d.id,null);
+  await kvPut("recent",list);await loadRecents();
+}
+async function openRecent(id,newWin){
+  if(newWin){window.open(location.pathname+"?w="+uid()+"&open="+id,"_blank");return}
+  const h=await kvGet("fh:"+id);
+  if(!h){toast(t("recentGone"));return}
+  try{
+    if(h.requestPermission){
+      const p=await h.requestPermission({mode:"readwrite"});
+      if(p!=="granted"){toast(t("noPerm"));return}
+    }
+    const f=await h.getFile();
+    const d=JSON.parse(await f.text());
+    if(!d||!Array.isArray(d.cards))throw new Error(t("errShape"));
+    snap();
+    await absorb(d,false);
+    fileHandle=h;fileName=f.name;fileOK=true;
+    LANG=S.lang||LANG;sel=[];selLink=null;
+    await kvPut(FH,h);
+    render();fit(true);save();
+    pushRecent(h,f.name);
+  }catch(e){alert(t("errImport")+"\n"+((e&&e.message)||e))}
+}
+function newWindow(){window.open(location.pathname+"?w="+uid(),"_blank")}
 async function unbind(quiet){
   fileHandle=null;fileName=null;fileOK=false;
   try{await kvPut(FH,null)}catch(e){}
@@ -1311,6 +1371,12 @@ const MANUAL=[
   <p>导出面板顶部的<b>范围</b>可选整个画布或仅选中内容。选中状态下打开面板时会自动切到仅选中。</p>
   <p>和编组配合使用最顺手：把一章的材料编成一组，点组内任意一张即选中整组，右键<b>导出…</b>就能单独导出这一章，四种格式都支持。</p>
   <p>格式列表里还有<b>画布文件</b>一项，把选中部分导出成独立的 json，可以拆分大文件，或分享某一部分给别人。导出的片段只包含两端都在选中范围内的连线。</p>`],
+
+ ["多窗口与最近打开","DUOCHUANGKOU",`
+  <p>可以像 Word 那样同时开多个文件：右键菜单的<b>文件 → 新建窗口</b>会开一个独立窗口，各自绑定各自的文件，内容互不干扰。系统任务栏上每个窗口是一项，右键任务栏图标即可在窗口之间切换。</p>
+  <p>之所以能互不干扰，是因为每个窗口在浏览器本地有独立的存储位置，由地址栏里的窗口编号区分。不要手动去掉那个编号，否则两个窗口会写到同一处。</p>
+  <p><b>最近打开</b>在文件子菜单里，按时间倒序列出最近十个文件，附带距上次使用多久。点击直接在当前窗口打开；子项<b>在新窗口打开</b>则另开一个窗口，适合对照两份笔记。</p>
+  <p class="tip">首次从最近列表打开某个文件时，浏览器会请求一次访问授权，点允许即可，之后不再询问。若文件被移动或删除，会提示无法访问，该项可忽略。</p>`],
 
  ["备份策略","BEIFEN",`
   <p>三层保险，从近到远：浏览器本地自动保存是第一层，绑定的工作文件是第二层，把该文件放进 iCloud、Dropbox 或 OneDrive 的同步目录是第三层，顺带获得云端历史版本。</p>
@@ -2181,52 +2247,99 @@ function idle(){
 addEventListener("pointermove",idle);addEventListener("keydown",idle);
 
 /* ================= menus ================= */
-let subT;
-function closeSub(d){clearTimeout(subT);subT=setTimeout(()=>$("submenu").classList.remove("on"),d||0)}
+// ---- 多级菜单：每一层有自己的元素，深层不会顶掉浅层 ----
+const MEXTRA={};
+const MAXLV=8;
+let owners=[],subT;
+function levelEl(i){
+  if(i===0)return $("menu");
+  if(i===1)return $("submenu");
+  if(!MEXTRA[i]){const d=document.createElement("div");d.className="menu";document.body.appendChild(d);MEXTRA[i]=d}
+  return MEXTRA[i];
+}
+function levelOpen(i){const e=(i===0)?$("menu"):(i===1?$("submenu"):MEXTRA[i]);
+  return e&&e.classList.contains("on")?e:null}
+function closeFrom(i){
+  clearTimeout(subT);
+  for(let k=MAXLV;k>=i;k--){
+    const e=(k===0)?$("menu"):(k===1?$("submenu"):MEXTRA[k]);
+    if(e)e.classList.remove("on");
+    owners[k]=null;
+  }
+  for(let k=0;k<i;k++){
+    const e=levelOpen(k);
+    if(e)e.querySelectorAll(".mi.open").forEach(b=>{
+      if(!owners[k+1]||b!==owners[k+1].btn)b.classList.remove("open")});
+  }
+}
+function closeMenus(){closeFrom(0)}
 function keepSub(){clearTimeout(subT)}
-$("submenu").addEventListener("pointerenter",keepSub);
-$("submenu").addEventListener("mouseenter",keepSub);
-function closeMenus(){clearTimeout(subT);$("menu").classList.remove("on");$("submenu").classList.remove("on")}
+const inBox=(x,y,r,p)=>x>=r.left-p&&x<=r.right+p&&y>=r.top-p&&y<=r.bottom+p;
+// 用指针坐标判断，而不是依赖 mouseenter / mouseleave
+addEventListener("pointermove",e=>{
+  if(!levelOpen(1))return;
+  let inside=false,deepest=0;
+  for(let k=0;k<=MAXLV;k++){
+    const el=levelOpen(k);if(!el)continue;
+    deepest=k;
+    if(inBox(e.clientX,e.clientY,el.getBoundingClientRect(),8)){inside=true;break}
+    const o=owners[k];
+    if(o){                                   // 父项与本层之间的通道
+      const r=el.getBoundingClientRect();
+      const bridge={left:Math.min(o.rect.right,r.left)-16,right:Math.max(o.rect.right,r.left)+16,
+        top:Math.min(o.rect.top,r.top)-12,bottom:Math.max(o.rect.bottom,r.bottom)+12};
+      if(inBox(e.clientX,e.clientY,bridge,0)){inside=true;break}
+    }
+  }
+  if(inside)keepSub();else{clearTimeout(subT);subT=setTimeout(()=>closeFrom(1),320)}
+},true);
 function place(el,x,y){
-  el.classList.add("on");el.style.left="0px";el.style.top="0px";
+  el.classList.add("on");el.style.left="0px";el.style.top="0px";el.scrollTop=0;
   const r=el.getBoundingClientRect();
   el.style.left=Math.max(6,Math.min(x,innerWidth-r.width-8))+"px";
   el.style.top=Math.max(6,Math.min(y,innerHeight-r.height-8))+"px";
 }
-function build(el,items){
+function build(el,items,level){
+  const lv=level||0;
   el.innerHTML="";
   items.forEach(it=>{
     if(it==="-"){const d=document.createElement("div");d.className="msep";el.appendChild(d);return}
     if(it.head){const d=document.createElement("div");d.className="mhd";d.textContent=it.head;el.appendChild(d);return}
     const b=document.createElement("button");b.className="mi"+(it.danger?" dz":"");
     b.innerHTML=`<span>${it.check?"✓ ":""}${it.label}</span>`+(it.key?`<span class="k">${it.key}</span>`:"")+(it.sub?`<span class="k">›</span>`:"");
-    if(it.sub){
-      b.onmouseenter=()=>{keepSub();const r=b.getBoundingClientRect();
-        build($("submenu"),it.sub);place($("submenu"),r.right+2,r.top-6)};
-      b.onclick=()=>{keepSub();const r=b.getBoundingClientRect();
-        build($("submenu"),it.sub);place($("submenu"),r.right+2,r.top-6)};
+    if(it.sub&&it.sub.length){
+      const open=()=>{
+        keepSub();
+        if(owners[lv+1]&&owners[lv+1].btn===b&&levelOpen(lv+1))return;
+        closeFrom(lv+1);
+        el.querySelectorAll(".mi.open").forEach(z=>z.classList.remove("open"));
+        b.classList.add("open");
+        const r=b.getBoundingClientRect();
+        const child=levelEl(lv+1);
+        build(child,it.sub,lv+1);
+        place(child,r.right+2,r.top-6);
+        let cr=child.getBoundingClientRect();
+        if(cr.right>innerWidth-6)place(child,Math.max(6,r.left-cr.width-2),r.top-6);
+        owners[lv+1]={btn:b,rect:b.getBoundingClientRect()};
+      };
+      b.onmouseenter=open;
+      b.onclick=e=>{e.stopPropagation();open()};
     }else{
-      if(el.id==="menu")b.onmouseenter=()=>closeSub(320);
+      b.onmouseenter=()=>{keepSub();closeFrom(lv+1)};
       b.onclick=()=>{closeMenus();it.on&&it.on()};
     }
     el.appendChild(b);
   });
 }
-function menuAt(x,y,items){build($("menu"),items);place($("menu"),x,y)}
+function menuAt(x,y,items){closeFrom(0);build($("menu"),items,0);place($("menu"),x,y)}
 function langItems(){
   return [{label:"English",check:LANG==="en",on:()=>setLang("en")},
           {label:"中文",check:LANG==="zh",on:()=>setLang("zh")}];
 }
 function setLang(l){LANG=l;S.lang=l;render();save()}
-function boardMenu(x,y){
-  menuAt(x,y,[
-    {label:t("insertImage"),on:()=>$("imgfile").click()},
-    {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
-    "-",
-    {label:t("selectAll"),key:"⌘A",on:()=>{sel=S.cards.map(c=>c.id);paintSel()}},
-    {label:t("fitView"),key:"F",on:()=>fit()},
-    {label:t("zoom100"),key:"0",on:()=>camTo(tgt.x,tgt.y,1)},
-    {label:t("search"),key:"⌘F",on:()=>showFind(true)},
+function viewItems(x,y){
+  return [
+    {head:t("vwDisplay")},
     {label:t("workMode"),check:S.work,on:()=>setWork(!S.work)},
     {label:t("textBar"),check:S.bar!==false,on:()=>{S.bar=S.bar===false;syncBar();save()}},
     {label:t("autoNum"),check:!!S.autoNum,on:()=>{S.autoNum=!S.autoNum;render();save()}},
@@ -2240,17 +2353,7 @@ function boardMenu(x,y){
       {head:t("focusKeyHint")},
       {label:t("focusEdit"),check:!!S.focusEdit,on:()=>{S.focusEdit=!S.focusEdit;save()}}
     ]},
-    {label:t("imgSize"),sub:[
-      {head:t("imgSize")},
-      ...[220,280,360,460,600,760].map(v=>({label:v+" "+t("px"),check:(S.imgMax||360)===v,
-        on:()=>{S.imgMax=v;save()}})),
-      "-",
-      {label:t("fitSel"),on:()=>sizeImages(false)},
-      {label:t("fitAllImg"),on:()=>sizeImages(true)}
-    ]},
-    "-",
-    {label:t("presentation"),on:()=>setLock(true)},
-    {label:isFS()?t("exitFullscreen"):t("fullscreen"),key:"F11",on:toggleFS},
+    {head:t("vwContent")},
     {label:t("linkView"),sub:[
       {head:t("linkView")},
       ...[["all","lvAll"],["focus","lvFocus"],["off","lvOff"]].map(([v,k])=>({label:t(k),
@@ -2260,22 +2363,73 @@ function boardMenu(x,y){
         check:S.linkLabel===v,on:()=>{S.linkLabel=v;drawLinks();save()}}))
     ]},
     {label:t("linkDefaults"),sub:linkStyleItems(S.linkDef,()=>save())},
+    {label:t("imgSize"),sub:[
+      {head:t("imgSize")},
+      ...[220,280,360,460,600,760].map(v=>({label:v+" "+t("px"),check:(S.imgMax||360)===v,
+        on:()=>{S.imgMax=v;save()}})),
+      "-",
+      {label:t("fitSel"),on:()=>sizeImages(false)},
+      {label:t("fitAllImg"),on:()=>sizeImages(true)}
+    ]},
     {label:t("canvasColor"),sub:[{head:t("colour")},...BG.map((c,i)=>({label:t("bg")[i],check:S.bg===c,
       on:()=>{S.bg=c;S.textDef.color=isDark(c)?"#EFEFEC":"#111111";render();save()}}))]},
-    {label:t("language"),sub:langItems()},
-    {label:t("defaultText"),on:()=>openText(x,y,"default")},
-    ...(LANG==="zh"?[{label:t("manual"),on:openManual}]:[]),
-    "-",
+    {label:t("defaultText"),on:()=>openText(x,y,"default")}
+  ];
+}
+function recentItems(){
+  if(!RECENTS.length)return [{label:t("recentNone")}];
+  const now=Date.now();
+  return RECENTS.slice(0,10).map(r=>({
+    label:r.name+"   "+ago(now-r.ts),
+    check:!!(fileName&&r.name===fileName),
+    on:()=>openRecent(r.id),
+    sub:null
+  })).concat(["-",{label:t("recentNewWin"),sub:RECENTS.slice(0,10).map(r=>({
+    label:r.name,on:()=>openRecent(r.id,true)}))}]);
+}
+function ago(ms){
+  const m=Math.round(ms/60000);
+  if(m<1)return t("agoNow");
+  if(m<60)return m+t("agoMin");
+  const h=Math.round(m/60);
+  if(h<24)return h+t("agoHour");
+  return Math.round(h/24)+t("agoDay");
+}
+function fileItems(x,y){
+  return [
     {head:(fileName?t("boundTo")+"  "+fileName:t("noBound"))},
     {label:t("save"),key:"⌘S",on:saveNow},
     {label:t("saveAs"),on:pickFile},
     ...(fileHandle?[{label:t("unbind"),on:()=>unbind()}]:[]),
+    "-",
+    {label:t("recent"),sub:recentItems()},
     {label:t("newBoard"),on:newBoard},
+    {label:t("newWindow"),on:newWindow},
     {label:t("importJSON"),on:()=>$("jsonfile").click()},
     {label:t("mergeJSON"),on:()=>$("mergefile").click()},
+    "-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
     {label:t("clearAll"),danger:true,on:async()=>{if(confirm(t("clearConfirm"))){
       snap();S.cards=[];S.links=[];S.groups=[];sel=[];await unbind(true);render();save();toast(t("unbound"))}}}
+  ];
+}
+function boardMenu(x,y){
+  menuAt(x,y,[
+    {label:t("insertImage"),on:()=>$("imgfile").click()},
+    {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
+    "-",
+    {label:t("selectAll"),key:"⌘A",on:()=>{sel=S.cards.map(c=>c.id);paintSel()}},
+    {label:t("fitView"),key:"F",on:()=>fit()},
+    {label:t("zoom100"),key:"0",on:()=>camTo(tgt.x,tgt.y,1)},
+    {label:t("search"),key:"⌘F",on:()=>showFind(true)},
+    "-",
+    {label:t("fileMenu"),sub:fileItems(x,y)},
+    {label:t("viewMenu"),sub:viewItems(x,y)},
+    "-",
+    {label:t("presentation"),on:()=>setLock(true)},
+    {label:isFS()?t("exitFullscreen"):t("fullscreen"),key:"F11",on:toggleFS},
+    {label:t("language"),sub:langItems()},
+    ...(LANG==="zh"?[{label:t("manual"),on:openManual}]:[])
   ]);
 }
 function lockMenu(x,y){
@@ -2462,6 +2616,9 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
   try{const h=await kvGet(FH);
     if(h){fileHandle=h;fileName=h.name;
       if(h.queryPermission){const p=await h.queryPermission({mode:"readwrite"});fileOK=(p==="granted")}}}catch(e){}
+  await loadRecents();
+  const wantOpen=QS.get("open");
+  if(wantOpen)setTimeout(()=>openRecent(wantOpen).catch(()=>toast(t("noPerm"))),300);
   applyCam();render();
   if(S.work&&!lock)$("find").classList.add("on");
   syncFindMode();refreshTagList();
