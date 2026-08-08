@@ -1156,7 +1156,14 @@ addEventListener("keydown",e=>{
   if(e.key===" "&&!editing&&!e.target.isContentEditable&&!lock){spaceDown=true;stage.classList.add("space")}
   if((e.metaKey||e.ctrlKey)&&k==="s"){e.preventDefault();saveNow();return}
   if((e.metaKey||e.ctrlKey)&&k==="f"&&!lock){e.preventDefault();showFind(true);return}
-  if(editing||e.target.isContentEditable){if(e.key==="Escape")document.activeElement.blur();return}
+  if(editing||e.target.isContentEditable){
+    if(e.key==="Escape"){document.activeElement.blur();return}
+    if((e.metaKey||e.ctrlKey)&&["b","i","u"].includes(k)){
+      e.preventDefault();cmd(k==="b"?"bold":k==="i"?"italic":"underline");return;
+    }
+    setTimeout(syncBar,0);                      // 撤销后同步按钮状态
+    return;
+  }
   if(lock){
     if(e.key==="Escape"){setLock(false);return}
     if(e.key==="ArrowRight"||e.key==="ArrowDown"||e.key===" "){e.preventDefault();step(1)}
@@ -1399,15 +1406,18 @@ const MANUAL=[
 
  ["局部文字格式","JUBUWENZI",`
   <p>选中一张卡片后，上方会浮出一条窄工具条。它作用于<b>你划选的那段文字</b>，而不是整个文字框。</p>
+  <p>工具条从左到右依次是：</p>
   <ul>
-    <li><b>B / I / U</b>：粗体、斜体、下划线</li>
+    <li><b>B / I / U</b>：粗体、斜体、下划线，三个按钮会随光标位置亮起，显示当前状态</li>
     <li><b>A− / A+</b>：以一像素为步长增减字号</li>
-    <li><b>六个圆点</b>：文字颜色</li>
-    <li><b>四个方块</b>：高亮标记，最后一个带斜杠的是取消高亮</li>
-    <li><b>清除</b>：去掉划选部分的全部格式</li>
+    <li><b>六个圆点</b>：文字颜色，依次为黑、深灰、浅灰、红、蓝、绿</li>
+    <li><b>四个方块</b>：高亮标记，依次为黄、绿、蓝、粉。在已是该底色的文字上再点一次即取消高亮，换一种颜色则是替换</li>
+    <li><b>清除</b>：去掉划选部分的全部格式，包括粗斜体、下划线、颜色、字号和底色</li>
   </ul>
   <p>双击进入编辑后划选文字再点按钮，只改那一段。如果没有划选任何文字，粗体、斜体、字号、颜色会退回作用于整张卡片，等同于文字样式面板；高亮则必须划选，因为整框高亮没有意义。</p>
   <p>这些局部格式会写进导出的 Word 和 PDF 文档：粗斜体、下划线、颜色、字号都保留，高亮会映射到 Word 内置的荧光笔颜色。</p>
+  <p><b>撤销</b>：编辑状态下按 <kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 可逐步回退加粗、高亮、改色、改字号等每一次操作，再按 <kbd>Shift</kbd> 组合可重做。退出编辑后，同样的快捷键回退的是卡片级别的改动。</p>
+  <p>编辑时还可以直接用 <kbd>Ctrl/Cmd</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> 加粗、斜体、下划线。</p>
   <p class="tip">工具条可在右键菜单的<b>文字工具条</b>关闭。粘贴进卡片的内容一律转为纯文本，不会把网页的杂乱格式带进来。</p>`],
 
  ["连线备注","LIANXIANBEIZHU",`
@@ -1904,7 +1914,7 @@ function dl(blob,name){
 
 /* ================= 文字工具条 ================= */
 const INK=["#111111","#5A5A55","#9A9A94","#C0392B","#2D6CDF","#1F8A70"];
-const HLS=["#FFF3A3","#C8F0C6","#CFE4FF","#FBD3E8","none"];
+const HLS=["#FFF3A3","#C8F0C6","#CFE4FF","#FBD3E8"];
 function barCard(){return sel.length===1?card(sel[0]):null}
 function capOf(c){return c?nodes.get(c.id)?.querySelector(".cap"):null}
 function textSel(){
@@ -1914,15 +1924,17 @@ function textSel(){
   if(!cap||!cap.contains(s.anchorNode))return null;
   return s.getRangeAt(0);
 }
-function wrapSel(css){
+// 用 insertHTML 改写选区，这样每一步都会进入浏览器的编辑历史，Ctrl+Z 可逐步回退
+function replaceSelHTML(transform){
   const r=textSel();if(!r)return false;
-  const span=document.createElement("span");
-  Object.assign(span.style,css);
-  try{span.appendChild(r.extractContents());r.insertNode(span)}catch(e){return false}
-  const sl=getSelection(),nr=document.createRange();
-  nr.selectNodeContents(span);sl.removeAllRanges();sl.addRange(nr);
+  const box=document.createElement("div");
+  box.appendChild(r.cloneContents());
+  transform(box);
+  document.execCommand("styleWithCSS",false,true);
+  document.execCommand("insertHTML",false,box.innerHTML);
   return true;
 }
+function cardSnapStyle(fn){snap();fn()}
 function afterInline(){
   const c=barCard(),cap=capOf(c);
   if(c&&cap){syncCap(c,cap);measure();drawLinksSoon();save()}
@@ -1932,8 +1944,11 @@ function cmd(name){
   if(!textSel()){                                   // 没划选就作用于整张卡片
     const c=barCard();if(!c)return;
     const cur={...DEF,...S.textDef,...(c.s||{})};
-    if(name==="bold")setStyle("weight",+cur.weight>=600?400:700);
-    if(name==="italic")setStyle("italic",!cur.italic);
+    cardSnapStyle(()=>{
+      if(name==="bold")setStyle("weight",+cur.weight>=600?400:700);
+      if(name==="italic")setStyle("italic",!cur.italic);
+      if(name==="underline")toast(t("needTextSel"));
+    });
     return;
   }
   document.execCommand("styleWithCSS",false,true);
@@ -1941,29 +1956,60 @@ function cmd(name){
   afterInline();
 }
 function setInkColor(v){
-  if(!textSel()){setStyle("color",v);return}
-  wrapSel({color:v});afterInline();
+  if(!textSel()){cardSnapStyle(()=>setStyle("color",v));return}
+  document.execCommand("styleWithCSS",false,true);
+  document.execCommand("foreColor",false,v);
+  afterInline();
+}
+function selBg(){
+  const r=textSel();if(!r)return null;
+  let n=r.startContainer;if(n.nodeType===3)n=n.parentNode;
+  const cap=n.closest?n.closest(".cap"):null;
+  while(n&&n!==cap){
+    const bg=getComputedStyle(n).backgroundColor;
+    const h=hex6(bg);
+    if(h&&!/rgba\(0, 0, 0, 0\)/.test(bg))return h;
+    n=n.parentNode;
+  }
+  return null;
 }
 function setHighlight(v){
   if(!textSel()){toast(t("needTextSel"));return}
-  wrapSel(v==="none"?{backgroundColor:"transparent"}:{backgroundColor:v,padding:"0 .12em",borderRadius:".15em"});
+  document.execCommand("styleWithCSS",false,true);
+  if(selBg()===hex6(v))v="none";          // 已是该底色，再点一次即取消
+  if(v==="none"){
+    // 真正剥掉底色：把选区内容取出、清空背景样式后写回，父层的高亮也随之断开
+    replaceSelHTML(box=>box.querySelectorAll("*").forEach(el=>{
+      el.style.backgroundColor="";el.style.padding="";el.style.borderRadius="";
+      if(!el.getAttribute("style"))el.removeAttribute("style");
+      if(el.tagName==="SPAN"&&!el.hasAttribute("style"))el.replaceWith(...el.childNodes);
+    }));
+  }else document.execCommand("hiliteColor",false,v);
   afterInline();
 }
 function bumpSize(d){
   const r=textSel();
   if(!r){const c=barCard();if(!c)return;
     const cur={...DEF,...S.textDef,...(c.s||{})};
-    setStyle("size",clamp(Math.round(cur.size+d),8,96));return}
+    cardSnapStyle(()=>setStyle("size",clamp(Math.round(cur.size+d),8,96)));return}
   const node=r.startContainer.nodeType===1?r.startContainer:r.startContainer.parentNode;
   const now=parseFloat(getComputedStyle(node).fontSize)||15;
-  wrapSel({fontSize:clamp(Math.round(now+d),8,96)+"px"});
+  const px=clamp(Math.round(now+d),8,96);
+  replaceSelHTML(box=>{
+    const span=document.createElement("span");
+    span.style.fontSize=px+"px";
+    while(box.firstChild)span.appendChild(box.firstChild);
+    box.appendChild(span);
+  });
   afterInline();
 }
 function clearFmt(){
   if(!textSel()){const c=barCard();if(!c)return;
     snap();delete c.rich;c.s={...DEF,...S.textDef};render();save();return}
-  document.execCommand("removeFormat",false,null);
-  wrapSel({backgroundColor:"transparent"});
+  replaceSelHTML(box=>box.querySelectorAll("*").forEach(el=>{
+    if(["B","I","U","STRONG","EM","FONT"].includes(el.tagName))el.replaceWith(...el.childNodes);
+    else el.removeAttribute("style");
+  }));
   afterInline();
 }
 function buildBar(){
@@ -1985,8 +2031,7 @@ function buildBar(){
   sep();
   INK.forEach(v=>mk("",()=>setInkColor(v),"dot","background:"+v));
   sep();
-  HLS.forEach(v=>mk(v==="none"?"\u2298":"",()=>setHighlight(v),"hl",
-    v==="none"?"font-size:11px":"background:"+v));
+  HLS.forEach(v=>mk("",()=>setHighlight(v),"hl","background:"+v));
   sep();
   mk(t("clearFmt"),clearFmt);
   b.addEventListener("pointerdown",e=>e.stopPropagation());
