@@ -148,6 +148,12 @@
   body.finding .card.nomatch{opacity:.12}
   .card.hit .ring{position:absolute;inset:calc(-8px * var(--iz));border-radius:3px;pointer-events:none;
     border:calc(1.5px * var(--iz)) dashed var(--sel);opacity:.7}
+  .card .twin{position:absolute;right:0;top:calc(-16px * var(--iz));opacity:.5;cursor:pointer;
+    font:500 calc(9.5px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.08em;
+    pointer-events:auto;display:flex;align-items:center;gap:calc(3px * var(--iz))}
+  .card .twin:hover{opacity:1}
+  .card.isTwin .cap{box-shadow:calc(-3px * var(--iz)) 0 0 var(--tw)}
+  body.lock .card .twin{display:none}
   .card .lvl{position:absolute;left:0;top:calc(-16px * var(--iz));opacity:.38;
     font:500 calc(9px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
   body.lock .card .lvl{display:none}
@@ -313,6 +319,10 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   roleHead:"Outside the sequence",roleApx:"Appendix",roleAside:"Other, not numbered",
+  twinAdd:"Create a twin",twinGo:"Next place it appears",twinSrc:"Jump to the source",
+  twinAll:"Select every place",twinUnlink:"Detach into its own card",twinDel:"Delete this one",
+  twinHead:"Twin",twinMade:"Twin created at the centre of the view",twinNone:"No other place",
+  twinSee:"Same entry, also at",findMerge:"Merge twins when searching",
   pageAdd:"New page frame",pageDefault:"Page",pageRename:"Rename this page",
   pageSelect:"Select everything on this page",pageFit:"Shrink to fit contents",
   pageExport:"Export this page…",pageDelete:"Remove frame, keep cards",
@@ -386,6 +396,10 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   roleHead:"不参与排序",roleApx:"附录",roleAside:"其他（不编号）",
+  twinAdd:"创建分身",twinGo:"跳到下一处",twinSrc:"跳到源头",
+  twinAll:"选中全部出现位置",twinUnlink:"脱离为独立卡片",twinDel:"删除这一处",
+  twinHead:"分身",twinMade:"分身已建在视野中央",twinNone:"没有其他位置",
+  twinSee:"同一条目，另见",findMerge:"检索时合并分身",
   pageAdd:"新建页面",pageDefault:"页面",pageRename:"重命名页面",
   pageSelect:"选中本页全部内容",pageFit:"收拢到内容大小",
   pageExport:"导出本页…",pageDelete:"仅删除页框，保留卡片",
@@ -482,6 +496,49 @@ let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
 let undo=[], redo=[], mouse={x:innerWidth/2,y:innerHeight/2}, focusIdx=-1;
 const card=id=>S.cards.find(c=>c.id===id);
 const IMG=new Map();
+// 分身：内容只有一个源，分身共享内容、各自拥有位置与样式
+const orig=c=>(c&&c.ref)?(S.cards.find(z=>z.id===c.ref)||c):c;
+const twins=c=>{const o=orig(c);return S.cards.filter(z=>z===o||z.ref===o.id)};
+const hasTwins=c=>twins(c).length>1;
+function makeTwin(){
+  const cs=sel.map(card).filter(Boolean);
+  if(!cs.length)return;
+  snap();
+  const ctr=toW(innerWidth/2,innerHeight/2);
+  const b=bbox(cs);
+  const ns=[];
+  cs.forEach(c=>{
+    const o=orig(c);
+    const n={id:uid(),ref:o.id,
+      x:Math.round(ctr.x+(c.x-b.x)-b.w/2),y:Math.round(ctr.y+(c.y-b.y)-b.h/2),
+      w:c.w,s:{...(c.s||{})}};
+    S.cards.push(n);ns.push(n.id);
+  });
+  sel=ns;render();save();toast(t("twinMade"));
+}
+function gotoTwin(c,back){
+  const list=twins(c);
+  if(list.length<2){toast(t("twinNone"));return}
+  if(back){const o=orig(c);sel=[o.id];paintSel();focusOn([o],true);return}
+  const i=list.indexOf(c);
+  const nx=list[(i+1)%list.length];
+  sel=[nx.id];paintSel();focusOn([nx],true);
+}
+function unlinkTwin(c){
+  const o=orig(c);
+  snap();
+  if(c.ref){                       // 分身脱离：就地固化为独立卡片
+    const n={...o,id:c.id,x:c.x,y:c.y,w:c.w,s:c.s};
+    delete n.ref;
+    S.cards[S.cards.indexOf(c)]=n;
+  }else{                           // 源脱离：所有分身各自固化
+    S.cards=S.cards.map(z=>{
+      if(z.ref!==o.id)return z;
+      const n={...o,id:z.id,x:z.x,y:z.y,w:z.w,s:z.s};delete n.ref;return n;
+    });
+  }
+  render();save();
+}
 const srcOf=c=>(c.ih&&IMG.get(c.ih))||c.src||"";
 const hOf=c=>c.h||size[c.id]?.h||c.w;
 async function hashStr(str){
@@ -607,6 +664,7 @@ function normCard(c){
   o.s=(o.s&&typeof o.s==="object")?o.s:{};
   if(o.level&&![1,2,3].includes(+o.level))delete o.level;
   if(o.role&&!["apx","aside"].includes(o.role))delete o.role;
+  if(o.ref&&typeof o.ref!=="string")delete o.ref;
   o.tags=Array.isArray(o.tags)?o.tags.filter(x=>typeof x==="string"):[];
   return o;
 }
@@ -614,6 +672,7 @@ async function absorb(data,merge){
   const cards=(data.cards||[]).map(normCard);
   await migrateInline(cards);
   if(!merge){
+    cards.forEach(c=>{if(c.ref&&!cards.some(z=>z.id===c.ref))delete c.ref});
     const ids0=new Set(cards.map(c=>c.id));
     S={...S,...data,cards,frames:Array.isArray(data.frames)?data.frames:[],
       links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>({...l,id:l.id||uid()})),
@@ -625,6 +684,7 @@ async function absorb(data,merge){
   const nb=bbox(cards)||{x:0,y:0};
   cards.forEach(c=>{const nid=uid();map[c.id]=nid;c.id=nid;
     c.x=Math.round(c.x-nb.x+ox);c.y=Math.round(c.y-nb.y+oy)});
+  cards.forEach(c=>{if(c.ref)c.ref=map[c.ref]||undefined;if(c.ref===undefined)delete c.ref});
   S.cards=S.cards.concat(cards);
   (data.links||[]).forEach(l=>{if(l&&map[l.a]&&map[l.b])
     S.links.push({...l,id:uid(),a:map[l.a],b:map[l.b]})});
@@ -831,6 +891,7 @@ function renderNow(){
   document.body.style.setProperty("--glassline",dark?"rgba(255,255,255,.12)":"rgba(0,0,0,.08)");
   document.body.style.setProperty("--fr",dark?"rgba(235,235,230,.45)":"rgba(60,66,72,.42)");
   document.body.style.setProperty("--frbg",dark?"rgba(255,255,255,.03)":"rgba(0,0,0,.018)");
+  document.body.style.setProperty("--tw",dark?"rgba(200,215,235,.55)":"rgba(70,110,170,.42)");
   document.body.style.setProperty("--panel",dark?"#1B1B1B":"#fff");
   document.body.style.setProperty("--pfg",dark?"#EFEFEC":"#111");
   document.body.style.setProperty("--pline",dark?"rgba(255,255,255,.16)":"rgba(0,0,0,.12)");
@@ -858,10 +919,11 @@ function badgeOf(c){
   if(!c.level)return "";
   return S.autoNum?(NUM.get(c.id)||("H"+c.level)):("H"+c.level);
 }
-function syncCap(c,cap){
+function syncCap(c0,cap){
+  const c=orig(c0);
   c.text=cap.innerText;
   const h=cap.innerHTML;
-  if(/<(span|b|i|u|strong|em|font)\b/i.test(h))c.rich=h;else delete c.rich;
+  if(/<(span|b|i|u|s|strike|del|strong|em|font)\b/i.test(h))c.rich=h;else delete c.rich;
 }
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
@@ -869,15 +931,16 @@ function makeCard(c){
   el.className="card"+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
-  const csrc=srcOf(c);
+  const oc=orig(c);
+  const csrc=srcOf(oc);
   if(csrc){
     const im=document.createElement("img");im.src=csrc;im.draggable=false;
-    if(c.ar)im.style.aspectRatio=`1 / ${c.ar}`;
-    im.onload=()=>{if(!c.ar)c.ar=im.naturalHeight/im.naturalWidth;measure();drawLinks()};
+    if(oc.ar)im.style.aspectRatio=`1 / ${oc.ar}`;
+    im.onload=()=>{if(!oc.ar)oc.ar=im.naturalHeight/im.naturalWidth;measure();drawLinks()};
     el.appendChild(im);
   }
   const cap=document.createElement("div");cap.className="cap";
-  if(c.rich)cap.innerHTML=c.rich;else cap.textContent=c.text||"";
+  if(oc.rich)cap.innerHTML=oc.rich;else cap.textContent=oc.text||"";
   cap.spellcheck=false;cap.dataset.ph=t("placeholder");
   Object.assign(cap.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",fontWeight:s.weight,
     lineHeight:s.lh,letterSpacing:s.spacing+"em",textAlign:s.align,color:s.color,
@@ -898,11 +961,23 @@ function makeCard(c){
     if(to&&to.closest&&(to.closest("#bar")||to.closest("#pop"))){syncCap(c,cap);return}
     syncCap(c,cap);cap.contentEditable="false";editing=false;
     measure();drawLinksSoon();save();
-    if(!rendering&&cardTags(c).join(",")!==(c._tg||""))render();   // 只有标签变了才需要重建
+    // 有分身时统一刷新，让其他位置同步显示
+    if(!rendering&&(hasTwins(c)||cardTags(c).join(",")!==(c._tg||"")))render();
   });
   cap.addEventListener("pointerdown",e=>{if(cap.isContentEditable)e.stopPropagation()});
   el.appendChild(cap);
 
+  if(hasTwins(c)){
+    const list=twins(c),i=list.indexOf(c)+1;
+    if(c.ref)el.classList.add("isTwin");
+    const tw=document.createElement("div");tw.className="twin";
+    tw.textContent="\u25C8 "+i+"/"+list.length;
+    tw.style.color=s.color;
+    tw.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();gotoTwin(c,e.shiftKey)});
+    tw.addEventListener("contextmenu",e=>{if(lock)return;e.preventDefault();e.stopPropagation();
+      sel=[c.id];paintSel();twinMenu(e.clientX,e.clientY,c)});
+    el.appendChild(tw);
+  }
   const badge=badgeOf(c);
   if(badge){const lb=document.createElement("div");lb.className="lvl";
     lb.textContent=badge;lb.style.color=s.color;el.appendChild(lb)}
@@ -953,7 +1028,11 @@ function makeCard(c){
   el.addEventListener("pointerenter",()=>{hoverId=c.id;if(S.linkView==="focus")drawLinksSoon()});
   el.addEventListener("pointerleave",()=>{if(hoverId===c.id){hoverId=null;
     if(S.linkView==="focus")drawLinksSoon()}});
-  el.addEventListener("dblclick",e=>{if(lock)return;e.stopPropagation();editText(c)});
+  el.addEventListener("dblclick",e=>{
+    if(lock)return;e.stopPropagation();
+    if(cap.isContentEditable)return;      // 已在编辑中：交给浏览器原生的双击选词
+    editText(c,e);
+  });
   el.addEventListener("contextmenu",e=>{
     e.preventDefault();e.stopPropagation();
     if(lock){lockMenu(e.clientX,e.clientY);return}
@@ -1049,6 +1128,18 @@ function delFrame(f,withCards){
   S.frames=S.frames.filter(z=>z!==f);
   selFrame=null;sel=[];render();save();
 }
+function twinMenu(x,y,c){
+  const list=twins(c);
+  menuAt(x,y,[
+    {head:t("twinHead")+" "+(list.indexOf(c)+1)+"/"+list.length},
+    {label:t("twinGo"),on:()=>gotoTwin(c)},
+    {label:t("twinSrc"),on:()=>gotoTwin(c,true)},
+    {label:t("twinAll"),on:()=>{sel=list.map(z=>z.id);paintSel();focusOn(list,true)}},
+    "-",
+    {label:t("twinUnlink"),on:()=>unlinkTwin(c)},
+    {label:t("twinDel"),danger:true,on:()=>{sel=[c.id];del()}}
+  ]);
+}
 function frameMenu(x,y,f){
   menuAt(x,y,[
     {head:f.title||t("pageDefault")},
@@ -1107,14 +1198,32 @@ function measure(){
     const c=card(el.dataset.id);if(c&&c.h!==h)c.h=h;
   });
 }
-function editText(c){
+function editText(c,ev){
   if(lock)return;
   if(isLocked(c.id)){toast(t("lockedNote"));return}
   c._tg=cardTags(c).join(",");
   const el=nodes.get(c.id)?.querySelector(".cap");if(!el)return;
   editing=true;el.contentEditable="true";el.focus();
-  const r=document.createRange();r.selectNodeContents(el);
-  const s=getSelection();s.removeAllRanges();s.addRange(r);
+  const s=getSelection();
+  // 双击进入时按落点选中一个词（拉丁文字），其余情况全选
+  let done=false;
+  if(ev&&document.caretRangeFromPoint){
+    const cr=document.caretRangeFromPoint(ev.clientX,ev.clientY);
+    if(cr&&el.contains(cr.startContainer)&&cr.startContainer.nodeType===3){
+      const txt=cr.startContainer.nodeValue||"";
+      let i=cr.startOffset,a=i,z=i;
+      const W=/[A-Za-z0-9'\u2019\-]/;
+      if(W.test(txt[i]||"")||W.test(txt[i-1]||"")){
+        while(a>0&&W.test(txt[a-1]))a--;
+        while(z<txt.length&&W.test(txt[z]))z++;
+        if(z>a){const r2=document.createRange();
+          r2.setStart(cr.startContainer,a);r2.setEnd(cr.startContainer,z);
+          s.removeAllRanges();s.addRange(r2);done=true}
+      }else{s.removeAllRanges();s.addRange(cr);done=true}
+    }
+  }
+  if(!done){const r=document.createRange();r.selectNodeContents(el);
+    s.removeAllRanges();s.addRange(r)}
 }
 
 /* ================= connectors ================= */
@@ -1422,6 +1531,7 @@ addEventListener("keydown",e=>{
     if((e.metaKey||e.ctrlKey)&&["b","i","u"].includes(k)){
       e.preventDefault();cmd(k==="b"?"bold":k==="i"?"italic":"underline");return;
     }
+    if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="x"){e.preventDefault();cmd("strikeThrough");return}
     setTimeout(syncBar,0);                      // 撤销后同步按钮状态
     return;
   }
@@ -1453,7 +1563,19 @@ function del(){
   if(lock)return;snap();
   if(selLink){S.links=S.links.filter(l=>l.id!==selLink);selLink=null}
   const kill=freeSel();
-  if(kill.length){S.links=S.links.filter(l=>!kill.includes(l.a)&&!kill.includes(l.b));
+  if(kill.length){
+    // 源被删除时把第一个分身扶正，内容不丢
+    kill.forEach(id=>{
+      const o=S.cards.find(z=>z.id===id);
+      if(!o||o.ref)return;
+      const kids=S.cards.filter(z=>z.ref===o.id&&!kill.includes(z.id));
+      if(!kids.length)return;
+      const heir=kids[0];
+      const n={...o,id:heir.id,x:heir.x,y:heir.y,w:heir.w,s:heir.s};delete n.ref;
+      S.cards[S.cards.indexOf(heir)]=n;
+      kids.slice(1).forEach(z=>z.ref=heir.id);
+    });
+    S.links=S.links.filter(l=>!kill.includes(l.a)&&!kill.includes(l.b));
     S.cards=S.cards.filter(c=>!kill.includes(c.id));sel=[]}
   else if(sel.length)toast(t("lockedNote"));
   cleanGroups();render();save();
@@ -1684,7 +1806,7 @@ const MANUAL=[
   <p>选中一张卡片后，上方会浮出一条窄工具条。它作用于<b>你划选的那段文字</b>，而不是整个文字框。</p>
   <p>工具条从左到右依次是：</p>
   <ul>
-    <li><b>B / I / U</b>：粗体、斜体、下划线，三个按钮会随光标位置亮起，显示当前状态</li>
+    <li><b>B / I / U / S</b>：粗体、斜体、下划线、删除线，按钮会随光标位置亮起显示当前状态。编辑时也可用 <kbd>Ctrl/Cmd</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd>，删除线为 <kbd>Ctrl/Cmd</kbd> + <kbd>Shift</kbd> + <kbd>X</kbd></li>
     <li><b>字号</b>：点数字直接敲新值，回车生效，方向键上下微调；右侧小三角展开常用档位。它不会夺走文字选区，所以划选一段文字后再调字号，改的就是那一段</li>
     <li><b>文字颜色 / 荧光笔</b>：点色块即以当前颜色套用，右侧小三角展开色板换色。换过之后按钮记住新颜色，之后连续标记只需一击。荧光笔在同色文字上再点一次即取消</li>
     <li><b>清除</b>：去掉划选部分的全部格式，包括粗斜体、下划线、颜色、字号和底色</li>
@@ -1695,6 +1817,16 @@ const MANUAL=[
   <p>编辑时还可以直接用 <kbd>Ctrl/Cmd</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> 加粗、斜体、下划线。</p>
   <p>工具条第二行是段落级设定：字重、对齐、字距、行距，作用于整张卡片；最右侧是分级统一，见该词条。</p>
   <p class="tip">工具条可在右键菜单的<b>文字工具条</b>关闭。粘贴进卡片的内容一律转为纯文本，不会把网页的杂乱格式带进来。</p>`],
+
+ ["分身","FENSHEN",`
+  <p>分身不是复制，而是<b>同一条内容在多处出现</b>。内容只有一个源，分身是它的投影：文字和图片共享，位置、尺寸、字号各自独立。改任意一处的文字，所有位置同步更新。</p>
+  <p><b>用途</b>：想法之间距离太远时，与其拉一条横跨画布的连线，不如在需要的地方放一个分身。既保持了上下文，又不会让连线变成乱麻。</p>
+  <p><b>创建</b>：选中卡片后右键<b>创建分身</b>，分身出现在视野中央，拖到需要的位置即可。同一条内容可以有任意多个分身。</p>
+  <p><b>串联与溯源</b>：有分身的卡片右上角出现菱形标记，写着「2/4」表示这是四处出现中的第二处。点标记跳到下一处，按住 <kbd>Shift</kbd> 点跳回源头，右键标记打开分身菜单，可以一次选中全部出现位置。顺着标记点下去，就能走完一条信息在画布上的完整轨迹。</p>
+  <p><b>与检索的关系</b>：分身共享源的文字和标签，所以天然进入检索结果。回车逐个跳转时，跳的是这条信息的所有出现位置。菜单里的<b>检索时合并分身</b>可以切换：关注内容时合并成一条，巡视位置时展开为多条。</p>
+  <p><b>与导出的关系</b>：分身不重复正文，而是在它所在的位置生成一行「同一条目，另见 §2.1」，接入交叉引用体系；编号也只算源，同一段不会被编两次号。</p>
+  <p><b>脱离</b>：右键分身选<b>脱离为独立卡片</b>，它会就地固化成一张普通卡片，此后与源各改各的。删除源时，第一个分身会自动继承内容成为新的源，内容不会丢。</p>
+  <p class="tip">分身和编组、页面互不冲突：编组管一起移动，页面管输出单元，分身管同一内容的多处呈现。</p>`],
 
  ["页面","YEMIAN",`
   <p>页面是画布上一块有名字的矩形区域，用来划分输出单元。选中若干卡片后右键<b>新建页面</b>，会自动框住它们；不选任何东西直接新建，则在视野中央生成一个空页面，之后把卡片拖进去即可。</p>
@@ -1759,6 +1891,7 @@ const MANUAL=[
 
  ["文字编辑","WENZIBIANJI",`
   <p>双击卡片下方文字区进入编辑，<kbd>Esc</kbd> 或点击别处退出。空白处双击新建纯文字卡。</p>
+  <p>双击进入时会选中落点所在的那个英文单词，而不是全选，方便直接改词。进入编辑后再双击任意单词同样只选中该词，三击选中整段。中文没有词边界，双击进入时只放置光标。</p>
   <p>粘贴纯文本时会自动创建一张文字卡。</p>`],
 
  ["文字样式","WENZIYANGSHI",`
@@ -1809,7 +1942,8 @@ $("man").addEventListener("pointerdown",e=>{if(e.target.id==="man")$("man").clas
 /* ================= document export ================= */
 const RELMAP={"#8A8A85":"relPlain","#111111":"relPlain","#EFEFEC":"relPlain",
   "#C0392B":"relAgainst","#2D6CDF":"relCite","#1F8A70":"relSupport"};
-function snippet(c,n){
+function snippet(c0,n){
+  const c=orig(c0);
   const s=(c.text||"").replace(/\s+/g," ").trim();
   if(!s)return srcOf(c)?"[image]":"[empty]";
   return s.length>(n||28)?s.slice(0,n||28)+"…":s;
@@ -1864,8 +1998,9 @@ function buildTree(list){
   const order=docOrder(list),stack=[],roots=[];
   order.forEach(c=>{
     const apx=c.role==="apx",aside=c.role==="aside";
-    const lv=aside?0:(apx?1:(c.level||0));
-    const node={c,lv,apx,aside,children:[],num:"",sec:""};
+    const isRef=!!c.ref;
+    const lv=(aside||isRef)?0:(apx?1:(c.level||0));
+    const node={c,lv,apx,aside,isRef,children:[],num:"",sec:""};
     if(lv===0){const p=stack[stack.length-1];(p?p.node.children:roots).push(node);node.parent=p?p.node:null}
     else{
       while(stack.length&&stack[stack.length-1].lv>=lv)stack.pop();
@@ -1883,7 +2018,8 @@ function buildTree(list){
   });
   walk(roots);
   const flat=[];const flatten=l=>l.forEach(n=>{flat.push(n);flatten(n.children)});flatten(roots);
-  const byId={};flat.forEach(n=>byId[n.c.id]=n);
+  const byId={};flat.forEach(n=>{byId[n.c.id]=n;
+    if(!n.isRef&&!byId[orig(n.c).id])byId[orig(n.c).id]=n});
   return {roots,flat,byId};
 }
 function secTag(n){
@@ -2027,6 +2163,7 @@ function richRuns(html){
       if(tag==="B"||tag==="STRONG"||cs.fontWeight==="bold"||+cs.fontWeight>=600)s2.bold=true;
       if(tag==="I"||tag==="EM"||cs.fontStyle==="italic")s2.italics=true;
       if(tag==="U"||(cs.textDecoration||"").includes("underline"))s2.underline={};
+      if(tag==="S"||tag==="STRIKE"||tag==="DEL"||(cs.textDecoration||"").includes("line-through"))s2.strike=true;
       const col=hex6(cs.color);if(col)s2.color=col;
       const bg=hex6(cs.backgroundColor);
       if(bg)s2.highlight=nearestHL(bg);else if(cs.backgroundColor==="transparent")delete s2.highlight;
@@ -2062,6 +2199,12 @@ async function exportDocx(D,o,tree){
       const d=imgDims(c);
       try{kids.push(new Paragraph({children:[new ImageRun({
         data:srcOf(c).split(",")[1],transformation:{width:d.w,height:d.h}})]}))}catch(e){}
+    }
+    if(n.isRef){
+      const src=tree.byId[orig(c).id];
+      if(src&&src!==n)kids.push(new Paragraph({children:[new TextRun({
+        text:"\u25C8 "+t("twinSee")+" "+refLabel(src),italics:true,size:18,color:"777777"})]}));
+      return;
     }
     const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
     const rich=c.rich?paraFrom(c,D,n.lv?{heading:HL[n.lv]}:null):null;
@@ -2100,7 +2243,7 @@ async function exportDocx(D,o,tree){
 function safeRich(html){
   const box=document.createElement("div");box.innerHTML=html||"";
   box.querySelectorAll("*").forEach(el=>{
-    if(!["SPAN","B","I","U","STRONG","EM","BR","DIV","FONT"].includes(el.tagName)){
+    if(!["SPAN","B","I","U","S","STRIKE","DEL","STRONG","EM","BR","DIV","FONT"].includes(el.tagName)){
       el.replaceWith(...el.childNodes);return;
     }
     [...el.attributes].forEach(a=>{if(a.name!=="style")el.removeAttribute(a.name)});
@@ -2176,6 +2319,11 @@ function docHTML(o,tree,forPrint){
   img{max-width:460px;height:auto}</style></head><body><h1>${esc(o.title)}</h1>`;
   tree.flat.forEach(n=>{
     const c=n.c;
+    if(n.isRef){
+      const src=tree.byId[orig(c).id];
+      if(src&&src!==n)h+=`<p class="rel">&#9672; ${esc(t("twinSee")+" "+refLabel(src))}</p>`;
+      return;
+    }
     if(o.img&&srcOf(c)){const d=imgDims(c);h+=`<p><img src="${srcOf(c)}" width="${d.w}" height="${d.h}"></p>`}
     const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
     if(c.rich){
@@ -2227,7 +2375,7 @@ function selHTML(r,cap){
   if(n.nodeType===3)n=n.parentNode;
   const chain=[];
   while(n&&n!==cap&&n.nodeType===1){
-    if(["SPAN","B","I","U","STRONG","EM","FONT"].includes(n.tagName))chain.push(n);
+    if(["SPAN","B","I","U","S","STRIKE","DEL","STRONG","EM","FONT"].includes(n.tagName))chain.push(n);
     n=n.parentNode;
   }
   chain.forEach(el=>{
@@ -2433,6 +2581,7 @@ function buildBar(){
   btn(b,"<b>B</b>",()=>cmd("bold")).dataset.k="b";
   btn(b,"<i>I</i>",()=>cmd("italic")).dataset.k="i";
   btn(b,"<u>U</u>",()=>cmd("underline")).dataset.k="u";
+  btn(b,"<s>S</s>",()=>cmd("strikeThrough")).dataset.k="s";
   div();
 
   /* 2. 字体 */
@@ -2687,12 +2836,14 @@ function syncBar(){
     b.querySelector('[data-k="b"]').classList.toggle("on",document.queryCommandState("bold"));
     b.querySelector('[data-k="i"]').classList.toggle("on",document.queryCommandState("italic"));
     b.querySelector('[data-k="u"]').classList.toggle("on",document.queryCommandState("underline"));
+    b.querySelector('[data-k="s"]').classList.toggle("on",document.queryCommandState("strikeThrough"));
   }catch(e){}
 }
 
 /* ================= tags ================= */
 const TAGRE=/#([\p{L}\p{N}_\-]{1,40})/gu;
-function cardTags(c){
+function cardTags(c0){
+  const c=orig(c0);
   const out=new Set((c.tags||[]).map(x=>x.toLowerCase()));
   (c.text||"").replace(TAGRE,(m,g)=>{out.add(g.toLowerCase());return m});
   return [...out];
@@ -2761,7 +2912,11 @@ function runFind(){
   const q=findQ().replace(/^#/,"");
   hits=!q?[]:S.cards.filter(c=>S.findMode==="tag"
     ? cardTags(c).some(x=>x.includes(q))
-    : ((c.text||"").toLowerCase().includes(q)||cardTags(c).some(x=>x.includes(q))));
+    : ((orig(c).text||"").toLowerCase().includes(q)||cardTags(c).some(x=>x.includes(q))));
+  if(S.findMerge){                       // 合并同一内容，只保留源或第一处
+    const seen=new Set();
+    hits=hits.filter(c=>{const k=orig(c).id;if(seen.has(k))return false;seen.add(k);return true});
+  }
   if(!hits.some(c=>c===S.cards[hitIdx]))hitIdx=-1;
   document.body.classList.toggle("finding",!!q);
   paintFind();
@@ -2907,6 +3062,7 @@ function viewItems(x,y){
     {label:t("workMode"),check:S.work,on:()=>setWork(!S.work)},
     {label:t("textBar"),check:S.bar!==false,on:()=>{S.bar=S.bar===false;syncBar();save()}},
     {label:t("autoNum"),check:!!S.autoNum,on:()=>{S.autoNum=!S.autoNum;render();save()}},
+    {label:t("findMerge"),check:!!S.findMerge,on:()=>{S.findMerge=!S.findMerge;runFind();save()}},
     {label:t("readOrder"),sub:[{head:t("readOrder")},
       ...[["auto","roAuto"],["col","roCol"],["row","roRow"]].map(([v,k])=>({label:t(k),
         check:(S.readOrder||"auto")===v,on:()=>{S.readOrder=v;render();save()}}))]},
@@ -3033,6 +3189,11 @@ function cardMenu(x,y){
     {label:t("alLeft"),on:()=>align("left")},{label:t("alCX"),on:()=>align("cx")},{label:t("alRight"),on:()=>align("right")},
     {label:t("alTop"),on:()=>align("top")},{label:t("alCY"),on:()=>align("cy")},{label:t("alBottom"),on:()=>align("bottom")},
     "-",{label:t("rowGap"),on:()=>align("rowgap")},{label:t("colGap"),on:()=>align("colgap")}]});
+  const anyTwin=sel.map(card).filter(Boolean).some(z=>hasTwins(z));
+  items.push({label:t("twinAdd"),on:makeTwin});
+  if(anyTwin)items.push({label:t("twinGo"),on:()=>gotoTwin(card(sel[0]))},
+    {label:t("twinSrc"),on:()=>gotoTwin(card(sel[0]),true)},
+    {label:t("twinUnlink"),on:()=>unlinkTwin(card(sel[0]))});
   items.push({label:t("pageAdd"),on:addFrame},"-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
     {label:t("duplicate"),key:"⌘D",on:dupe},
