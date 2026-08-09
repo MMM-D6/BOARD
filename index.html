@@ -151,12 +151,11 @@
   .card .cap a{color:inherit;text-decoration:underline;text-underline-offset:2px;
     text-decoration-thickness:1px;cursor:pointer}
   .card .cap a:hover{text-decoration-thickness:2px}
-  .card .lnk{position:absolute;left:calc(-2px * var(--iz));bottom:calc(-20px * var(--iz));
-    width:calc(15px * var(--iz));height:calc(15px * var(--iz));border-radius:50%;
-    border:calc(1px * var(--iz)) solid currentColor;opacity:.42;cursor:pointer;
-    display:flex;align-items:center;justify-content:center;pointer-events:auto;
-    font:400 calc(9px * var(--iz))/1 "IBM Plex Sans",sans-serif}
-  .card .lnk:hover{opacity:.95}
+  .card .lnk{position:absolute;left:0;bottom:calc(-21px * var(--iz));
+    width:calc(16px * var(--iz));height:calc(16px * var(--iz));opacity:.45;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;pointer-events:auto}
+  .card .lnk svg{width:100%;height:100%;display:block}
+  .card .lnk:hover{opacity:1}
   body.lock .card .lnk{opacity:.4}
   .card .twin{position:absolute;right:0;top:calc(-16px * var(--iz));opacity:.5;cursor:pointer;
     font:500 calc(9.5px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.08em;
@@ -239,12 +238,14 @@
   #bar .pp{position:absolute;top:100%;left:0;margin-top:7px;z-index:6;display:none;padding:7px;
     border-radius:10px;background:var(--panel);border:1px solid var(--pline);
     box-shadow:0 16px 40px rgba(0,0,0,.2);min-width:150px;white-space:normal}
+  #bar .pp .scroll{min-width:198px}
   #bar .pp.on{display:block}
   #bar .pp.right{left:auto;right:0}
   #bar .pp .hd2{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
     opacity:.4;padding:6px 6px 6px}
-  #bar .pp .item{display:block;width:100%;height:27px;text-align:left;padding:0 9px;border:none;
-    background:none;border-radius:6px;cursor:pointer;color:inherit;font-size:13px}
+  #bar .pp .item{display:block;width:100%;height:30px;line-height:30px;text-align:left;
+    padding:0 10px;border:none;background:none;border-radius:6px;cursor:pointer;color:inherit;
+    font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #bar .pp .item:hover{background:var(--phi)}
   #bar .pp .item.on{background:var(--pfg);color:var(--panel)}
   #bar .pp .scroll{max-height:264px;overflow:auto}
@@ -1038,7 +1039,12 @@ function makeCard(c){
   const ourl=oc.url;
   if(ourl){
     const lk=document.createElement("div");lk.className="lnk";
-    lk.textContent="\u2197";lk.title=ourl;
+    lk.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M9.6 14.4l4.8-4.8"/>
+      <path d="M13 7.6l1.9-1.9a3.6 3.6 0 0 1 5.1 5.1l-1.9 1.9"/>
+      <path d="M11 16.4l-1.9 1.9a3.6 3.6 0 0 1-5.1-5.1l1.9-1.9"/></svg>`;
+    lk.title=ourl;
     lk.style.color=s.color;
     lk.addEventListener("pointerdown",e=>{e.stopPropagation();openUrl(ourl)});
     el.appendChild(lk);
@@ -2535,7 +2541,9 @@ function dl(blob,name){
 }
 
 /* ================= 文字工具条 ================= */
-const INK=["#111111","#5A5A55","#9A9A94","#C0392B","#2D6CDF","#1F8A70"];
+const INK=["#111111","#4A4A46","#9A9A94",
+  "#A01B14","#B4470B","#7A6A00","#1F6B33",
+  "#0E6B6B","#1B4F9C","#3B2E8C","#7A1F6B","#B01858"];
 const HLS=["#FFF2A0","#FFD9A0","#FFC2C2","#F6C6E8","#D8C8F5","#C5E3FF","#BEEFD6","#DDE3E8"];
 function barCard(){return sel.length===1?card(sel[0]):null}
 function capOf(c){return c?nodes.get(c.id)?.querySelector(".cap"):null}
@@ -2846,7 +2854,8 @@ function buildBar(){
       FONTS.filter(f=>f[2]===g).forEach(f=>{
         const it=document.createElement("button");
         it.className="item"+(cur===f[0]?" on":"");
-        it.textContent=famName(f[0]);it.style.fontFamily=f[1];
+        it.textContent=famName(f[0]);
+        it.style.fontFamily=f[1];it.style.fontSize="13.5px";it.style.fontWeight="400";
         it.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
         it.addEventListener("click",e=>{e.stopPropagation();setFamily(f[0]);close()});
         sc.appendChild(it);
