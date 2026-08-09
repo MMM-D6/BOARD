@@ -148,6 +148,14 @@
   body.finding .card.nomatch{opacity:.12}
   .card.hit .ring{position:absolute;inset:calc(-8px * var(--iz));border-radius:3px;pointer-events:none;
     border:calc(1.5px * var(--iz)) dashed var(--sel);opacity:.7}
+  .card .cap a{color:inherit;text-decoration:underline;text-underline-offset:2px;
+    text-decoration-thickness:1px;cursor:pointer}
+  .card .cap a:hover{text-decoration-thickness:2px}
+  .card .lnk{position:absolute;left:0;bottom:calc(-15px * var(--iz));opacity:.55;cursor:pointer;
+    font:400 calc(10px * var(--iz))/1 "IBM Plex Mono",monospace;max-width:100%;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;pointer-events:auto}
+  .card .lnk:hover{opacity:1;text-decoration:underline}
+  body.lock .card .lnk{opacity:.4}
   .card .twin{position:absolute;right:0;top:calc(-16px * var(--iz));opacity:.5;cursor:pointer;
     font:500 calc(9.5px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.08em;
     pointer-events:auto;display:flex;align-items:center;gap:calc(3px * var(--iz))}
@@ -218,6 +226,7 @@
   #bar .ctl.half{padding:0 6px 0 8px}
   #bar .ctl.caret{padding:0 6px 0 2px}
   #bar .cell.split:hover .ctl{background:var(--phi)}
+  #bar .ctl.lnkbtn{font-size:12px;filter:grayscale(1)}
   #bar .ctl .sw{width:14px;height:14px;border-radius:50%;border:1px solid var(--pline);flex:none}
   #bar .ctl .swb{width:14px;height:11px;border-radius:2px;border:1px solid var(--pline);flex:none}
   #bar .div{width:1px;height:15px;background:var(--pline);margin:0 5px;flex:none;opacity:.7}
@@ -321,6 +330,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   roleHead:"Outside the sequence",roleApx:"Appendix",roleAside:"Other, not numbered",
+  linkAdd:"Add a link…",linkEdit:"Edit the link…",linkOpen:"Open the link",
+  linkPrompt:"Web address: a PDF link, a Google Scholar entry, or a DOI. Empty removes it.",linkLabel:"Link",
   twinAdd:"Create a twin",twinGo:"Next place it appears",twinSrc:"Jump to the source",
   twinAll:"Select every place",twinUnlink:"Detach into its own card",twinDel:"Delete this one",
   twinHead:"Twin",twinMade:"Twin created at the centre of the view",twinNone:"No other place",
@@ -398,6 +409,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   roleHead:"不参与排序",roleApx:"附录",roleAside:"其他（不编号）",
+  linkAdd:"添加链接…",linkEdit:"修改链接…",linkOpen:"打开链接",
+  linkPrompt:"网址：PDF 链接、Google Scholar 条目、或直接粘 DOI。留空则移除",linkLabel:"链接",
   twinAdd:"创建分身",twinGo:"跳到下一处",twinSrc:"跳到源头",
   twinAll:"选中全部出现位置",twinUnlink:"脱离为独立卡片",twinDel:"删除这一处",
   twinHead:"分身",twinMade:"分身已建在视野中央",twinNone:"没有其他位置",
@@ -502,6 +515,38 @@ const IMG=new Map();
 const orig=c=>(c&&c.ref)?(S.cards.find(z=>z.id===c.ref)||c):c;
 const twins=c=>{const o=orig(c);return S.cards.filter(z=>z===o||z.ref===o.id)};
 const hasTwins=c=>twins(c).length>1;
+function normUrl(u){
+  u=(u||"").trim();
+  if(!u)return "";
+  if(/^(https?|mailto|file):/i.test(u))return u;
+  if(/^10\.\d{4,}\//.test(u))return "https://doi.org/"+u;   // 直接粘 DOI 也认
+  return "https://"+u.replace(/^\/+/,"");
+}
+function shortUrl(u){
+  const x=(u||"").replace(/^https?:\/\//i,"").replace(/^www\./i,"");
+  return x.length>42?x.slice(0,42)+"\u2026":x;
+}
+function openUrl(u){if(u)window.open(normUrl(u),"_blank","noopener")}
+function setCardUrl(){
+  const cs=targets().filter(z=>!isLocked(z.id));
+  if(!cs.length)return;
+  const cur=orig(cs[0]).url||"";
+  const v=prompt(t("linkPrompt"),cur);
+  if(v===null)return;
+  snap();
+  cs.forEach(z=>{const o=orig(z);const u=normUrl(v);if(u)o.url=u;else delete o.url});
+  render();save();
+}
+function setTextLink(){
+  if(!ensureSel()){setCardUrl();return}
+  const v=prompt(t("linkPrompt"),"");
+  if(v===null)return;
+  const u=normUrl(v);
+  document.execCommand("styleWithCSS",false,true);
+  if(u)document.execCommand("createLink",false,u);
+  else document.execCommand("unlink",false,null);
+  afterInline();
+}
 function makeTwin(){
   const cs=sel.map(card).filter(Boolean);
   if(!cs.length)return;
@@ -668,6 +713,7 @@ function normCard(c){
   if(o.role&&!["apx","aside"].includes(o.role))delete o.role;
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
   if(o.bg&&typeof o.bg!=="string")delete o.bg;
+  if(o.url&&typeof o.url!=="string")delete o.url;
   o.tags=Array.isArray(o.tags)?o.tags.filter(x=>typeof x==="string"):[];
   return o;
 }
@@ -926,7 +972,7 @@ function syncCap(c0,cap){
   const c=orig(c0);
   c.text=cap.innerText;
   const h=cap.innerHTML;
-  if(/<(span|b|i|u|s|strike|del|strong|em|font)\b/i.test(h))c.rich=h;else delete c.rich;
+  if(/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(h))c.rich=h;else delete c.rich;
 }
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
@@ -972,6 +1018,14 @@ function makeCard(c){
   cap.addEventListener("pointerdown",e=>{if(cap.isContentEditable)e.stopPropagation()});
   el.appendChild(cap);
 
+  const ourl=oc.url;
+  if(ourl){
+    const lk=document.createElement("div");lk.className="lnk";
+    lk.textContent="\u2197 "+shortUrl(ourl);
+    lk.style.color=s.color;
+    lk.addEventListener("pointerdown",e=>{e.stopPropagation();openUrl(ourl)});
+    el.appendChild(lk);
+  }
   if(hasTwins(c)){
     const list=twins(c),i=list.indexOf(c)+1;
     if(c.ref)el.classList.add("isTwin");
@@ -1033,6 +1087,10 @@ function makeCard(c){
   el.addEventListener("pointerenter",()=>{hoverId=c.id;if(S.linkView==="focus")drawLinksSoon()});
   el.addEventListener("pointerleave",()=>{if(hoverId===c.id){hoverId=null;
     if(S.linkView==="focus")drawLinksSoon()}});
+  el.addEventListener("pointerdown",e=>{
+    const a=e.target.closest&&e.target.closest("a");
+    if(a&&!cap.isContentEditable){e.stopPropagation();e.preventDefault();openUrl(a.getAttribute("href"))}
+  },true);
   el.addEventListener("dblclick",e=>{
     if(lock)return;e.stopPropagation();
     if(cap.isContentEditable)return;      // 已在编辑中：交给浏览器原生的双击选词
@@ -1847,6 +1905,13 @@ const MANUAL=[
   <p><b>段落</b>浮层里除了对齐、字重、字距、行距，还有<b>卡片底色</b>：给整张卡片铺一层底色，用来区分内容类别，比如引文一种颜色、评注另一种。它与荧光笔和文字颜色是三个层次——文字颜色改字本身，荧光笔标记局部字句，卡片底色标识整张卡片的性质。底色会跟随导出到 Word 与 PDF 文档。</p>
   <p class="tip">工具条可在右键菜单的<b>文字工具条</b>关闭。粘贴进卡片的内容一律转为纯文本，不会把网页的杂乱格式带进来。</p>`],
 
+ ["链接","LIANJIE",`
+  <p>每张卡片可以挂一个来源链接。右键选<b>添加链接</b>，粘贴网址即可，卡片左下角出现一行 ↗ 加域名的小字，点它在新标签页打开。</p>
+  <p>三种形式都认：PDF 的直接网址、Google Scholar 的条目链接、以及直接粘贴的 DOI（会自动补成 doi.org 链接）。没写 https 前缀也会自动补全。</p>
+  <p>链接内容纳入全文检索，所以可以直接搜域名找回某个来源，比如输入 scholar 就能筛出所有来自 Google Scholar 的条目。</p>
+  <p>导出 Word 和 PDF 文档时，链接会作为可点击的超链接附在该段之后。分身共享源的链接。演示模式下链接依然可点，方便当场打开原文。</p>
+  <p class="tip">建议配合标签使用：链接解决"去哪里找原文"，标签解决"这是什么类型的材料"。</p>`],
+
  ["分身","FENSHEN",`
   <p>分身不是复制，而是<b>同一条内容在多处出现</b>。内容只有一个源，分身是它的投影：文字和图片共享，位置、尺寸、字号各自独立。改任意一处的文字，所有位置同步更新。</p>
   <p><b>用途</b>：想法之间距离太远时，与其拉一条横跨画布的连线，不如在需要的地方放一个分身。既保持了上下文，又不会让连线变成乱麻。</p>
@@ -2244,6 +2309,15 @@ async function exportDocx(D,o,tree){
     else if(n.lv){kids.push(new Paragraph({text:(txt[0]||snippet(c)),heading:HL[n.lv]}));
       txt.slice(1).forEach(z=>kids.push(new Paragraph({text:z})))}
     else txt.forEach(z=>kids.push(new Paragraph({text:z})));
+    if(o2u(c)){
+      try{
+        const {ExternalHyperlink}=D;
+        kids.push(new Paragraph({children:[new ExternalHyperlink({
+          children:[new TextRun({text:o2u(c),style:"Hyperlink",size:18})],link:o2u(c)})]}));
+      }catch(e){
+        kids.push(new Paragraph({children:[new TextRun({text:o2u(c),size:18,color:"2D6CDF"})]}));
+      }
+    }
     if(o.tags){const tg=cardTags(c);
       if(tg.length)kids.push(new Paragraph({children:[new TextRun({
         text:tg.map(x=>"#"+x).join("  "),italics:true,size:18,color:"888888"})]}))}
@@ -2269,9 +2343,16 @@ async function exportDocx(D,o,tree){
   const blob=await Packer.toBlob(doc);
   dl(blob,o.title+".docx");
 }
+const o2u=c=>orig(c).url||"";
 function safeRich(html){
   const box=document.createElement("div");box.innerHTML=html||"";
   box.querySelectorAll("*").forEach(el=>{
+    if(el.tagName==="A"){
+      const href=el.getAttribute("href")||"";
+      [...el.attributes].forEach(a=>el.removeAttribute(a.name));
+      if(/^(https?|mailto|file):/i.test(href)){el.setAttribute("href",href);el.setAttribute("target","_blank")}
+      return;
+    }
     if(!["SPAN","B","I","U","S","STRIKE","DEL","STRONG","EM","BR","DIV","FONT"].includes(el.tagName)){
       el.replaceWith(...el.childNodes);return;
     }
@@ -2405,6 +2486,7 @@ function docHTML(o,tree,forPrint){
     else if(n.lv){h+=`<h${n.lv+1}>${esc(txt[0]||snippet(c))}</h${n.lv+1}>`;
       txt.slice(1).forEach(z=>h+=`<p>${esc(z)}</p>`)}
     else txt.forEach(z=>h+=`<p>${esc(z)}</p>`);
+    if(o2u(c))h+=`<p class="rel"><a href="${esc(o2u(c))}">${esc(o2u(c))}</a></p>`;
     if(wrapBg)h+="</div>";
     if(o.tags){const tg=cardTags(c);if(tg.length)h+=`<p class="tg">${esc(tg.map(x=>"#"+x).join("  "))}</p>`}
     if(o.refs){const r=relationsFor(c.id,tree.byId);
@@ -2448,7 +2530,7 @@ function selHTML(r,cap){
   if(n.nodeType===3)n=n.parentNode;
   const chain=[];
   while(n&&n!==cap&&n.nodeType===1){
-    if(["SPAN","B","I","U","S","STRIKE","DEL","STRONG","EM","FONT"].includes(n.tagName))chain.push(n);
+    if(["SPAN","A","B","I","U","S","STRIKE","DEL","STRONG","EM","FONT"].includes(n.tagName))chain.push(n);
     n=n.parentNode;
   }
   chain.forEach(el=>{
@@ -2663,6 +2745,7 @@ function buildBar(){
   btn(b,"<i>I</i>",()=>cmd("italic")).dataset.k="i";
   btn(b,"<u>U</u>",()=>cmd("underline")).dataset.k="u";
   btn(b,"<s>S</s>",()=>cmd("strikeThrough")).dataset.k="s";
+  btn(b,"\u{1F517}",setTextLink,"lnkbtn");
   div();
 
   /* 2. 字体 */
@@ -3007,7 +3090,8 @@ function runFind(){
   const q=findQ().replace(/^#/,"");
   hits=!q?[]:S.cards.filter(c=>S.findMode==="tag"
     ? cardTags(c).some(x=>x.includes(q))
-    : ((orig(c).text||"").toLowerCase().includes(q)||cardTags(c).some(x=>x.includes(q))));
+    : ((orig(c).text||"").toLowerCase().includes(q)||(orig(c).url||"").toLowerCase().includes(q)
+       ||cardTags(c).some(x=>x.includes(q))));
   if(S.findMerge){                       // 合并同一内容，只保留源或第一处
     const seen=new Set();
     hits=hits.filter(c=>{const k=orig(c).id;if(seen.has(k))return false;seen.add(k);return true});
@@ -3285,6 +3369,9 @@ function cardMenu(x,y){
     {label:t("alTop"),on:()=>align("top")},{label:t("alCY"),on:()=>align("cy")},{label:t("alBottom"),on:()=>align("bottom")},
     "-",{label:t("rowGap"),on:()=>align("rowgap")},{label:t("colGap"),on:()=>align("colgap")}]});
   const anyTwin=sel.map(card).filter(Boolean).some(z=>hasTwins(z));
+  const one2=sel.length===1?orig(card(sel[0])):null;
+  items.push({label:one2&&one2.url?t("linkEdit"):t("linkAdd"),on:setCardUrl});
+  if(one2&&one2.url)items.push({label:t("linkOpen"),on:()=>openUrl(one2.url)});
   items.push({label:t("twinAdd"),on:makeTwin});
   if(anyTwin)items.push({label:t("twinGo"),on:()=>gotoTwin(card(sel[0]))},
     {label:t("twinSrc"),on:()=>gotoTwin(card(sel[0]),true)},
