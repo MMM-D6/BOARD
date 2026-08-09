@@ -132,7 +132,12 @@
   #hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
     font-size:13px;opacity:.32;line-height:2;pointer-events:none;z-index:5}
   body.hidecur,body.hidecur *{cursor:none !important}
-  .card.lk .ring{border-style:dashed}
+  .card.lk .ring{border-style:dashed;opacity:.75}
+  .card .lockmk{position:absolute;right:0;bottom:calc(-21px * var(--iz));
+    width:calc(15px * var(--iz));height:calc(15px * var(--iz));opacity:.4;pointer-events:none;
+    display:flex;align-items:center;justify-content:center}
+  .card .lockmk svg{width:100%;height:100%;display:block}
+  body.lock .card .lockmk{display:none}
   .card.lk .hnd{display:none !important}
   #find{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:70;display:none;
     align-items:center;gap:8px;padding:6px 10px;border-radius:9px;background:var(--panel);
@@ -398,8 +403,9 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   tagsMenu:"Tags…",tagTitle:"Tags",tagsPh:"tag1, tag2",allTags:"Tags on this board",tagHint:"Also picks up #tag written in the text",
   imgSize:"Image size on import",fitSel:"Resize selected images to this",
   fitAllImg:"Resize every image to this",px:"px",
-  group:"Group selection",ungroup:"Ungroup",lockGroup:"Lock group",unlockGroup:"Unlock group",
-  lockedNote:"This group is locked",defaultText:"Default text style…",defTitle:"Default text style",
+  lockCard:"Lock",unlockCard:"Unlock",lockOn2:"Locked",lockOff:"Unlocked",
+  linkLocked:"This connector is locked with its cards",
+  lockedNote:"This card is locked",defaultText:"Default text style…",defTitle:"Default text style",
   defHint:"Setting the starting style for new cards. Esc to leave.",
   tsTitle:"Text style",font:"Font",size:"Size",weight:"Weight",tracking:"Tracking",leading:"Leading",
   alignRow:"Align",colourRow:"Colour",applyAll:"Apply to every card",appliedAll:"Applied to every card",
@@ -498,8 +504,9 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   tagsMenu:"标签…",tagTitle:"标签",tagsPh:"标签1, 标签2",allTags:"画布中已有标签",tagHint:"正文里写的 #标签 也会自动识别",
   imgSize:"导入图片尺寸",fitSel:"把选中图片调成该尺寸",
   fitAllImg:"把所有图片调成该尺寸",px:"px",
-  group:"编组",ungroup:"取消编组",lockGroup:"锁定该组",unlockGroup:"解锁该组",
-  lockedNote:"该组已锁定",defaultText:"默认文字格式…",defTitle:"默认文字格式",
+  lockCard:"锁定",unlockCard:"解锁",lockOn2:"已锁定",lockOff:"已解锁",
+  linkLocked:"该连线随两端卡片一同锁定",
+  lockedNote:"该卡片已锁定",defaultText:"默认文字格式…",defTitle:"默认文字格式",
   defHint:"正在设定新建卡片的起始格式，按 Esc 退出",
   tsTitle:"文字样式",font:"字体",size:"字号",weight:"字重",tracking:"字距",leading:"行距",
   alignRow:"对齐",colourRow:"颜色",applyAll:"应用到全部卡片",appliedAll:"已应用到全部卡片",
@@ -554,7 +561,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* ================= state ================= */
 const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",italic:false,color:"#111111"};
 const DEFLINK={kind:"curve",dash:false,arrow:"none",w:1.4,color:"#8A8A85"};
-let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"all",linkLabel:"dot"};
+let S={bg:"#F4F4F2",cards:[],links:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"all",linkLabel:"dot"};
 let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
 let undo=[], redo=[], mouse={x:innerWidth/2,y:innerHeight/2}, focusIdx=-1;
@@ -642,7 +649,7 @@ function sendItems(mode){
 // 卡片剪贴板：先放进去，再跳到任意位置粘贴，不必拖着跨屏
 let CLIP=null;
 function clipCards(mode){
-  const cs=sel.map(card).filter(Boolean);
+  const cs=sel.map(card).filter(Boolean);   // 锁定的卡片同样可以做分身
   if(!cs.length){toast(t("clipNeed"));return}
   const b=bbox(cs);
   CLIP={mode,items:cs.map(c=>({src:orig(c).id,dx:c.x-b.x,dy:c.y-b.y,w:c.w,
@@ -667,7 +674,7 @@ function pasteClip(p){
   sel=ns;render();save();
   toast(CLIP.mode==="twin"?t("sentTwin"):t("pasteDone"));
 }
-function makeTwin(){
+function makeTwin(){   // 锁定不影响创建分身
   const cs=sel.map(card).filter(Boolean);
   if(!cs.length)return;
   snap();
@@ -738,29 +745,33 @@ async function migrateInline(cards){
     }catch(e){/* 保留 c.src，图片照样能显示 */}
   }
 }
-const groupOf=id=>(S.groups||[]).find(g=>g.ids.includes(id));
-const isLocked=id=>{const g=groupOf(id);return !!(g&&g.locked)};
-const expand=ids=>{const out=new Set();
-  ids.forEach(i=>{const g=groupOf(i);(g?g.ids:[i]).forEach(x=>{if(card(x))out.add(x)})});
-  return [...out]};
-const freeSel=()=>sel.filter(i=>!isLocked(i));
-function cleanGroups(){
-  S.groups=(S.groups||[]).map(g=>({...g,ids:g.ids.filter(i=>card(i))})).filter(g=>g.ids.length>1);
+const isLocked=id=>{const c=card(id);return !!(c&&c.lock)};
+const isLinkLocked=l=>isLocked(l.a)||isLocked(l.b);   // 连线随两端卡片一同锁定
+function setCardLock(ids,v){
+  const cs=(ids||sel).map(card).filter(Boolean);
+  if(!cs.length)return;
+  snap();
+  cs.forEach(c=>{if(v)c.lock=true;else delete c.lock});
+  render();save();
+  toast(v?t("lockOn2"):t("lockOff"));
 }
+const expand=ids=>[...new Set(ids.filter(i=>card(i)))];
+const freeSel=()=>sel.filter(i=>!isLocked(i));
+
 const size={};
 const cleanCard=c=>{const o={...c};delete o._tg;return o};
-function packState(){return JSON.stringify({groups:S.groups,frames:S.frames,links:S.links,cards:S.cards.map(cleanCard)})}
+function packState(){return JSON.stringify({frames:S.frames,links:S.links,cards:S.cards.map(cleanCard)})}
 function unpackState(str){return JSON.parse(str)}
 function snap(){undo.push(packState());if(undo.length>40)undo.shift();redo=[]}
 function applyUndo(stack,other){
   if(!stack.length)return;
   other.push(packState());
-  const p=unpackState(stack.pop());S.cards=p.cards;S.links=p.links;S.groups=p.groups||[];S.frames=p.frames||[];
+  const p=unpackState(stack.pop());S.cards=p.cards;S.links=p.links;S.frames=p.frames||[];
   sel=[];selLink=null;render();save();
 }
 
 /* ================= storage ================= */
-const SCHEMA=3;                         // 数据结构版本，只增不减
+const SCHEMA=4;                         // 数据结构版本，只增不减
 function migrate(d){
   if(!d||typeof d!=="object")return d;
   const from=+d.v||1;
@@ -771,6 +782,13 @@ function migrate(d){
   if(from<3){                            // 2 -> 3 页面、模板字段补全
     d.frames=Array.isArray(d.frames)?d.frames:[];
     d.templates=Array.isArray(d.templates)?d.templates:[];
+  }
+  if(from<4){                            // 3 -> 4 编组取消，已锁定的组转为卡片自身锁定
+    const locked=new Set();
+    (Array.isArray(d.groups)?d.groups:[]).forEach(g=>{
+      if(g&&g.locked&&Array.isArray(g.ids))g.ids.forEach(i=>locked.add(i))});
+    (d.cards||[]).forEach(c=>{if(locked.has(c.id))c.lock=true});
+    delete d.groups;
   }
   d.v=Math.max(from,SCHEMA);
   return d;
@@ -832,7 +850,7 @@ function bundle(list){
   const ids=new Set(cards.map(c=>c.id));
   return {...S,v:SCHEMA,cards,
     links:S.links.filter(l=>ids.has(l.a)&&ids.has(l.b)),
-    groups:(S.groups||[]).map(g=>({...g,ids:g.ids.filter(i=>ids.has(i))})).filter(g=>g.ids.length>1)};
+  };
 }
 function normCard(c){
   const o={...c};
@@ -850,6 +868,7 @@ function normCard(c){
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
   if(o.bg&&typeof o.bg!=="string")delete o.bg;
   if(o.url&&typeof o.url!=="string")delete o.url;
+  if(o.lock!==true)delete o.lock;
   o.tags=Array.isArray(o.tags)?o.tags.filter(x=>typeof x==="string"):[];
   return o;
 }
@@ -863,8 +882,7 @@ async function absorb(data,merge){
     S={...S,...data,cards,templates:Array.isArray(data.templates)?data.templates:[],
       frames:Array.isArray(data.frames)?data.frames:[],
       links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>({...l,id:l.id||uid()})),
-      groups:(data.groups||[]).filter(g=>g&&Array.isArray(g.ids))
-        .map(g=>({...g,id:g.id||uid(),ids:g.ids.filter(i=>ids0.has(i))})).filter(g=>g.ids.length>1)};
+  };
     await loadImgs(cards);return cards.length;
   }
   const map={},b=bbox(),ox=b?b.x+b.w+120:0,oy=b?b.y:0;
@@ -879,9 +897,6 @@ async function absorb(data,merge){
     S.frames=(S.frames||[]).concat([{...f,id:uid(),
       x:Math.round((+f.x||0)-nb.x+ox),y:Math.round((+f.y||0)-nb.y+oy),
       w:Math.max(120,+f.w||400),h:Math.max(100,+f.h||300)}])});
-  (data.groups||[]).forEach(g=>{if(!g||!Array.isArray(g.ids))return;
-    const ids=g.ids.map(i=>map[i]).filter(Boolean);
-    if(ids.length>1)S.groups.push({...g,id:uid(),ids})});
   await loadImgs(cards);
   return cards.length;
 }
@@ -979,7 +994,7 @@ async function newBoard(){
   if(S.cards.length&&!confirm(t("confirmNew")))return;
   if(fileHandle&&S.cards.length)await writeFile(true);
   snap();
-  S.cards=[];S.links=[];S.groups=[];sel=[];selLink=null;
+  S.cards=[];S.links=[];sel=[];selLink=null;
   await unbind(true);
   camTo(0,0,1,true);render();save();
 }
@@ -1021,7 +1036,7 @@ async function restoreBackup(it){
   await autoBackup(true);                   // 先给当前状态留一份，回滚也可逆
   snap();
   const d=migrate(bk.data);
-  S={...S,...d};S.cards=d.cards||[];S.links=d.links||[];S.groups=d.groups||[];
+  S={...S,...d};S.cards=d.cards||[];S.links=d.links||[];
   S.frames=d.frames||[];
   await loadImgs(S.cards);
   sel=[];selLink=null;render();fit(true);save();
@@ -1228,6 +1243,15 @@ function makeCard(c){
       sel=[c.id];paintSel();twinMenu(e.clientX,e.clientY,c)});
     el.appendChild(tw);
   }
+  if(c.lock){
+    const lm=document.createElement("div");lm.className="lockmk";
+    lm.style.color=s.color;
+    lm.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/>
+      <path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/></svg>`;
+    el.appendChild(lm);
+  }
   const badge=badgeOf(c);
   if(badge){const lb=document.createElement("div");lb.className="lvl";
     lb.textContent=badge;lb.style.color=s.color;el.appendChild(lb)}
@@ -1334,7 +1358,7 @@ function renderFrames(){
 }
 function startFrameMove(e,f){
   snap();
-  const kids=inFrame(f).filter(c=>!isLocked(c.id)).map(c=>({c,x:c.x,y:c.y}));
+  const kids=inFrame(f).map(c=>({c,x:c.x,y:c.y}));   // 页面整体移动时锁定卡片一起走
   const sx=e.clientX,sy=e.clientY,ox=f.x,oy=f.y;
   const mv=ev=>{
     const dx=(ev.clientX-sx)/cam.z,dy=(ev.clientY-sy)/cam.z;
@@ -1377,7 +1401,6 @@ function delFrame(f,withCards){
     const ids=inFrame(f).map(c=>c.id);
     S.links=S.links.filter(l=>!ids.includes(l.a)&&!ids.includes(l.b));
     S.cards=S.cards.filter(c=>!ids.includes(c.id));
-    cleanGroups();
   }
   S.frames=S.frames.filter(z=>z!==f);
   selFrame=null;sel=[];render();save();
@@ -1823,7 +1846,8 @@ addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?applyUndo(redo,undo):applyUndo(undo,redo);return}
   if((e.metaKey||e.ctrlKey)&&k==="a"){e.preventDefault();sel=S.cards.map(c=>c.id);paintSel();return}
   if((e.metaKey||e.ctrlKey)&&k==="d"){e.preventDefault();dupe();return}
-  if((e.metaKey||e.ctrlKey)&&k==="g"){e.preventDefault();e.shiftKey?ungroup():makeGroup();return}
+  if((e.metaKey||e.ctrlKey)&&k==="l"&&sel.length){e.preventDefault();
+    setCardLock(null,!sel.map(card).filter(Boolean).every(z=>z.lock));return}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="c"){e.preventDefault();clipCards("twin");return}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="v"){e.preventDefault();pasteClip(toW(mouse.x,mouse.y));return}
   if(e.key==="Escape"){closeMenus();sel=[];selLink=null;linkFrom=null;stage.style.cursor="";toast("");paintSel()}
@@ -1841,7 +1865,10 @@ addEventListener("keydown",e=>{
 /* ================= edits ================= */
 function del(){
   if(lock)return;snap();
-  if(selLink){S.links=S.links.filter(l=>l.id!==selLink);selLink=null}
+  if(selLink){const l0=S.links.find(z=>z.id===selLink);
+    if(l0&&isLinkLocked(l0))toast(t("lockedNote"));
+    else S.links=S.links.filter(l=>l.id!==selLink);
+    selLink=null}
   const kill=freeSel();
   if(kill.length){
     // 源被删除时把第一个分身扶正，内容不丢
@@ -1858,7 +1885,7 @@ function del(){
     S.links=S.links.filter(l=>!kill.includes(l.a)&&!kill.includes(l.b));
     S.cards=S.cards.filter(c=>!kill.includes(c.id));sel=[]}
   else if(sel.length)toast(t("lockedNote"));
-  cleanGroups();render();save();
+  render();save();
 }
 function dupe(){if(!sel.length||lock)return;snap();
   const ns=[];freeSel().map(card).filter(Boolean).forEach(c=>{
@@ -1925,24 +1952,6 @@ function setLevel(v){
   });
   render();save();
 }
-function makeGroup(){
-  const ids=expand(sel).filter(i=>!isLocked(i));
-  if(ids.length<2)return;
-  snap();
-  S.groups=(S.groups||[]).filter(g=>!g.ids.some(i=>ids.includes(i)));
-  S.groups.push({id:uid(),ids,locked:false});
-  sel=ids;render();save();
-}
-function ungroup(){
-  const gs=[...new Set(sel.map(i=>groupOf(i)).filter(Boolean))];
-  if(!gs.length)return;snap();
-  S.groups=S.groups.filter(g=>!gs.includes(g));render();save();
-}
-function setGroupLock(v){
-  const gs=[...new Set(sel.map(i=>groupOf(i)).filter(Boolean))];
-  if(!gs.length)return;snap();
-  gs.forEach(g=>g.locked=v);render();save();
-}
 function toast(x){const e=$("toast");if(!x){e.classList.remove("on");return}
   e.textContent=x;e.classList.add("on");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("on"),2600)}
 
@@ -1968,7 +1977,7 @@ const MANUAL=[
 
  ["部分导出","BUFENDAOCHU",`
   <p>导出面板顶部的<b>范围</b>可选整个画布或仅选中内容。选中状态下打开面板时会自动切到仅选中。</p>
-  <p>和编组配合使用最顺手：把一章的材料编成一组，点组内任意一张即选中整组，右键<b>导出…</b>就能单独导出这一章，四种格式都支持。</p>
+  <p>和页面配合使用最顺手：右键页面标题选<b>导出本页…</b>，即可单独导出这一章，五种格式都支持。也可以框选一批卡片后右键导出。</p>
   <p>格式列表里还有<b>画布文件</b>一项，把选中部分导出成独立的 json，可以拆分大文件，或分享某一部分给别人。导出的片段只包含两端都在选中范围内的连线。</p>`],
 
  ["多窗口与最近打开","DUOCHUANGKOU",`
@@ -1984,13 +1993,8 @@ const MANUAL=[
 
  ["合并导入","HEBINGDAORU",`
   <p>右键菜单的<b>合并导入…</b>把另一个 json 并入当前画布，不覆盖已有内容。</p>
-  <p>并入的内容会整体放在现有内容右侧，间隔一百二十像素，保持其内部的相对布局、连线、编组和标签。所有编号会重新生成，因此不会和已有内容冲突，同一个文件重复并入也不会互相覆盖。</p>
+  <p>并入的内容会整体放在现有内容右侧，间隔一百二十像素，保持其内部的相对布局、连线、页面、锁定状态和标签。所有编号会重新生成，因此不会和已有内容冲突，同一个文件重复并入也不会互相覆盖。</p>
   <p class="tip">适合把分散在多个小文件里的笔记逐步汇拢成一个总库，也适合从他人处接收片段。并入后按 <kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 可整体撤销。</p>`],
-
- ["编组","BIANZU",`
-  <p>多选之后右键选择<b>编组</b>，或按 <kbd>Ctrl/Cmd</kbd> + <kbd>G</kbd>。编组后点击组内任意一张即选中整组，拖动时组内相对位置保持不变。</p>
-  <p>取消编组用 <kbd>Shift</kbd> + <kbd>Ctrl/Cmd</kbd> + <kbd>G</kbd>，或从右键菜单选择。</p>
-  <p class="tip">适合把一篇文献的图、摘要、评注绑在一起整体挪动。</p>`],
 
  ["标签","BIAOQIAN",`
   <p>两种录入方式，可以混用，系统会自动去重。</p>
@@ -2070,7 +2074,6 @@ const MANUAL=[
     <li><kbd>Ctrl/Cmd</kbd> + <kbd>V</kbd> 粘贴图片　<kbd>Ctrl/Cmd</kbd> + <kbd>S</kbd> 保存</li>
     <li><kbd>Ctrl/Cmd</kbd> + <kbd>F</kbd> 搜索　<kbd>Ctrl/Cmd</kbd> + <kbd>A</kbd> 全选</li>
     <li><kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 撤销　<kbd>Ctrl/Cmd</kbd> + <kbd>D</kbd> 复制</li>
-    <li><kbd>Ctrl/Cmd</kbd> + <kbd>G</kbd> 编组　加 <kbd>Shift</kbd> 取消编组</li>
     <li><kbd>T</kbd> 文字样式　<kbd>F</kbd> 适应画面　<kbd>0</kbd> 缩放归位</li>
     <li><kbd>Delete</kbd> 删除　<kbd>Esc</kbd> 取消选择或退出演示</li>
     <li>方向键微移一像素，加 <kbd>Shift</kbd> 移十像素</li>
@@ -2123,7 +2126,7 @@ const MANUAL=[
   <p><b>与检索的关系</b>：分身共享源的文字和标签，所以天然进入检索结果。回车逐个跳转时，跳的是这条信息的所有出现位置。菜单里的<b>检索时合并分身</b>可以切换：关注内容时合并成一条，巡视位置时展开为多条。</p>
   <p><b>与导出的关系</b>：分身不重复正文，而是在它所在的位置生成一行「同一条目，另见 §2.1」，接入交叉引用体系；编号也只算源，同一段不会被编两次号。</p>
   <p><b>脱离</b>：右键分身选<b>脱离为独立卡片</b>，它会就地固化成一张普通卡片，此后与源各改各的。删除源时，第一个分身会自动继承内容成为新的源，内容不会丢。</p>
-  <p class="tip">分身和编组、页面互不冲突：编组管一起移动，页面管输出单元，分身管同一内容的多处呈现。</p>`],
+  <p class="tip">分身和页面、锁定互不冲突：页面管输出单元，锁定管防误碰，分身管同一内容的多处呈现。锁定的卡片同样可以创建分身。</p>`],
 
  ["存档与长期保存","CUNDANG",`
   <p>这是防止资料作废的核心机制。导出面板选<b>存档包</b>，得到一个 zip，里面有四样东西：</p>
@@ -2148,7 +2151,7 @@ const MANUAL=[
   <p>拖动页面左上角的标题即可整体移动，框内卡片一起走；右下角小圆点调整大小。双击标题重命名。右键标题打开页面菜单：重命名、选中本页全部内容、收拢到内容大小、单独导出本页、删除页框（保留卡片）、连同卡片一起删除。</p>
   <p><b>与阅读顺序的关系</b>：导出时先按页面排序，页面之间的先后由它们的位置决定；页面内部再按你设定的按列或按行规则排。不属于任何页面的卡片排在所有页面之后。</p>
   <p><b>与分级标题的关系</b>：两者分工。页面负责顶层切分，标题负责页面内部的层级，编号仍然只由标题决定，页面不参与编号，避免两套层级打架。</p>
-  <p class="tip">页面和编组不重复：编组回答"这些要一起移动"，是编辑期的便利；页面回答"这些属于同一个输出单元"，是产出期的结构。一个页面里可以有多个编组。</p>`],
+  <p class="tip">页面回答的是"这些属于同一个输出单元"，是产出期的结构，与锁定、分身各管各的事，互不冲突。</p>`],
 
  ["连线备注","LIANXIANBEIZHU",`
   <p>右键点在线上选<b>连线备注…</b>，可以写下这条关联意味着什么。</p>
@@ -2190,9 +2193,12 @@ const MANUAL=[
   <p>输入即时过滤，命中项加虚线框，其余淡出但保留位置，画布结构依然可见。回车逐个跳转并居中，<kbd>Shift</kbd> + 回车反向。输入框带自动补全。</p>`],
 
  ["锁定","SUODING",`
-  <p>选中一个组后右键<b>锁定该组</b>。锁定后这组卡片完全冻结：不能拖动、不能改大小、不能改格式、不能编辑文字、不能删除，连接点不再出现，框选时自动跳过，选中框显示为虚线。</p>
-  <p>唯一还能生效的操作是点中它再右键解锁。</p>
-  <p class="tip">适合锁住已经定稿的框架，避免整理其他内容时误碰。</p>`],
+  <p>用来保护已经定稿的内容，避免整理其他材料时误碰。选中一张或多张卡片，右键选<b>锁定</b>，或按 <kbd>Ctrl/Cmd</kbd> + <kbd>L</kbd>。锁定的卡片右下角会出现一枚小锁，选中框变为虚线。</p>
+  <p><b>锁定后不能做的事</b>：拖动、改大小、编辑文字、改格式、删除。框选时会被跳过，批量操作也不会波及。</p>
+  <p><b>连线一同锁定</b>：只要连线的任意一端是锁定卡片，这条连线就不能删除、不能改样式，批量套用连线样式时也会跳过它。但仍可给它写备注。</p>
+  <p><b>仍然可以做的事</b>：创建分身、被别的卡片连线指向、随页面整体移动。页面移动时锁定卡片照常跟随，锁定只是把它在页面内钉住，不是把它钉死在画布上。</p>
+  <p>再次右键选<b>解锁</b>或按同样的快捷键即可恢复。</p>
+  <p class="tip">建议把已经写定的引文、原始摘录、关键论点锁起来。后续大量整理、批量改格式、框选移动时，它们都不会被意外改动。</p>`],
 
  ["图片尺寸","TUPIANCHICUN",`
   <p>右键菜单的<b>导入图片尺寸</b>限制新图的<b>长边</b>上限，横图竖图因此视觉体量一致。可选 220 到 760，默认 360。数值是 100% 缩放时的实际像素。</p>
@@ -3843,7 +3849,7 @@ function viewItems(x,y){
       {label:t("linkApplyAll"),on:()=>{
         if(!S.links.length)return;
         snap();
-        S.links.forEach(l=>Object.assign(l,{kind:S.linkDef.kind,dash:S.linkDef.dash,
+        S.links.filter(l=>!isLinkLocked(l)).forEach(l=>Object.assign(l,{kind:S.linkDef.kind,dash:S.linkDef.dash,
           arrow:S.linkDef.arrow,w:S.linkDef.w,color:S.linkDef.color}));
         drawLinks();save();toast(t("linkApplied")+" "+S.links.length);
       }}]},
@@ -3894,7 +3900,7 @@ function fileItems(x,y){
     "-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
     {label:t("clearAll"),danger:true,on:async()=>{if(confirm(t("clearConfirm"))){
-      snap();S.cards=[];S.links=[];S.groups=[];sel=[];await unbind(true);render();save();toast(t("unbound"))}}}
+      snap();S.cards=[];S.links=[];sel=[];await unbind(true);render();save();toast(t("unbound"))}}}
   ];
 }
 function boardMenu(x,y){
@@ -3951,13 +3957,9 @@ function cardMenu(x,y){
       const r=await putImg(d);one.ih=r.h;if(r.ok)delete one.src;else one.src=d;
       one.ar=h/w;render();save()})};
     inp.click()}});
-  const gs=[...new Set(sel.map(i=>groupOf(i)).filter(Boolean))];
-  if(expand(sel).length>1&&!gs.length)items.push({label:t("group"),key:"⌘G",on:makeGroup});
-  if(gs.length){
-    items.push({label:t("ungroup"),key:"⇧⌘G",on:ungroup});
-    items.push(gs.every(g=>g.locked)?{label:t("unlockGroup"),on:()=>setGroupLock(false)}
-                                     :{label:t("lockGroup"),on:()=>setGroupLock(true)});
-  }
+  const allLocked=sel.map(card).filter(Boolean).every(z=>z.lock);
+  items.push(allLocked?{label:t("unlockCard"),key:"⌘L",on:()=>setCardLock(null,false)}
+                     :{label:t("lockCard"),key:"⌘L",on:()=>setCardLock(null,true)});
   if(sel.length>1)items.push({label:t("alignDistribute"),sub:[
     {head:t("align")},
     {label:t("alLeft"),on:()=>align("left")},{label:t("alCX"),on:()=>align("cx")},{label:t("alRight"),on:()=>align("right")},
@@ -4007,10 +4009,14 @@ function linkStyleItems(target,after){
 }
 function linkMenu(x,y){
   const l=S.links.find(v=>v.id===selLink);if(!l)return;
+  if(isLinkLocked(l)){
+    menuAt(x,y,[{head:t("linkLocked")},{label:t("linkNote"),on:()=>openLinkNote(l,x,y)}]);
+    return;
+  }
   menuAt(x,y,[...linkStyleItems(l,()=>save()),"-",
     {label:t("linkNote"),on:()=>openLinkNote(l,x,y)},
     {label:t("reverse"),on:()=>{snap();const a=l.a,sa=l.sa;l.a=l.b;l.b=a;l.sa=l.sb;l.sb=sa;drawLinks();save()}},
-    {label:t("delLink"),danger:true,on:del}]);
+    ...(isLinkLocked(l)?[]:[{label:t("delLink"),danger:true,on:del}])]);
 }
 
 /* ================= text panel ================= */
@@ -4083,7 +4089,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
 (async()=>{
   try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch(e){}
   const saved=await loadState();
-  if(saved&&saved.cards){S={...S,...migrate(saved)};S.links=S.links||[];S.groups=S.groups||[];S.frames=S.frames||[];
+  if(saved&&saved.cards){S={...S,...migrate(saved)};S.links=S.links||[];S.frames=S.frames||[];
     if(!S.lvMigrated){S.linkView="all";S.lvMigrated=true}
     S.linkDef={...DEFLINK,...(saved.linkDef||{})};S.textDef={...DEF,...(saved.textDef||{})}}
   LANG=S.lang||"en";

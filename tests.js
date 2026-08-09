@@ -54,7 +54,7 @@ function makeCtx(page, record) {
           S.cards = cards;
           S.links = links || [];
           S.frames = (extra && extra.frames) || [];
-          S.groups = (extra && extra.groups) || [];
+          
           S.templates = (extra && extra.templates) || [];
           sel = (extra && extra.sel) || [];
           render();
@@ -363,23 +363,63 @@ group("pages 页面与层级", async (c) => {
    6. 编组与锁定
    ===================================================================== */
 
-group("groups 编组锁定", async (c) => {
+group("lock 锁定", async (c) => {
   await c.board(
     [
       { id: "a", x: -300, y: 0, w: 240, text: "甲", s: {} },
       { id: "b", x: 100, y: 0, w: 240, text: "乙", s: {} },
     ],
-    []
+    [{ id: "L", a: "a", b: "b", kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85" }],
+    { frames: [{ id: "f1", x: -400, y: -100, w: 800, h: 300, title: "页" }] }
   );
-  await c.run(() => { sel = ["a", "b"]; makeGroup(); setGroupLock(true); });
+  await c.run(() => { sel = ["a"]; setCardLock(null, true); });
   await c.wait(300);
-  c.ok("编组已建立", (await c.run(() => S.groups.length)) === 1);
-  c.ok("锁定状态生效", (await c.run(() => isLocked("a"))) === true);
+  c.ok("卡片可以单独锁定", (await c.run(() => isLocked("a"))) === true);
+  c.ok("锁定后显示锁标识", await c.run(() => !!nodes.get("a")?.querySelector(".lockmk")));
+
+  // 锁定后不可移动、不可编辑、不可删除
+  const x0 = await c.run(() => card("a").x);
+  await c.run(() => { sel = ["a"]; startMove({ clientX: 0, clientY: 0, shiftKey: false }); });
+  await c.wait(150);
+  c.ok("锁定后不可移动", (await c.run(() => card("a").x)) === x0);
+  await c.run(() => { sel = ["a"]; editText(card("a")); });
+  await c.wait(200);
+  c.ok(
+    "锁定后不可编辑文字",
+    await c.run(() => !nodes.get("a").querySelector(".cap").isContentEditable)
+  );
+  await c.run(() => { sel = ["a"]; setStyle("size", 40); });
+  await c.wait(200);
+  c.ok("锁定后不可改样式", await c.run(() => !card("a").s || card("a").s.size !== 40));
   await c.run(() => { sel = ["a"]; del(); });
   await c.wait(200);
-  c.ok("锁定卡片无法删除", (await c.run(() => S.cards.length)) === 2);
-  await c.run(() => { sel = ["a"]; setGroupLock(false); });
+  c.ok("锁定后不可删除", (await c.run(() => S.cards.length)) === 2);
+
+  // 连线随卡片一同锁定
+  await c.run(() => { selLink = "L"; sel = []; del(); });
   await c.wait(200);
+  c.ok("相连的连线也不可删除", (await c.run(() => S.links.length)) === 1);
+
+  // 页面整体移动时锁定卡片仍然跟随
+  await c.run(() => {
+    const f = S.frames[0];
+    const kids = inFrame(f);
+    const dx = 500;
+    f.x += dx;
+    kids.forEach((z) => (z.x += dx));
+    render();
+  });
+  await c.wait(250);
+  c.ok("页面移动时锁定卡片跟随", (await c.run(() => card("a").x)) === x0 + 500);
+
+  // 锁定状态下仍可创建分身
+  await c.run(() => { sel = ["a"]; clipCards("twin"); pasteClip({ x: 3000, y: 3000 }); });
+  await c.wait(400);
+  c.ok("锁定状态下仍可创建分身", (await c.run(() => S.cards.filter((z) => z.ref === "a").length)) === 1);
+  c.ok("新建的分身本身未被锁定", await c.run(() => !S.cards.find((z) => z.ref === "a").lock));
+
+  await c.run(() => { sel = ["a"]; setCardLock(null, false); });
+  await c.wait(250);
   c.ok("可以解锁", (await c.run(() => isLocked("a"))) === false);
 });
 
@@ -538,7 +578,18 @@ group("archive 存档与分页导出", async (c) => {
 
 group("data 数据安全", async (c) => {
   await c.board([{ id: "a", x: 0, y: 0, w: 300, text: "内容", s: {} }], []);
-  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 3);
+  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 4);
+
+  // 旧版的"已锁定编组"要迁移成卡片自身的锁定，锁定状态不能丢
+  const mig = await c.run(() =>
+    migrate({
+      v: 3,
+      cards: [{ id: "g1", x: 0, y: 0, w: 200, text: "旧锁定卡" }, { id: "g2", x: 300, y: 0, w: 200, text: "普通卡" }],
+      groups: [{ id: "gg", ids: ["g1"], locked: true }],
+    })
+  );
+  c.ok("旧编组的锁定状态迁移到卡片", mig.cards[0].lock === true && !mig.cards[1].lock);
+  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 4);
 
   await c.run(async () => { await autoBackup(true); });
   await c.wait(500);
