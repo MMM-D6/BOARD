@@ -151,10 +151,12 @@
   .card .cap a{color:inherit;text-decoration:underline;text-underline-offset:2px;
     text-decoration-thickness:1px;cursor:pointer}
   .card .cap a:hover{text-decoration-thickness:2px}
-  .card .lnk{position:absolute;left:0;bottom:calc(-15px * var(--iz));opacity:.55;cursor:pointer;
-    font:400 calc(10px * var(--iz))/1 "IBM Plex Mono",monospace;max-width:100%;overflow:hidden;
-    text-overflow:ellipsis;white-space:nowrap;pointer-events:auto}
-  .card .lnk:hover{opacity:1;text-decoration:underline}
+  .card .lnk{position:absolute;left:calc(-2px * var(--iz));bottom:calc(-20px * var(--iz));
+    width:calc(15px * var(--iz));height:calc(15px * var(--iz));border-radius:50%;
+    border:calc(1px * var(--iz)) solid currentColor;opacity:.42;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;pointer-events:auto;
+    font:400 calc(9px * var(--iz))/1 "IBM Plex Sans",sans-serif}
+  .card .lnk:hover{opacity:.95}
   body.lock .card .lnk{opacity:.4}
   .card .twin{position:absolute;right:0;top:calc(-16px * var(--iz));opacity:.5;cursor:pointer;
     font:500 calc(9.5px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.08em;
@@ -348,6 +350,13 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   clearFmt:"Clear",unify:"Unify",unifyGo:"Apply to level",bodyShort:"Body",
   exclManual:"skip cards styled by hand",unifyDone:"Cards updated:",needTextSel:"Select some text first",textBar:"Text toolbar",
   zoomTo:"Zoom to this",
+  tplMenu:"Card templates",tplSaveFile:"Save selection as a template (this file)",
+  tplSaveGlobal:"Save as a template (all files)",tplInFile:"In this file",tplGlobal:"All files",
+  tplApply:"Apply to selection",tplNew:"New card from this",tplDefault:"Use for new cards",
+  tplDel:"Delete this template",tplEmpty:"No templates yet",tplAsk:"Template name",
+  tplUnnamed:"Template",tplSaved:"Template saved:",tplApplied:"Cards restyled:",
+  tplRemoved:"Template deleted",tplNeedCard:"Select a card first",tplIsDefault:"New cards will use it",
+  linkApplyAll:"Apply this style to every connector",linkApplied:"Connectors updated:",
   linkView:"Connector display",lvAll:"Always visible",lvFocus:"Focus on hover",lvOff:"Hidden",
   linkLabel:"Note marker",llDot:"Dot only",llText:"Short label",llNone:"None",
   linkNote:"Note on this connector…",noteTitle:"Connector note",notePh:"What does this link mean",
@@ -427,6 +436,13 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   clearFmt:"清除",unify:"分级统一",unifyGo:"统一该层级",bodyShort:"正文",
   exclManual:"跳过手动调整过的",unifyDone:"已统一卡片：",needTextSel:"请先划选文字",textBar:"文字工具条",
   zoomTo:"放大居中",
+  tplMenu:"卡片模板",tplSaveFile:"把选中卡片存为模板（本文件）",
+  tplSaveGlobal:"存为模板（所有文件通用）",tplInFile:"本文件",tplGlobal:"通用",
+  tplApply:"套用到选中卡片",tplNew:"用它新建卡片",tplDefault:"设为新建卡片默认",
+  tplDel:"删除该模板",tplEmpty:"还没有模板",tplAsk:"模板名称",
+  tplUnnamed:"模板",tplSaved:"模板已保存：",tplApplied:"已套用卡片：",
+  tplRemoved:"模板已删除",tplNeedCard:"请先选中一张卡片",tplIsDefault:"新建卡片将采用它",
+  linkApplyAll:"套用到全部连线",linkApplied:"已更新连线：",
   linkView:"连线显示",lvAll:"始终显示",lvFocus:"聚焦时显示",lvOff:"隐藏",
   linkLabel:"批注标记",llDot:"仅圆点",llText:"简短标签",llNone:"不显示",
   linkNote:"连线备注…",noteTitle:"连线备注",notePh:"这条关联意味着什么",
@@ -504,7 +520,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ================= state ================= */
 const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",italic:false,color:"#111111"};
-const DEFLINK={kind:"curve",dash:false,arrow:"end",w:1.4,color:"#8A8A85"};
+const DEFLINK={kind:"curve",dash:false,arrow:"none",w:1.4,color:"#8A8A85"};
 let S={bg:"#F4F4F2",cards:[],links:[],groups:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"all",linkLabel:"dot"};
 let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
@@ -723,7 +739,8 @@ async function absorb(data,merge){
   if(!merge){
     cards.forEach(c=>{if(c.ref&&!cards.some(z=>z.id===c.ref))delete c.ref});
     const ids0=new Set(cards.map(c=>c.id));
-    S={...S,...data,cards,frames:Array.isArray(data.frames)?data.frames:[],
+    S={...S,...data,cards,templates:Array.isArray(data.templates)?data.templates:[],
+      frames:Array.isArray(data.frames)?data.frames:[],
       links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>({...l,id:l.id||uid()})),
       groups:(data.groups||[]).filter(g=>g&&Array.isArray(g.ids))
         .map(g=>({...g,id:g.id||uid(),ids:g.ids.filter(i=>ids0.has(i))})).filter(g=>g.ids.length>1)};
@@ -1021,7 +1038,7 @@ function makeCard(c){
   const ourl=oc.url;
   if(ourl){
     const lk=document.createElement("div");lk.className="lnk";
-    lk.textContent="\u2197 "+shortUrl(ourl);
+    lk.textContent="\u2197";lk.title=ourl;
     lk.style.color=s.color;
     lk.addEventListener("pointerdown",e=>{e.stopPropagation();openUrl(ourl)});
     el.appendChild(lk);
@@ -1905,8 +1922,15 @@ const MANUAL=[
   <p><b>段落</b>浮层里除了对齐、字重、字距、行距，还有<b>卡片底色</b>：给整张卡片铺一层底色，用来区分内容类别，比如引文一种颜色、评注另一种。它与荧光笔和文字颜色是三个层次——文字颜色改字本身，荧光笔标记局部字句，卡片底色标识整张卡片的性质。底色会跟随导出到 Word 与 PDF 文档。</p>
   <p class="tip">工具条可在右键菜单的<b>文字工具条</b>关闭。粘贴进卡片的内容一律转为纯文本，不会把网页的杂乱格式带进来。</p>`],
 
+ ["卡片模板","KAPIANMUBAN",`
+  <p>把一张调好的卡片存成模板，之后一键复用。模板记住的是：<b>字体、字号、字重、字距、行距、对齐、文字颜色、卡片底色、卡片宽度</b>，不记内容。</p>
+  <p><b>保存</b>：选中一张卡片，右键 → 卡片模板 → 存为模板，填个名字即可，比如"报告正文""引文块""批注"。</p>
+  <p><b>使用</b>：右键 → 卡片模板 → 选中某个模板，有三种用法。<b>套用到选中卡片</b>支持多选，一次统一一批；<b>用它新建卡片</b>直接在视野中央生成一张空白卡并进入编辑；<b>设为新建卡片默认</b>让之后所有新卡片都采用这套格式。</p>
+  <p><b>存在哪里</b>：保存时可选两处。<b>本文件</b>随画布文件一起走，导出 json 时带着，换电脑打开或发给别人都在，适合这个项目专用的格式。<b>通用</b>存在浏览器本地，所有文件共享，但不会跟着文件走，适合你个人长期的排版习惯。同一套模板可以两处都存一份。</p>
+  <p class="tip">和分级统一的分工：分级统一按层级批量刷格式，适合整理已有内容；模板是预设，适合新建内容时保持一致。</p>`],
+
  ["链接","LIANJIE",`
-  <p>每张卡片可以挂一个来源链接。右键选<b>添加链接</b>，粘贴网址即可，卡片左下角出现一行 ↗ 加域名的小字，点它在新标签页打开。</p>
+  <p>每张卡片可以挂一个来源链接。右键选<b>添加链接</b>，粘贴网址即可。卡片左下角出现一个小圆圈箭头图标，点它在新标签页打开，鼠标悬停显示完整网址。图标是固定尺寸的，画布缩放时不会跟着变大变小。</p>
   <p>三种形式都认：PDF 的直接网址、Google Scholar 的条目链接、以及直接粘贴的 DOI（会自动补成 doi.org 链接）。没写 https 前缀也会自动补全。</p>
   <p>链接内容纳入全文检索，所以可以直接搜域名找回某个来源，比如输入 scholar 就能筛出所有来自 Google Scholar 的条目。</p>
   <p>导出 Word 和 PDF 文档时，链接会作为可点击的超链接附在该段之后。分身共享源的链接。演示模式下链接依然可点，方便当场打开原文。</p>
@@ -1948,7 +1972,7 @@ const MANUAL=[
  ["连线","LIANXIAN",`
   <p>鼠标悬停卡片时四边出现小圆点，从圆点拖到另一张卡片即可连线。也可用右键的<b>从这里连线</b>，再点目标。</p>
   <p>右键点在线上可调整：线型（曲线、折线、直线）、实线或虚线、粗细、箭头（无、单向、双向）、颜色、反转方向、删除。</p>
-  <p>右键空白处的<b>默认连线样式</b>决定新连线的初始外观。</p>`],
+  <p>右键空白处的<b>默认连线样式</b>决定新连线的初始外观，新连线默认不带箭头。该子菜单底部的<b>套用到全部连线</b>可以把当前这套样式一次刷到画布上所有连线，适合统一风格或批量去掉箭头。</p>`],
 
  ["平移与缩放","PINGYI",`
   <p>平移：按住空格拖动、按住 <kbd>Alt</kbd> 拖动、或中键拖动。左键拖空白处是框选，不是平移。</p>
@@ -2635,6 +2659,70 @@ function setFamily(k){
   afterInline();
 }
 const CARDBG=["","#FFFFFF","#F3EEE4","#FDF3D8","#E8F0E4","#E4ECF5","#F2E7F0","#2A2A28"];
+/* 卡片模板：同时存在文件内和浏览器全局两处，见说明书 */
+let GTPL=[];
+async function loadGlobalTpl(){try{GTPL=(await kvGet("templates"))||[]}catch(e){GTPL=[]}}
+async function saveGlobalTpl(){try{await kvPut("templates",GTPL)}catch(e){}}
+function tplFromCard(c,name){
+  const st={...DEF,...S.textDef,...(c.s||{})};
+  return {id:uid(),name:name||t("tplUnnamed"),w:c.w,bg:c.bg||"",s:st};
+}
+function addTemplate(global){
+  const c=barCard()||card(sel[0]);
+  if(!c){toast(t("tplNeedCard"));return}
+  const name=prompt(t("tplAsk"),(c.text||"").replace(/\s+/g," ").trim().slice(0,16)||t("tplUnnamed"));
+  if(name===null)return;
+  const tpl=tplFromCard(orig(c),name.trim()||t("tplUnnamed"));
+  if(global){GTPL=[tpl,...GTPL].slice(0,40);saveGlobalTpl()}
+  else{S.templates=[tpl,...(S.templates||[])].slice(0,40);save()}
+  toast(t("tplSaved")+" "+tpl.name);
+}
+function applyTemplate(tpl){
+  const cs=targets().filter(z=>!isLocked(z.id));
+  if(!cs.length){toast(t("tplNeedCard"));return}
+  snap();
+  cs.forEach(z=>{
+    z.s={...tpl.s};z.sMan=true;
+    if(tpl.w)z.w=tpl.w;
+    if(tpl.bg)z.bg=tpl.bg;else delete z.bg;
+  });
+  render();save();toast(t("tplApplied")+" "+cs.length);
+}
+function newFromTemplate(tpl,p){
+  snap();
+  const c={id:uid(),src:null,x:Math.round(p.x-(tpl.w||300)/2),y:Math.round(p.y-20),
+    w:tpl.w||300,text:"",s:{...tpl.s}};
+  if(tpl.bg)c.bg=tpl.bg;
+  S.cards.push(c);sel=[c.id];render();save();
+  setTimeout(()=>editText(c),30);
+}
+function delTemplate(tpl,global){
+  if(global){GTPL=GTPL.filter(z=>z!==tpl);saveGlobalTpl()}
+  else{S.templates=(S.templates||[]).filter(z=>z!==tpl);save()}
+  toast(t("tplRemoved"));
+}
+function tplItems(where,p){
+  const mine=S.templates||[],all=GTPL;
+  const list=[];
+  if(sel.length)list.push({label:t("tplSaveFile"),on:()=>addTemplate(false)},
+                          {label:t("tplSaveGlobal"),on:()=>addTemplate(true)});
+  const section=(arr,head,global)=>{
+    if(!arr.length)return;
+    list.push({head});
+    arr.forEach(tpl=>list.push({label:tpl.name,sub:[
+      {head:tpl.name},
+      {label:t("tplApply"),on:()=>applyTemplate(tpl)},
+      {label:t("tplNew"),on:()=>newFromTemplate(tpl,p||toW(innerWidth/2,innerHeight/2))},
+      {label:t("tplDefault"),on:()=>{S.textDef={...S.textDef,...tpl.s};save();toast(t("tplIsDefault"))}},
+      "-",
+      {label:t("tplDel"),danger:true,on:()=>delTemplate(tpl,global)}
+    ]}));
+  };
+  section(mine,t("tplInFile"),false);
+  section(all,t("tplGlobal"),true);
+  if(!mine.length&&!all.length&&!sel.length)list.push({label:t("tplEmpty")});
+  return list;
+}
 function setCardBg(v){
   const cs=targets().filter(z=>!isLocked(z.id));
   if(!cs.length)return;
@@ -3255,7 +3343,14 @@ function viewItems(x,y){
       ...[["dot","llDot"],["text","llText"],["none","llNone"]].map(([v,k])=>({label:t(k),
         check:S.linkLabel===v,on:()=>{S.linkLabel=v;drawLinks();save()}}))
     ]},
-    {label:t("linkDefaults"),sub:linkStyleItems(S.linkDef,()=>save())},
+    {label:t("linkDefaults"),sub:[...linkStyleItems(S.linkDef,()=>save()),"-",
+      {label:t("linkApplyAll"),on:()=>{
+        if(!S.links.length)return;
+        snap();
+        S.links.forEach(l=>Object.assign(l,{kind:S.linkDef.kind,dash:S.linkDef.dash,
+          arrow:S.linkDef.arrow,w:S.linkDef.w,color:S.linkDef.color}));
+        drawLinks();save();toast(t("linkApplied")+" "+S.links.length);
+      }}]},
     {label:t("imgSize"),sub:[
       {head:t("imgSize")},
       ...[220,280,360,460,600,760].map(v=>({label:v+" "+t("px"),check:(S.imgMax||360)===v,
@@ -3310,6 +3405,7 @@ function boardMenu(x,y){
     {label:t("insertImage"),on:()=>$("imgfile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("pageAdd"),on:addFrame},
+    {label:t("tplMenu"),sub:tplItems("board",toW(x,y))},
     "-",
     {label:t("selectAll"),key:"⌘A",on:()=>{sel=S.cards.map(c=>c.id);paintSel()}},
     {label:t("fitView"),key:"F",on:()=>fit()},
@@ -3376,6 +3472,7 @@ function cardMenu(x,y){
   if(anyTwin)items.push({label:t("twinGo"),on:()=>gotoTwin(card(sel[0]))},
     {label:t("twinSrc"),on:()=>gotoTwin(card(sel[0]),true)},
     {label:t("twinUnlink"),on:()=>unlinkTwin(card(sel[0]))});
+  items.push({label:t("tplMenu"),sub:tplItems("card",toW(x,y))});
   items.push({label:t("pageAdd"),on:addFrame},"-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
     {label:t("duplicate"),key:"⌘D",on:dupe},
@@ -3495,6 +3592,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
     if(h){fileHandle=h;fileName=h.name;
       if(h.queryPermission){const p=await h.queryPermission({mode:"readwrite"});fileOK=(p==="granted")}}}catch(e){}
   await loadRecents();
+  await loadGlobalTpl();
   const wantOpen=QS.get("open");
   if(wantOpen)setTimeout(()=>openRecent(wantOpen).catch(()=>toast(t("noPerm"))),300);
   applyCam();render();
