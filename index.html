@@ -356,6 +356,18 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   clearFmt:"Clear",unify:"Unify",unifyGo:"Apply to level",bodyShort:"Body",
   exclManual:"skip cards styled by hand",unifyDone:"Cards updated:",needTextSel:"Select some text first",textBar:"Text toolbar",
   zoomTo:"Zoom to this",
+  clipTwinDo:"Put a twin on the clipboard",clipCopyDo:"Copy card to the clipboard",
+  pasteTwinHere:"Paste the twin here",pasteHere:"Paste here",pasteDone:"Pasted",
+  clipTwin:"Twin ready to place:",clipCopy:"Copied:",clipEmpty:"The card clipboard is empty",
+  clipNeed:"Select a card first",
+  fmtMd:"Markdown",fmtZip:"Archive",loosePage:"Unfiled",
+  byPage:"One file per page",zipShots:"Also render one image per page",
+  zipNote:"The archive holds page-by-page Markdown, the original images, and the full data file.",
+  sendMove:"Move to…",sendView:"Centre of the view",sendPage:"A page",
+  sentMove:"Moved",sentTwin:"Twin placed",
+  bkMenu:"Automatic snapshots",bkNone:"No snapshots yet",bkCards:" cards",
+  bkConfirm:"Restore this snapshot? The current board is saved as a snapshot first.",
+  bkDone:"Snapshot restored",bkGone:"That snapshot is gone",
   tplShort:"Template",tplHowto:"Style a card, then save it as a template from here.",
   tplMenu:"Card templates",tplSaveFile:"Save selection as a template (this file)",
   tplSaveGlobal:"Save as a template (all files)",tplInFile:"In this file",tplGlobal:"All files",
@@ -443,6 +455,19 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   clearFmt:"清除",unify:"分级统一",unifyGo:"统一该层级",bodyShort:"正文",
   exclManual:"跳过手动调整过的",unifyDone:"已统一卡片：",needTextSel:"请先划选文字",textBar:"文字工具条",
   zoomTo:"放大居中",
+  clipTwinDo:"把分身放入剪贴板",clipCopyDo:"复制卡片到剪贴板",
+  pasteTwinHere:"在此处粘贴分身",pasteHere:"在此处粘贴",pasteDone:"已粘贴",
+  clipTwin:"分身待放置：",clipCopy:"已复制：",clipEmpty:"卡片剪贴板是空的",
+  clipNeed:"请先选中卡片",
+  fmtMd:"Markdown",fmtZip:"存档包",loosePage:"未分页",
+  byPage:"按页面分开导出",zipShots:"同时渲染每页的图片",
+  zipNote:"存档包内含分页的 Markdown 正文、图片原件、以及完整数据文件",
+
+  fmtMd:"Markdown",sendMove:"移动到…",sendView:"视野中央",sendPage:"某个页面",
+  sentMove:"已移动",sentTwin:"分身已放置",
+  bkMenu:"自动快照",bkNone:"暂无快照",bkCards:" 张卡片",
+  bkConfirm:"回到这个快照？当前状态会先存成一份快照，可以再退回来。",
+  bkDone:"已恢复到该快照",bkGone:"该快照已不存在",
   tplShort:"模板",tplHowto:"先把一张卡片调好，再从这里存为模板",
   tplMenu:"卡片模板",tplSaveFile:"把选中卡片存为模板（本文件）",
   tplSaveGlobal:"存为模板（所有文件通用）",tplInFile:"本文件",tplGlobal:"通用",
@@ -571,6 +596,77 @@ function setTextLink(){
   else document.execCommand("unlink",false,null);
   afterInline();
 }
+// 在页面里找一块空位，避免叠在已有内容上
+function freeSpotIn(f,w,h){
+  const inside=inFrame(f);
+  const x=f.x+24;
+  let y=f.y+30;
+  if(inside.length)y=Math.max(y,Math.max(...inside.map(z=>z.y+hOf(z)))+36);
+  if(y+h>f.y+f.h){                       // 页面装不下就把页面撑高
+    f.h=Math.round(y+h-f.y+30);
+  }
+  return {x:Math.round(Math.min(x,f.x+f.w-w-16)),y:Math.round(y)};
+}
+function sendTo(target,mode){
+  const cs=sel.map(card).filter(Boolean).filter(z=>!isLocked(z.id));
+  if(!cs.length)return;
+  snap();
+  const ns=[];
+  cs.forEach(c=>{
+    const h=hOf(c)||120;
+    const p=target==="view"
+      ? (()=>{const v=toW(innerWidth/2,innerHeight/2);return {x:Math.round(v.x-c.w/2),y:Math.round(v.y-h/2)}})()
+      : freeSpotIn(target,c.w,h);
+    if(mode==="twin"){
+      const n={id:uid(),ref:orig(c).id,x:p.x,y:p.y,w:c.w,s:{...(c.s||{})}};
+      if(c.bg)n.bg=c.bg;
+      S.cards.push(n);ns.push(n.id);
+    }else{
+      c.x=p.x;c.y=p.y;ns.push(c.id);
+    }
+  });
+  sel=ns;render();save();
+  const list=ns.map(card).filter(Boolean);
+  if(list.length)focusOn(list,true);
+  toast(mode==="twin"?t("sentTwin"):t("sentMove"));
+}
+function sendItems(mode){
+  const list=[{label:t("sendView"),on:()=>sendTo("view",mode)}];
+  const fs=S.frames||[];
+  if(fs.length){
+    list.push({head:t("sendPage")});
+    fs.forEach(f=>list.push({label:f.title||t("pageDefault"),on:()=>sendTo(f,mode)}));
+  }
+  return list;
+}
+// 卡片剪贴板：先放进去，再跳到任意位置粘贴，不必拖着跨屏
+let CLIP=null;
+function clipCards(mode){
+  const cs=sel.map(card).filter(Boolean);
+  if(!cs.length){toast(t("clipNeed"));return}
+  const b=bbox(cs);
+  CLIP={mode,items:cs.map(c=>({src:orig(c).id,dx:c.x-b.x,dy:c.y-b.y,w:c.w,
+    s:{...(c.s||{})},bg:c.bg||"",snap:JSON.parse(JSON.stringify(cleanCard(orig(c))))}))};
+  toast((mode==="twin"?t("clipTwin"):t("clipCopy"))+" "+cs.length);
+}
+function pasteClip(p){
+  if(!CLIP){toast(t("clipEmpty"));return}
+  snap();
+  const ns=[];
+  CLIP.items.forEach(it=>{
+    const base={id:uid(),x:Math.round(p.x+it.dx),y:Math.round(p.y+it.dy),w:it.w,s:{...it.s}};
+    if(it.bg)base.bg=it.bg;
+    if(CLIP.mode==="twin"&&S.cards.some(z=>z.id===it.src)){
+      S.cards.push({...base,ref:it.src});
+    }else{
+      const cp={...it.snap,...base};delete cp.ref;
+      S.cards.push(cp);
+    }
+    ns.push(base.id);
+  });
+  sel=ns;render();save();
+  toast(CLIP.mode==="twin"?t("sentTwin"):t("pasteDone"));
+}
 function makeTwin(){
   const cs=sel.map(card).filter(Boolean);
   if(!cs.length)return;
@@ -664,6 +760,21 @@ function applyUndo(stack,other){
 }
 
 /* ================= storage ================= */
+const SCHEMA=3;                         // 数据结构版本，只增不减
+function migrate(d){
+  if(!d||typeof d!=="object")return d;
+  const from=+d.v||1;
+  if(from>SCHEMA)console.warn("file written by a newer version:",from);
+  if(from<2){                            // 1 -> 2 连线显示默认值修正
+    if(!d.lvMigrated){d.linkView="all";d.lvMigrated=true}
+  }
+  if(from<3){                            // 2 -> 3 页面、模板字段补全
+    d.frames=Array.isArray(d.frames)?d.frames:[];
+    d.templates=Array.isArray(d.templates)?d.templates:[];
+  }
+  d.v=Math.max(from,SCHEMA);
+  return d;
+}
 const DB="boardmin";
 const QS=new URLSearchParams(location.search);
 const WID=QS.get("w")||"";
@@ -698,6 +809,7 @@ async function loadState(){
 let st;const save=()=>{clearTimeout(st);st=setTimeout(async()=>{
   const plain=JSON.parse(JSON.stringify({...S,cards:S.cards.map(cleanCard)}));
   const ok=await kvPut(KEY,plain);
+  autoBackup(false);
   if(!ok){try{localStorage.setItem("boardmin",JSON.stringify(S))}catch(e){}}
   fileAutoSave();
 },400)};
@@ -718,7 +830,7 @@ function stampName(base,ext){
 function bundle(list){
   const cards=(list||S.cards).map(c=>{const o=cleanCard(c);if(o.ih){o.src=IMG.get(o.ih)||"";delete o.ih}return o});
   const ids=new Set(cards.map(c=>c.id));
-  return {...S,cards,
+  return {...S,v:SCHEMA,cards,
     links:S.links.filter(l=>ids.has(l.a)&&ids.has(l.b)),
     groups:(S.groups||[]).map(g=>({...g,ids:g.ids.filter(i=>ids.has(i))})).filter(g=>g.ids.length>1)};
 }
@@ -747,6 +859,7 @@ async function absorb(data,merge){
   if(!merge){
     cards.forEach(c=>{if(c.ref&&!cards.some(z=>z.id===c.ref))delete c.ref});
     const ids0=new Set(cards.map(c=>c.id));
+    data=migrate(data);
     S={...S,...data,cards,templates:Array.isArray(data.templates)?data.templates:[],
       frames:Array.isArray(data.frames)?data.frames:[],
       links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>({...l,id:l.id||uid()})),
@@ -874,6 +987,54 @@ async function saveNow(){
   if(fileHandle){const ok=await writeFile();if(ok)return}
   if(!fileHandle&&fileName&&!window.showSaveFilePicker){download();return}
   pickFile();
+}
+// 图片单独存放，所以快照只有结构数据，几百 KB 级别，可以放心多存几份
+let bkT=0;
+async function autoBackup(force){
+  const now=Date.now();
+  if(!force&&now-bkT<10*60*1000)return;     // 每十分钟最多一份
+  if(!S.cards.length)return;
+  bkT=now;
+  try{
+    const snap={t:now,n:S.cards.length,name:fileName||"",
+      data:JSON.parse(JSON.stringify({...S,cards:S.cards.map(cleanCard)}))};
+    await kvPut("bk:"+now,snap);
+    let idx=(await kvGet("bkIndex"))||[];
+    idx.unshift({t:now,n:snap.n,name:snap.name});
+    const keep=[],seenDay=new Set();
+    idx.forEach((it,i)=>{
+      const day=new Date(it.t).toISOString().slice(0,10);
+      if(i<12||!seenDay.has(day)){keep.push(it);seenDay.add(day)}
+    });
+    const drop=idx.filter(it=>!keep.includes(it)).slice(0, 200);
+    for(const d of drop)await kvPut("bk:"+d.t,null);
+    await kvPut("bkIndex",keep.slice(0,40));
+    BK=keep.slice(0,40);
+  }catch(e){}
+}
+let BK=[];
+async function loadBackups(){try{BK=(await kvGet("bkIndex"))||[]}catch(e){BK=[]}}
+async function restoreBackup(it){
+  const bk=await kvGet("bk:"+it.t);
+  if(!bk||!bk.data){toast(t("bkGone"));return}
+  if(!confirm(t("bkConfirm")+"\n"+bkLabel(it)))return;
+  await autoBackup(true);                   // 先给当前状态留一份，回滚也可逆
+  snap();
+  const d=migrate(bk.data);
+  S={...S,...d};S.cards=d.cards||[];S.links=d.links||[];S.groups=d.groups||[];
+  S.frames=d.frames||[];
+  await loadImgs(S.cards);
+  sel=[];selLink=null;render();fit(true);save();
+  toast(t("bkDone"));
+}
+function bkLabel(it){
+  const d=new Date(it.t),p=n=>String(n).padStart(2,"0");
+  return p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())
+    +"  \u00B7  "+it.n+t("bkCards")+(it.name?"  \u00B7  "+it.name:"");
+}
+function bkItems(){
+  if(!BK.length)return [{label:t("bkNone")}];
+  return BK.slice(0,20).map(it=>({label:bkLabel(it),on:()=>restoreBackup(it)}));
 }
 let ft;function fileAutoSave(){
   if(!fileHandle||!fileOK)return;
@@ -1663,6 +1824,8 @@ addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&k==="a"){e.preventDefault();sel=S.cards.map(c=>c.id);paintSel();return}
   if((e.metaKey||e.ctrlKey)&&k==="d"){e.preventDefault();dupe();return}
   if((e.metaKey||e.ctrlKey)&&k==="g"){e.preventDefault();e.shiftKey?ungroup():makeGroup();return}
+  if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="c"){e.preventDefault();clipCards("twin");return}
+  if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="v"){e.preventDefault();pasteClip(toW(mouse.x,mouse.y));return}
   if(e.key==="Escape"){closeMenus();sel=[];selLink=null;linkFrom=null;stage.style.cursor="";toast("");paintSel()}
   if(e.key==="Backspace"||e.key==="Delete"){if(sel.length||selLink){e.preventDefault();del()}}
   if(k==="f")fit();
@@ -1954,12 +2117,30 @@ const MANUAL=[
  ["分身","FENSHEN",`
   <p>分身不是复制，而是<b>同一条内容在多处出现</b>。内容只有一个源，分身是它的投影：文字和图片共享，位置、尺寸、字号各自独立。改任意一处的文字，所有位置同步更新。</p>
   <p><b>用途</b>：想法之间距离太远时，与其拉一条横跨画布的连线，不如在需要的地方放一个分身。既保持了上下文，又不会让连线变成乱麻。</p>
-  <p><b>创建</b>：选中卡片后右键<b>创建分身</b>，分身出现在视野中央，拖到需要的位置即可。同一条内容可以有任意多个分身。</p>
+  <p><b>创建与放置</b>：选中卡片后右键<b>把分身放入剪贴板</b>（或按 Ctrl/Cmd + Shift + C），然后移动到目标位置，在空白处右键<b>在此处粘贴分身</b>（或 Ctrl/Cmd + Shift + V 粘贴在鼠标处）。跨多少距离都不用拖动。多选时相对位置会保持。</p>
+  <p>另有<b>移动到…</b>可以直接把选中卡片送到某个页面或视野中央，由程序在该页面里找一块空位放置，页面装不下会自动撑高。</p>
   <p><b>串联与溯源</b>：有分身的卡片右上角出现菱形标记，写着「2/4」表示这是四处出现中的第二处。点标记跳到下一处，按住 <kbd>Shift</kbd> 点跳回源头，右键标记打开分身菜单，可以一次选中全部出现位置。顺着标记点下去，就能走完一条信息在画布上的完整轨迹。</p>
   <p><b>与检索的关系</b>：分身共享源的文字和标签，所以天然进入检索结果。回车逐个跳转时，跳的是这条信息的所有出现位置。菜单里的<b>检索时合并分身</b>可以切换：关注内容时合并成一条，巡视位置时展开为多条。</p>
   <p><b>与导出的关系</b>：分身不重复正文，而是在它所在的位置生成一行「同一条目，另见 §2.1」，接入交叉引用体系；编号也只算源，同一段不会被编两次号。</p>
   <p><b>脱离</b>：右键分身选<b>脱离为独立卡片</b>，它会就地固化成一张普通卡片，此后与源各改各的。删除源时，第一个分身会自动继承内容成为新的源，内容不会丢。</p>
   <p class="tip">分身和编组、页面互不冲突：编组管一起移动，页面管输出单元，分身管同一内容的多处呈现。</p>`],
+
+ ["存档与长期保存","CUNDANG",`
+  <p>这是防止资料作废的核心机制。导出面板选<b>存档包</b>，得到一个 zip，里面有四样东西：</p>
+  <ul>
+    <li><b>pages/</b> 每个页面一份 Markdown 纯文本，标题层级、正文、标签、链接、交叉引用都在，任何编辑器、任何系统、二十年后都能打开</li>
+    <li><b>assets/</b> 全部图片原件，Markdown 里按文件名引用，图片可以单独查看</li>
+    <li><b>board.json</b> 完整画布数据，可重新导入本程序，保留位置、连线、分身、模板</li>
+    <li><b>README.md</b> 说明包内结构</li>
+  </ul>
+  <p>可选勾选"同时渲染每页的图片"，再附一份 images/ 目录，保留画布的空间布局。</p>
+  <p class="tip">建议每完成一个阶段就导一次存档包，放进云盘。即使本程序某天无法运行，pages 和 assets 仍是完整可读的资料，不依赖任何软件。</p>`],
+
+ ["自动快照","ZIDONGKUAIZHAO",`
+  <p>程序每十分钟自动在浏览器本地存一份结构快照，保留最近十二份，并按天各保留一份共七天。</p>
+  <p>因为图片是单独存放的，快照只含结构数据，通常只有几百 KB，存几十份也不占地方。</p>
+  <p>从<b>文件 → 自动快照</b>选择时间点即可回滚，列表显示时间、卡片数量和当时的文件名。回滚前会先把当前状态也存成一份快照，所以回滚本身也是可逆的。</p>
+  <p class="tip">快照防的是误操作，存档包防的是程序失效，两者互补，都不能替代把文件放进云盘。</p>`],
 
  ["页面","YEMIAN",`
   <p>页面是画布上一块有名字的矩形区域，用来划分输出单元。选中若干卡片后右键<b>新建页面</b>，会自动框住它们；不选任何东西直接新建，则在视野中央生成一个空页面，之后把卡片拖进去即可。</p>
@@ -2072,6 +2253,60 @@ $("man").addEventListener("pointerdown",e=>{if(e.target.id==="man")$("man").clas
 
 /* ================= 中文说明书 end ================= */
 
+/* ================= ZIP 打包（无压缩，纯自写，不依赖任何库） ================= */
+const CRCT=(()=>{const t=new Uint32Array(256);
+  for(let i=0;i<256;i++){let c=i;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[i]=c>>>0}
+  return t})();
+function crc32(u8){let c=0xFFFFFFFF;
+  for(let i=0;i<u8.length;i++)c=CRCT[(c^u8[i])&0xFF]^(c>>>8);
+  return (c^0xFFFFFFFF)>>>0}
+const enc=new TextEncoder();
+function dosTime(d){
+  return {t:((d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()/2))&0xFFFF,
+          d:(((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate())&0xFFFF};
+}
+function zipMake(files){
+  const now=dosTime(new Date()),parts=[],central=[];
+  let offset=0;
+  files.forEach(f=>{
+    const name=enc.encode(f.name);
+    const data=typeof f.data==="string"?enc.encode(f.data):f.data;
+    const crc=crc32(data);
+    const lh=new DataView(new ArrayBuffer(30));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,20,true);lh.setUint16(6,0x0800,true);
+    lh.setUint16(8,0,true);lh.setUint16(10,now.t,true);lh.setUint16(12,now.d,true);
+    lh.setUint32(14,crc,true);lh.setUint32(18,data.length,true);lh.setUint32(22,data.length,true);
+    lh.setUint16(26,name.length,true);lh.setUint16(28,0,true);
+    parts.push(new Uint8Array(lh.buffer),name,data);
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,20,true);ch.setUint16(6,20,true);
+    ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);
+    ch.setUint16(12,now.t,true);ch.setUint16(14,now.d,true);
+    ch.setUint32(16,crc,true);ch.setUint32(20,data.length,true);ch.setUint32(24,data.length,true);
+    ch.setUint16(28,name.length,true);ch.setUint16(30,0,true);ch.setUint16(32,0,true);
+    ch.setUint16(34,0,true);ch.setUint16(36,0,true);ch.setUint32(38,0,true);
+    ch.setUint32(42,offset,true);
+    central.push(new Uint8Array(ch.buffer),name);
+    offset+=30+name.length+data.length;
+  });
+  let cdSize=0;central.forEach(x=>cdSize+=x.length);
+  const end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true);end.setUint16(8,files.length,true);
+  end.setUint16(10,files.length,true);end.setUint32(12,cdSize,true);end.setUint32(16,offset,true);
+  return new Blob([...parts,...central,new Uint8Array(end.buffer)],{type:"application/zip"});
+}
+function dataURLtoBytes(u){
+  const i=u.indexOf(",");const b=atob(u.slice(i+1));
+  const out=new Uint8Array(b.length);
+  for(let k=0;k<b.length;k++)out[k]=b.charCodeAt(k);
+  return out;
+}
+function extOf(u){return /^data:image\/png/i.test(u)?"png":"jpg"}
+function safeName(x,i){
+  const base=(x||"").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g," ").trim().slice(0,40);
+  return String(i).padStart(2,"0")+(base?"-"+base:"");
+}
+
 /* ================= document export ================= */
 const RELMAP={"#8A8A85":"relPlain","#111111":"relPlain","#EFEFEC":"relPlain",
   "#C0392B":"relAgainst","#2D6CDF":"relCite","#1F8A70":"relSupport"};
@@ -2177,7 +2412,7 @@ function openExport(x,y){
     <div class="hd"><b>${t("expTitle")}</b><button id="pcx">\u00D7</button></div>
     <div class="sec">${t("fmt")}</div>
     <div class="grid" id="exf">
-      ${[["word","fmtWord"],["pdfdoc","fmtPdfDoc"],["pdfview","fmtPdfView"],["jpg","fmtJpg"],["json","fmtJson"]]
+      ${[["word","fmtWord"],["pdfdoc","fmtPdfDoc"],["pdfview","fmtPdfView"],["jpg","fmtJpg"],["md","fmtMd"],["json","fmtJson"],["zip","fmtZip"]]
         .map(([v,k],i)=>`<button data-v="${v}" class="${i===0?"on":""}"${i===4?' style="grid-column:1 / -1"':""}>${t(k)}</button>`).join("")}
     </div>
     <div class="sec">${t("scope")}</div>
@@ -2187,6 +2422,11 @@ function openExport(x,y){
     </div>
     <div class="sec">${t("expName")}</div>
     <input class="ti" id="exn" value="${esc(stampName(fileName||"Board"))}" spellcheck="false">
+    <div id="exzip" style="display:none">
+      <div class="sec">${t("expOpts")}</div>
+      <label class="opt"><input type="checkbox" id="exshot"> ${t("zipShots")}</label>
+      <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("zipNote")}</div>
+    </div>
     <div id="exdoc">
       <div class="sec">${t("expOpts")}</div>
       <label class="opt"><input type="checkbox" id="ex1" checked> ${t("expImg")}</label>
@@ -2195,6 +2435,7 @@ function openExport(x,y){
       <label class="opt"><input type="checkbox" id="ex4"> ${t("expTable")}</label>
     </div>
     <div id="eximg" style="display:none">
+      <label class="opt"><input type="checkbox" id="exbp" checked> ${t("byPage")}</label>
       <div class="sec">${t("scale")}</div>
       <div class="trio" id="exs">${[1,2,3].map(v=>`<button data-v="${v}" class="${v===2?"on":""}">${v}x</button>`).join("")}</div>
     </div>
@@ -2212,12 +2453,16 @@ function openExport(x,y){
   p.querySelector("#exf").onclick=e=>{const b=e.target.closest("button");if(!b)return;
     [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");
     fmt=b.dataset.v;const isImg=(fmt==="jpg"||fmt==="pdfview");
-    p.querySelector("#exdoc").style.display=(isImg||fmt==="json")?"none":"";
-    p.querySelector("#eximg").style.display=isImg?"":"none"};
+    p.querySelector("#exdoc").style.display=(isImg||fmt==="json"||fmt==="zip")?"none":"";
+    p.querySelector("#eximg").style.display=(isImg||fmt==="zip")?"":"none";
+    p.querySelector("#exzip").style.display=fmt==="zip"?"":"none";
+    const bp=p.querySelector("#exbp");if(bp)bp.parentNode.style.display=isImg?"":"none"};
   p.querySelector("#exs").onclick=e=>{const b=e.target.closest("button");if(!b)return;
     [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");scale=+b.dataset.v};
   p.querySelector("#exgo").onclick=()=>{
-    const o={fmt,scale,scope,title:stampName(p.querySelector("#exn").value.trim()||"Board"),
+    const o={fmt,scale,scope,byPage:!!p.querySelector("#exbp")?.checked,
+      shots:!!p.querySelector("#exshot")?.checked,
+      title:stampName(p.querySelector("#exn").value.trim()||"Board"),
       img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
       refs:p.querySelector("#ex3").checked,table:p.querySelector("#ex4").checked};
     p.classList.remove("on","wide");
@@ -2231,12 +2476,92 @@ function exportSet(o){
   const list=S.cards.filter(c=>ids.has(c.id));
   return list.length?list:null;
 }
+async function exportArchive(o){
+  const files=[];
+  const groups=pageGroups(null);
+  const stamp=new Date().toISOString().slice(0,16).replace("T"," ");
+  // 1) 每页一份 Markdown
+  const index=["# "+o.title,"","导出时间 "+stamp,"",
+    "本压缩包的结构：","","- `pages/` 每个页面一份 Markdown，纯文本，任何编辑器都能打开",
+    "- `assets/` 全部图片原件，Markdown 中按文件名引用",
+    "- `board.json` 完整画布数据，可重新导入本程序",
+    "- 若本程序某天无法使用，`pages/` 和 `assets/` 依然是完整可读的资料",""];
+  groups.forEach((g,i)=>{
+    const nm=safeName(g.title,i+1);
+    const tree=buildTree(g.cards);
+    files.push({name:"pages/"+nm+".md",data:docMD({...o,title:g.title},tree)});
+    index.push("- pages/"+nm+".md　"+g.cards.length+t("bkCards"));
+  });
+  files.push({name:"README.md",data:index.join("\n")});
+  // 2) 图片原件
+  const used=new Set();
+  S.cards.forEach(c=>{const o2=orig(c);if(o2.ih&&IMG.has(o2.ih))used.add(o2.ih)});
+  used.forEach(h=>{
+    const u=IMG.get(h);
+    files.push({name:"assets/"+h+"."+extOf(u),data:dataURLtoBytes(u)});
+  });
+  // 3) 完整数据
+  files.push({name:"board.json",data:JSON.stringify(bundle(null),null,1)});
+  // 4) 可选：每页一张渲染图
+  if(o.shots){
+    for(let i=0;i<groups.length;i++){
+      try{
+        const cv=await captureCanvas(o.scale||2,groups[i].cards);
+        files.push({name:"images/"+safeName(groups[i].title,i+1)+".jpg",
+          data:dataURLtoBytes(cv.toDataURL("image/jpeg",.92))});
+      }catch(e){}
+    }
+  }
+  dl(zipMake(files),o.title+".zip");
+  toast(t("expDone"));
+}
+async function exportPageShots(o){
+  const groups=pageGroups(exportSet(o));
+  if(groups.length<2){                       // 只有一页时就直接给单张图
+    const cv=await captureCanvas(o.scale,exportSet(o));
+    cv.toBlob(b2=>dl(b2,o.title+".jpg"),"image/jpeg",.93);
+    return;
+  }
+  const files=[];
+  for(let i=0;i<groups.length;i++){
+    const cv=await captureCanvas(o.scale,groups[i].cards);
+    files.push({name:safeName(groups[i].title,i+1)+".jpg",
+      data:dataURLtoBytes(cv.toDataURL("image/jpeg",.93))});
+  }
+  dl(zipMake(files),o.title+".zip");
+}
+async function exportPagePDF(o){
+  const groups=pageGroups(exportSet(o));
+  const imgs=[];
+  for(let i=0;i<groups.length;i++){
+    const cv=await captureCanvas(o.scale,groups[i].cards);
+    imgs.push({t:groups[i].title,u:cv.toDataURL("image/jpeg",.92)});
+  }
+  printHTML(`<html><head><meta charset="utf-8"><title>${esc(o.title)}</title>
+    <style>@page{size:auto;margin:8mm}html,body{margin:0;padding:0}
+    .pg{page-break-after:always;display:flex;align-items:center;justify-content:center;height:100vh}
+    .pg:last-child{page-break-after:auto}
+    img{max-width:100%;max-height:100%;display:block}</style></head><body>`+
+    imgs.map(x=>`<div class="pg"><img src="${x.u}"></div>`).join("")+
+    `</body></html>`,o.title);
+}
 async function doExport(o){
   const list=exportSet(o);
   if(o.scope==="sel"&&!list){toast(t("needSel"));return}
   if(o.fmt==="json"){download(bundle(list),o.title+".json");return}
+  if(o.fmt==="md"){
+    const tree=buildTree(list);
+    dl(new Blob([docMD(o,tree)],{type:"text/markdown;charset=utf-8"}),o.title+".md");
+    toast(t("expDone"));return;
+  }
+  if(o.fmt==="zip"){try{await exportArchive(o)}catch(e){toast(((e&&e.message)||"")+" "+t("errShot"))}return}
   if(o.fmt==="jpg"||o.fmt==="pdfview"){
     try{
+      if(o.byPage){
+        if(o.fmt==="jpg")await exportPageShots(o);else await exportPagePDF(o);
+        toast(o.fmt==="jpg"?t("expDone"):t("expPrint"));
+        return;
+      }
       const cv=await captureCanvas(o.scale,list);
       if(o.fmt==="jpg"){cv.toBlob(b=>dl(b,o.title+".jpg"),"image/jpeg",.93);toast(t("expDone"))}
       else{printImage(cv.toDataURL("image/jpeg",.94),o.title);toast(t("expPrint"))}
@@ -2498,6 +2823,54 @@ function loadH2C(){
     document.head.appendChild(el);
     setTimeout(()=>{window.html2canvas?res(window.html2canvas):fail()},9000);
   });
+}
+// 纯文本导出：不依赖任何程序也能读，作为最终保底
+// 按页面分组；不属于任何页面的内容归为一组
+function pageGroups(list){
+  const all=list||S.cards;
+  const out=[];
+  (S.frames||[]).slice().sort((a,b)=>
+    S.readOrder==="row"?(a.y-b.y||a.x-b.x):(a.x-b.x||a.y-b.y)).forEach(f=>{
+    const inside=all.filter(c=>frameOf(c)===f);
+    if(inside.length)out.push({title:f.title||t("pageDefault"),cards:inside,frame:f});
+  });
+  const loose=all.filter(c=>!frameOf(c));
+  if(loose.length)out.push({title:t("loosePage"),cards:loose,frame:null});
+  return out;
+}
+function docMD(o,tree){
+  const lines=["# "+o.title,""];
+  tree.flat.forEach(n=>{
+    const c=n.c,oc=orig(c);
+    if(n.isRef){
+      const src=tree.byId[oc.id];
+      if(src&&src!==n)lines.push("> "+t("twinSee")+" "+refLabel(src),"");
+      return;
+    }
+    if(o.img&&srcOf(oc))lines.push("!["+(t("expImg"))+"]("+(oc.ih?("assets/"+oc.ih+".png"):"embedded")+")","");
+    const txt=(oc.text||"").split(/\n+/).filter(z=>z.trim());
+    if(n.lv){
+      lines.push("#".repeat(Math.min(6,n.lv+1))+" "+(n.num?n.num+" ":"")+(txt[0]||snippet(oc)),"");
+      txt.slice(1).forEach(z=>lines.push(z,""));
+    }else txt.forEach(z=>lines.push(z,""));
+    if(o.tags){const tg=cardTags(oc);if(tg.length)lines.push(tg.map(x=>"#"+x).join(" "),"")}
+    if(o2u(oc))lines.push("<"+o2u(oc)+">","");
+    if(o.refs){
+      const r=relationsFor(c.id,tree.byId);
+      r.out.forEach(({n:m,l})=>lines.push("- \u2192 "+t("relSee")+" "+refLabel(m)
+        +"（"+relName(l)+"）"+(l.note?" "+l.note.replace(/\n+/g," "):"")));
+      if(r.out.length)lines.push("");
+    }
+  });
+  const links=S.links.filter(l=>tree.byId[l.a]&&tree.byId[l.b]);
+  if(o.table&&links.length){
+    lines.push("## "+t("relTable"),"");
+    links.forEach(l=>{const a=tree.byId[l.a],b2=tree.byId[l.b];if(!a||!b2)return;
+      lines.push("- "+refLabel(a)+" \u2192 "+refLabel(b2)+" \u00B7 "+relName(l)
+        +(l.note?" \u00B7 "+l.note.replace(/\n+/g," "):""))});
+    lines.push("");
+  }
+  return lines.join("\n");
 }
 function docHTML(o,tree,forPrint){
   let h=`<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word"><head><meta charset="utf-8">
@@ -3513,6 +3886,7 @@ function fileItems(x,y){
     ...(fileHandle?[{label:t("unbind"),on:()=>unbind()}]:[]),
     "-",
     {label:t("recent"),sub:recentItems()},
+    {label:t("bkMenu"),sub:bkItems()},
     {label:t("newBoard"),on:newBoard},
     {label:t("newWindow"),on:newWindow},
     {label:t("importJSON"),on:()=>$("jsonfile").click()},
@@ -3527,6 +3901,8 @@ function boardMenu(x,y){
   menuAt(x,y,[
     {label:t("insertImage"),on:()=>$("imgfile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
+    ...(CLIP?[{label:CLIP.mode==="twin"?t("pasteTwinHere"):t("pasteHere"),key:"⌘⇧V",
+      on:()=>pasteClip(toW(x,y))}]:[]),
     {label:t("pageAdd"),on:addFrame},
     {label:t("tplMenu"),sub:tplItems("board",toW(x,y))},
     "-",
@@ -3591,7 +3967,9 @@ function cardMenu(x,y){
   const one2=sel.length===1?orig(card(sel[0])):null;
   items.push({label:one2&&one2.url?t("linkEdit"):t("linkAdd"),on:setCardUrl});
   if(one2&&one2.url)items.push({label:t("linkOpen"),on:()=>openUrl(one2.url)});
-  items.push({label:t("twinAdd"),on:makeTwin});
+  items.push({label:t("clipTwinDo"),key:"⌘⇧C",on:()=>clipCards("twin")});
+  items.push({label:t("clipCopyDo"),on:()=>clipCards("copy")});
+  items.push({label:t("sendMove"),sub:sendItems("move")});
   if(anyTwin)items.push({label:t("twinGo"),on:()=>gotoTwin(card(sel[0]))},
     {label:t("twinSrc"),on:()=>gotoTwin(card(sel[0]),true)},
     {label:t("twinUnlink"),on:()=>unlinkTwin(card(sel[0]))});
@@ -3705,7 +4083,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
 (async()=>{
   try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch(e){}
   const saved=await loadState();
-  if(saved&&saved.cards){S={...S,...saved};S.links=S.links||[];S.groups=S.groups||[];S.frames=S.frames||[];
+  if(saved&&saved.cards){S={...S,...migrate(saved)};S.links=S.links||[];S.groups=S.groups||[];S.frames=S.frames||[];
     if(!S.lvMigrated){S.linkView="all";S.lvMigrated=true}
     S.linkDef={...DEFLINK,...(saved.linkDef||{})};S.textDef={...DEF,...(saved.textDef||{})}}
   LANG=S.lang||"en";
@@ -3716,6 +4094,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
       if(h.queryPermission){const p=await h.queryPermission({mode:"readwrite"});fileOK=(p==="granted")}}}catch(e){}
   await loadRecents();
   await loadGlobalTpl();
+  await loadBackups();
   const wantOpen=QS.get("open");
   if(wantOpen)setTimeout(()=>openRecent(wantOpen).catch(()=>toast(t("noPerm"))),300);
   applyCam();render();
