@@ -232,6 +232,9 @@
   #bar .ctl.lnkbtn{font-size:12px;filter:grayscale(1)}
   #bar .ctl .sw{width:14px;height:14px;border-radius:50%;border:1px solid var(--pline);flex:none}
   #bar .ctl .swb{width:14px;height:11px;border-radius:2px;border:1px solid var(--pline);flex:none}
+  #bar .ctl .swc{width:14px;height:14px;border-radius:3px;flex:none;
+    border:1px solid var(--pline);box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}
+  #bar .ctl .swc.act{box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),0 0 0 1.5px var(--frame)}
   #bar .div{width:1px;height:15px;background:var(--pline);margin:0 5px;flex:none;opacity:.7}
   #bar .szi{min-width:26px;height:26px;padding:0 4px;text-align:center;border-radius:7px;
     font:400 12px/26px "IBM Plex Mono",monospace;cursor:text;user-select:none}
@@ -1929,7 +1932,7 @@ const MANUAL=[
   <p>这些局部格式会写进导出的 Word 和 PDF 文档：粗斜体、下划线、颜色、字号都保留，高亮会映射到 Word 内置的荧光笔颜色。</p>
   <p><b>撤销</b>：编辑状态下按 <kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 可逐步回退加粗、高亮、改色、改字号等每一次操作，再按 <kbd>Shift</kbd> 组合可重做。退出编辑后，同样的快捷键回退的是卡片级别的改动。</p>
   <p>编辑时还可以直接用 <kbd>Ctrl/Cmd</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> 加粗、斜体、下划线。</p>
-  <p><b>段落</b>浮层里除了对齐、字重、字距、行距，还有<b>卡片底色</b>：给整张卡片铺一层底色，用来区分内容类别，比如引文一种颜色、评注另一种。它与荧光笔和文字颜色是三个层次——文字颜色改字本身，荧光笔标记局部字句，卡片底色标识整张卡片的性质。底色会跟随导出到 Word 与 PDF 文档。</p>
+  <p><b>卡片底色</b>在工具栏上有独立控件（段落图标右侧的小方块）：点方块直接以当前颜色套用，右侧小三角展开色板换色，换过之后按钮记住新颜色，连续标记只需一击，支持多选批量。给整张卡片铺一层底色，用来区分内容类别，比如引文一种颜色、评注另一种。十三种可选，除纯白和深色外都是半透明的极淡色（透明度 3% 到 10%），叠在任何画布底色上都不抢眼。它与荧光笔和文字颜色是三个层次——文字颜色改字本身，荧光笔标记局部字句，卡片底色标识整张卡片的性质。底色会跟随导出到 Word 与 PDF 文档。</p>
   <p class="tip">工具条可在右键菜单的<b>文字工具条</b>关闭。粘贴进卡片的内容一律转为纯文本，不会把网页的杂乱格式带进来。</p>`],
 
  ["卡片模板","KAPIANMUBAN",`
@@ -2673,9 +2676,9 @@ function setFamily(k){
   afterInline();
 }
 const CARDBG=["","#FFFFFF",
-  "rgba(255,214,102,.18)","rgba(255,150,80,.16)","rgba(232,90,90,.14)","rgba(214,120,190,.14)",
-  "rgba(140,120,220,.14)","rgba(90,150,235,.15)","rgba(80,190,190,.15)","rgba(110,190,120,.16)",
-  "rgba(150,140,110,.16)","rgba(20,20,20,.055)","#2A2A28"];
+  "rgba(255,206,64,.10)","rgba(255,140,60,.085)","rgba(230,70,70,.075)","rgba(214,100,180,.075)",
+  "rgba(130,105,225,.075)","rgba(70,140,240,.08)","rgba(50,185,185,.085)","rgba(90,190,105,.09)",
+  "rgba(150,135,100,.085)","rgba(20,20,20,.03)","#2A2A28"];
 /* 卡片模板：同时存在文件内和浏览器全局两处，见说明书 */
 let GTPL=[];
 async function loadGlobalTpl(){try{GTPL=(await kvGet("templates"))||[]}catch(e){GTPL=[]}}
@@ -3021,21 +3024,37 @@ function buildBar(){
       x=>setStyle("spacing",x/100));
     mkSld(t("leadShort"),90,260,5,Math.round(st.lh*100),x=>(x/100).toFixed(2),
       x=>setStyle("lh",x/100));
-    const h3=document.createElement("div");h3.className="hd2";h3.textContent=t("cardBg");
-    pop.appendChild(h3);
-    const g=document.createElement("div");g.className="chips";
-    CARDBG.forEach(v=>{
-      const x=document.createElement("button");
-      x.style.background=v||"transparent";
-      if(!v)x.textContent="\u2298";
-      if((c.bg||"")===(v||""))x.classList.add("on");
-      x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
-      x.addEventListener("click",e=>{e.stopPropagation();setCardBg(v);
-        [...g.children].forEach(z=>z.classList.remove("on"));x.classList.add("on")});
-      g.appendChild(x);
-    });
-    pop.appendChild(g);
   });
+
+  /* 6.4 卡片底色：点方块直接套用当前色，小三角换色 */
+  {
+    const cell=document.createElement("div");cell.className="cell split";b.appendChild(cell);
+    btn(cell,`<span class="swc" id="bgsw"></span>`,()=>setCardBg(lastBg()),"half");
+    const pop=document.createElement("div");pop.className="pp";
+    pop.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    const trig=btn(cell,car,()=>{
+      const was=pop.classList.contains("on");closePops();
+      if(was)return;
+      pop.innerHTML="";
+      const c0=barCard();
+      const g=document.createElement("div");g.className="chips";
+      CARDBG.forEach(v=>{
+        const x=document.createElement("button");
+        x.style.background=v||"transparent";
+        if(!v)x.textContent="\u2298";
+        if(c0&&(c0.bg||"")===(v||""))x.classList.add("on");
+        x.addEventListener("pointerdown",e2=>{e2.preventDefault();e2.stopPropagation()});
+        x.addEventListener("click",e2=>{e2.stopPropagation();
+          if(v)S.lastBg=v;save();setCardBg(v);closePops();syncBar()});
+        g.appendChild(x);
+      });
+      pop.appendChild(g);
+      pop.classList.remove("right");pop.classList.add("on");
+      b.classList.add("open");trig.classList.add("on");
+      if(pop.getBoundingClientRect().right>innerWidth-10)pop.classList.add("right");
+    },"caret");
+    cell.appendChild(pop);
+  }
 
   /* 6.5 模板：点按钮直接套用当前模板，小三角换一个 */
   {
@@ -3126,6 +3145,7 @@ function closePops(){
   b.classList.remove("open");
 }
 const lastInk=()=>S.lastInk||INK[0];
+const lastBg=()=>S.lastBg||CARDBG[2];
 const lastHL=()=>S.lastHL||HLS[0];
 function curInk(){
   const r=textSel()||(validRange()?keepRange:null);
@@ -3191,6 +3211,9 @@ function syncBar(){
   if(isw)isw.style.background=lastInk();
   const hsw=b.querySelector("#hlsw");
   if(hsw)hsw.style.background=lastHL();
+  const bsw=b.querySelector("#bgsw");
+  if(bsw){bsw.style.background=lastBg();
+    bsw.classList.toggle("act",!!(c&&c.bg))}
   const tl=b.querySelector("#tpllab");
   if(tl){const tp=curTpl();
     const nm=tp?tp.name:t("tplShort");
