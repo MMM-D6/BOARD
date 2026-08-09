@@ -243,7 +243,8 @@
   #bar .pp .grid button:hover{border-color:var(--frame)}
   #bar .pp .grid button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
   #bar .pp .chips{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;padding:3px}
-  #bar .pp .chips button{height:26px;border-radius:6px;border:1px solid var(--pline);cursor:pointer;padding:0}
+  #bar .pp .chips button{height:26px;border-radius:6px;border:1px solid var(--pline);cursor:pointer;
+    padding:0;color:inherit;font-size:12px;opacity:.95}
   #bar .pp .chips button.on{box-shadow:0 0 0 2px var(--pfg) inset}
   #bar .pp .rowp{display:flex;align-items:center;gap:8px;margin:7px 3px}
   #bar .pp .rowp label{width:32px;flex:none;opacity:.5;font-size:11px}
@@ -330,7 +331,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   level:"Heading level",lvNone:"Body text",lv1:"Heading 1",lv2:"Heading 2",lv3:"Heading 3",
   exportDoc:"Export…",expTitle:"Export",expName:"Document title",
   grpEn:"Latin",grpZh:"Chinese",
-  trackShort:"Track",leadShort:"Lead",hlNone:"No highlight",
+  trackShort:"Track",leadShort:"Lead",cardBg:"Card background",hlNone:"No highlight",
   unifyHint:"Style one card first, then apply it to every card of that level.",
   clearFmt:"Clear",unify:"Unify",unifyGo:"Apply to level",bodyShort:"Body",
   exclManual:"skip cards styled by hand",unifyDone:"Cards updated:",needTextSel:"Select some text first",textBar:"Text toolbar",
@@ -407,7 +408,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   level:"层级",lvNone:"正文",lv1:"一级标题",lv2:"二级标题",lv3:"三级标题",
   exportDoc:"导出…",expTitle:"导出",expName:"文档标题",
   grpEn:"英文",grpZh:"中文",
-  trackShort:"字距",leadShort:"行距",hlNone:"取消高亮",
+  trackShort:"字距",leadShort:"行距",cardBg:"卡片底色",hlNone:"取消高亮",
   unifyHint:"先把一张卡片调好，再统一到该层级的全部卡片",
   clearFmt:"清除",unify:"分级统一",unifyGo:"统一该层级",bodyShort:"正文",
   exclManual:"跳过手动调整过的",unifyDone:"已统一卡片：",needTextSel:"请先划选文字",textBar:"文字工具条",
@@ -665,6 +666,7 @@ function normCard(c){
   if(o.level&&![1,2,3].includes(+o.level))delete o.level;
   if(o.role&&!["apx","aside"].includes(o.role))delete o.role;
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
+  if(o.bg&&typeof o.bg!=="string")delete o.bg;
   o.tags=Array.isArray(o.tags)?o.tags.filter(x=>typeof x==="string"):[];
   return o;
 }
@@ -931,6 +933,8 @@ function makeCard(c){
   el.className="card"+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
+  if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
+  else{el.style.background="";el.style.padding="";el.style.borderRadius=""}
   const oc=orig(c);
   const csrc=srcOf(oc);
   if(csrc){
@@ -1815,7 +1819,7 @@ const MANUAL=[
   <p>这些局部格式会写进导出的 Word 和 PDF 文档：粗斜体、下划线、颜色、字号都保留，高亮会映射到 Word 内置的荧光笔颜色。</p>
   <p><b>撤销</b>：编辑状态下按 <kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 可逐步回退加粗、高亮、改色、改字号等每一次操作，再按 <kbd>Shift</kbd> 组合可重做。退出编辑后，同样的快捷键回退的是卡片级别的改动。</p>
   <p>编辑时还可以直接用 <kbd>Ctrl/Cmd</kbd> + <kbd>B</kbd> / <kbd>I</kbd> / <kbd>U</kbd> 加粗、斜体、下划线。</p>
-  <p>工具条第二行是段落级设定：字重、对齐、字距、行距，作用于整张卡片；最右侧是分级统一，见该词条。</p>
+  <p><b>段落</b>浮层里除了对齐、字重、字距、行距，还有<b>卡片底色</b>：给整张卡片铺一层底色，用来区分内容类别，比如引文一种颜色、评注另一种。它与荧光笔和文字颜色是三个层次——文字颜色改字本身，荧光笔标记局部字句，卡片底色标识整张卡片的性质。底色会跟随导出到 Word 与 PDF 文档。</p>
   <p class="tip">工具条可在右键菜单的<b>文字工具条</b>关闭。粘贴进卡片的内容一律转为纯文本，不会把网页的杂乱格式带进来。</p>`],
 
  ["分身","FENSHEN",`
@@ -2291,12 +2295,50 @@ async function captureCanvas(scale,list){
   }
   wrap.appendChild(inner);document.body.appendChild(wrap);
   try{
-    const h2c=await loadH2C();
-    const cv=await h2c(wrap,{backgroundColor:S.bg,scale:scale||2,logging:false,useCORS:true,
-      width:W,height:H,windowWidth:W,windowHeight:H});
-    return cv;
+    try{
+      const h2i=await loadH2I();
+      return await h2i.toCanvas(wrap,{pixelRatio:scale||2,backgroundColor:S.bg,
+        width:W,height:H,cacheBust:false,skipFonts:false});
+    }catch(e1){
+      const h2c=await loadH2C();
+      const cv=await h2c(wrap,{backgroundColor:S.bg,scale:scale||2,logging:false,useCORS:true,
+        width:W,height:H,windowWidth:W,windowHeight:H});
+      const layer=await svgLayer(inner,W,H);      // 把丢掉的连线补画回去
+      if(layer){
+        const ctx=cv.getContext("2d");const k=(scale||2);
+        ctx.drawImage(layer,-20000*k+(-b.x+pad)*k,-20000*k+(-b.y+pad)*k,
+          layer.width*k,layer.height*k);
+      }
+      return cv;
+    }
   }finally{wrap.remove();CULL.m=prevMargin;S.linkView=prevView;hoverId=prevHover;
     sel=prevSel;selLink=prevSelL;syncCards();measure();drawLinks()}
+}
+// 首选 html-to-image：走浏览器自身的排版，行内底色与内嵌 SVG 都能正确还原
+function loadH2I(){
+  if(window.htmlToImage)return Promise.resolve(window.htmlToImage);
+  return new Promise((res,rej)=>{
+    const el=document.createElement("script");
+    el.src="https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js";
+    const fail=()=>rej(new Error(t("errCDN")));
+    el.onload=()=>window.htmlToImage?res(window.htmlToImage):fail();el.onerror=fail;
+    document.head.appendChild(el);
+    setTimeout(()=>{window.htmlToImage?res(window.htmlToImage):fail()},9000);
+  });
+}
+// 退路：html2canvas 不渲染内嵌 SVG，连线需要单独栅格化后合成
+function svgLayer(inner,W,H){
+  return new Promise(res=>{
+    const svg=inner.querySelector("#links");
+    if(!svg)return res(null);
+    const clone=svg.cloneNode(true);
+    clone.setAttribute("xmlns","http://www.w3.org/2000/svg");
+    const box=document.createElement("div");box.appendChild(clone);
+    const url="data:image/svg+xml;charset=utf-8,"+encodeURIComponent(box.innerHTML);
+    const im=new Image();
+    im.onload=()=>res(im);im.onerror=()=>res(null);
+    im.src=url;
+  });
 }
 function loadH2C(){
   if(window.html2canvas)return Promise.resolve(window.html2canvas);
@@ -2324,6 +2366,8 @@ function docHTML(o,tree,forPrint){
       if(src&&src!==n)h+=`<p class="rel">&#9672; ${esc(t("twinSee")+" "+refLabel(src))}</p>`;
       return;
     }
+    const wrapBg=c.bg?`<div style="background:${esc(c.bg)};padding:10px 12px;border-radius:3px">`:"";
+    if(wrapBg)h+=wrapBg;
     if(o.img&&srcOf(c)){const d=imgDims(c);h+=`<p><img src="${srcOf(c)}" width="${d.w}" height="${d.h}"></p>`}
     const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
     if(c.rich){
@@ -2333,6 +2377,7 @@ function docHTML(o,tree,forPrint){
     else if(n.lv){h+=`<h${n.lv+1}>${esc(txt[0]||snippet(c))}</h${n.lv+1}>`;
       txt.slice(1).forEach(z=>h+=`<p>${esc(z)}</p>`)}
     else txt.forEach(z=>h+=`<p>${esc(z)}</p>`);
+    if(wrapBg)h+="</div>";
     if(o.tags){const tg=cardTags(c);if(tg.length)h+=`<p class="tg">${esc(tg.map(x=>"#"+x).join("  "))}</p>`}
     if(o.refs){const r=relationsFor(c.id,tree.byId);
       r.out.forEach(({n:m,l})=>h+=`<p class="rel">&#8594; ${esc(t("relSee")+" "+refLabel(m))}\uFF08${esc(relName(l))}\uFF09${l.note?"  "+esc(l.note.replace(/\n+/g," ")):""}</p>`);
@@ -2478,6 +2523,14 @@ function setFamily(k){
   if(!ensureSel()){const c=barCard();if(!c)return;cardSnapStyle(()=>setStyle("family",k));return}
   wrapSelWith({fontFamily:famCSS(k)});
   afterInline();
+}
+const CARDBG=["","#FFFFFF","#F3EEE4","#FDF3D8","#E8F0E4","#E4ECF5","#F2E7F0","#2A2A28"];
+function setCardBg(v){
+  const cs=targets().filter(z=>!isLocked(z.id));
+  if(!cs.length)return;
+  snap();
+  cs.forEach(z=>{if(v)z.bg=v;else delete z.bg;z.sMan=true;applyCardStyle(z)});
+  measure();drawLinksSoon();save();
 }
 function setAlign(v){
   const c=barCard();if(!c)return;
@@ -2723,6 +2776,20 @@ function buildBar(){
       x=>setStyle("spacing",x/100));
     mkSld(t("leadShort"),90,260,5,Math.round(st.lh*100),x=>(x/100).toFixed(2),
       x=>setStyle("lh",x/100));
+    const h3=document.createElement("div");h3.className="hd2";h3.textContent=t("cardBg");
+    pop.appendChild(h3);
+    const g=document.createElement("div");g.className="chips";
+    CARDBG.forEach(v=>{
+      const x=document.createElement("button");
+      x.style.background=v||"transparent";
+      if(!v)x.textContent="\u2298";
+      if((c.bg||"")===(v||""))x.classList.add("on");
+      x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+      x.addEventListener("click",e=>{e.stopPropagation();setCardBg(v);
+        [...g.children].forEach(z=>z.classList.remove("on"));x.classList.add("on")});
+      g.appendChild(x);
+    });
+    pop.appendChild(g);
   });
 
   /* 7. 清除格式 */
@@ -3243,6 +3310,8 @@ function curStyle(){if(styleMode==="default")return {...DEF,...S.textDef};
   const c=targets()[0];return {...DEF,...S.textDef,...(c?.s||{})}}
 function applyCardStyle(c){
   const el=nodes.get(c.id);if(!el)return;
+  if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
+  else{el.style.background="";el.style.padding="";el.style.borderRadius=""}
   const cap=el.querySelector(".cap");if(!cap)return;
   const s={...DEF,...S.textDef,...(c.s||{})};
   Object.assign(cap.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",fontWeight:s.weight,
