@@ -221,6 +221,8 @@
   #bar .ctl:hover{background:var(--phi)}
   #bar .ctl.on{background:var(--pfg);color:var(--panel)}
   #bar .ctl.wide{min-width:104px;justify-content:space-between}
+  #bar .tplbtn{max-width:98px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    font-size:12px;padding:0 7px}
   #bar .ctl .car{font-size:7px;opacity:.4;margin-left:1px}
   #bar .ctl.on .car{opacity:.7}
   #bar .cell.split{gap:0}
@@ -351,6 +353,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   clearFmt:"Clear",unify:"Unify",unifyGo:"Apply to level",bodyShort:"Body",
   exclManual:"skip cards styled by hand",unifyDone:"Cards updated:",needTextSel:"Select some text first",textBar:"Text toolbar",
   zoomTo:"Zoom to this",
+  tplShort:"Template",tplHowto:"Style a card, then save it as a template from here.",
   tplMenu:"Card templates",tplSaveFile:"Save selection as a template (this file)",
   tplSaveGlobal:"Save as a template (all files)",tplInFile:"In this file",tplGlobal:"All files",
   tplApply:"Apply to selection",tplNew:"New card from this",tplDefault:"Use for new cards",
@@ -437,6 +440,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   clearFmt:"清除",unify:"分级统一",unifyGo:"统一该层级",bodyShort:"正文",
   exclManual:"跳过手动调整过的",unifyDone:"已统一卡片：",needTextSel:"请先划选文字",textBar:"文字工具条",
   zoomTo:"放大居中",
+  tplShort:"模板",tplHowto:"先把一张卡片调好，再从这里存为模板",
   tplMenu:"卡片模板",tplSaveFile:"把选中卡片存为模板（本文件）",
   tplSaveGlobal:"存为模板（所有文件通用）",tplInFile:"本文件",tplGlobal:"通用",
   tplApply:"套用到选中卡片",tplNew:"用它新建卡片",tplDefault:"设为新建卡片默认",
@@ -1930,8 +1934,10 @@ const MANUAL=[
 
  ["卡片模板","KAPIANMUBAN",`
   <p>把一张调好的卡片存成模板，之后一键复用。模板记住的是：<b>字体、字号、字重、字距、行距、对齐、文字颜色、卡片底色、卡片宽度</b>，不记内容。</p>
+  <p>如果你的格式是用划选文字的方式设的（存在正文内部而非卡片属性里），存模板时也会被识别并吸收。套用模板时会清掉正文里的局部字体、字号、颜色，让模板真正生效，加粗、斜体、高亮这类标记则保留。</p>
   <p><b>保存</b>：选中一张卡片，右键 → 卡片模板 → 存为模板，填个名字即可，比如"报告正文""引文块""批注"。</p>
-  <p><b>使用</b>：右键 → 卡片模板 → 选中某个模板，有三种用法。<b>套用到选中卡片</b>支持多选，一次统一一批；<b>用它新建卡片</b>直接在视野中央生成一张空白卡并进入编辑；<b>设为新建卡片默认</b>让之后所有新卡片都采用这套格式。</p>
+  <p><b>一键套用</b>：工具栏上有一个模板按钮，显示当前模板名，选中一张或多张卡片后点它即可套用；右侧小三角展开列表换模板，也可以从那里直接存新模板。</p>
+  <p><b>右键菜单</b>：右键 → 卡片模板 → 选中某个模板，有三种用法。<b>套用到选中卡片</b>支持多选，一次统一一批；<b>用它新建卡片</b>直接在视野中央生成一张空白卡并进入编辑；<b>设为新建卡片默认</b>让之后所有新卡片都采用这套格式。</p>
   <p><b>存在哪里</b>：保存时可选两处。<b>本文件</b>随画布文件一起走，导出 json 时带着，换电脑打开或发给别人都在，适合这个项目专用的格式。<b>通用</b>存在浏览器本地，所有文件共享，但不会跟着文件走，适合你个人长期的排版习惯。同一套模板可以两处都存一份。</p>
   <p class="tip">和分级统一的分工：分级统一按层级批量刷格式，适合整理已有内容；模板是预设，适合新建内容时保持一致。</p>`],
 
@@ -2545,7 +2551,7 @@ const INK=["#111111","#4A4A46","#9A9A94",
   "#A01B14","#B4470B","#7A6A00","#1F6B33",
   "#0E6B6B","#1B4F9C","#3B2E8C","#7A1F6B","#B01858"];
 const HLS=["#FFF2A0","#FFD9A0","#FFC2C2","#F6C6E8","#D8C8F5","#C5E3FF","#BEEFD6","#DDE3E8"];
-function barCard(){return sel.length===1?card(sel[0]):null}
+function barCard(){return sel.length?card(sel[0]):null}
 function capOf(c){return c?nodes.get(c.id)?.querySelector(".cap"):null}
 function textSel(){
   const s=getSelection();
@@ -2666,14 +2672,33 @@ function setFamily(k){
   wrapSelWith({fontFamily:famCSS(k)});
   afterInline();
 }
-const CARDBG=["","#FFFFFF","#F3EEE4","#FDF3D8","#E8F0E4","#E4ECF5","#F2E7F0","#2A2A28"];
+const CARDBG=["","#FFFFFF",
+  "rgba(255,214,102,.18)","rgba(255,150,80,.16)","rgba(232,90,90,.14)","rgba(214,120,190,.14)",
+  "rgba(140,120,220,.14)","rgba(90,150,235,.15)","rgba(80,190,190,.15)","rgba(110,190,120,.16)",
+  "rgba(150,140,110,.16)","rgba(20,20,20,.055)","#2A2A28"];
 /* 卡片模板：同时存在文件内和浏览器全局两处，见说明书 */
 let GTPL=[];
 async function loadGlobalTpl(){try{GTPL=(await kvGet("templates"))||[]}catch(e){GTPL=[]}}
 async function saveGlobalTpl(){try{await kvPut("templates",GTPL)}catch(e){}}
 function tplFromCard(c,name){
   const st={...DEF,...S.textDef,...(c.s||{})};
+  // 用划选方式设的字体、字号、颜色存在正文内部，这里一并吸收，避免模板"看起来没记住"
+  if(c.rich){
+    const box=document.createElement("div");box.innerHTML=c.rich;
+    const first=x=>[...box.querySelectorAll("*")].map(el=>el.style&&el.style[x]).find(v=>v);
+    const ff=first("fontFamily");
+    if(ff){const k=FONTS.find(f=>f[1].split(",")[0].replace(/["']/g,"").trim()===
+      ff.split(",")[0].replace(/["']/g,"").trim());if(k)st.family=k[0]}
+    const fs=parseFloat(first("fontSize"));if(fs)st.size=Math.round(fs);
+    const col=first("color");const hx=col&&hex6(col);if(hx)st.color="#"+hx;
+    const fw=first("fontWeight");if(fw&&(fw==="bold"||+fw>=600))st.weight=700;
+  }
   return {id:uid(),name:name||t("tplUnnamed"),w:c.w,bg:c.bg||"",s:st};
+}
+function allTpl(){return [...(S.templates||[]),...GTPL]}
+function curTpl(){
+  const list=allTpl();
+  return list.find(z=>z.id===S.lastTpl)||list[0]||null;
 }
 function addTemplate(global){
   const c=barCard()||card(sel[0]);
@@ -2689,10 +2714,22 @@ function applyTemplate(tpl){
   const cs=targets().filter(z=>!isLocked(z.id));
   if(!cs.length){toast(t("tplNeedCard"));return}
   snap();
-  cs.forEach(z=>{
+  cs.forEach(z0=>{
+    const z=z0;
     z.s={...tpl.s};z.sMan=true;
     if(tpl.w)z.w=tpl.w;
     if(tpl.bg)z.bg=tpl.bg;else delete z.bg;
+    const o=orig(z);
+    if(o.rich){
+      const box=document.createElement("div");box.innerHTML=o.rich;
+      box.querySelectorAll("*").forEach(el=>{
+        if(!el.style)return;
+        el.style.fontFamily="";el.style.fontSize="";el.style.color="";
+        if(!el.getAttribute("style")&&el.tagName==="SPAN")el.replaceWith(...el.childNodes);
+      });
+      const h=box.innerHTML;
+      if(/<(span|b|i|u|s|strike|del|strong|em|font)\b/i.test(h))o.rich=h;else delete o.rich;
+    }
   });
   render();save();toast(t("tplApplied")+" "+cs.length);
 }
@@ -3000,6 +3037,52 @@ function buildBar(){
     pop.appendChild(g);
   });
 
+  /* 6.5 模板：点按钮直接套用当前模板，小三角换一个 */
+  {
+    const cell=document.createElement("div");cell.className="cell split";b.appendChild(cell);
+    const main=btn(cell,`<span id="tpllab">${t("tplShort")}</span>`,()=>{
+      const tp=curTpl();
+      if(tp)applyTemplate(tp);else toast(t("tplEmpty"));
+    },"half tplbtn");
+    const pop=document.createElement("div");pop.className="pp";
+    pop.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    const trig=btn(cell,car,()=>{
+      const was=pop.classList.contains("on");closePops();
+      if(was)return;
+      pop.innerHTML="";
+      const add=(arr,head,global)=>{
+        if(!arr.length)return;
+        const h=document.createElement("div");h.className="hd2";h.textContent=head;pop.appendChild(h);
+        arr.forEach(tp=>{
+          const it=document.createElement("button");
+          it.className="item"+((S.lastTpl===tp.id)?" on":"");
+          it.textContent=tp.name;
+          it.addEventListener("pointerdown",e2=>{e2.preventDefault();e2.stopPropagation()});
+          it.addEventListener("click",e2=>{e2.stopPropagation();
+            S.lastTpl=tp.id;save();applyTemplate(tp);closePops();syncBar()});
+          pop.appendChild(it);
+        });
+      };
+      add(S.templates||[],t("tplInFile"),false);
+      add(GTPL,t("tplGlobal"),true);
+      if(!(S.templates||[]).length&&!GTPL.length){
+        const n=document.createElement("div");n.className="note2";n.textContent=t("tplHowto");
+        pop.appendChild(n);
+      }else{
+        const sv=document.createElement("button");sv.className="item";sv.textContent=t("tplSaveFile");
+        sv.addEventListener("pointerdown",e2=>{e2.preventDefault();e2.stopPropagation()});
+        sv.addEventListener("click",e2=>{e2.stopPropagation();closePops();addTemplate(false)});
+        pop.appendChild(document.createElement("div")).className="hd2";
+        pop.lastChild.textContent=t("tplMenu");
+        pop.appendChild(sv);
+      }
+      pop.classList.remove("right");pop.classList.add("on");
+      b.classList.add("open");trig.classList.add("on");
+      if(pop.getBoundingClientRect().right>innerWidth-10)pop.classList.add("right");
+    },"caret");
+    cell.appendChild(pop);
+  }
+
   /* 7. 清除格式 */
   btn(b,t("clearFmt"),clearFmt);
   div();
@@ -3085,9 +3168,12 @@ function syncBar(){
   const b=$("bar"),c=barCard();
   if(lock||!c||S.bar===false){b.classList.remove("on");closePops();return}
   if(!b.children.length)buildBar();
-  const el=nodes.get(c.id);
-  if(!el){b.classList.remove("on");return}
-  const r=el.getBoundingClientRect();
+  const els=sel.map(id=>nodes.get(id)).filter(Boolean);
+  if(!els.length){b.classList.remove("on");return}
+  const rs=els.map(e=>e.getBoundingClientRect());
+  const r={left:Math.min(...rs.map(z=>z.left)),right:Math.max(...rs.map(z=>z.right)),
+    top:Math.min(...rs.map(z=>z.top))};
+  r.width=r.right-r.left;
   b.classList.add("on");
   const bw=b.offsetWidth||300;
   b.style.left=clamp(r.left+r.width/2-bw/2,8,innerWidth-bw-8)+"px";
@@ -3105,6 +3191,11 @@ function syncBar(){
   if(isw)isw.style.background=lastInk();
   const hsw=b.querySelector("#hlsw");
   if(hsw)hsw.style.background=lastHL();
+  const tl=b.querySelector("#tpllab");
+  if(tl){const tp=curTpl();
+    const nm=tp?tp.name:t("tplShort");
+    tl.textContent=nm.length>8?nm.slice(0,8)+"\u2026":nm;
+    const mb=b.querySelector(".tplbtn");if(mb)mb.style.opacity=tp?"":"0.5";}
   const par=b.querySelector("#parlab");
   if(par)par.innerHTML=alSvg(st.align||"left");
   try{
