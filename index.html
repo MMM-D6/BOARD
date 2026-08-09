@@ -132,12 +132,6 @@
   #hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
     font-size:13px;opacity:.32;line-height:2;pointer-events:none;z-index:5}
   body.hidecur,body.hidecur *{cursor:none !important}
-  .card.lk .ring{border-style:dashed;opacity:.75}
-  .card .lockmk{position:absolute;right:0;bottom:calc(-21px * var(--iz));
-    width:calc(15px * var(--iz));height:calc(15px * var(--iz));opacity:.4;pointer-events:none;
-    display:flex;align-items:center;justify-content:center}
-  .card .lockmk svg{width:100%;height:100%;display:block}
-  body.lock .card .lockmk{display:none}
   .card.lk .hnd{display:none !important}
   #find{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:70;display:none;
     align-items:center;gap:8px;padding:6px 10px;border-radius:9px;background:var(--panel);
@@ -747,13 +741,23 @@ async function migrateInline(cards){
 }
 const isLocked=id=>{const c=card(id);return !!(c&&c.lock)};
 const isLinkLocked=l=>isLocked(l.a)||isLocked(l.b);   // 连线随两端卡片一同锁定
+// 锁定会顺着连线扩散一层：与目标直接相连的卡片一并锁定，解锁同理
+function linkedNeighbours(ids){
+  const set=new Set(ids);
+  S.links.forEach(l=>{
+    if(set.has(l.a)&&card(l.b))set.add(l.b);
+    if(set.has(l.b)&&card(l.a))set.add(l.a);
+  });
+  return [...set];
+}
 function setCardLock(ids,v){
-  const cs=(ids||sel).map(card).filter(Boolean);
-  if(!cs.length)return;
+  const base=(ids||sel).filter(i=>card(i));
+  if(!base.length)return;
+  const all=linkedNeighbours(base).map(card).filter(Boolean);
   snap();
-  cs.forEach(c=>{if(v)c.lock=true;else delete c.lock});
+  all.forEach(c=>{if(v)c.lock=true;else delete c.lock});
   render();save();
-  toast(v?t("lockOn2"):t("lockOff"));
+  toast((v?t("lockOn2"):t("lockOff"))+" "+all.length);
 }
 const expand=ids=>[...new Set(ids.filter(i=>card(i)))];
 const freeSel=()=>sel.filter(i=>!isLocked(i));
@@ -1242,15 +1246,6 @@ function makeCard(c){
     tw.addEventListener("contextmenu",e=>{if(lock)return;e.preventDefault();e.stopPropagation();
       sel=[c.id];paintSel();twinMenu(e.clientX,e.clientY,c)});
     el.appendChild(tw);
-  }
-  if(c.lock){
-    const lm=document.createElement("div");lm.className="lockmk";
-    lm.style.color=s.color;
-    lm.innerHTML=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/>
-      <path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/></svg>`;
-    el.appendChild(lm);
   }
   const badge=badgeOf(c);
   if(badge){const lb=document.createElement("div");lb.className="lvl";
@@ -2193,9 +2188,11 @@ const MANUAL=[
   <p>输入即时过滤，命中项加虚线框，其余淡出但保留位置，画布结构依然可见。回车逐个跳转并居中，<kbd>Shift</kbd> + 回车反向。输入框带自动补全。</p>`],
 
  ["锁定","SUODING",`
-  <p>用来保护已经定稿的内容，避免整理其他材料时误碰。选中一张或多张卡片，右键选<b>锁定</b>，或按 <kbd>Ctrl/Cmd</kbd> + <kbd>L</kbd>。锁定的卡片右下角会出现一枚小锁，选中框变为虚线。</p>
-  <p><b>锁定后不能做的事</b>：拖动、改大小、编辑文字、改格式、删除。框选时会被跳过，批量操作也不会波及。</p>
-  <p><b>连线一同锁定</b>：只要连线的任意一端是锁定卡片，这条连线就不能删除、不能改样式，批量套用连线样式时也会跳过它。但仍可给它写备注。</p>
+  <p>用来保护已经定稿的内容，避免整理其他材料时误碰。选中一张或多张卡片，右键选<b>锁定</b>，或按 <kbd>Ctrl/Cmd</kbd> + <kbd>L</kbd>。</p>
+  <p>锁定没有任何视觉标注，因为一旦动不了你自然就知道它锁着了，不必用符号占据画面。</p>
+  <p><b>锁定后不能做的事</b>：拖动、改大小、编辑文字、改格式、删除。缩放控制点不再出现，框选时会被跳过，批量操作也不会波及。</p>
+  <p><b>连带锁定相连的卡片</b>：锁定会顺着连线扩散一层，与目标直接相连的卡片一并锁定。因为有关联的内容通常是一个整体，单独锁住一张而放任它的关联对象被改动，保护是不完整的。解锁同样扩散，两者对称。提示会显示实际影响了几张。</p>
+  <p>相关的连线也随之锁定：只要任意一端是锁定卡片，这条线就不能删除、不能改样式，批量套用连线样式时会跳过它。但仍可给它写备注，因为备注是思考记录，不属于会被弄坏的内容。</p>
   <p><b>仍然可以做的事</b>：创建分身、被别的卡片连线指向、随页面整体移动。页面移动时锁定卡片照常跟随，锁定只是把它在页面内钉住，不是把它钉死在画布上。</p>
   <p>再次右键选<b>解锁</b>或按同样的快捷键即可恢复。</p>
   <p class="tip">建议把已经写定的引文、原始摘录、关键论点锁起来。后续大量整理、批量改格式、框选移动时，它们都不会被意外改动。</p>`],

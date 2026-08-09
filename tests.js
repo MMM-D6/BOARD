@@ -375,7 +375,10 @@ group("lock 锁定", async (c) => {
   await c.run(() => { sel = ["a"]; setCardLock(null, true); });
   await c.wait(300);
   c.ok("卡片可以单独锁定", (await c.run(() => isLocked("a"))) === true);
-  c.ok("锁定后显示锁标识", await c.run(() => !!nodes.get("a")?.querySelector(".lockmk")));
+  c.ok("锁定后不显示额外标注", await c.run(() => !nodes.get("a")?.querySelector(".lockmk")));
+  c.ok("锁定后隐藏缩放控制点", await c.run(() => getComputedStyle(nodes.get("a").querySelector(".hnd")).display === "none"));
+  // 锁定会顺着连线扩散一层
+  c.ok("相连的卡片一同锁定", (await c.run(() => isLocked("b"))) === true);
 
   // 锁定后不可移动、不可编辑、不可删除
   const x0 = await c.run(() => card("a").x);
@@ -421,6 +424,15 @@ group("lock 锁定", async (c) => {
   await c.run(() => { sel = ["a"]; setCardLock(null, false); });
   await c.wait(250);
   c.ok("可以解锁", (await c.run(() => isLocked("a"))) === false);
+  c.ok("解锁同样扩散到相连卡片", (await c.run(() => isLocked("b"))) === false);
+
+  // 没有连线的卡片不受牵连
+  await c.run(() => {
+    S.cards.push({ id: "z", x: 900, y: 900, w: 200, text: "无关", s: {} });
+    sel = ["a"]; render(); setCardLock(null, true);
+  });
+  await c.wait(300);
+  c.ok("未相连的卡片不被牵连", (await c.run(() => !isLocked("z"))) === true);
 });
 
 /* =====================================================================
