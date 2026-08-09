@@ -47,6 +47,7 @@
     box-shadow:0 1px 2px rgba(0,0,0,.06)}
   .card .cap{margin-top:10px;white-space:pre-wrap;word-break:break-word;min-height:1em}
   .card .cap:empty:before{content:attr(data-ph);opacity:.28}
+  .card.lk .cap{user-select:text;cursor:text}
   .card .cap[contenteditable=true]{user-select:text;cursor:text;
     box-shadow:0 0 0 calc(1px * var(--iz)) rgba(0,0,0,.18);border-radius:2px}
   .card.sel .ring{position:absolute;inset:calc(-7px * var(--iz));pointer-events:none;
@@ -133,6 +134,8 @@
     font-size:13px;opacity:.32;line-height:2;pointer-events:none;z-index:5}
   body.hidecur,body.hidecur *{cursor:none !important}
   .card.lk .hnd{display:none !important}
+  /* 锁定的卡片仍可划选文字以便复制引文，只是不能编辑 */
+  .card.lk .cap{user-select:text;-webkit-user-select:text;cursor:text}
   #find{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:70;display:none;
     align-items:center;gap:8px;padding:6px 10px;border-radius:9px;background:var(--panel);
     color:var(--pfg);border:1px solid var(--pline);box-shadow:0 8px 26px rgba(0,0,0,.13)}
@@ -397,6 +400,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   tagsMenu:"Tags…",tagTitle:"Tags",tagsPh:"tag1, tag2",allTags:"Tags on this board",tagHint:"Also picks up #tag written in the text",
   imgSize:"Image size on import",fitSel:"Resize selected images to this",
   fitAllImg:"Resize every image to this",px:"px",
+  pageLock:"Lock everything on this page",pageUnlock:"Unlock everything on this page",
+  pageEmpty:"This page has no cards",
   lockCard:"Lock",unlockCard:"Unlock",lockOn2:"Locked",lockOff:"Unlocked",
   linkLocked:"This connector is locked with its cards",
   lockedNote:"This card is locked",defaultText:"Default text style…",defTitle:"Default text style",
@@ -498,6 +503,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   tagsMenu:"标签…",tagTitle:"标签",tagsPh:"标签1, 标签2",allTags:"画布中已有标签",tagHint:"正文里写的 #标签 也会自动识别",
   imgSize:"导入图片尺寸",fitSel:"把选中图片调成该尺寸",
   fitAllImg:"把所有图片调成该尺寸",px:"px",
+  pageLock:"锁定本页全部内容",pageUnlock:"解锁本页全部内容",
+  pageEmpty:"这个页面里没有卡片",
   lockCard:"锁定",unlockCard:"解锁",lockOn2:"已锁定",lockOff:"已解锁",
   linkLocked:"该连线随两端卡片一同锁定",
   lockedNote:"该卡片已锁定",defaultText:"默认文字格式…",defTitle:"默认文字格式",
@@ -741,23 +748,18 @@ async function migrateInline(cards){
 }
 const isLocked=id=>{const c=card(id);return !!(c&&c.lock)};
 const isLinkLocked=l=>isLocked(l.a)||isLocked(l.b);   // 连线随两端卡片一同锁定
-// 锁定会顺着连线扩散一层：与目标直接相连的卡片一并锁定，解锁同理
-function linkedNeighbours(ids){
-  const set=new Set(ids);
-  S.links.forEach(l=>{
-    if(set.has(l.a)&&card(l.b))set.add(l.b);
-    if(set.has(l.b)&&card(l.a))set.add(l.a);
-  });
-  return [...set];
-}
 function setCardLock(ids,v){
-  const base=(ids||sel).filter(i=>card(i));
-  if(!base.length)return;
-  const all=linkedNeighbours(base).map(card).filter(Boolean);
+  const cs=(ids||sel).map(card).filter(Boolean);
+  if(!cs.length)return;
   snap();
-  all.forEach(c=>{if(v)c.lock=true;else delete c.lock});
+  cs.forEach(c=>{if(v)c.lock=true;else delete c.lock});
   render();save();
-  toast((v?t("lockOn2"):t("lockOff"))+" "+all.length);
+  toast((v?t("lockOn2"):t("lockOff"))+" "+cs.length);
+}
+function setFrameLock(f,v){
+  const cs=inFrame(f);
+  if(!cs.length){toast(t("pageEmpty"));return}
+  setCardLock(cs.map(c=>c.id),v);
 }
 const expand=ids=>[...new Set(ids.filter(i=>card(i)))];
 const freeSel=()=>sel.filter(i=>!isLocked(i));
@@ -1418,6 +1420,8 @@ function frameMenu(x,y,f){
     {label:t("pageRename"),on:()=>{const v=prompt(t("pageRename"),f.title||"");
       if(v!==null){snap();f.title=v.trim();renderFrames();save()}}},
     {label:t("pageSelect"),on:()=>{sel=inFrame(f).map(c=>c.id);selFrame=null;render();paintSel()}},
+    {label:t("pageLock"),on:()=>setFrameLock(f,true)},
+    {label:t("pageUnlock"),on:()=>setFrameLock(f,false)},
     {label:t("pageFit"),on:()=>{const cs=inFrame(f);
       if(cs.length){const bb=bbox(cs);snap();
         f.x=Math.round(bb.x-70);f.y=Math.round(bb.y-70);
@@ -2191,7 +2195,9 @@ const MANUAL=[
   <p>用来保护已经定稿的内容，避免整理其他材料时误碰。选中一张或多张卡片，右键选<b>锁定</b>，或按 <kbd>Ctrl/Cmd</kbd> + <kbd>L</kbd>。</p>
   <p>锁定没有任何视觉标注，因为一旦动不了你自然就知道它锁着了，不必用符号占据画面。</p>
   <p><b>锁定后不能做的事</b>：拖动、改大小、编辑文字、改格式、删除。缩放控制点不再出现，框选时会被跳过，批量操作也不会波及。</p>
-  <p><b>连带锁定相连的卡片</b>：锁定会顺着连线扩散一层，与目标直接相连的卡片一并锁定。因为有关联的内容通常是一个整体，单独锁住一张而放任它的关联对象被改动，保护是不完整的。解锁同样扩散，两者对称。提示会显示实际影响了几张。</p>
+  <p><b>可以选中文字</b>：锁定只挡编辑，不挡阅读。你依然可以划选锁定卡片里的文字并复制，只是改不动它。</p>
+  <p><b>整页锁定</b>：右键页面标题选<b>锁定本页全部内容</b>，页面里的卡片一次全部锁住；<b>解锁本页全部内容</b>同理。这是最常用的做法：一章写定之后整页锁上，之后无论怎么整理别处都碰不到它。</p>
+  <p>需要改其中一张时，选中它单独解锁，改完再整页锁一次即可全部锁回。不必记住哪几张单独解过锁，整页锁定是覆盖式的。</p>
   <p>相关的连线也随之锁定：只要任意一端是锁定卡片，这条线就不能删除、不能改样式，批量套用连线样式时会跳过它。但仍可给它写备注，因为备注是思考记录，不属于会被弄坏的内容。</p>
   <p><b>仍然可以做的事</b>：创建分身、被别的卡片连线指向、随页面整体移动。页面移动时锁定卡片照常跟随，锁定只是把它在页面内钉住，不是把它钉死在画布上。</p>
   <p>再次右键选<b>解锁</b>或按同样的快捷键即可恢复。</p>
