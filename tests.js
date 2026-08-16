@@ -632,6 +632,34 @@ group("map 页面地图", async (c) => {
   c.ok("画出全部页面", (await c.run(() => mapHit.length)) === 24);
   c.ok("显示页面总数", (await c.run(() => $("mapn").textContent)) === "24");
   c.ok("标注页面名称", await c.run(() => $("mapov").children.length > 6));
+  c.ok("标题位于页面框内", await c.run(() => {
+    const lb = $("mapov").children[0], h = mapHit[0];
+    const top = parseFloat(lb.style.top);
+    return top >= h.y && top < h.y + h.h;
+  }));
+  c.ok("不再绘制视野方框", await c.run(() => typeof mapSel !== "undefined"));
+
+  // 点击选中：视觉上要能区分，且状态被记住
+  const first = await c.run(() => {
+    const h = mapHit[3], r = $("mapc").getBoundingClientRect();
+    return { x: r.left + h.x + h.w / 2, y: r.top + h.y + h.h / 2, id: h.f.id };
+  });
+  await c.page.mouse.click(first.x, first.y);
+  await c.wait(500);
+  c.ok("点击后该页面成为选中态", (await c.run(() => mapSel)) === first.id);
+
+  // 悬停显示完整标题
+  const second = await c.run(() => {
+    const h = mapHit[1], r = $("mapc").getBoundingClientRect();
+    return { x: r.left + h.x + h.w / 2, y: r.top + h.y + h.h / 2, title: h.f.title };
+  });
+  await c.page.mouse.move(second.x, second.y);
+  await c.wait(300);
+  const tip = await c.run(() => ({ on: $("maptip").classList.contains("on"), txt: $("maptip").textContent }));
+  c.ok("悬停显示完整标题", tip.on && tip.txt.includes(second.title));
+  await c.page.mouse.move(5, 5);
+  await c.wait(250);
+  c.ok("移开后提示消失", await c.run(() => !$("maptip").classList.contains("on")));
 
   await c.run(() => { $("mapq").value = "访谈"; drawMap(); });
   await c.wait(300);

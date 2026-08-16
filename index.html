@@ -297,8 +297,14 @@
   #map #mapn{font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.45}
   #map #mapx{border:none;background:none;cursor:pointer;color:inherit;opacity:.45;font-size:15px;padding:0 2px}
   #map .lbl2{position:absolute;font:500 10px/1.2 "IBM Plex Sans","PingFang SC",sans-serif;
-    color:var(--pfg);opacity:.75;pointer-events:none;white-space:nowrap;
-    text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
+    color:var(--pfg);opacity:.8;pointer-events:none;white-space:nowrap;
+    overflow:hidden;text-overflow:ellipsis;
+    text-shadow:0 0 3px var(--panel),0 0 2px var(--panel),0 0 2px var(--panel)}
+  #map .tip2{position:absolute;z-index:3;padding:4px 8px;border-radius:6px;pointer-events:none;
+    background:var(--panel);color:var(--pfg);border:1px solid var(--pline);
+    box-shadow:0 6px 18px rgba(0,0,0,.18);font-size:11.5px;white-space:nowrap;
+    max-width:300px;overflow:hidden;text-overflow:ellipsis;display:none}
+  #map .tip2.on{display:block}
   body.lock #map{display:none !important}
   #marq{position:fixed;z-index:30;display:none;border:1px solid var(--sel);
     background:rgba(125,125,125,.13);border-radius:2px;pointer-events:none}
@@ -317,7 +323,7 @@
 <datalist id="taglist"></datalist>
 <div id="man"><div class="win"><div class="side" id="manside"></div><div class="body" id="manbody"></div></div><button class="cx" id="manx">×</button></div>
 <div id="bar"></div>
-<div id="map"><div class="mapin"><canvas id="mapc"></canvas><div id="mapov"></div></div>
+<div id="map"><div class="mapin"><canvas id="mapc"></canvas><div id="mapov"></div><div class="tip2" id="maptip"></div></div>
   <div class="maphd"><input id="mapq" spellcheck="false"><span id="mapn"></span><button id="mapx">×</button></div></div>
 <div id="marq"></div>
 <div id="hint"></div>
@@ -2254,8 +2260,9 @@ const MANUAL=[
 
  ["页面地图","YEMIANDITU",`
   <p>页面多了之后靠平移找位置会很慢。按 <kbd>M</kbd> 或从右键菜单打开<b>页面地图</b>，右下角浮出一张全局缩略图。</p>
-  <p>地图上灰色小块是卡片，密度即内容分布；方框是页面，上方标注序号和名称；蓝色框是你当前所在的视野位置，随平移缩放实时移动。</p>
-  <p><b>点页面方框</b>直接跳过去并框住整页；<b>点空白处</b>平移到该位置，保持当前缩放。</p>
+  <p>地图上灰色小块是卡片，密度即内容分布；方框是页面，框内左上角标注序号和名称。</p>
+  <p><b>点页面方框</b>跳过去并框住整页，同时该页在地图上成为选中态，底色略深、描边加粗，你能一眼看出刚才去的是哪一页。<b>点空白处</b>平移到该位置并取消选中。</p>
+  <p><b>鼠标悬停</b>在任意页面上会浮出完整标题，所以名称再长、方框再小也能确认是哪一页；悬停的页面同时会有一层更淡的底色作为呼应。</p>
   <p>底部输入框可按名称筛选页面：匹配的加粗描边，其余淡出，右侧显示"匹配数 / 总数"。回车直接跳到第一个匹配的页面。</p>
   <p>地图用的是缩略图而不是列表，因为页面在画布上的相对位置本身就是记忆线索，列表会把这个信息丢掉。开关状态随文件保存。</p>
   <p class="tip">实测四百个页面、两万张卡片时地图绘制只需十几毫秒，所以可以一直开着不用担心拖慢。</p>`],
@@ -3889,7 +3896,7 @@ function setWork(v){
 }
 
 /* ================= 页面地图 ================= */
-let mapOn=false,mapHit=[];
+let mapOn=false,mapHit=[],mapSel=null,mapHov=null;
 function toggleMap(){
   mapOn=!mapOn;S.map=mapOn;
   $("map").classList.toggle("on",mapOn);
@@ -3923,7 +3930,7 @@ function drawMap(){
   const q=($("mapq").value||"").trim().toLowerCase();
 
   // 卡片：只画点，密度即内容分布
-  g.fillStyle=dark?"rgba(235,235,230,.30)":"rgba(40,45,55,.24)";
+  g.fillStyle=dark?"rgba(235,235,230,.26)":"rgba(40,45,55,.20)";
   const step=S.cards.length>20000?Math.ceil(S.cards.length/20000):1;
   for(let i=0;i<S.cards.length;i+=step){
     const c=S.cards[i];
@@ -3937,31 +3944,33 @@ function drawMap(){
   fs.forEach((f,i)=>{
     const hit=q&&(f.title||"").toLowerCase().includes(q);
     if(q&&hit)nHit++;
-    g.strokeStyle=hit?(dark?"#EDEDEA":"#111")
-      :(dark?"rgba(200,200,195,.5)":"rgba(60,66,72,.45)");
-    g.lineWidth=hit?2:1;
-    if(q&&!hit)g.globalAlpha=.28;
-    g.strokeRect(X(f.x),Y(f.y),f.w*k,f.h*k);
-    if(hit){g.fillStyle=dark?"rgba(255,255,255,.10)":"rgba(0,0,0,.06)";
-      g.fillRect(X(f.x),Y(f.y),f.w*k,f.h*k)}
+    const isSel=mapSel===f.id, isHov=mapHov===f.id;
+    const fx=X(f.x),fy=Y(f.y),fw=f.w*k,fh=f.h*k;
+    if(q&&!hit)g.globalAlpha=.26;
+    // 选中与悬停用底色浓淡区分，不用彩色，保持整体质感
+    if(isSel){g.fillStyle=dark?"rgba(255,255,255,.14)":"rgba(30,34,40,.10)";g.fillRect(fx,fy,fw,fh)}
+    else if(isHov){g.fillStyle=dark?"rgba(255,255,255,.07)":"rgba(30,34,40,.05)";g.fillRect(fx,fy,fw,fh)}
+    else if(hit){g.fillStyle=dark?"rgba(255,255,255,.09)":"rgba(0,0,0,.055)";g.fillRect(fx,fy,fw,fh)}
+    g.strokeStyle=(isSel||hit)?(dark?"#EDEDEA":"#111")
+      :isHov?(dark?"rgba(235,235,230,.8)":"rgba(40,45,52,.7)")
+      :(dark?"rgba(200,200,195,.45)":"rgba(60,66,72,.4)");
+    g.lineWidth=isSel?2:(hit||isHov?1.6:1);
+    g.strokeRect(fx,fy,fw,fh);
     g.globalAlpha=1;
-    mapHit.push({f,x:X(f.x),y:Y(f.y),w:f.w*k,h:f.h*k});
-    if(f.w*k>34){
+    mapHit.push({f,x:fx,y:fy,w:fw,h:fh,i});
+    if(fw>30&&fh>16){
+      // 标题带：盖掉这一条里的卡片色块，保证文字始终清晰
+      g.fillStyle=dark?"rgba(24,24,24,.82)":"rgba(255,255,255,.82)";
+      g.fillRect(fx+1,fy+1,fw-2,Math.min(fh-2,14));
       const lb=document.createElement("div");lb.className="lbl2";
       lb.textContent=(i+1)+"  "+(f.title||t("pageDefault"));
-      lb.style.left=X(f.x)+2+"px";lb.style.top=Math.max(0,Y(f.y)-12)+"px";
-      lb.style.maxWidth=Math.max(40,f.w*k)+"px";
-      lb.style.overflow="hidden";lb.style.textOverflow="ellipsis";
-      if(q&&!hit)lb.style.opacity=".25";
+      lb.style.left=(fx+3)+"px";lb.style.top=(fy+3)+"px";
+      lb.style.maxWidth=Math.max(24,fw-6)+"px";
+      if(isSel)lb.style.opacity="1";
+      if(q&&!hit)lb.style.opacity=".22";
       ov.appendChild(lb);
     }
   });
-  // 当前视野
-  const a=toW(0,0),b3=toW(innerWidth,innerHeight);
-  g.strokeStyle=dark?"#8FB8FF":"#2D6CDF";g.lineWidth=1.5;
-  g.strokeRect(X(a.x),Y(a.y),(b3.x-a.x)*k,(b3.y-a.y)*k);
-  g.fillStyle=dark?"rgba(143,184,255,.10)":"rgba(45,108,223,.08)";
-  g.fillRect(X(a.x),Y(a.y),(b3.x-a.x)*k,(b3.y-a.y)*k);
   $("mapn").textContent=q?(nHit+"/"+fs.length):(fs.length+"");
   $("map")._m={k,ox,oy};
 }
@@ -3970,17 +3979,50 @@ function mapToWorld(ev){
   const r=$("mapc").getBoundingClientRect();
   return {x:(ev.clientX-r.left-m.ox)/m.k, y:(ev.clientY-r.top-m.oy)/m.k};
 }
+function mapAt(ev){
+  const r=$("mapc").getBoundingClientRect();
+  const lx=ev.clientX-r.left,ly=ev.clientY-r.top;
+  // 命中多个时取最小的那个，避免大页面盖住嵌在里面的小页面
+  const hits=mapHit.filter(h=>lx>=h.x&&lx<=h.x+h.w&&ly>=h.y&&ly<=h.y+h.h);
+  if(!hits.length)return null;
+  return hits.sort((a,b)=>a.w*a.h-b.w*b.h)[0];
+}
 $("mapc").addEventListener("pointerdown",e=>{
   e.stopPropagation();
-  const p=mapToWorld(e);if(!p)return;
-  const r=$("mapc").getBoundingClientRect();
-  const lx=e.clientX-r.left,ly=e.clientY-r.top;
-  const hit=mapHit.find(h=>lx>=h.x&&lx<=h.x+h.w&&ly>=h.y&&ly<=h.y+h.h);
-  if(hit){                                  // 点页面：框住整页
+  const hit=mapAt(e);
+  if(hit){
+    mapSel=hit.f.id;
     const cs=inFrame(hit.f);
     boxTo({x:hit.f.x,y:hit.f.y,w:hit.f.w,h:hit.f.h},120,1.4);
     if(cs.length)focusIdx=S.cards.indexOf(cs[0]);
-  }else camTo(-p.x*tgt.z,-p.y*tgt.z,tgt.z); // 点空白：平移过去
+    drawMap();
+  }else{
+    const p=mapToWorld(e);if(!p)return;
+    mapSel=null;
+    camTo(-p.x*tgt.z,-p.y*tgt.z,tgt.z);
+    drawMap();
+  }
+});
+$("mapc").addEventListener("pointermove",e=>{
+  const hit=mapAt(e);
+  const id=hit?hit.f.id:null;
+  const tip=$("maptip");
+  if(hit){
+    const idx=hit.i+1;
+    tip.textContent=idx+"  "+(hit.f.title||t("pageDefault"));
+    tip.classList.add("on");
+    const box=$("mapc").parentNode.getBoundingClientRect();
+    let lx=e.clientX-box.left+12, ly=e.clientY-box.top+14;
+    const tw=tip.offsetWidth,th=tip.offsetHeight;
+    if(lx+tw>box.width-4)lx=Math.max(4,box.width-tw-4);
+    if(ly+th>box.height-4)ly=e.clientY-box.top-th-8;
+    tip.style.left=lx+"px";tip.style.top=ly+"px";
+  }else tip.classList.remove("on");
+  if(id!==mapHov){mapHov=id;drawMap()}
+});
+$("mapc").addEventListener("pointerleave",()=>{
+  $("maptip").classList.remove("on");
+  if(mapHov){mapHov=null;drawMap()}
 });
 $("mapq").addEventListener("input",drawMap);
 $("mapq").addEventListener("keydown",e=>{
@@ -3990,7 +4032,7 @@ $("mapq").addEventListener("keydown",e=>{
     const q=$("mapq").value.trim().toLowerCase();
     const f=(S.frames||[]).slice().sort((a,b)=>a.x-b.x||a.y-b.y)
       .find(z=>(z.title||"").toLowerCase().includes(q));
-    if(f)boxTo({x:f.x,y:f.y,w:f.w,h:f.h},120,1.4);
+    if(f){mapSel=f.id;boxTo({x:f.x,y:f.y,w:f.w,h:f.h},120,1.4);drawMap()}
   }
 });
 $("mapx").onclick=()=>toggleMap();
