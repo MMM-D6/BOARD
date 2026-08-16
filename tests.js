@@ -631,11 +631,10 @@ group("map 页面地图", async (c) => {
   c.ok("地图可以打开", await c.run(() => $("map").classList.contains("on")));
   c.ok("画出全部页面", (await c.run(() => mapHit.length)) === 24);
   c.ok("显示页面总数", (await c.run(() => $("mapn").textContent)) === "24");
-  c.ok("标注页面名称", await c.run(() => $("mapov").children.length > 6));
-  c.ok("标题位于页面框内", await c.run(() => {
-    const lb = $("mapov").children[0], h = mapHit[0];
-    const top = parseFloat(lb.style.top);
-    return top >= h.y && top < h.y + h.h;
+  c.ok("地图里不画标题与序号", await c.run(() => !document.getElementById("mapov")));
+  c.ok("页面按真实比例绘制", await c.run(() => {
+    const a = mapHit[0], f = a.f;
+    return Math.abs(a.w / a.h - f.w / f.h) < 0.02;   // 长宽比与实际一致
   }));
   c.ok("不再绘制视野方框", await c.run(() => typeof mapSel !== "undefined"));
 
@@ -656,7 +655,7 @@ group("map 页面地图", async (c) => {
   await c.page.mouse.move(second.x, second.y);
   await c.wait(300);
   const tip = await c.run(() => ({ on: $("maptip").classList.contains("on"), txt: $("maptip").textContent }));
-  c.ok("悬停显示完整标题", tip.on && tip.txt.includes(second.title));
+  c.ok("悬停显示完整标题", tip.on && tip.txt === second.title);
   await c.page.mouse.move(5, 5);
   await c.wait(250);
   c.ok("移开后提示消失", await c.run(() => !$("maptip").classList.contains("on")));
@@ -674,6 +673,58 @@ group("map 页面地图", async (c) => {
   await c.page.mouse.click(t.x, t.y);
   await c.wait(600);
   c.ok("点击地图跳到该页", await c.run(() => Math.abs(-tgt.x / tgt.z - 800) < 4000));
+
+  // 页面很多时必须能放大，否则缩略图小到无法辨认
+  await c.run(() => {
+    const cards = [], frames = [];
+    for (let f = 0; f < 300; f++) {
+      const fx = (f % 20) * 1700, fy = Math.floor(f / 20) * 1300;
+      frames.push({ id: "z" + f, x: fx, y: fy, w: 1500, h: 1100, title: "第" + (f + 1) + "章" });
+      for (let i = 0; i < 12; i++)
+        cards.push({ id: "zc" + f + "_" + i, x: fx + 60 + (i % 4) * 350, y: fy + 60 + Math.floor(i / 4) * 200, w: 320, text: "x", s: {} });
+    }
+    S.cards = cards; S.frames = frames; S.links = [];
+    invalidateIndex(); render(); fit(true); mapFit();
+  });
+  await c.wait(500);
+  const baseZ = await c.run(() => {
+    const box = $("mapc").parentNode;
+    return fitMapCam(box.clientWidth, box.clientHeight).z;
+  });
+  c.ok("三百页面时默认自动全览", (await c.run(() => mapCam)) === null);
+
+  const ctr = await c.run(() => {
+    const r = $("mapc").getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  });
+  await c.page.mouse.move(ctr.x, ctr.y);
+  for (let i = 0; i < 10; i++) await c.page.mouse.wheel({ deltaY: -120 });
+  await c.wait(400);
+  const z2 = await c.run(() => (mapCam ? mapCam.z : 0));
+  c.ok("滚轮可放大地图", z2 > baseZ * 2);
+  c.ok("放大后显示倍率并可一键全览",
+    await c.run(() => /%$/.test($("mapz").textContent) && $("mapfit").style.display === ""));
+
+  // 拖动平移地图，且不应误触发画布跳转
+  const camBefore = await c.run(() => ({ x: tgt.x, y: tgt.y }));
+  await c.page.mouse.move(ctr.x, ctr.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(ctr.x + 90, ctr.y + 60, { steps: 10 });
+  await c.page.mouse.up();
+  await c.wait(350);
+  c.ok("空白拖动平移地图", await c.run(() => !!mapCam));
+  c.ok("拖动不会误跳转画布",
+    await c.run(([x, y]) => tgt.x === x && tgt.y === y, [camBefore.x, camBefore.y]));
+
+  await c.page.mouse.click(ctr.x, ctr.y, { clickCount: 2 });
+  await c.wait(400);
+  c.ok("双击回到全览", (await c.run(() => mapCam)) === null);
+
+  await c.run(() => { S.mapW = 680; S.mapH = 460; applyMapSize(); drawMap(); });
+  await c.wait(300);
+  c.ok("面板可以放大",
+    await c.run(() => $("map").getBoundingClientRect().width > 600 && $("mapc").parentNode.clientHeight > 400));
+  await c.run(() => { delete S.mapW; delete S.mapH; $("map").style.width = ""; $("mapc").parentNode.style.height = ""; });
 
   // 大规模下仍要够快，否则地图本身成了负担
   const ms = await c.run(async () => {

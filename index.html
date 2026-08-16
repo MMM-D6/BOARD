@@ -289,17 +289,19 @@
   #map.on{display:block}
   #map .mapin{position:relative;height:240px;cursor:crosshair}
   #map canvas{width:100%;height:100%;display:block}
-  #map #mapov{position:absolute;inset:0;pointer-events:none}
   #map .maphd{display:flex;align-items:center;gap:6px;padding:6px 8px;
     border-top:1px solid var(--glassline)}
   #map #mapq{flex:1;height:24px;border:none;background:none;color:inherit;font-size:12.5px;outline:none}
   #map #mapq::placeholder{opacity:.4}
   #map #mapn{font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.45}
-  #map #mapx{border:none;background:none;cursor:pointer;color:inherit;opacity:.45;font-size:15px;padding:0 2px}
-  #map .lbl2{position:absolute;font:500 10px/1.2 "IBM Plex Sans","PingFang SC",sans-serif;
-    color:var(--pfg);opacity:.8;pointer-events:none;white-space:nowrap;
-    overflow:hidden;text-overflow:ellipsis;
-    text-shadow:0 0 3px var(--panel),0 0 2px var(--panel),0 0 2px var(--panel)}
+  #map #mapx,#map #mapfit{border:none;background:none;cursor:pointer;color:inherit;
+    opacity:.45;font-size:15px;padding:0 3px;line-height:1}
+  #map #mapfit:hover,#map #mapx:hover{opacity:.9}
+  #map #mapz{font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.4}
+  #map #mapgrip{position:absolute;left:0;top:0;width:16px;height:16px;cursor:nwse-resize;z-index:4}
+  #map #mapgrip:before{content:"";position:absolute;left:5px;top:5px;width:7px;height:7px;
+    border-left:1.5px solid var(--pfg);border-top:1.5px solid var(--pfg);opacity:.3}
+  #map .mapin.drag{cursor:grabbing}
   #map .tip2{position:absolute;z-index:3;padding:4px 8px;border-radius:6px;pointer-events:none;
     background:var(--panel);color:var(--pfg);border:1px solid var(--pline);
     box-shadow:0 6px 18px rgba(0,0,0,.18);font-size:11.5px;white-space:nowrap;
@@ -323,8 +325,10 @@
 <datalist id="taglist"></datalist>
 <div id="man"><div class="win"><div class="side" id="manside"></div><div class="body" id="manbody"></div></div><button class="cx" id="manx">×</button></div>
 <div id="bar"></div>
-<div id="map"><div class="mapin"><canvas id="mapc"></canvas><div id="mapov"></div><div class="tip2" id="maptip"></div></div>
-  <div class="maphd"><input id="mapq" spellcheck="false"><span id="mapn"></span><button id="mapx">×</button></div></div>
+<div id="map"><div class="mapin"><canvas id="mapc"></canvas><div class="tip2" id="maptip"></div></div>
+  <div class="maphd"><input id="mapq" spellcheck="false"><span id="mapz"></span>
+  <button id="mapfit" style="display:none">⌗</button><span id="mapn"></span>
+  <button id="mapx">×</button></div><div id="mapgrip"></div></div>
 <div id="marq"></div>
 <div id="hint"></div>
 <div id="status"></div>
@@ -2260,12 +2264,14 @@ const MANUAL=[
 
  ["页面地图","YEMIANDITU",`
   <p>页面多了之后靠平移找位置会很慢。按 <kbd>M</kbd> 或从右键菜单打开<b>页面地图</b>，右下角浮出一张全局缩略图。</p>
-  <p>地图上灰色小块是卡片，密度即内容分布；方框是页面，框内左上角标注序号和名称。</p>
+  <p>地图是按真实比例和布局绘制的预览：方框是页面，灰色小块是卡片，密度即内容分布。地图里不写文字，因为缩略之后文字必然被截断，反而干扰对布局的判断，名称交给悬停提示。</p>
   <p><b>点页面方框</b>跳过去并框住整页，同时该页在地图上成为选中态，底色略深、描边加粗，你能一眼看出刚才去的是哪一页。<b>点空白处</b>平移到该位置并取消选中。</p>
-  <p><b>鼠标悬停</b>在任意页面上会浮出完整标题，所以名称再长、方框再小也能确认是哪一页；悬停的页面同时会有一层更淡的底色作为呼应。</p>
+  <p><b>鼠标悬停</b>在任意页面上会浮出完整标题，名称再长、方框再小都能确认是哪一页；悬停的页面同时会有一层更淡的底色作为呼应。</p>
   <p>底部输入框可按名称筛选页面：匹配的加粗描边，其余淡出，右侧显示"匹配数 / 总数"。回车直接跳到第一个匹配的页面。</p>
   <p>地图用的是缩略图而不是列表，因为页面在画布上的相对位置本身就是记忆线索，列表会把这个信息丢掉。开关状态随文件保存。</p>
-  <p class="tip">实测四百个页面、两万张卡片时地图绘制只需十几毫秒，所以可以一直开着不用担心拖慢。</p>`],
+  <p><b>放大与平移</b>：页面积累到几百个时，全览下每一页会小到无法辨认（三百页时每页只有十几像素宽）。在地图上滚动滚轮即可放大，拖动空白处平移，双击或点右下角的全览按钮回到整体视图。放大后右下角显示当前倍率。</p>
+  <p><b>面板可以拉大</b>：拖动地图左上角的小三角可以调整面板尺寸，最大到九百像素宽。尺寸随文件保存。</p>
+  <p class="tip">实测四百个页面、两万张卡片时地图绘制只需十几毫秒，放大状态下只绘制可见部分，所以可以一直开着不用担心拖慢。</p>`],
 
  ["页面","YEMIAN",`
   <p>页面是画布上一块有名字的矩形区域，用来划分输出单元。选中若干卡片后右键<b>新建页面</b>，会自动框住它们；不选任何东西直接新建，则在视野中央生成一个空页面，之后把卡片拖进去即可。</p>
@@ -3897,8 +3903,32 @@ function setWork(v){
 
 /* ================= 页面地图 ================= */
 let mapOn=false,mapHit=[],mapSel=null,mapHov=null;
+// 地图有自己的相机，页面多到看不清时可以在地图里放大和平移
+let mapCam=null;                            // {cx,cy,z}，为空表示自动全览
+function fitMapCam(W,H){
+  const b=mapBounds();
+  const z=Math.min(W/b.w,H/b.h);
+  return {cx:b.x+b.w/2,cy:b.y+b.h/2,z};
+}
+function mapFit(){mapCam=null;drawMap()}
+function mapZoom(f,px,py){
+  const box=$("mapc").parentNode,W=box.clientWidth,H=box.clientHeight;
+  const m=mapCam||fitMapCam(W,H);
+  const base=fitMapCam(W,H).z;
+  const nz=clamp(m.z*f,base*0.9,base*60);   // 下限略低于全览，避免缩不回去
+  // 以光标处的世界点为锚，缩放前后保持不动
+  const wx=(px-W/2)/m.z+m.cx, wy=(py-H/2)/m.z+m.cy;
+  mapCam={z:nz,cx:wx-(px-W/2)/nz,cy:wy-(py-H/2)/nz};
+  if(nz<=base*1.001)mapCam=null;            // 回到全览就交还自动模式
+  drawMap();
+}
+function applyMapSize(){
+  if(S.mapW)$("map").style.width=S.mapW+"px";
+  if(S.mapH)$("mapc").parentNode.style.height=S.mapH+"px";
+}
 function toggleMap(){
   mapOn=!mapOn;S.map=mapOn;
+  if(mapOn)applyMapSize();
   $("map").classList.toggle("on",mapOn);
   if(mapOn){drawMap();$("mapq").placeholder=t("mapFind")}else $("mapq").value="";
   save();
@@ -3917,30 +3947,21 @@ function mapBounds(){
 }
 function drawMap(){
   if(!mapOn)return;
-  const cv=$("mapc"),box=cv.parentNode,ov=$("mapov");
+  const cv=$("mapc"),box=cv.parentNode;
   const W=box.clientWidth,H=box.clientHeight,dpr=Math.min(2,devicePixelRatio||1);
   cv.width=W*dpr;cv.height=H*dpr;
   const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);
   g.clearRect(0,0,W,H);
-  const b=mapBounds();
-  const k=Math.min(W/b.w,H/b.h);
-  const ox=(W-b.w*k)/2-b.x*k, oy=(H-b.h*k)/2-b.y*k;
+  const m=mapCam||fitMapCam(W,H);
+  const k=m.z, ox=W/2-m.cx*k, oy=H/2-m.cy*k;
   const X=v=>v*k+ox, Y=v=>v*k+oy;
   const dark=isDark(S.bg);
   const q=($("mapq").value||"").trim().toLowerCase();
 
-  // 卡片：只画点，密度即内容分布
-  g.fillStyle=dark?"rgba(235,235,230,.26)":"rgba(40,45,55,.20)";
-  const step=S.cards.length>20000?Math.ceil(S.cards.length/20000):1;
-  for(let i=0;i<S.cards.length;i+=step){
-    const c=S.cards[i];
-    g.fillRect(X(c.x),Y(c.y),Math.max(1,c.w*k),Math.max(1,(hOf(c)||100)*k));
-  }
-  // 页面框
   mapHit=[];
-  ov.innerHTML="";
   const fs=(S.frames||[]).slice().sort((a,b2)=>a.x-b2.x||a.y-b2.y);
   let nHit=0;
+  // 页面底色与选中态
   fs.forEach((f,i)=>{
     const hit=q&&(f.title||"").toLowerCase().includes(q);
     if(q&&hit)nHit++;
@@ -3958,21 +3979,35 @@ function drawMap(){
     g.strokeRect(fx,fy,fw,fh);
     g.globalAlpha=1;
     mapHit.push({f,x:fx,y:fy,w:fw,h:fh,i});
-    if(fw>30&&fh>16){
-      // 标题带：盖掉这一条里的卡片色块，保证文字始终清晰
-      g.fillStyle=dark?"rgba(24,24,24,.82)":"rgba(255,255,255,.82)";
-      g.fillRect(fx+1,fy+1,fw-2,Math.min(fh-2,14));
-      const lb=document.createElement("div");lb.className="lbl2";
-      lb.textContent=(i+1)+"  "+(f.title||t("pageDefault"));
-      lb.style.left=(fx+3)+"px";lb.style.top=(fy+3)+"px";
-      lb.style.maxWidth=Math.max(24,fw-6)+"px";
-      if(isSel)lb.style.opacity="1";
-      if(q&&!hit)lb.style.opacity=".22";
-      ov.appendChild(lb);
-    }
+  });
+  // 卡片：按真实比例铺在页面之上，密度即内容分布
+  g.fillStyle=dark?"rgba(235,235,230,.34)":"rgba(40,45,55,.26)";
+  const vx=-ox/k, vy=-oy/k, vx2=(W-ox)/k, vy2=(H-oy)/k;   // 地图当前可见的世界范围
+  const step=S.cards.length>20000?Math.ceil(S.cards.length/20000):1;
+  for(let i=0;i<S.cards.length;i+=step){
+    const c=S.cards[i];
+    const ch=hOf(c)||100;
+    if(c.x+c.w<vx||c.x>vx2||c.y+ch<vy||c.y>vy2)continue;
+    g.fillRect(X(c.x),Y(c.y),Math.max(1,c.w*k),Math.max(1,ch*k));
+  }
+  // 卡片盖住了框线，补画一遍，保证页面边界清晰
+  fs.forEach(f=>{
+    const hit=q&&(f.title||"").toLowerCase().includes(q);
+    const isSel=mapSel===f.id,isHov=mapHov===f.id;
+    if(q&&!hit)g.globalAlpha=.26;
+    g.strokeStyle=(isSel||hit)?(dark?"#EDEDEA":"#111")
+      :isHov?(dark?"rgba(235,235,230,.8)":"rgba(40,45,52,.7)")
+      :(dark?"rgba(200,200,195,.45)":"rgba(60,66,72,.4)");
+    g.lineWidth=isSel?2:(hit||isHov?1.6:1);
+    g.strokeRect(X(f.x),Y(f.y),f.w*k,f.h*k);
+    g.globalAlpha=1;
   });
   $("mapn").textContent=q?(nHit+"/"+fs.length):(fs.length+"");
   $("map")._m={k,ox,oy};
+  const base=fitMapCam(W,H).z;
+  $("mapfit").style.display=(mapCam&&k>base*1.02)?"":"none";
+  // 放大后只画视野内的部分，页面再多也不会变慢
+  $("mapz").textContent=k>base*1.02?Math.round(k/base*100)+"%":"";
 }
 function mapToWorld(ev){
   const m=$("map")._m;if(!m)return null;
@@ -3987,29 +4022,67 @@ function mapAt(ev){
   if(!hits.length)return null;
   return hits.sort((a,b)=>a.w*a.h-b.w*b.h)[0];
 }
+$("mapc").addEventListener("wheel",e=>{
+  e.preventDefault();e.stopPropagation();
+  const r=$("mapc").getBoundingClientRect();
+  mapZoom(Math.exp(-e.deltaY*0.0022),e.clientX-r.left,e.clientY-r.top);
+},{passive:false});
+$("mapc").addEventListener("dblclick",e=>{e.stopPropagation();mapFit()});
 $("mapc").addEventListener("pointerdown",e=>{
   e.stopPropagation();
   const hit=mapAt(e);
-  if(hit){
-    mapSel=hit.f.id;
-    const cs=inFrame(hit.f);
-    boxTo({x:hit.f.x,y:hit.f.y,w:hit.f.w,h:hit.f.h},120,1.4);
-    if(cs.length)focusIdx=S.cards.indexOf(cs[0]);
+  const box=$("mapc").parentNode;
+  const W=box.clientWidth,H=box.clientHeight;
+  const start={x:e.clientX,y:e.clientY};
+  const m0=mapCam?{...mapCam}:fitMapCam(W,H);
+  let moved=false;
+  const mv=ev=>{
+    const dx=ev.clientX-start.x, dy=ev.clientY-start.y;
+    if(!moved&&Math.abs(dx)+Math.abs(dy)<4)return;
+    moved=true;box.classList.add("drag");
+    mapCam={z:m0.z,cx:m0.cx-dx/m0.z,cy:m0.cy-dy/m0.z};
     drawMap();
-  }else{
-    const p=mapToWorld(e);if(!p)return;
-    mapSel=null;
-    camTo(-p.x*tgt.z,-p.y*tgt.z,tgt.z);
+  };
+  const up=()=>{
+    removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    box.classList.remove("drag");
+    if(moved)return;                       // 拖过就只是平移地图，不跳转
+    if(hit){
+      mapSel=hit.f.id;
+      const cs=inFrame(hit.f);
+      boxTo({x:hit.f.x,y:hit.f.y,w:hit.f.w,h:hit.f.h},120,1.4);
+      if(cs.length)focusIdx=S.cards.indexOf(cs[0]);
+    }else{
+      const p=mapToWorld(e);
+      if(p){mapSel=null;camTo(-p.x*tgt.z,-p.y*tgt.z,tgt.z)}
+    }
     drawMap();
-  }
+  };
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+});
+$("mapfit").onclick=e=>{e.stopPropagation();mapFit()};
+// 面板可以拉大，页面多时看得更清楚
+$("mapgrip").addEventListener("pointerdown",e=>{
+  e.preventDefault();e.stopPropagation();
+  const el=$("map"),r=el.getBoundingClientRect();
+  const sx=e.clientX,sy=e.clientY,w0=r.width,h0=$("mapc").parentNode.clientHeight;
+  const mv=ev=>{
+    const w=clamp(w0-(ev.clientX-sx),260,Math.min(900,innerWidth-40));
+    const h=clamp(h0-(ev.clientY-sy),180,Math.min(760,innerHeight-120));
+    el.style.width=w+"px";
+    $("mapc").parentNode.style.height=h+"px";
+    S.mapW=w;S.mapH=h;
+    drawMap();
+  };
+  const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);save()};
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
 });
 $("mapc").addEventListener("pointermove",e=>{
   const hit=mapAt(e);
   const id=hit?hit.f.id:null;
   const tip=$("maptip");
   if(hit){
-    const idx=hit.i+1;
-    tip.textContent=idx+"  "+(hit.f.title||t("pageDefault"));
+    tip.textContent=hit.f.title||t("pageDefault");
     tip.classList.add("on");
     const box=$("mapc").parentNode.getBoundingClientRect();
     let lx=e.clientX-box.left+12, ly=e.clientY-box.top+14;
@@ -4422,7 +4495,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
   if(wantOpen)setTimeout(()=>openRecent(wantOpen).catch(()=>toast(t("noPerm"))),300);
   applyCam();render();
   if(S.work&&!lock)$("find").classList.add("on");
-  if(S.map){mapOn=true;$("map").classList.add("on");setTimeout(drawMap,300)}
+  if(S.map){mapOn=true;$("map").classList.add("on");applyMapSize();setTimeout(drawMap,300)}
   syncFindMode();refreshTagList();
   if(S.cards.length)fit(true);
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{measure();drawLinks()});
