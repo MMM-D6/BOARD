@@ -570,23 +570,35 @@ group("render 画面导出", async (c) => {
 group("archive 存档与分页导出", async (c) => {
   await c.board(
     [
-      { id: "h1", x: -800, y: -300, w: 300, text: "第一章 引论", level: 1, s: {} },
+      { id: "h1", x: -800, y: -300, w: 300, text: "引论", level: 1, s: {} },
       { id: "p1", x: -800, y: -150, w: 300, text: "正文一 #方法", url: "https://doi.org/10.1000/x", s: {} },
-      { id: "h2", x: 200, y: -300, w: 300, text: "第二章 方法", level: 1, s: {} },
+      { id: "h2", x: 200, y: -300, w: 300, text: "方法概述", level: 1, s: {} },
       { id: "p2", x: 200, y: -150, w: 300, text: "正文二", s: {} },
     ],
     [{ id: "L", a: "p1", b: "p2", kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85", note: "相互印证" }],
     {
       frames: [
-        { id: "f1", x: -900, y: -380, w: 520, h: 400, title: "第一章" },
-        { id: "f2", x: 100, y: -380, w: 520, h: 400, title: "第二章" },
+        { id: "f1", x: -900, y: -380, w: 520, h: 400, title: "第一章 导论" },
+        { id: "f2", x: 100, y: -380, w: 520, h: 400, title: "第二章 方法" },
       ],
     }
   );
   c.ok(
     "页面分组正确",
-    (await c.run(() => pageGroups(null).map((g) => g.title + ":" + g.cards.length).join("|"))) === "第一章:2|第二章:2"
+    (await c.run(() => pageGroups(null).map((g) => g.title + ":" + g.cards.length).join("|"))) === "第一章 导论:2|第二章 方法:2"
   );
+
+  // 页面标题作最高级标题时，卡片层级整体下移，编号跨页连续
+  const doc = await c.run(() =>
+    docMD({ title: "论文", img: false, tags: false, refs: false, table: false, byPageDoc: true }, buildTree())
+  );
+  c.ok("页面标题成为最高级标题", /## 1 {2}第一章/.test(doc) && /## 2 {2}第二章/.test(doc));
+  c.ok("卡片层级整体下移一级", /### 1\.1 /.test(doc));
+  c.ok("编号跨页连续不重复", /### 2\.1 /.test(doc));
+  const flat = await c.run(() =>
+    docMD({ title: "论文", img: false, tags: false, refs: false, table: false, byPageDoc: false }, buildTree())
+  );
+  c.ok("关闭该选项时回到原结构", /## 1 第一章/.test(flat) === false && /## 1 /.test(flat));
 
   const arc = await c.zipNames(
     `exportArchive({title:'ARCH',img:true,tags:true,refs:true,table:true,scale:1,shots:false})`
