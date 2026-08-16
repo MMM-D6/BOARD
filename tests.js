@@ -611,6 +611,62 @@ group("archive 存档与分页导出", async (c) => {
   c.ok("分页图片各成一张打包", shots.names.length === 2 && shots.names.every((n) => n.endsWith(".jpg")));
 });
 
+group("map 页面地图", async (c) => {
+  await c.run(() => {
+    const cards = [], frames = [];
+    const titles = ["导论", "文献综述", "方法论", "田野记录", "访谈分析", "理论框架"];
+    for (let f = 0; f < 24; f++) {
+      const fx = (f % 6) * 1800, fy = Math.floor(f / 6) * 1400;
+      frames.push({ id: "f" + f, x: fx, y: fy, w: 1600, h: 1200, title: titles[f % 6] + " " + (f + 1) });
+      for (let i = 0; i < 12; i++)
+        cards.push({ id: "c" + f + "_" + i, x: fx + 60 + (i % 4) * 380, y: fy + 60 + Math.floor(i / 4) * 200,
+          w: 340, text: "内容", level: i === 0 ? 1 : 0, s: {} });
+    }
+    S.cards = cards; S.frames = frames; S.links = []; sel = [];
+    invalidateIndex(); render(); fit(true);
+  });
+  await c.wait(600);
+  await c.run(() => toggleMap());
+  await c.wait(400);
+  c.ok("地图可以打开", await c.run(() => $("map").classList.contains("on")));
+  c.ok("画出全部页面", (await c.run(() => mapHit.length)) === 24);
+  c.ok("显示页面总数", (await c.run(() => $("mapn").textContent)) === "24");
+  c.ok("标注页面名称", await c.run(() => $("mapov").children.length > 6));
+
+  await c.run(() => { $("mapq").value = "访谈"; drawMap(); });
+  await c.wait(300);
+  c.ok("可按名称筛选", (await c.run(() => $("mapn").textContent)) === "4/24");
+
+  await c.run(() => { $("mapq").value = ""; drawMap(); });
+  await c.wait(250);
+  const t = await c.run(() => {
+    const h = mapHit[7], r = $("mapc").getBoundingClientRect();
+    return { x: r.left + h.x + h.w / 2, y: r.top + h.y + h.h / 2, fx: h.f.x };
+  });
+  await c.page.mouse.click(t.x, t.y);
+  await c.wait(600);
+  c.ok("点击地图跳到该页", await c.run(() => Math.abs(-tgt.x / tgt.z - 800) < 4000));
+
+  // 大规模下仍要够快，否则地图本身成了负担
+  const ms = await c.run(async () => {
+    const cards = [], frames = [];
+    for (let f = 0; f < 400; f++) {
+      const fx = (f % 20) * 1800, fy = Math.floor(f / 20) * 1400;
+      frames.push({ id: "F" + f, x: fx, y: fy, w: 1600, h: 1200, title: "页" + f });
+      for (let i = 0; i < 50; i++)
+        cards.push({ id: "C" + f + "_" + i, x: fx + 60 + (i % 5) * 300, y: fy + 60 + Math.floor(i / 5) * 120, w: 280, text: "x", s: {} });
+    }
+    S.cards = cards; S.frames = frames; S.links = [];
+    invalidateIndex(); render(); fit(true);
+    await new Promise((r) => setTimeout(r, 300));
+    const t0 = performance.now();
+    for (let k = 0; k < 5; k++) drawMap();
+    return (performance.now() - t0) / 5;
+  });
+  c.ok("四百页面两万卡片时地图绘制在 400ms 内（实测 " + ms.toFixed(0) + "ms）", ms < 400);
+  await c.run(() => toggleMap());
+});
+
 /* =====================================================================
    11. 数据安全：版本、快照、导入容错
    ===================================================================== */

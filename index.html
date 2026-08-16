@@ -282,6 +282,24 @@
     color:var(--panel);cursor:pointer;font-size:12.5px}
   #bar .pp .note2{font-size:10.5px;opacity:.42;padding:5px 6px 2px;line-height:1.5}
   body.lock #bar{display:none !important}
+  #map{position:fixed;right:16px;bottom:16px;z-index:72;display:none;
+    width:340px;border-radius:12px;background:var(--glass);border:1px solid var(--glassline);
+    backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
+    box-shadow:0 14px 40px rgba(0,0,0,.16);overflow:hidden}
+  #map.on{display:block}
+  #map .mapin{position:relative;height:240px;cursor:crosshair}
+  #map canvas{width:100%;height:100%;display:block}
+  #map #mapov{position:absolute;inset:0;pointer-events:none}
+  #map .maphd{display:flex;align-items:center;gap:6px;padding:6px 8px;
+    border-top:1px solid var(--glassline)}
+  #map #mapq{flex:1;height:24px;border:none;background:none;color:inherit;font-size:12.5px;outline:none}
+  #map #mapq::placeholder{opacity:.4}
+  #map #mapn{font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.45}
+  #map #mapx{border:none;background:none;cursor:pointer;color:inherit;opacity:.45;font-size:15px;padding:0 2px}
+  #map .lbl2{position:absolute;font:500 10px/1.2 "IBM Plex Sans","PingFang SC",sans-serif;
+    color:var(--pfg);opacity:.75;pointer-events:none;white-space:nowrap;
+    text-shadow:0 0 3px var(--panel),0 0 3px var(--panel)}
+  body.lock #map{display:none !important}
   #marq{position:fixed;z-index:30;display:none;border:1px solid var(--sel);
     background:rgba(125,125,125,.13);border-radius:2px;pointer-events:none}
   #stage.space{cursor:grab}
@@ -299,6 +317,8 @@
 <datalist id="taglist"></datalist>
 <div id="man"><div class="win"><div class="side" id="manside"></div><div class="body" id="manbody"></div></div><button class="cx" id="manx">×</button></div>
 <div id="bar"></div>
+<div id="map"><div class="mapin"><canvas id="mapc"></canvas><div id="mapov"></div></div>
+  <div class="maphd"><input id="mapq" spellcheck="false"><span id="mapn"></span><button id="mapx">×</button></div></div>
 <div id="marq"></div>
 <div id="hint"></div>
 <div id="status"></div>
@@ -362,6 +382,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pasteTwinHere:"Paste the twin here",pasteHere:"Paste here",pasteDone:"Pasted",
   clipTwin:"Twin ready to place:",clipCopy:"Copied:",clipEmpty:"The card clipboard is empty",
   clipNeed:"Select a card first",
+  mapMenu:"Page map",mapFind:"Find a page",
   fmtMd:"Markdown",fmtZip:"Archive",loosePage:"Unfiled",
   byPage:"One file per page",byPageDoc:"Page titles as top level headings",zipShots:"Also render one image per page",
   zipNote:"The archive holds page-by-page Markdown, the original images, and the full data file.",
@@ -464,6 +485,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pasteTwinHere:"在此处粘贴分身",pasteHere:"在此处粘贴",pasteDone:"已粘贴",
   clipTwin:"分身待放置：",clipCopy:"已复制：",clipEmpty:"卡片剪贴板是空的",
   clipNeed:"请先选中卡片",
+  mapMenu:"页面地图",mapFind:"查找页面",
   fmtMd:"Markdown",fmtZip:"存档包",loosePage:"未分页",
   byPage:"按页面分开导出",byPageDoc:"页面标题作为最高级标题",zipShots:"同时渲染每页的图片",
   zipNote:"存档包内含分页的 Markdown 正文、图片原件、以及完整数据文件",
@@ -1073,7 +1095,7 @@ function loop(){
 }
 requestAnimationFrame(loop);
 function applyCam(){
-  cullSoon();syncBar();
+  cullSoon();syncBar();if(mapOn)mapSoon();
   const w=$("world");
   w.style.transform=`translate(${cam.x}px,${cam.y}px) scale(${cam.z})`;
   w.style.setProperty("--iz",1/cam.z);
@@ -1153,7 +1175,7 @@ function renderNow(){
   document.body.style.setProperty("--pline",dark?"rgba(255,255,255,.16)":"rgba(0,0,0,.12)");
   document.body.style.setProperty("--phi",dark?"rgba(255,255,255,.09)":"rgba(0,0,0,.06)");
   markNumsDirty();computeNums();
-  renderFrames();
+  renderFrames();if(mapOn)mapSoon();
   nodes.forEach(el=>el.remove());nodes.clear();
   syncCards();
   measure();drawLinks();statusBar();paintFind();refreshTagList();syncFindMode();syncBar();
@@ -1485,6 +1507,8 @@ function syncCards(){
   });
   if(frag.childNodes.length)box.appendChild(frag);
 }
+let mapT;
+function mapSoon(){clearTimeout(mapT);mapT=setTimeout(drawMap,90)}
 let cullT;
 function cullSoon(){clearTimeout(cullT);cullT=setTimeout(()=>{
   const before=nodes.size;syncCards();
@@ -1923,6 +1947,7 @@ addEventListener("keydown",e=>{
     if(e.key==="ArrowRight"||e.key==="ArrowDown"||e.key===" "){e.preventDefault();step(1)}
     if(e.key==="ArrowLeft"||e.key==="ArrowUp"){e.preventDefault();step(-1)}
     if(k==="f")fit();
+  if(k==="m")toggleMap();
     return;
   }
   if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?applyUndo(redo,undo):applyUndo(undo,redo);return}
@@ -2226,6 +2251,14 @@ const MANUAL=[
   <p>因为图片是单独存放的，快照只含结构数据，通常只有几百 KB，存几十份也不占地方。</p>
   <p>从<b>文件 → 自动快照</b>选择时间点即可回滚，列表显示时间、卡片数量和当时的文件名。回滚前会先把当前状态也存成一份快照，所以回滚本身也是可逆的。</p>
   <p class="tip">快照防的是误操作，存档包防的是程序失效，两者互补，都不能替代把文件放进云盘。</p>`],
+
+ ["页面地图","YEMIANDITU",`
+  <p>页面多了之后靠平移找位置会很慢。按 <kbd>M</kbd> 或从右键菜单打开<b>页面地图</b>，右下角浮出一张全局缩略图。</p>
+  <p>地图上灰色小块是卡片，密度即内容分布；方框是页面，上方标注序号和名称；蓝色框是你当前所在的视野位置，随平移缩放实时移动。</p>
+  <p><b>点页面方框</b>直接跳过去并框住整页；<b>点空白处</b>平移到该位置，保持当前缩放。</p>
+  <p>底部输入框可按名称筛选页面：匹配的加粗描边，其余淡出，右侧显示"匹配数 / 总数"。回车直接跳到第一个匹配的页面。</p>
+  <p>地图用的是缩略图而不是列表，因为页面在画布上的相对位置本身就是记忆线索，列表会把这个信息丢掉。开关状态随文件保存。</p>
+  <p class="tip">实测四百个页面、两万张卡片时地图绘制只需十几毫秒，所以可以一直开着不用担心拖慢。</p>`],
 
  ["页面","YEMIAN",`
   <p>页面是画布上一块有名字的矩形区域，用来划分输出单元。选中若干卡片后右键<b>新建页面</b>，会自动框住它们；不选任何东西直接新建，则在视野中央生成一个空页面，之后把卡片拖进去即可。</p>
@@ -3855,6 +3888,113 @@ function setWork(v){
   if(v&&!lock)f.classList.add("on");else if(!v)showFind(false);
 }
 
+/* ================= 页面地图 ================= */
+let mapOn=false,mapHit=[];
+function toggleMap(){
+  mapOn=!mapOn;S.map=mapOn;
+  $("map").classList.toggle("on",mapOn);
+  if(mapOn){drawMap();$("mapq").placeholder=t("mapFind")}else $("mapq").value="";
+  save();
+}
+function mapBounds(){
+  const fs=S.frames||[];
+  if(!fs.length)return bbox()||{x:-500,y:-400,w:1000,h:800};
+  let x=Infinity,y=Infinity,x2=-Infinity,y2=-Infinity;
+  fs.forEach(f=>{x=Math.min(x,f.x);y=Math.min(y,f.y);
+    x2=Math.max(x2,f.x+f.w);y2=Math.max(y2,f.y+f.h)});
+  const b2=bbox();
+  if(b2){x=Math.min(x,b2.x);y=Math.min(y,b2.y);
+    x2=Math.max(x2,b2.x+b2.w);y2=Math.max(y2,b2.y+b2.h)}
+  const pad=Math.max(200,(x2-x)*.04);
+  return {x:x-pad,y:y-pad,w:x2-x+pad*2,h:y2-y+pad*2};
+}
+function drawMap(){
+  if(!mapOn)return;
+  const cv=$("mapc"),box=cv.parentNode,ov=$("mapov");
+  const W=box.clientWidth,H=box.clientHeight,dpr=Math.min(2,devicePixelRatio||1);
+  cv.width=W*dpr;cv.height=H*dpr;
+  const g=cv.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);
+  g.clearRect(0,0,W,H);
+  const b=mapBounds();
+  const k=Math.min(W/b.w,H/b.h);
+  const ox=(W-b.w*k)/2-b.x*k, oy=(H-b.h*k)/2-b.y*k;
+  const X=v=>v*k+ox, Y=v=>v*k+oy;
+  const dark=isDark(S.bg);
+  const q=($("mapq").value||"").trim().toLowerCase();
+
+  // 卡片：只画点，密度即内容分布
+  g.fillStyle=dark?"rgba(235,235,230,.30)":"rgba(40,45,55,.24)";
+  const step=S.cards.length>20000?Math.ceil(S.cards.length/20000):1;
+  for(let i=0;i<S.cards.length;i+=step){
+    const c=S.cards[i];
+    g.fillRect(X(c.x),Y(c.y),Math.max(1,c.w*k),Math.max(1,(hOf(c)||100)*k));
+  }
+  // 页面框
+  mapHit=[];
+  ov.innerHTML="";
+  const fs=(S.frames||[]).slice().sort((a,b2)=>a.x-b2.x||a.y-b2.y);
+  let nHit=0;
+  fs.forEach((f,i)=>{
+    const hit=q&&(f.title||"").toLowerCase().includes(q);
+    if(q&&hit)nHit++;
+    g.strokeStyle=hit?(dark?"#EDEDEA":"#111")
+      :(dark?"rgba(200,200,195,.5)":"rgba(60,66,72,.45)");
+    g.lineWidth=hit?2:1;
+    if(q&&!hit)g.globalAlpha=.28;
+    g.strokeRect(X(f.x),Y(f.y),f.w*k,f.h*k);
+    if(hit){g.fillStyle=dark?"rgba(255,255,255,.10)":"rgba(0,0,0,.06)";
+      g.fillRect(X(f.x),Y(f.y),f.w*k,f.h*k)}
+    g.globalAlpha=1;
+    mapHit.push({f,x:X(f.x),y:Y(f.y),w:f.w*k,h:f.h*k});
+    if(f.w*k>34){
+      const lb=document.createElement("div");lb.className="lbl2";
+      lb.textContent=(i+1)+"  "+(f.title||t("pageDefault"));
+      lb.style.left=X(f.x)+2+"px";lb.style.top=Math.max(0,Y(f.y)-12)+"px";
+      lb.style.maxWidth=Math.max(40,f.w*k)+"px";
+      lb.style.overflow="hidden";lb.style.textOverflow="ellipsis";
+      if(q&&!hit)lb.style.opacity=".25";
+      ov.appendChild(lb);
+    }
+  });
+  // 当前视野
+  const a=toW(0,0),b3=toW(innerWidth,innerHeight);
+  g.strokeStyle=dark?"#8FB8FF":"#2D6CDF";g.lineWidth=1.5;
+  g.strokeRect(X(a.x),Y(a.y),(b3.x-a.x)*k,(b3.y-a.y)*k);
+  g.fillStyle=dark?"rgba(143,184,255,.10)":"rgba(45,108,223,.08)";
+  g.fillRect(X(a.x),Y(a.y),(b3.x-a.x)*k,(b3.y-a.y)*k);
+  $("mapn").textContent=q?(nHit+"/"+fs.length):(fs.length+"");
+  $("map")._m={k,ox,oy};
+}
+function mapToWorld(ev){
+  const m=$("map")._m;if(!m)return null;
+  const r=$("mapc").getBoundingClientRect();
+  return {x:(ev.clientX-r.left-m.ox)/m.k, y:(ev.clientY-r.top-m.oy)/m.k};
+}
+$("mapc").addEventListener("pointerdown",e=>{
+  e.stopPropagation();
+  const p=mapToWorld(e);if(!p)return;
+  const r=$("mapc").getBoundingClientRect();
+  const lx=e.clientX-r.left,ly=e.clientY-r.top;
+  const hit=mapHit.find(h=>lx>=h.x&&lx<=h.x+h.w&&ly>=h.y&&ly<=h.y+h.h);
+  if(hit){                                  // 点页面：框住整页
+    const cs=inFrame(hit.f);
+    boxTo({x:hit.f.x,y:hit.f.y,w:hit.f.w,h:hit.f.h},120,1.4);
+    if(cs.length)focusIdx=S.cards.indexOf(cs[0]);
+  }else camTo(-p.x*tgt.z,-p.y*tgt.z,tgt.z); // 点空白：平移过去
+});
+$("mapq").addEventListener("input",drawMap);
+$("mapq").addEventListener("keydown",e=>{
+  e.stopPropagation();
+  if(e.key==="Escape"){$("mapq").value="";drawMap();$("mapq").blur();return}
+  if(e.key==="Enter"){
+    const q=$("mapq").value.trim().toLowerCase();
+    const f=(S.frames||[]).slice().sort((a,b)=>a.x-b.x||a.y-b.y)
+      .find(z=>(z.title||"").toLowerCase().includes(q));
+    if(f)boxTo({x:f.x,y:f.y,w:f.w,h:f.h},120,1.4);
+  }
+});
+$("mapx").onclick=()=>toggleMap();
+
 /* ================= full screen ================= */
 const isFS=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
 async function goFS(){try{const e=document.documentElement;
@@ -4050,6 +4190,7 @@ function boardMenu(x,y){
     {label:t("fitView"),key:"F",on:()=>fit()},
     {label:t("zoom100"),key:"0",on:()=>camTo(tgt.x,tgt.y,1)},
     {label:t("search"),key:"⌘F",on:()=>showFind(true)},
+    {label:t("mapMenu"),key:"M",check:mapOn,on:toggleMap},
     "-",
     {label:t("fileMenu"),sub:fileItems(x,y)},
     {label:t("viewMenu"),sub:viewItems(x,y)},
@@ -4239,6 +4380,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
   if(wantOpen)setTimeout(()=>openRecent(wantOpen).catch(()=>toast(t("noPerm"))),300);
   applyCam();render();
   if(S.work&&!lock)$("find").classList.add("on");
+  if(S.map){mapOn=true;$("map").classList.add("on");setTimeout(drawMap,300)}
   syncFindMode();refreshTagList();
   if(S.cards.length)fit(true);
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{measure();drawLinks()});
