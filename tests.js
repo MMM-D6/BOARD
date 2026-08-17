@@ -746,6 +746,53 @@ group("map 页面地图", async (c) => {
   await c.run(() => toggleMap());
 });
 
+group("scale 整体缩放", async (c) => {
+  const r = await c.run(() => {
+    S.textDef = { ...DEF, size: 18 };
+    S.lvStyle = { 1: { ...DEF, size: 38 } };
+    S.templates = [{ id: "tp", name: "模板", w: 400, bg: "", s: { ...DEF, size: 20 } }];
+    S.imgMax = 360;
+    S.cards = [
+      { id: "a", x: 0, y: 0, w: 300, text: "普通正文", s: { ...DEF, size: 18 } },
+      { id: "b", x: 600, y: 400, w: 360, text: "手动调过", s: { ...DEF, size: 26 }, sMan: true },
+      { id: "c", x: 1200, y: 0, w: 300, text: "锁定的", s: { ...DEF, size: 18 }, lock: true },
+      { id: "d", x: 0, y: 800, w: 300, text: "带局部格式", s: { ...DEF, size: 18 },
+        rich: '带<span style="font-size: 30px; color: rgb(160,27,20);">局部</span>格式' },
+      { id: "h", x: 1800, y: 0, w: 300, text: "标题", level: 1, s: { ...DEF, size: 38 } },
+    ];
+    S.links = [{ id: "L", a: "a", b: "b", kind: "curve", arrow: "none", w: 3, color: "#8A8A85" }];
+    S.frames = [{ id: "f", x: -60, y: -60, w: 2400, h: 1400, title: "页" }];
+    S.linkDef = { ...DEFLINK, w: 3 };
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    const z0 = tgt.z;
+    rescaleAll(12 / 18);
+    return {
+      z0, base: baseSize(), a: card("a").s.size, b: card("b").s.size, cc: card("c").s.size,
+      h: card("h").s.size, bx: card("b").x, by: card("b").y, bw: card("b").w,
+      fw: S.frames[0].w, fx: S.frames[0].x, rich: card("d").rich, lw: S.links[0].w,
+      lvl1: S.lvStyle[1].size, tplW: S.templates[0].w, img: S.imgMax, z: tgt.z,
+      lh: card("a").s.lh, sp: card("a").s.spacing,
+    };
+  });
+  const k = 12 / 18;
+  c.ok("基准字号按比例缩放", r.base === 12 && r.a === 12);
+  c.ok("手动调过的一并缩放且保留相对差异", r.b > r.a && Math.abs(r.b - 26 * k) < 0.02);
+  c.ok("锁定的卡片同样缩放", r.cc === 12);
+  c.ok("标题按同一比例缩放", Math.abs(r.h - 38 * k) < 0.02);
+  c.ok("位置与宽度一起缩放", r.bx === Math.round(600 * k) && r.by === Math.round(400 * k) && r.bw === Math.round(360 * k));
+  c.ok("页面框一起缩放", r.fw === Math.round(2400 * k) && r.fx === Math.round(-60 * k));
+  c.ok("正文里的局部字号缩放且不破坏颜色", /font-size: 20px/.test(r.rich) && /rgb\(160,27,20\)/.test(r.rich));
+  c.ok("连线粗细缩放", r.lw === 2);
+  c.ok("层级样式与模板一起缩放", Math.abs(r.lvl1 - 38 * k) < 0.02 && r.tplW === Math.round(400 * k));
+  c.ok("新图尺寸上限缩放", r.img === Math.round(360 * k));
+  c.ok("行距与字距不缩放（本身是相对量）", Math.abs(r.lh - 1.55) < 0.001 && Math.abs(r.sp - 0.01) < 0.001);
+  c.ok("屏幕上不跳变（缩放同步补偿）", Math.abs(r.z - r.z0 / k) < 0.001);
+
+  await c.run(() => applyUndo(undo, redo));
+  await c.wait(400);
+  c.ok("可以整体撤销", await c.run(() => card("a").s.size === 18 && card("b").x === 600 && S.frames[0].w === 2400));
+});
+
 /* =====================================================================
    11. 数据安全：版本、快照、导入容错
    ===================================================================== */

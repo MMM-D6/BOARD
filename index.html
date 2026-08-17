@@ -393,6 +393,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   clipTwin:"Twin ready to place:",clipCopy:"Copied:",clipEmpty:"The card clipboard is empty",
   clipNeed:"Select a card first",
   mapMenu:"Page map",mapFind:"Find a page",
+  scaleAll:"Rescale everything…",scaleDone:"Rescaled to",scaleBad:"Enter a size between 1 and 200",
+  scaleAsk:"New base text size (currently {n}). Everything scales by the same ratio: text, card widths, spacing, page frames. Manually adjusted and locked cards scale too, so their relative difference is kept.",
   fmtMd:"Markdown",fmtZip:"Archive",loosePage:"Unfiled",
   byPage:"One file per page",byPageDoc:"Page titles as top level headings",zipShots:"Also render one image per page",
   zipNote:"The archive holds page-by-page Markdown, the original images, and the full data file.",
@@ -496,6 +498,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   clipTwin:"分身待放置：",clipCopy:"已复制：",clipEmpty:"卡片剪贴板是空的",
   clipNeed:"请先选中卡片",
   mapMenu:"页面地图",mapFind:"查找页面",
+  scaleAll:"按比例缩放全部内容…",scaleDone:"已按比例缩放",scaleBad:"请输入 1 到 200 之间的字号",
+  scaleAsk:"新的基准字号（当前 {n}）。文字、卡片宽度、间距、页面框都会按同一比例缩放。手动调整过的和锁定的卡片也一并缩放，因此相对差异得以保留。",
   fmtMd:"Markdown",fmtZip:"存档包",loosePage:"未分页",
   byPage:"按页面分开导出",byPageDoc:"页面标题作为最高级标题",zipShots:"同时渲染每页的图片",
   zipNote:"存档包内含分页的 Markdown 正文、图片原件、以及完整数据文件",
@@ -2196,6 +2200,14 @@ const MANUAL=[
     <li>方向键微移一像素，加 <kbd>Shift</kbd> 移十像素</li>
   </ul>`],
 
+ ["整体缩放","ZHENGTISUOFANG",`
+  <p>觉得整份文档的字偏大或偏小时，用<b>视图与设置 → 按比例缩放全部内容</b>。填入新的基准字号即可，比如从 18 改成 12。</p>
+  <p>缩放的是<b>整个文档的尺度</b>，不只是字号：文字大小、卡片宽度、卡片之间的间距、页面框的位置和尺寸、连线粗细、新图片的尺寸上限，全部按同一比例缩放。这是必要的，否则字变小了而间距不变，画布会变得空洞。</p>
+  <p><b>手动调整过的和锁定的卡片也一并缩放</b>，所以它们与基准的相对差异得以保留：原来比正文大出一截的强调段落，缩放后依然大出同样的比例。你不需要做任何手动调整。</p>
+  <p>行距和字距不参与缩放，因为它们本身就是相对量（行距是字号的倍数，字距以 em 为单位），会自动跟着字号走。</p>
+  <p>缩放的同时画布视角会同步补偿，所以执行后屏幕上看起来没有任何跳变，只是此后你能在同样的视野里放下更多内容。不满意按 <kbd>Ctrl/Cmd</kbd> + <kbd>Z</kbd> 一次撤销。</p>
+  <p class="tip">与分级统一的分工：分级统一是把某一层级刷成同一个样子，会抹掉差异；整体缩放是等比例改变尺度，保留全部差异。</p>`],
+
  ["分级统一","FENJITONGYI",`
   <p>工具条第二行右侧用来统一某一层级的排印。做法是：先把一张卡片调成你想要的样子，再选择层级（正文 / H1 / H2 / H3），点<b>统一该层级</b>，画布上该层级的所有卡片一并采用这套字体、字号、字重、字距、行距和颜色。</p>
   <p><b>跳过手动调整过的</b>默认勾选。凡是你单独动过格式的卡片会被保护，不会被批量覆盖，适合保留特意做了标记或强调的那几张。取消勾选则是全部统一，无一例外。</p>
@@ -3330,6 +3342,57 @@ function tplItems(where,p){
   if(!mine.length&&!all.length&&!sel.length)list.push({label:t("tplEmpty")});
   return list;
 }
+// 整体等比缩放：改的是文档的尺度，所以位置、宽度、页面框、连线粗细都要一起缩，
+// 否则字变小了而间距不变，画布会变得空洞。锁定与手动调过的卡片一并参与，
+// 它们与基准的相对差异因此得以保留。
+function baseSize(){return ({...DEF,...S.textDef}).size||15}
+function scaleRich(html,k){
+  return (html||"").replace(/font-size:\s*([\d.]+)px/gi,
+    (m,v)=>"font-size: "+Math.max(4,Math.round(parseFloat(v)*k*100)/100)+"px");
+}
+function scaleStyleObj(o,k){
+  if(!o)return o;
+  if(o.size)o.size=Math.max(4,Math.round(o.size*k*100)/100);
+  return o;                                  // 行距是倍数、字距是 em，本身就是相对量，不缩
+}
+function rescaleAll(k){
+  if(!(k>0)||Math.abs(k-1)<1e-6)return;
+  snap();
+  S.cards.forEach(c=>{
+    c.x=Math.round(c.x*k);c.y=Math.round(c.y*k);
+    c.w=Math.max(20,Math.round(c.w*k));
+    if(c.h)c.h=Math.round(c.h*k);
+    if(c.s)scaleStyleObj(c.s,k);
+    if(c.rich)c.rich=scaleRich(c.rich,k);
+  });
+  (S.frames||[]).forEach(f=>{
+    f.x=Math.round(f.x*k);f.y=Math.round(f.y*k);
+    f.w=Math.max(60,Math.round(f.w*k));f.h=Math.max(60,Math.round(f.h*k));
+  });
+  S.links.forEach(l=>{if(l.w)l.w=Math.max(.4,Math.round(l.w*k*100)/100)});
+  if(S.linkDef&&S.linkDef.w)S.linkDef.w=Math.max(.4,Math.round(S.linkDef.w*k*100)/100);
+  scaleStyleObj(S.textDef,k);
+  if(S.lvStyle)Object.keys(S.lvStyle).forEach(lv=>scaleStyleObj(S.lvStyle[lv],k));
+  (S.templates||[]).forEach(tp=>{
+    if(tp.w)tp.w=Math.max(20,Math.round(tp.w*k));
+    scaleStyleObj(tp.s,k);
+  });
+  if(S.imgMax)S.imgMax=Math.max(60,Math.round(S.imgMax*k));
+  // 世界坐标整体乘以 k，把缩放同步除掉，屏幕上看起来没有跳变
+  cam.z=cam.z/k;tgt.z=tgt.z/k;
+  Object.keys(size).forEach(id=>delete size[id]);
+  mapCam=null;
+  applyCam();render();save();
+  toast(t("scaleDone")+" "+Math.round(k*100)+"%");
+}
+function askRescale(){
+  const cur=baseSize();
+  const v=prompt(t("scaleAsk").replace("{n}",cur),String(cur));
+  if(v===null)return;
+  const n=parseFloat(v);
+  if(!(n>0)||n>200){toast(t("scaleBad"));return}
+  rescaleAll(n/cur);
+}
 function setCardBg(v){
   const cs=targets().filter(z=>!isLocked(z.id));
   if(!cs.length)return;
@@ -4250,6 +4313,7 @@ function viewItems(x,y){
       {label:t("fitSel"),on:()=>sizeImages(false)},
       {label:t("fitAllImg"),on:()=>sizeImages(true)}
     ]},
+    {label:t("scaleAll"),on:askRescale},
     {label:t("canvasColor"),sub:[{head:t("colour")},...BG.map((c,i)=>({label:t("bg")[i],check:S.bg===c,
       on:()=>{S.bg=c;S.textDef.color=isDark(c)?"#EFEFEC":"#111111";render();save()}}))]},
   ];
