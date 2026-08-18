@@ -48,17 +48,23 @@
   .card table.tb{border-collapse:collapse;table-layout:fixed;width:100%;
     background:var(--tbbg);border-radius:2px;overflow:hidden}
   .card table.tb td{border:1px solid var(--tbln);padding:.42em .6em;vertical-align:top;
-    word-break:break-word;overflow-wrap:anywhere;position:relative}
+    word-break:break-word;overflow-wrap:anywhere;position:relative;
+    white-space:pre-wrap}               /* 单元格内的换行要保留 */
+  /* 空单元格要和有字的一样高：用一个零宽占位撑起一整行的行高，
+     它是伪元素，不会进入 innerText，也不会被复制或导出 */
+  .card table.tb td:empty:before{content:"\200b"}
   .card table.tb tr.hd td{font-weight:600;background:var(--tbhd)}
   .card table.tb td.hc{font-weight:600;background:var(--tbhd)}
   .card table.tb td[contenteditable=true]{outline:none;background:var(--tbedit)}
   .card .tbwrap{position:relative}
-  .card .cgrip{position:absolute;top:0;bottom:0;width:calc(11px * var(--iz));
-    margin-left:calc(-5.5px * var(--iz));cursor:col-resize;z-index:4;background:transparent}
+  .card .cgrip{position:absolute;top:0;bottom:0;
+    width:calc(10px * var(--iz));margin-left:calc(-5px * var(--iz));
+    cursor:col-resize;z-index:6;background:transparent}
   .card .cgrip:after{content:"";position:absolute;left:50%;top:0;bottom:0;
-    width:calc(2px * var(--iz));margin-left:calc(-1px * var(--iz));background:var(--frame);
-    opacity:0;transition:opacity .12s}
-  .card .cgrip:hover:after,.card .cgrip.on:after{opacity:.75}
+    width:calc(3px * var(--iz));margin-left:calc(-1.5px * var(--iz));border-radius:calc(2px * var(--iz));
+    background:var(--frame);opacity:0;transition:opacity .12s}
+  .card.sel .cgrip:after{opacity:.22}
+  .card .cgrip:hover:after,.card .cgrip.on:after{opacity:.85}
   body.lock .card .cgrip{display:none}
   .card .cap{margin-top:10px;white-space:pre-wrap;word-break:break-word;min-height:1em}
   .card .cap:empty:before{content:attr(data-ph);opacity:.28}
@@ -407,6 +413,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pasteTwinHere:"Paste the twin here",pasteHere:"Paste here",pasteDone:"Pasted",
   clipTwin:"Twin ready to place:",clipCopy:"Copied:",clipEmpty:"The card clipboard is empty",
   clipNeed:"Select a card first",
+  tbCopy:"Copy the table",tbCopied:"Table copied. It pastes into Excel as cells.",
+  tbPasted:"Pasted",
   insertTable:"Insert a table",tbSize:"Rows × columns",tbMenu:"Table",
   tbRowAbove:"Add a row above",tbRowBelow:"Add a row below",
   tbColLeft:"Add a column to the left",tbColRight:"Add a column to the right",
@@ -518,6 +526,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pasteTwinHere:"在此处粘贴分身",pasteHere:"在此处粘贴",pasteDone:"已粘贴",
   clipTwin:"分身待放置：",clipCopy:"已复制：",clipEmpty:"卡片剪贴板是空的",
   clipNeed:"请先选中卡片",
+  tbCopy:"复制整张表格",tbCopied:"已复制，可直接粘进 Excel",
+  tbPasted:"已粘贴",
   insertTable:"插入表格",tbSize:"行 × 列",tbMenu:"表格",
   tbRowAbove:"在上方插入行",tbRowBelow:"在下方插入行",
   tbColLeft:"在左侧插入列",tbColRight:"在右侧插入列",
@@ -1275,6 +1285,71 @@ function newTable(p,rows,cols){
     if(td)editCell(td)},40);
   return c;
 }
+// Excel 复制出来的纯文本是 TSV：含制表符、换行或引号的单元格会被引号包裹，
+// 内部的引号成对出现。按字符扫描才能正确还原，简单 split 会把跨行单元格拆坏。
+function parseTSV(txt){
+  const rows=[];let row=[],cell="",i=0,inQ=false;
+  txt=txt.replace(/\r\n/g,"\n").replace(/\r/g,"\n");
+  while(i<txt.length){
+    const ch=txt[i];
+    if(inQ){
+      if(ch==='"'){
+        if(txt[i+1]==='"'){cell+='"';i+=2;continue}
+        inQ=false;i++;continue;
+      }
+      cell+=ch;i++;continue;
+    }
+    if(ch==='"'&&cell===""){inQ=true;i++;continue}
+    if(ch==="\t"){row.push(cell);cell="";i++;continue}
+    if(ch==="\n"){row.push(cell);rows.push(row);row=[];cell="";i++;continue}
+    cell+=ch;i++;
+  }
+  if(cell!==""||row.length){row.push(cell);rows.push(row)}
+  while(rows.length&&rows[rows.length-1].every(v=>v===""))rows.pop();
+  return rows;
+}
+function tableTSV(c){
+  const tb=orig(c).tb;if(!tb)return "";
+  return tb.rows.map(r=>r.map(v=>{
+    const s2=String(v==null?"":v);
+    return /[\t\n"]/.test(s2)?'"'+s2.replace(/"/g,'""')+'"':s2;
+  }).join("\t")).join("\n");
+}
+function tableHTML(c){
+  const tb=orig(c).tb;if(!tb)return "";
+  return "<table>"+tb.rows.map((r,ri)=>"<tr>"+r.map((v,ci)=>{
+    const hd=(tb.head&&ri===0)||(tb.headCol&&ci===0);
+    return `<${hd?"th":"td"}>${esc(String(v==null?"":v)).replace(/\n/g,"<br>")}</${hd?"th":"td"}>`;
+  }).join("")+"</tr>").join("")+"</table>";
+}
+// 从剪贴板的 HTML 里读表格，比纯文本更可靠（保留空单元格与合并前的结构）
+function gridFromHTML(html){
+  if(!html)return null;
+  const box=document.createElement("div");box.innerHTML=html;
+  const tbl=box.querySelector("table");
+  if(!tbl)return null;
+  const rows=[...tbl.rows].map(tr=>[...tr.cells].map(td=>{
+    const h=td.innerHTML.replace(/<br\s*\/?>/gi,"\n");
+    const d=document.createElement("div");d.innerHTML=h;
+    return (d.textContent||"").replace(/\u00a0/g," ").trim();
+  }));
+  return rows.length?rows:null;
+}
+function pasteGrid(c,tb,oc,ri,ci,grid){
+  snap();
+  grid.forEach((r2,dr)=>{
+    const R=ri+dr;
+    while(tb.rows.length<=R)tb.rows.push(new Array(tb.cols.length).fill(""));
+    r2.forEach((v,dc)=>{
+      const C=ci+dc;
+      while(tb.cols.length<=C){tb.cols.push(Math.max(120,Math.round(baseSize()*13)));
+        tb.rows.forEach(z=>z.push(""))}
+      tb.rows[R][C]=v;
+    });
+  });
+  syncTable(oc);render();save();
+  toast(t("tbPasted")+" "+grid.length+"\u00D7"+Math.max(...grid.map(r=>r.length)));
+}
 function tableText(c){
   const tb=orig(c).tb;if(!tb)return "";
   return tb.rows.map(r=>r.join("\t")).join("\n");
@@ -1315,6 +1390,9 @@ function buildTable(el,c,oc,s){
     fontWeight:s.weight,lineHeight:s.lh,letterSpacing:s.spacing+"em",color:s.color,
     fontStyle:s.italic?"italic":"normal"});
   const cg=document.createElement("colgroup");
+  // 行的列数与 cols 不一致时先补齐，否则会留下空列或错位
+  const nc=tb.cols.length;
+  tb.rows.forEach(r=>{while(r.length<nc)r.push("");if(r.length>nc)r.length=nc});
   tb.cols.forEach(w=>{const col=document.createElement("col");
     col.style.width=w+"px";cg.appendChild(col)});
   table.appendChild(cg);
@@ -1334,31 +1412,32 @@ function buildTable(el,c,oc,s){
       });
       td.addEventListener("paste",e=>{
         if(!td.isContentEditable)return;
-        e.preventDefault();
-        const txt=(e.clipboardData||window.clipboardData).getData("text/plain");
-        // 从表格软件粘来的多行多列内容自动铺开
-        if(/\t|\n/.test(txt)){
-          const grid=txt.replace(/\r/g,"").replace(/\n+$/,"").split("\n").map(l=>l.split("\t"));
-          snap();
-          grid.forEach((r2,dr)=>{
-            const R=ri+dr;
-            while(tb.rows.length<=R)tb.rows.push(new Array(tb.cols.length).fill(""));
-            r2.forEach((v,dc)=>{
-              const C=ci+dc;
-              while(tb.cols.length<=C){tb.cols.push(160);tb.rows.forEach(z=>z.push(""))}
-              tb.rows[R][C]=v;
-            });
-          });
-          syncTable(oc);render();save();
+        const dt=e.clipboardData||window.clipboardData;
+        const html=dt.getData("text/html");
+        const txt=dt.getData("text/plain");
+        let grid=gridFromHTML(html);                 // 优先用 HTML，空单元格不会错位
+        if(!grid&&/\t|\n/.test(txt))grid=parseTSV(txt);
+        if(grid&&(grid.length>1||grid[0].length>1)){
+          e.preventDefault();
+          pasteGrid(c,tb,oc,ri,ci,grid);
           return;
         }
-        document.execCommand("insertText",false,txt);
+        e.preventDefault();
+        document.execCommand("insertText",false,
+          grid?grid[0][0]:txt.replace(/\r/g,""));
       });
       td.addEventListener("keydown",e=>{
         e.stopPropagation();
         if(e.key==="Tab"){e.preventDefault();moveCell(td,0,e.shiftKey?-1:1);return}
         if(e.key==="Escape"){e.preventDefault();td.blur();return}
-        if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();
+        if(e.key==="Enter"&&(e.shiftKey||e.altKey)){    // 单元格内换行
+          e.preventDefault();
+          document.execCommand("insertLineBreak");
+          tb.rows[ri][ci]=td.innerText;
+          syncTable(oc);measure();drawLinksSoon();save();
+          return;
+        }
+        if(e.key==="Enter"){e.preventDefault();
           const last=ri===tb.rows.length-1;
           if(last){tbOp(c,g=>g.rows.push(new Array(g.cols.length).fill("")));
             setTimeout(()=>{const el2=nodes.get(c.id);
@@ -1408,8 +1487,7 @@ function buildTable(el,c,oc,s){
         oc.w=Math.round(tb.cols.reduce((a,b)=>a+b,0));
         el.style.width=oc.w+"px";
         [...cg.children].forEach((col,i)=>col.style.width=tb.cols[i]+"px");
-        let a2=0;[...wrap.querySelectorAll(".cgrip")].forEach((g2,i)=>{
-          a2+=tb.cols[i];g2.style.left=a2+"px"});
+        alignGrips(el);
         measure();drawLinksSoon();
       };
       const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
@@ -1419,6 +1497,17 @@ function buildTable(el,c,oc,s){
     wrap.appendChild(gp);
   });
   el.appendChild(wrap);
+}
+function alignGrips(el){
+  const wrap=el.querySelector(".tbwrap");if(!wrap)return;
+  const tr=wrap.querySelector("tr");if(!tr)return;
+  const cells=[...tr.children];
+  [...wrap.querySelectorAll(".cgrip")].forEach((g,i)=>{
+    const td=cells[i],nx=cells[i+1];
+    // 折叠边框由相邻两格各分担一半，边界取两格之间的中点才真正居中
+    if(td)g.style.left=(nx?(td.offsetLeft+td.offsetWidth+nx.offsetLeft)/2
+                          :(td.offsetLeft+td.offsetWidth))+"px";
+  });
 }
 function tableMenu(x,y,c,target){
   const oc=orig(c),tb=oc.tb;
@@ -1435,6 +1524,12 @@ function tableMenu(x,y,c,target){
     if(tb.cols.length>1)items.push({label:t("tbDelCol"),on:()=>tbOp(c,g=>{g.cols.splice(ci,1);g.rows.forEach(r=>r.splice(ci,1))})});
     items.push("-");
   }
+  items.push({label:t("tbCopy"),key:"⌘C",on:()=>{
+    const ta=document.createElement("textarea");
+    ta.value=tableTSV(c);document.body.appendChild(ta);ta.select();
+    try{document.execCommand("copy");toast(t("tbCopied"))}catch(e){}
+    ta.remove();
+  }},"-");
   items.push({label:t("tbHead"),check:!!tb.head,on:()=>tbOp(c,g=>{g.head=!g.head})});
   items.push({label:t("tbHeadCol"),check:!!tb.headCol,on:()=>tbOp(c,g=>{g.headCol=!g.headCol})});
   items.push({label:t("tbEven"),on:()=>tbOp(c,g=>{
@@ -1791,6 +1886,7 @@ function measure(){
   const live=new Set(S.cards.map(c=>c.id));
   Object.keys(size).forEach(k=>{if(!live.has(k))delete size[k]});
   document.querySelectorAll(".card").forEach(el=>{
+    if(el.querySelector(".tbwrap"))alignGrips(el);
     const h=el.offsetHeight;
     size[el.dataset.id]={w:el.offsetWidth,h};
     const c=card(el.dataset.id);if(c&&c.h!==h)c.h=h;
@@ -2130,13 +2226,54 @@ function addText(p){
 $("imgfile").onchange=e=>{addImages(e.target.files,toW(mouse.x,mouse.y));e.target.value=""};
 addEventListener("dragover",e=>e.preventDefault());
 addEventListener("drop",e=>{e.preventDefault();addImages(e.dataTransfer.files,toW(e.clientX,e.clientY))});
+addEventListener("copy",e=>{
+  if(editing||lock)return;
+  const c=sel.length===1?card(sel[0]):null;
+  if(!c||!isTable(c))return;
+  const dt=e.clipboardData;if(!dt)return;
+  e.preventDefault();
+  dt.setData("text/plain",tableTSV(c));      // Excel 会按这份还原成单元格
+  dt.setData("text/html",tableHTML(c));
+  toast(t("tbCopied"));
+});
 addEventListener("paste",e=>{
   if(editing||lock)return;
+  const selCard=sel.length===1?card(sel[0]):null;
+  if(selCard&&isTable(selCard)&&!isLocked(selCard.id)){
+    const dt=e.clipboardData;
+    const grid=gridFromHTML(dt.getData("text/html"))||
+      (/\t|\n/.test(dt.getData("text/plain"))?parseTSV(dt.getData("text/plain")):null);
+    if(grid&&grid.length){
+      e.preventDefault();
+      const oc=orig(selCard);
+      snap();
+      const cols=Math.max(...grid.map(r=>r.length));
+      const cw=Math.max(120,Math.round(baseSize()*13));
+      oc.tb.cols=Array.from({length:cols},(_,i)=>oc.tb.cols[i]||cw);
+      oc.tb.rows=grid.map(r=>{const row=r.slice();while(row.length<cols)row.push("");return row});
+      syncTable(oc);render();save();
+      toast(t("tbPasted")+" "+grid.length+"\u00D7"+cols);
+      return;
+    }
+  }
   const items=[...(e.clipboardData?.items||[])];
   const img=items.find(x=>x.type.startsWith("image/"));
   const p=toW(mouse.x,mouse.y);
   if(img){e.preventDefault();snap();shrink(img.getAsFile(),(d,w,h)=>addImage(d,w,h,p));return}
-  const txt=e.clipboardData?.getData("text/plain");
+  const htmlGrid=gridFromHTML(e.clipboardData?.getData("text/html"));
+  const plain=e.clipboardData?.getData("text/plain")||"";
+  const tsvGrid=htmlGrid||(/\t/.test(plain)?parseTSV(plain):null);
+  if(tsvGrid&&tsvGrid.length&&Math.max(...tsvGrid.map(r=>r.length))>1){
+    e.preventDefault();                       // 从 Excel 粘到空白处：直接生成一张表
+    const cols=Math.max(...tsvGrid.map(r=>r.length));
+    const c2=newTable(p,tsvGrid.length,cols);
+    const oc=orig(c2);
+    oc.tb.rows=tsvGrid.map(r=>{const row=r.slice();while(row.length<cols)row.push("");return row});
+    syncTable(oc);render();save();
+    toast(t("tbPasted")+" "+tsvGrid.length+"\u00D7"+cols);
+    return;
+  }
+  const txt=plain;
   if(txt&&txt.trim()){e.preventDefault();snap();
     const c={id:uid(),src:null,x:Math.round(p.x-160),y:Math.round(p.y-16),w:320,text:txt.trim(),s:newStyle()};
     invalidateIndex();S.cards.push(c);sel=[c.id];render();save()}
@@ -2538,11 +2675,13 @@ const MANUAL=[
  ["表格","BIAOGE",`
   <p>右键空白处选<b>插入表格</b>，从预设的行列数里挑一个即可。表格是卡片的一种形态，所以移动、选中、锁定、页面归属、导出顺序、整体缩放全都和普通卡片一样。</p>
   <p><b>编辑</b>：双击任意单元格进入编辑。<kbd>Tab</kbd> 移到右邻单元格，<kbd>Shift</kbd> + <kbd>Tab</kbd> 向左，行尾会自动折到下一行开头。<kbd>Enter</kbd> 移到下一行同列，在最后一行按 <kbd>Enter</kbd> 会自动新增一行，所以连续录入不用碰菜单。<kbd>Esc</kbd> 退出编辑。</p>
-  <p><b>列宽</b>：每两列之间有一条贯穿整个表格高度的分隔线，在任意行的位置都能拖动，靠近时会显现。默认是在相邻两列之间挪动边界，表格总宽不变；按住 <kbd>Alt</kbd> 拖动则只加宽当前列，整个表格随之变宽。右键菜单里有<b>列宽均分</b>。</p>
+  <p><b>列宽</b>：每两列之间有一条贯穿整个表格高度的分隔线，在任意行的位置都能拖动，选中表格时会显出一条淡线提示位置。默认是在相邻两列之间挪动边界，表格总宽不变；按住 <kbd>Alt</kbd> 拖动则只加宽当前列，整个表格随之变宽。右键菜单里有<b>列宽均分</b>。</p>
   <p><b>整体缩放</b>：拖动卡片四周的控制点可以等比缩放整张表，所有列宽按同一比例跟随，表格不会溢出选中框。新建时的列宽按当前基准字号推算，一开始就是舒服的宽度，输入文字之后也不会再变。</p>
   <p><b>增删行列</b>：右键某个单元格，可在其上下左右插入，或删除所在行列。</p>
   <p><b>标题栏</b>：右键菜单里可分别开关<b>标题行</b>和<b>标题列</b>，两者可以同时开启。标题会加粗并带浅底色，导出时映射为真正的表头。</p>
-  <p><b>粘贴</b>：从 Excel、Word 或网页表格里复制的内容，粘进任意单元格会自动铺开成多行多列，不够的行列自动补齐。</p>
+  <p><b>单元格内换行</b>：<kbd>Shift</kbd> + <kbd>Enter</kbd> 或 <kbd>Alt</kbd> + <kbd>Enter</kbd>。单独按 <kbd>Enter</kbd> 是移到下一行的单元格。</p>
+  <p><b>与 Excel 互通</b>：从 Excel、Word 或网页表格复制的内容，粘进任意单元格会自动铺开成多行多列，行列不够自动补齐；粘在画布空白处则直接生成一张新表。含换行、制表符或引号的单元格都能正确还原，不会串行。</p>
+  <p>反向也通：选中表格（不进入编辑）按 <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>，或用右键菜单的<b>复制整张表格</b>，粘进 Excel 就是规规矩矩的单元格，不是一整坨文字。</p>
   <p><b>导出</b>：Word 里是真正的表格对象，可继续编辑；PDF 和 HTML 是标准表格标签；Markdown 是管道表格，能被任何 Markdown 编辑器识别。表格内容也纳入全文检索。</p>
   <p>右键菜单底部的<b>转为纯文字</b>可以把表格拆回普通文字卡片，内容以制表符分隔保留。</p>
   <p class="tip">与页面的区别：页面管的是输出单元的划分，表格管的是结构化内容本身。文献对照、方法比较、时间线这类信息用表格比用一堆卡片清楚得多。</p>`],

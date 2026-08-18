@@ -859,7 +859,7 @@ group("tablesize 表格尺寸", async (c) => {
       tblH: el.querySelector("table").getBoundingClientRect().height };
   }, id);
   c.ok("每两列之间都有分隔把手", g.n === 3);
-  c.ok("把手贯穿整个表格高度", Math.abs(g.h - g.tblH) < 4);
+  c.ok("把手贯穿整个表格高度（略微外扩便于抓取）", g.h >= g.tblH && g.h - g.tblH < 20);
 
   const before = await c.run((i) => [...card(i).tb.cols], id);
   await c.page.mouse.move(g.x, g.y);
@@ -881,6 +881,69 @@ group("tablesize 表格尺寸", async (c) => {
   }, id);
   await c.wait(400);
   c.ok("输入长文字后宽度不变", (await c.run((i) => card(i).w, id)) === w0);
+});
+
+group("excel 表格与 Excel 互通", async (c) => {
+  await c.run(() => {
+    S.textDef = { ...DEF, size: 18 };
+    S.cards = []; S.links = []; S.frames = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    newTable({ x: 0, y: -200 }, 3, 3);
+  });
+  await c.wait(500);
+  const id = await c.run(() => S.cards[0].id);
+
+  // 空行必须和有字的行一样高，否则新建的表看起来是一堆细线
+  const emptyH = await c.run((i) => nodes.get(i).querySelectorAll("td")[4].getBoundingClientRect().height, id);
+  await c.run((i) => { const cc = card(i); cc.tb.rows[1][1] = "一行字"; syncTable(cc); render(); }, id);
+  await c.wait(400);
+  const filledH = await c.run((i) => nodes.get(i).querySelectorAll("td")[4].getBoundingClientRect().height, id);
+  c.ok("空行与有字的行等高", Math.abs(emptyH - filledH) < 2);
+  c.ok("占位符不进入数据", await c.run((i) => card(i).tb.rows[0][0] === "" &&
+    nodes.get(i).querySelectorAll("td")[0].innerText === "", id));
+
+  // 把手必须精确压在列边界上：折叠边框会让"列宽累加值"与真实边界有偏差，
+  // 列一多就累积成肉眼可见的错位，所以按实际渲染位置对齐
+  const align = await c.run((i) => {
+    const el = nodes.get(i), cells = [...el.querySelector("tr").children];
+    return [...el.querySelectorAll(".cgrip")].map((g, j) => {
+      const gr = g.getBoundingClientRect(), cr = cells[j].getBoundingClientRect();
+      return Math.abs(gr.x + gr.width / 2 - cr.right);
+    });
+  }, id);
+  c.ok("把手对准列边界（最大偏差 " + Math.max(...align).toFixed(2) + "px）", Math.max(...align) < 1.2);
+  c.ok("把手宽度保持克制",
+    (await c.run((i) => nodes.get(i).querySelector(".cgrip").getBoundingClientRect().width, id)) <= 12);
+
+  // 单元格内换行
+  await c.run((i) => { const cc = card(i); cc.tb.rows[1][0] = "第一行\n第二行"; syncTable(cc); render(); }, id);
+  await c.wait(400);
+  const wrap = await c.run((i) => {
+    const td = nodes.get(i).querySelectorAll("td")[3];
+    return { ws: getComputedStyle(td).whiteSpace, txt: td.textContent, h: td.getBoundingClientRect().height };
+  }, id);
+  c.ok("单元格内换行被保留", wrap.ws === "pre-wrap" && wrap.txt.includes("\n") && wrap.h > filledH * 1.5);
+
+  // Excel 的纯文本格式：引号包裹、跨行单元格、成对引号
+  const parsed = await c.run(() =>
+    parseTSV('姓名\t备注\n张三\t"第一行\n第二行"\n李四\t"含""引号""的内容"'));
+  c.ok("能解析 Excel 的跨行单元格", parsed.length === 3 && parsed[1][1] === "第一行\n第二行");
+  c.ok("能解析成对引号", parsed[2][1] === '含"引号"的内容');
+
+  const g2 = await c.run(() =>
+    gridFromHTML("<table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td></td></tr><tr><td>2</td><td>x<br>y</td></tr></table>"));
+  c.ok("从剪贴板 HTML 读表格（空单元格不错位）", g2.length === 3 && g2[1][1] === "" && g2[2][1] === "x\ny");
+
+  const tsv = await c.run((i) => {
+    const cc = card(i);
+    cc.tb.rows = [["姓名", "备注"], ["张三", "第一行\n第二行"], ["李四", "含\t制表符"]];
+    syncTable(cc); return tableTSV(cc);
+  }, id);
+  c.ok("导出时对特殊字符加引号", /"第一行\n第二行"/.test(tsv) && /"含\t制表符"/.test(tsv));
+  c.ok("复制粘贴往返一致", await c.run((v) => {
+    const g = parseTSV(v);
+    return g[1][1] === "第一行\n第二行" && g[2][1] === "含\t制表符";
+  }, tsv));
 });
 
 group("scale 整体缩放", async (c) => {
