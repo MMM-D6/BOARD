@@ -746,6 +746,77 @@ group("map 页面地图", async (c) => {
   await c.run(() => toggleMap());
 });
 
+group("table 表格", async (c) => {
+  await c.run(() => {
+    S.cards = []; S.links = []; S.frames = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    const t2 = newTable({ x: 0, y: 0 }, 3, 3);
+    t2.tb.rows = [["作者", "年份", "观点"], ["Bulley", "2021", "实践研究"], ["Sahin", "2023", "方法论"]];
+    syncTable(t2); render();
+  });
+  await c.wait(500);
+  const id = await c.run(() => S.cards[0].id);
+  c.ok("可以插入表格", await c.run(() => !!S.cards[0].tb));
+  c.ok("渲染为真实表格元素", await c.run((i) => !!nodes.get(i).querySelector("table.tb"), id));
+  c.ok("默认带标题行", await c.run((i) => nodes.get(i).querySelector("tr").classList.contains("hd"), id));
+  c.ok("卡片宽度等于列宽之和",
+    await c.run((i) => card(i).w === card(i).tb.cols.reduce((a, b) => a + b, 0), id));
+  c.ok("表格内容进入检索文本", await c.run((i) => card(i).text.includes("Bulley"), id));
+
+  await c.run(() => { S.findMode = "all"; showFind(true); $("findq").value = "方法论"; runFind(); });
+  await c.wait(300);
+  c.ok("可以搜到表格里的内容", (await c.run(() => hits.length)) === 1);
+  await c.run(() => { $("findq").value = ""; runFind(); showFind(false); });
+
+  await c.run((i) => tbOp(card(i), (g) => g.rows.push(new Array(g.cols.length).fill(""))), id);
+  await c.wait(300);
+  c.ok("可以加行", (await c.run((i) => card(i).tb.rows.length, id)) === 4);
+  await c.run((i) => tbOp(card(i), (g) => { g.cols.push(160); g.rows.forEach((r) => r.push("")); }), id);
+  await c.wait(300);
+  c.ok("加列后宽度同步",
+    await c.run((i) => card(i).tb.cols.length === 4 && card(i).w === card(i).tb.cols.reduce((a, b) => a + b, 0), id));
+  await c.run((i) => tbOp(card(i), (g) => { g.cols.splice(3, 1); g.rows.forEach((r) => r.splice(3, 1)); }), id);
+  await c.wait(300);
+  c.ok("可以删列", (await c.run((i) => card(i).tb.cols.length, id)) === 3);
+
+  await c.run((i) => tbOp(card(i), (g) => { g.head = false; }), id);
+  await c.wait(300);
+  c.ok("可以关闭标题行",
+    await c.run((i) => !nodes.get(i).querySelector("tr").classList.contains("hd"), id));
+  await c.run((i) => tbOp(card(i), (g) => { g.head = true; g.headCol = true; }), id);
+  await c.wait(300);
+  c.ok("可以开启标题列", await c.run((i) => !!nodes.get(i).querySelector("td.hc"), id));
+
+  const out = await c.run(() => {
+    const tree = buildTree();
+    return {
+      md: docMD({ title: "T", img: false, tags: false, refs: false, table: false }, tree),
+      html: docHTML({ title: "T", img: false, tags: false, refs: false, table: false }, tree, false),
+    };
+  });
+  c.ok("Markdown 导出为管道表格", /\| Bulley \| 2021 \|/.test(out.md) && /\| --- \|/.test(out.md));
+  c.ok("HTML 导出为表格标签", /<table class="tbx">/.test(out.html) && /<th>/.test(out.html));
+
+  await c.run((i) => { sel = [i]; setCardLock(null, true); }, id);
+  await c.wait(300);
+  c.ok("表格可以锁定", await c.run((i) => isLocked(i), id));
+  await c.run((i) => { sel = [i]; setCardLock(null, false); }, id);
+
+  const w0 = await c.run((i) => card(i).tb.cols[0], id);
+  await c.run(() => rescaleAll(0.5));
+  await c.wait(400);
+  c.ok("整体缩放时列宽一起缩",
+    await c.run(([i, w]) => Math.abs(card(i).tb.cols[0] - w * 0.5) < 2, [id, w0]));
+
+  await c.run((i) => {
+    const cc = card(i); snap();
+    const txt = tableText(cc); const o = orig(cc);
+    delete o.tb; o.text = txt; render();
+  }, id);
+  await c.wait(300);
+  c.ok("可以转为纯文字", await c.run((i) => !card(i).tb && card(i).text.includes("Bulley"), id));
+});
+
 group("scale 整体缩放", async (c) => {
   const r = await c.run(() => {
     S.textDef = { ...DEF, size: 18 };

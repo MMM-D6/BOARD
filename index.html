@@ -45,6 +45,17 @@
   .card{position:absolute;user-select:none}
   .card img{width:100%;height:auto;display:block;border-radius:2px;pointer-events:none;
     box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .card table.tb{border-collapse:collapse;table-layout:fixed;width:100%;
+    background:var(--tbbg);border-radius:2px;overflow:hidden}
+  .card table.tb td{border:1px solid var(--tbln);padding:.42em .6em;vertical-align:top;
+    word-break:break-word;overflow-wrap:anywhere;position:relative}
+  .card table.tb tr.hd td{font-weight:600;background:var(--tbhd)}
+  .card table.tb td.hc{font-weight:600;background:var(--tbhd)}
+  .card table.tb td[contenteditable=true]{outline:none;background:var(--tbedit)}
+  .card .cgrip{position:absolute;top:0;right:calc(-4px * var(--iz));width:calc(8px * var(--iz));
+    height:100%;cursor:col-resize;z-index:2}
+  .card .cgrip:hover{background:var(--frame);opacity:.35}
+  body.lock .card .cgrip{display:none}
   .card .cap{margin-top:10px;white-space:pre-wrap;word-break:break-word;min-height:1em}
   .card .cap:empty:before{content:attr(data-ph);opacity:.28}
   .card.lk .cap{user-select:text;cursor:text}
@@ -392,6 +403,12 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pasteTwinHere:"Paste the twin here",pasteHere:"Paste here",pasteDone:"Pasted",
   clipTwin:"Twin ready to place:",clipCopy:"Copied:",clipEmpty:"The card clipboard is empty",
   clipNeed:"Select a card first",
+  insertTable:"Insert a table",tbSize:"Rows × columns",tbMenu:"Table",
+  tbRowAbove:"Add a row above",tbRowBelow:"Add a row below",
+  tbColLeft:"Add a column to the left",tbColRight:"Add a column to the right",
+  tbDelRow:"Delete this row",tbDelCol:"Delete this column",
+  tbHead:"Header row",tbHeadCol:"Header column",tbEven:"Even column widths",
+  tbToText:"Turn into plain text",cardMenuMore:"Card options",
   mapMenu:"Page map",mapFind:"Find a page",
   scaleAll:"Rescale everything…",scaleDone:"Rescaled to",scaleBad:"Enter a size between 1 and 200",
   scaleAsk:"New base text size (currently {n}). Everything scales by the same ratio: text, card widths, spacing, page frames. Manually adjusted and locked cards scale too, so their relative difference is kept.",
@@ -497,6 +514,12 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pasteTwinHere:"在此处粘贴分身",pasteHere:"在此处粘贴",pasteDone:"已粘贴",
   clipTwin:"分身待放置：",clipCopy:"已复制：",clipEmpty:"卡片剪贴板是空的",
   clipNeed:"请先选中卡片",
+  insertTable:"插入表格",tbSize:"行 × 列",tbMenu:"表格",
+  tbRowAbove:"在上方插入行",tbRowBelow:"在下方插入行",
+  tbColLeft:"在左侧插入列",tbColRight:"在右侧插入列",
+  tbDelRow:"删除该行",tbDelCol:"删除该列",
+  tbHead:"标题行",tbHeadCol:"标题列",tbEven:"列宽均分",
+  tbToText:"转为纯文字",cardMenuMore:"卡片操作",
   mapMenu:"页面地图",mapFind:"查找页面",
   scaleAll:"按比例缩放全部内容…",scaleDone:"已按比例缩放",scaleBad:"请输入 1 到 200 之间的字号",
   scaleAsk:"新的基准字号（当前 {n}）。文字、卡片宽度、间距、页面框都会按同一比例缩放。手动调整过的和锁定的卡片也一并缩放，因此相对差异得以保留。",
@@ -911,6 +934,20 @@ function normCard(c){
   if(o.bg&&typeof o.bg!=="string")delete o.bg;
   if(o.url&&typeof o.url!=="string")delete o.url;
   if(o.lock!==true)delete o.lock;
+  if(o.tb){
+    const g=o.tb;
+    if(!Array.isArray(g.rows)||!Array.isArray(g.cols)||!g.rows.length||!g.cols.length)delete o.tb;
+    else{
+      g.cols=g.cols.map(w=>Math.max(40,+w||120));
+      g.rows=g.rows.map(r=>{
+        const row=Array.isArray(r)?r.map(v=>typeof v==="string"?v:String(v==null?"":v)):[];
+        while(row.length<g.cols.length)row.push("");
+        row.length=g.cols.length;
+        return row;
+      });
+      g.head=!!g.head;g.headCol=!!g.headCol;
+    }
+  }
   o.tags=Array.isArray(o.tags)?o.tags.filter(x=>typeof x==="string"):[];
   return o;
 }
@@ -1184,6 +1221,10 @@ function renderNow(){
   document.body.style.setProperty("--fr",dark?"rgba(235,235,230,.45)":"rgba(60,66,72,.42)");
   document.body.style.setProperty("--frbg",dark?"rgba(255,255,255,.03)":"rgba(0,0,0,.018)");
   document.body.style.setProperty("--tw",dark?"rgba(200,215,235,.55)":"rgba(70,110,170,.42)");
+  document.body.style.setProperty("--tbln",dark?"rgba(235,235,230,.28)":"rgba(60,66,72,.32)");
+  document.body.style.setProperty("--tbhd",dark?"rgba(255,255,255,.09)":"rgba(30,34,40,.055)");
+  document.body.style.setProperty("--tbbg",dark?"rgba(255,255,255,.02)":"rgba(255,255,255,.5)");
+  document.body.style.setProperty("--tbedit",dark?"rgba(255,255,255,.07)":"rgba(45,108,223,.06)");
   document.body.style.setProperty("--panel",dark?"#1B1B1B":"#fff");
   document.body.style.setProperty("--pfg",dark?"#EFEFEC":"#111");
   document.body.style.setProperty("--pline",dark?"rgba(255,255,255,.16)":"rgba(0,0,0,.12)");
@@ -1215,6 +1256,180 @@ function badgeOf(c){
   if(!c.level)return "";
   return S.autoNum?(NUM.get(c.id)||("H"+c.level)):("H"+c.level);
 }
+// 表格是卡片的一种形态：位置、选中、移动、锁定、页面归属、导出顺序全部复用卡片逻辑
+const isTable=c=>!!(c&&orig(c).tb);
+function newTable(p,rows,cols){
+  rows=rows||3;cols=cols||3;
+  const cw=180;
+  const tb={head:true,headCol:false,cols:new Array(cols).fill(cw),
+    rows:Array.from({length:rows},()=>new Array(cols).fill(""))};
+  const w=cols*cw;
+  const c={id:uid(),x:Math.round(p.x-w/2),y:Math.round(p.y-40),w,tb,text:"",s:newStyle()};
+  snap();S.cards.push(c);sel=[c.id];invalidateIndex();render();save();
+  setTimeout(()=>{const el=nodes.get(c.id);const td=el&&el.querySelector("td");
+    if(td)editCell(td)},40);
+  return c;
+}
+function tableText(c){
+  const tb=orig(c).tb;if(!tb)return "";
+  return tb.rows.map(r=>r.join("\t")).join("\n");
+}
+function syncTable(c){
+  const o=orig(c);
+  o.text=tableText(c);
+  o.w=Math.max(60,Math.round(o.tb.cols.reduce((a,b)=>a+b,0)));
+}
+function tbOp(c,fn){
+  const o=orig(c);
+  if(isLocked(c.id)){toast(t("lockedNote"));return}
+  snap();fn(o.tb);syncTable(o);render();save();
+}
+function editCell(td){
+  if(!td)return;
+  editing=true;td.contentEditable="true";td.focus();
+  const r=document.createRange();r.selectNodeContents(td);
+  const sl=getSelection();sl.removeAllRanges();sl.addRange(r);
+}
+function moveCell(td,dr,dc){
+  const tr=td.parentNode,tb=tr.parentNode;
+  const ci=[...tr.children].indexOf(td), ri=[...tb.children].indexOf(tr);
+  const nr=tb.children[ri+dr];
+  if(dc){
+    const target=tr.children[ci+dc];
+    if(target)return editCell(target);
+    const row=tb.children[ri+(dc>0?1:-1)];
+    if(row)return editCell(row.children[dc>0?0:row.children.length-1]);
+    return;
+  }
+  if(nr)editCell(nr.children[ci]);
+}
+function buildTable(el,c,oc,s){
+  const tb=oc.tb;
+  const table=document.createElement("table");table.className="tb";
+  Object.assign(table.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",
+    fontWeight:s.weight,lineHeight:s.lh,letterSpacing:s.spacing+"em",color:s.color,
+    fontStyle:s.italic?"italic":"normal"});
+  const cg=document.createElement("colgroup");
+  tb.cols.forEach(w=>{const col=document.createElement("col");
+    col.style.width=w+"px";cg.appendChild(col)});
+  table.appendChild(cg);
+  const body=document.createElement("tbody");
+  tb.rows.forEach((row,ri)=>{
+    const tr=document.createElement("tr");
+    if(tb.head&&ri===0)tr.className="hd";
+    row.forEach((cell,ci)=>{
+      const td=document.createElement("td");
+      td.textContent=cell;
+      td.dataset.r=ri;td.dataset.c=ci;
+      td.style.textAlign=s.align;
+      if(tb.headCol&&ci===0)td.className="hc";
+      td.addEventListener("input",()=>{
+        tb.rows[ri][ci]=td.innerText;
+        syncTable(oc);measure();drawLinksSoon();save();
+      });
+      td.addEventListener("paste",e=>{
+        if(!td.isContentEditable)return;
+        e.preventDefault();
+        const txt=(e.clipboardData||window.clipboardData).getData("text/plain");
+        // 从表格软件粘来的多行多列内容自动铺开
+        if(/\t|\n/.test(txt)){
+          const grid=txt.replace(/\r/g,"").replace(/\n+$/,"").split("\n").map(l=>l.split("\t"));
+          snap();
+          grid.forEach((r2,dr)=>{
+            const R=ri+dr;
+            while(tb.rows.length<=R)tb.rows.push(new Array(tb.cols.length).fill(""));
+            r2.forEach((v,dc)=>{
+              const C=ci+dc;
+              while(tb.cols.length<=C){tb.cols.push(160);tb.rows.forEach(z=>z.push(""))}
+              tb.rows[R][C]=v;
+            });
+          });
+          syncTable(oc);render();save();
+          return;
+        }
+        document.execCommand("insertText",false,txt);
+      });
+      td.addEventListener("keydown",e=>{
+        e.stopPropagation();
+        if(e.key==="Tab"){e.preventDefault();moveCell(td,0,e.shiftKey?-1:1);return}
+        if(e.key==="Escape"){e.preventDefault();td.blur();return}
+        if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();
+          const last=ri===tb.rows.length-1;
+          if(last){tbOp(c,g=>g.rows.push(new Array(g.cols.length).fill("")));
+            setTimeout(()=>{const el2=nodes.get(c.id);
+              const td2=el2&&el2.querySelector(`td[data-r="${ri+1}"][data-c="${ci}"]`);
+              if(td2)editCell(td2)},30);
+          }else moveCell(td,1,0);
+          return;
+        }
+        if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="z"){/* 交给浏览器 */}
+      });
+      td.addEventListener("blur",()=>{
+        if(!td.isContentEditable)return;
+        tb.rows[ri][ci]=td.innerText;
+        td.contentEditable="false";editing=false;
+        syncTable(oc);measure();drawLinksSoon();save();
+      });
+      td.addEventListener("pointerdown",e=>{if(td.isContentEditable)e.stopPropagation()});
+      // 列宽拖动：每列右缘一条把手
+      if(ri===0&&ci<tb.cols.length){
+        const gp=document.createElement("div");gp.className="cgrip";
+        gp.addEventListener("pointerdown",e=>{
+          if(lock||isLocked(c.id))return;
+          e.preventDefault();e.stopPropagation();
+          const sx=e.clientX,w0=tb.cols[ci];
+          snap();
+          const mv=ev=>{
+            tb.cols[ci]=Math.max(40,Math.round(w0+(ev.clientX-sx)/cam.z));
+            cg.children[ci].style.width=tb.cols[ci]+"px";
+            oc.w=Math.round(tb.cols.reduce((a,b)=>a+b,0));
+            el.style.width=oc.w+"px";
+            measure();drawLinksSoon();
+          };
+          const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+            syncTable(oc);save()};
+          addEventListener("pointermove",mv);addEventListener("pointerup",up);
+        });
+        td.appendChild(gp);
+      }
+      tr.appendChild(td);
+    });
+    body.appendChild(tr);
+  });
+  table.appendChild(body);
+  el.appendChild(table);
+}
+function tableMenu(x,y,c,target){
+  const oc=orig(c),tb=oc.tb;
+  const td=target&&target.closest&&target.closest("td");
+  const ri=td?+td.dataset.r:-1, ci=td?+td.dataset.c:-1;
+  const items=[{head:t("tbMenu")+"  "+tb.rows.length+"\u00D7"+tb.cols.length}];
+  if(td){
+    items.push({label:t("tbRowAbove"),on:()=>tbOp(c,g=>g.rows.splice(ri,0,new Array(g.cols.length).fill("")))});
+    items.push({label:t("tbRowBelow"),on:()=>tbOp(c,g=>g.rows.splice(ri+1,0,new Array(g.cols.length).fill("")))});
+    items.push({label:t("tbColLeft"),on:()=>tbOp(c,g=>{g.cols.splice(ci,0,160);g.rows.forEach(r=>r.splice(ci,0,""))})});
+    items.push({label:t("tbColRight"),on:()=>tbOp(c,g=>{g.cols.splice(ci+1,0,160);g.rows.forEach(r=>r.splice(ci+1,0,""))})});
+    items.push("-");
+    if(tb.rows.length>1)items.push({label:t("tbDelRow"),on:()=>tbOp(c,g=>g.rows.splice(ri,1))});
+    if(tb.cols.length>1)items.push({label:t("tbDelCol"),on:()=>tbOp(c,g=>{g.cols.splice(ci,1);g.rows.forEach(r=>r.splice(ci,1))})});
+    items.push("-");
+  }
+  items.push({label:t("tbHead"),check:!!tb.head,on:()=>tbOp(c,g=>{g.head=!g.head})});
+  items.push({label:t("tbHeadCol"),check:!!tb.headCol,on:()=>tbOp(c,g=>{g.headCol=!g.headCol})});
+  items.push({label:t("tbEven"),on:()=>tbOp(c,g=>{
+    const total=g.cols.reduce((a,b)=>a+b,0),n=g.cols.length;
+    g.cols=g.cols.map(()=>Math.round(total/n));
+  })});
+  items.push("-",
+    {label:t("tbToText"),on:()=>{
+      if(isLocked(c.id)){toast(t("lockedNote"));return}
+      snap();const txt=tableText(c);
+      const o=orig(c);delete o.tb;o.text=txt;delete o.rich;
+      render();save();
+    }},
+    {label:t("cardMenuMore"),sub:cardItems(x,y)});
+  menuAt(x,y,items);
+}
 function syncCap(c0,cap){
   const c=orig(c0);
   c.text=cap.innerText;
@@ -1230,6 +1445,7 @@ function makeCard(c){
   if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
   else{el.style.background="";el.style.padding="";el.style.borderRadius=""}
   const oc=orig(c);
+  if(oc.tb){buildTable(el,c,oc,s);return finishCard(el,c,s)}
   const csrc=srcOf(oc);
   if(csrc){
     const im=document.createElement("img");im.src=csrc;im.draggable=false;
@@ -1301,6 +1517,9 @@ function makeCard(c){
       tw.appendChild(b)});
     el.appendChild(tw);
   }
+  return finishCard(el,c,s);
+}
+function finishCard(el,c,s){
   const ring=document.createElement("div");ring.className="ring";el.appendChild(ring);
   const HND=[["nw","0%","0%"],["n","50%","0%"],["ne","100%","0%"],
              ["e","100%","50%"],["se","100%","100%"],["s","50%","100%"],
@@ -1341,18 +1560,29 @@ function makeCard(c){
     if(S.linkView==="focus")drawLinksSoon()}});
   el.addEventListener("pointerdown",e=>{
     const a=e.target.closest&&e.target.closest("a");
-    if(a&&!cap.isContentEditable){e.stopPropagation();e.preventDefault();openUrl(a.getAttribute("href"))}
+    const cap0=el.querySelector(".cap");
+    if(a&&!(cap0&&cap0.isContentEditable)){e.stopPropagation();e.preventDefault();
+      openUrl(a.getAttribute("href"))}
   },true);
   el.addEventListener("dblclick",e=>{
-    if(lock)return;e.stopPropagation();
-    if(cap.isContentEditable)return;      // 已在编辑中：交给浏览器原生的双击选词
+    if(lock)return;
+    if(isTable(c)){                        // 表格：双击进入所在单元格
+      const td=e.target.closest&&e.target.closest("td");
+      if(td){e.stopPropagation();if(!td.isContentEditable)editCell(td)}
+      return;
+    }
+    e.stopPropagation();
+    const cap0=el.querySelector(".cap");
+    if(cap0&&cap0.isContentEditable)return; // 已在编辑中：交给浏览器原生的双击选词
     editText(c,e);
   });
   el.addEventListener("contextmenu",e=>{
     e.preventDefault();e.stopPropagation();
     if(lock){lockMenu(e.clientX,e.clientY);return}
     if(!sel.includes(c.id)){sel=[c.id];paintSel()}
-    selLink=null;cardMenu(e.clientX,e.clientY);
+    selLink=null;
+    if(isTable(c)){tableMenu(e.clientX,e.clientY,c,e.target);return}
+    cardMenu(e.clientX,e.clientY);
   });
   return el;
 }
@@ -2274,6 +2504,17 @@ const MANUAL=[
   <p>从<b>文件 → 自动快照</b>选择时间点即可回滚，列表显示时间、卡片数量和当时的文件名。回滚前会先把当前状态也存成一份快照，所以回滚本身也是可逆的。</p>
   <p class="tip">快照防的是误操作，存档包防的是程序失效，两者互补，都不能替代把文件放进云盘。</p>`],
 
+ ["表格","BIAOGE",`
+  <p>右键空白处选<b>插入表格</b>，从预设的行列数里挑一个即可。表格是卡片的一种形态，所以移动、选中、锁定、页面归属、导出顺序、整体缩放全都和普通卡片一样。</p>
+  <p><b>编辑</b>：双击任意单元格进入编辑。<kbd>Tab</kbd> 移到右邻单元格，<kbd>Shift</kbd> + <kbd>Tab</kbd> 向左，行尾会自动折到下一行开头。<kbd>Enter</kbd> 移到下一行同列，在最后一行按 <kbd>Enter</kbd> 会自动新增一行，所以连续录入不用碰菜单。<kbd>Esc</kbd> 退出编辑。</p>
+  <p><b>列宽</b>：把鼠标移到列的右边界拖动即可，卡片宽度自动跟随列宽之和。右键菜单里有<b>列宽均分</b>。</p>
+  <p><b>增删行列</b>：右键某个单元格，可在其上下左右插入，或删除所在行列。</p>
+  <p><b>标题栏</b>：右键菜单里可分别开关<b>标题行</b>和<b>标题列</b>，两者可以同时开启。标题会加粗并带浅底色，导出时映射为真正的表头。</p>
+  <p><b>粘贴</b>：从 Excel、Word 或网页表格里复制的内容，粘进任意单元格会自动铺开成多行多列，不够的行列自动补齐。</p>
+  <p><b>导出</b>：Word 里是真正的表格对象，可继续编辑；PDF 和 HTML 是标准表格标签；Markdown 是管道表格，能被任何 Markdown 编辑器识别。表格内容也纳入全文检索。</p>
+  <p>右键菜单底部的<b>转为纯文字</b>可以把表格拆回普通文字卡片，内容以制表符分隔保留。</p>
+  <p class="tip">与页面的区别：页面管的是输出单元的划分，表格管的是结构化内容本身。文献对照、方法比较、时间线这类信息用表格比用一堆卡片清楚得多。</p>`],
+
  ["页面地图","YEMIANDITU",`
   <p>页面多了之后靠平移找位置会很慢。按 <kbd>M</kbd> 或从右键菜单打开<b>页面地图</b>，右下角浮出一张全局缩略图。</p>
   <p>地图是按真实比例和布局绘制的预览：方框是页面，灰色小块是卡片，密度即内容分布。地图里不写文字，因为缩略之后文字必然被截断，反而干扰对布局的判断，名称交给悬停提示。</p>
@@ -2836,6 +3077,25 @@ async function exportDocx(D,o,tree){
         text:"\u25C8 "+t("twinSee")+" "+refLabel(src),italics:true,size:18,color:"777777"})]}));
       return;
     }
+    if(orig(c).tb){                          // 表格：导出成 Word 真表格
+      const g=orig(c).tb;
+      try{
+        const {Table,TableRow,TableCell,WidthType}=D;
+        kids.push(new Table({width:{size:100,type:WidthType.PERCENTAGE},
+          rows:g.rows.map((row,ri)=>new TableRow({
+            tableHeader:!!(g.head&&ri===0),
+            children:row.map((cell,ci)=>new TableCell({
+              children:[new Paragraph({children:[new TextRun({text:String(cell||""),
+                bold:!!((g.head&&ri===0)||(g.headCol&&ci===0))})]})]
+            }))
+          }))
+        }));
+        kids.push(new Paragraph({text:""}));
+      }catch(e){
+        g.rows.forEach(row=>kids.push(new Paragraph({text:row.join("　")})));
+      }
+      return;
+    }
     const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
     const rich=c.rich?paraFrom(c,D,n.out?{heading:hl(n.out)}:null):null;
     if(rich&&rich.length){
@@ -3033,6 +3293,19 @@ function docMD(o,tree){
       if(src&&src!==n)lines.push("> "+t("twinSee")+" "+refLabel(src),"");
       return;
     }
+    if(oc.tb){                              // 表格：导出成 Markdown 管道表格
+      const g=oc.tb;
+      const esc2=v=>String(v==null?"":v).replace(/\|/g,"\\|").replace(/\n/g," ");
+      const rows=g.rows.map(r=>"| "+r.map(esc2).join(" | ")+" |");
+      if(g.head&&rows.length){
+        rows.splice(1,0,"|"+g.cols.map(()=>" --- ").join("|")+"|");
+      }else{
+        rows.unshift("|"+g.cols.map(()=>"   ").join("|")+"|",
+                     "|"+g.cols.map(()=>" --- ").join("|")+"|");
+      }
+      lines.push(...rows,"");
+      return;
+    }
     if(o.img&&srcOf(oc))lines.push("!["+(t("expImg"))+"]("+(oc.ih?("assets/"+oc.ih+".png"):"embedded")+")","");
     const txt=(oc.text||"").split(/\n+/).filter(z=>z.trim());
     if(n.out){
@@ -3071,6 +3344,9 @@ function docHTML(o,tree,forPrint){
   body{font-family:Calibri,"Noto Sans SC",sans-serif;line-height:1.5}
   h1,h2,h3{page-break-after:avoid}img{page-break-inside:avoid}
   .rel{color:#777;font-style:italic;font-size:9pt}.tg{color:#888;font-style:italic;font-size:9pt}
+  table.tbx{border-collapse:collapse;margin:8pt 0;width:100%}
+  table.tbx td,table.tbx th{border:1px solid #999;padding:4pt 6pt;text-align:left;vertical-align:top}
+  table.tbx th{background:#f0f0f0;font-weight:600}
   img{max-width:460px;height:auto}</style></head><body><h1>${esc(o.title)}</h1>`;
   const emit=(n)=>{
     const c=n.c;
@@ -3081,6 +3357,15 @@ function docHTML(o,tree,forPrint){
     }
     const wrapBg=c.bg?`<div style="background:${esc(c.bg)};padding:10px 12px;border-radius:3px">`:"";
     if(wrapBg)h+=wrapBg;
+    if(orig(c).tb){
+      const g=orig(c).tb;
+      h+=`<table class="tbx">`+g.rows.map((row,ri)=>"<tr>"+row.map((cell,ci)=>{
+        const hd=(g.head&&ri===0)||(g.headCol&&ci===0);
+        return `<${hd?"th":"td"}>${esc(String(cell||""))}</${hd?"th":"td"}>`;
+      }).join("")+"</tr>").join("")+`</table>`;
+      if(wrapBg)h+="</div>";
+      return;
+    }
     if(o.img&&srcOf(c)){const d=imgDims(c);h+=`<p><img src="${srcOf(c)}" width="${d.w}" height="${d.h}"></p>`}
     const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
     if(c.rich){
@@ -3362,6 +3647,7 @@ function rescaleAll(k){
     c.x=Math.round(c.x*k);c.y=Math.round(c.y*k);
     c.w=Math.max(20,Math.round(c.w*k));
     if(c.h)c.h=Math.round(c.h*k);
+    if(c.tb)c.tb.cols=c.tb.cols.map(w=>Math.max(30,Math.round(w*k)));
     if(c.s)scaleStyleObj(c.s,k);
     if(c.rich)c.rich=scaleRich(c.rich,k);
   });
@@ -4360,6 +4646,9 @@ function boardMenu(x,y){
   menuAt(x,y,[
     {label:t("insertImage"),on:()=>$("imgfile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
+    {label:t("insertTable"),sub:[{head:t("tbSize")},
+      ...[[2,2],[3,2],[3,3],[4,3],[5,3],[3,4],[6,4]].map(([r,cc])=>({
+        label:r+" \u00D7 "+cc,on:()=>newTable(toW(x,y),r,cc)}))]},
     ...(CLIP?[{label:CLIP.mode==="twin"?t("pasteTwinHere"):t("pasteHere"),key:"⌘⇧V",
       on:()=>pasteClip(toW(x,y))}]:[]),
     {label:t("pageAdd"),on:addFrame},
@@ -4391,7 +4680,8 @@ function lockMenu(x,y){
     {label:t("exitPresentation"),key:"Esc",on:()=>setLock(false)}
   ]);
 }
-function cardMenu(x,y){
+function cardMenu(x,y){menuAt(x,y,cardItems(x,y))}
+function cardItems(x,y){
   const one=sel.length===1?card(sel[0]):null;
   const items=[
     {label:t("zoomTo"),key:"Z",on:focusSel},
@@ -4436,7 +4726,7 @@ function cardMenu(x,y){
     {label:t("toFront"),on:()=>order(1)},
     {label:t("toBack"),on:()=>order(-1)},
     {label:t("del"),key:"Del",danger:true,on:del});
-  menuAt(x,y,items);
+  return items;
 }
 function linkStyleItems(target,after){
   const set=o=>{Object.assign(target,o);drawLinks();after&&after()};
