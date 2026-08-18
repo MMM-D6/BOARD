@@ -56,6 +56,9 @@
   .card table.tb tr.hd td{font-weight:600;background:var(--tbhd)}
   .card table.tb td.hc{font-weight:600;background:var(--tbhd)}
   .card table.tb td[contenteditable=true]{outline:none;background:var(--tbedit)}
+  .card table.tb td.tsel:after{content:"";position:absolute;inset:0;pointer-events:none;
+    background:var(--tbmark)}
+  .card table.tb td.tsel[contenteditable=true]:after{display:none}
   .card .tbwrap{position:relative}
   .card .cgrip{position:absolute;top:0;bottom:0;
     width:calc(10px * var(--iz));margin-left:calc(-5px * var(--iz));
@@ -235,6 +238,7 @@
     white-space:nowrap;font-size:12.5px;color:var(--pfg);
     transition:background-color .16s,border-color .16s}
   #bar:not(:hover):not(.open){background:var(--glassSoft);border-color:transparent}
+  #bar.overlap:not(:hover){opacity:.35}
   #bar:not(:hover):not(.open) .ctl{opacity:.68}
   #bar.on{display:flex}
   #bar .cell{position:relative;display:flex;align-items:center}
@@ -413,6 +417,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pasteTwinHere:"Paste the twin here",pasteHere:"Paste here",pasteDone:"Pasted",
   clipTwin:"Twin ready to place:",clipCopy:"Copied:",clipEmpty:"The card clipboard is empty",
   clipNeed:"Select a card first",
+  tbSelRow:"Select this row",tbSelCol:"Select this column",tbSelAll:"Select all cells",
+  tbSelInfo:"selected {n}",tbClearCells:"Clear the selected cells",
   tbCopy:"Copy the table",tbCopied:"Table copied. It pastes into Excel as cells.",
   tbPasted:"Pasted",
   insertTable:"Insert a table",tbSize:"Rows × columns",tbMenu:"Table",
@@ -526,6 +532,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pasteTwinHere:"在此处粘贴分身",pasteHere:"在此处粘贴",pasteDone:"已粘贴",
   clipTwin:"分身待放置：",clipCopy:"已复制：",clipEmpty:"卡片剪贴板是空的",
   clipNeed:"请先选中卡片",
+  tbSelRow:"选中整行",tbSelCol:"选中整列",tbSelAll:"选中全部单元格",
+  tbSelInfo:"已选 {n}",tbClearCells:"清空选中单元格",
   tbCopy:"复制整张表格",tbCopied:"已复制，可直接粘进 Excel",
   tbPasted:"已粘贴",
   insertTable:"插入表格",tbSize:"行 × 列",tbMenu:"表格",
@@ -960,6 +968,11 @@ function normCard(c){
         return row;
       });
       g.head=!!g.head;g.headCol=!!g.headCol;
+      if(g.fmt&&typeof g.fmt==="object"){
+        Object.keys(g.fmt).forEach(k=>{
+          if(!/^\d+,\d+$/.test(k)||typeof g.fmt[k]!=="object")delete g.fmt[k]});
+        if(!Object.keys(g.fmt).length)delete g.fmt;
+      }else delete g.fmt;
     }
   }
   o.tags=Array.isArray(o.tags)?o.tags.filter(x=>typeof x==="string"):[];
@@ -1239,6 +1252,7 @@ function renderNow(){
   document.body.style.setProperty("--tbhd",dark?"rgba(255,255,255,.09)":"rgba(30,34,40,.055)");
   document.body.style.setProperty("--tbbg",dark?"rgba(255,255,255,.02)":"rgba(255,255,255,.5)");
   document.body.style.setProperty("--tbedit",dark?"rgba(255,255,255,.07)":"rgba(45,108,223,.06)");
+  document.body.style.setProperty("--tbmark",dark?"rgba(150,190,255,.16)":"rgba(45,108,223,.11)");
   document.body.style.setProperty("--panel",dark?"#1B1B1B":"#fff");
   document.body.style.setProperty("--pfg",dark?"#EFEFEC":"#111");
   document.body.style.setProperty("--pline",dark?"rgba(255,255,255,.16)":"rgba(0,0,0,.12)");
@@ -1247,7 +1261,8 @@ function renderNow(){
   renderFrames();if(mapOn)mapSoon();
   nodes.forEach(el=>el.remove());nodes.clear();
   syncCards();
-  measure();drawLinks();statusBar();paintFind();refreshTagList();syncFindMode();syncBar();
+  measure();drawLinks();statusBar();paintFind();refreshTagList();syncFindMode();
+  paintTbSel();syncBar();
   $("hint").innerHTML=(S.cards.length||lock)?"":t("hint");
 }
 function isDark(h){if(!h||h[0]!=="#")return false;
@@ -1272,6 +1287,56 @@ function badgeOf(c){
 }
 // 表格是卡片的一种形态：位置、选中、移动、锁定、页面归属、导出顺序全部复用卡片逻辑
 const isTable=c=>!!(c&&orig(c).tb);
+// 单元格选区：{id, r1,c1, r2,c2}，坐标未排序，用 tbRect 归一
+let tbSel=null;
+function tbRect(){
+  if(!tbSel)return null;
+  return {id:tbSel.id,
+    r1:Math.min(tbSel.r1,tbSel.r2),r2:Math.max(tbSel.r1,tbSel.r2),
+    c1:Math.min(tbSel.c1,tbSel.c2),c2:Math.max(tbSel.c1,tbSel.c2)};
+}
+function tbCells(){                       // 选区覆盖的所有单元格坐标
+  const r=tbRect();if(!r)return [];
+  const out=[];
+  for(let i=r.r1;i<=r.r2;i++)for(let j=r.c1;j<=r.c2;j++)out.push([i,j]);
+  return out;
+}
+function clearTbSel(repaint){
+  if(!tbSel)return;
+  tbSel=null;
+  if(repaint!==false)paintTbSel();
+}
+function paintTbSel(){
+  document.querySelectorAll(".card table.tb td.tsel").forEach(td=>td.classList.remove("tsel"));
+  const r=tbRect();if(!r)return;
+  const el=nodes.get(r.id);if(!el)return;
+  for(let i=r.r1;i<=r.r2;i++)for(let j=r.c1;j<=r.c2;j++){
+    const td=el.querySelector(`td[data-r="${i}"][data-c="${j}"]`);
+    if(td)td.classList.add("tsel");
+  }
+}
+// 单元格级格式存成稀疏表，行数据仍是纯字符串，导入导出都不受影响
+function cellFmt(tb,r,c,make){
+  const k=r+","+c;
+  if(!tb.fmt&&make)tb.fmt={};
+  if(!tb.fmt)return null;
+  if(!tb.fmt[k]&&make)tb.fmt[k]={};
+  return tb.fmt[k]||null;
+}
+function applyCellFmt(prop,val){
+  const r=tbRect();if(!r)return false;
+  const c=card(r.id);if(!c||isLocked(c.id))return false;
+  const o=orig(c),tb=o.tb;
+  snap();
+  tbCells().forEach(([i,j])=>{
+    const f=cellFmt(tb,i,j,true);
+    if(val===null||val===undefined||val==="")delete f[prop];else f[prop]=val;
+    if(!Object.keys(f).length)delete tb.fmt[i+","+j];
+  });
+  if(tb.fmt&&!Object.keys(tb.fmt).length)delete tb.fmt;
+  render();save();
+  return true;
+}
 function newTable(p,rows,cols){
   rows=rows||3;cols=cols||3;
   // 列宽按当前基准字号推算，保证新建时就是一个舒服的宽度，输入文字后不会再变
@@ -1404,8 +1469,36 @@ function buildTable(el,c,oc,s){
       const td=document.createElement("td");
       td.textContent=cell;
       td.dataset.r=ri;td.dataset.c=ci;
-      td.style.textAlign=s.align;
+      const f=tb.fmt&&tb.fmt[ri+","+ci];
+      td.style.textAlign=(f&&f.al)||s.align;
+      if(f&&f.b)td.style.fontWeight="700";
+      if(f&&f.i)td.style.fontStyle="italic";
+      if(f&&f.bg)td.style.background=f.bg;
+      if(f&&f.co)td.style.color=f.co;
       if(tb.headCol&&ci===0)td.className="hc";
+      // 未进入编辑时，在单元格上拖动即框选，Shift 点击扩展
+      td.addEventListener("pointerdown",e=>{
+        if(lock||e.button!==0||td.isContentEditable)return;
+        e.stopPropagation();
+        if(!sel.includes(c.id)){sel=[c.id];selLink=null;paintSel()}
+        if(e.shiftKey&&tbSel&&tbSel.id===oc.id){tbSel.r2=ri;tbSel.c2=ci}
+        else tbSel={id:c.id,r1:ri,c1:ci,r2:ri,c2:ci};
+        paintTbSel();syncBar();
+        let moved=false;
+        const over=ev=>{
+          const t2=document.elementFromPoint(ev.clientX,ev.clientY);
+          const cell2=t2&&t2.closest&&t2.closest("td");
+          if(cell2&&nodes.get(c.id).contains(cell2)){
+            const nr=+cell2.dataset.r,nc=+cell2.dataset.c;
+            if(nr!==tbSel.r2||nc!==tbSel.c2){moved=true;tbSel.r2=nr;tbSel.c2=nc;paintTbSel()}
+          }
+        };
+        const up=ev=>{
+          removeEventListener("pointermove",over);removeEventListener("pointerup",up);
+          if(!moved&&!e.shiftKey&&ev.detail>=2)editCell(td);
+        };
+        addEventListener("pointermove",over);addEventListener("pointerup",up);
+      });
       td.addEventListener("input",()=>{
         tb.rows[ri][ci]=td.innerText;
         syncTable(oc);measure();drawLinksSoon();save();
@@ -1513,15 +1606,37 @@ function tableMenu(x,y,c,target){
   const oc=orig(c),tb=oc.tb;
   const td=target&&target.closest&&target.closest("td");
   const ri=td?+td.dataset.r:-1, ci=td?+td.dataset.c:-1;
-  const items=[{head:t("tbMenu")+"  "+tb.rows.length+"\u00D7"+tb.cols.length}];
+  const R=tbRect();
+  const inSel=R&&R.id===c.id&&td&&ri>=R.r1&&ri<=R.r2&&ci>=R.c1&&ci<=R.c2;
+  const r1=inSel?R.r1:ri, r2=inSel?R.r2:ri, c1=inSel?R.c1:ci, c2=inSel?R.c2:ci;
+  const nR=r2-r1+1, nC=c2-c1+1;
+  const cw=Math.max(120,Math.round(baseSize()*13));
+  const items=[{head:t("tbMenu")+"  "+tb.rows.length+"\u00D7"+tb.cols.length
+    +(inSel&&(nR>1||nC>1)?"　"+t("tbSelInfo").replace("{n}",nR+"\u00D7"+nC):"")}];
   if(td){
-    items.push({label:t("tbRowAbove"),on:()=>tbOp(c,g=>g.rows.splice(ri,0,new Array(g.cols.length).fill("")))});
-    items.push({label:t("tbRowBelow"),on:()=>tbOp(c,g=>g.rows.splice(ri+1,0,new Array(g.cols.length).fill("")))});
-    items.push({label:t("tbColLeft"),on:()=>tbOp(c,g=>{g.cols.splice(ci,0,160);g.rows.forEach(r=>r.splice(ci,0,""))})});
-    items.push({label:t("tbColRight"),on:()=>tbOp(c,g=>{g.cols.splice(ci+1,0,160);g.rows.forEach(r=>r.splice(ci+1,0,""))})});
+    items.push({label:t("tbSelRow"),on:()=>{
+      tbSel={id:c.id,r1,c1:0,r2,c2:tb.cols.length-1};paintTbSel();syncBar()}});
+    items.push({label:t("tbSelCol"),on:()=>{
+      tbSel={id:c.id,r1:0,c1,r2:tb.rows.length-1,c2};paintTbSel();syncBar()}});
+    items.push({label:t("tbSelAll"),on:()=>{
+      tbSel={id:c.id,r1:0,c1:0,r2:tb.rows.length-1,c2:tb.cols.length-1};paintTbSel();syncBar()}});
     items.push("-");
-    if(tb.rows.length>1)items.push({label:t("tbDelRow"),on:()=>tbOp(c,g=>g.rows.splice(ri,1))});
-    if(tb.cols.length>1)items.push({label:t("tbDelCol"),on:()=>tbOp(c,g=>{g.cols.splice(ci,1);g.rows.forEach(r=>r.splice(ci,1))})});
+    // 有选区时按选区的行列数批量增删，没有则针对当前单元格
+    items.push({label:t("tbRowAbove")+(nR>1?"　\u00D7"+nR:""),
+      on:()=>tbOp(c,g=>{for(let k=0;k<nR;k++)g.rows.splice(r1,0,new Array(g.cols.length).fill(""))})});
+    items.push({label:t("tbRowBelow")+(nR>1?"　\u00D7"+nR:""),
+      on:()=>tbOp(c,g=>{for(let k=0;k<nR;k++)g.rows.splice(r2+1,0,new Array(g.cols.length).fill(""))})});
+    items.push({label:t("tbColLeft")+(nC>1?"　\u00D7"+nC:""),
+      on:()=>tbOp(c,g=>{for(let k=0;k<nC;k++){g.cols.splice(c1,0,cw);g.rows.forEach(r=>r.splice(c1,0,""))}})});
+    items.push({label:t("tbColRight")+(nC>1?"　\u00D7"+nC:""),
+      on:()=>tbOp(c,g=>{for(let k=0;k<nC;k++){g.cols.splice(c2+1,0,cw);g.rows.forEach(r=>r.splice(c2+1,0,""))}})});
+    items.push("-");
+    if(tb.rows.length>nR)items.push({label:t("tbDelRow")+(nR>1?"　\u00D7"+nR:""),
+      on:()=>{tbOp(c,g=>g.rows.splice(r1,nR));clearTbSel()}});
+    if(tb.cols.length>nC)items.push({label:t("tbDelCol")+(nC>1?"　\u00D7"+nC:""),
+      on:()=>{tbOp(c,g=>{g.cols.splice(c1,nC);g.rows.forEach(r=>r.splice(c1,nC))});clearTbSel()}});
+    items.push({label:t("tbClearCells"),on:()=>{
+      tbOp(c,g=>{for(let i=r1;i<=r2;i++)for(let j=c1;j<=c2;j++)g.rows[i][j]=""})}});
     items.push("-");
   }
   items.push({label:t("tbCopy"),key:"⌘C",on:()=>{
@@ -1660,7 +1775,9 @@ function finishCard(el,c,s){
   el.addEventListener("pointerdown",e=>{
     if(e.button!==0)return;
     if(lock){e.stopPropagation();focusCard(c);return}
-    if(editing&&cap.isContentEditable)return;
+    const capNow=el.querySelector(".cap");
+    if(editing&&((capNow&&capNow.isContentEditable)||
+      (e.target.closest&&e.target.closest("td[contenteditable=true]"))))return;
     e.stopPropagation();
     if(linkFrom){finishLinkClick(c);return}
     const ids=expand([c.id]);
@@ -2287,6 +2404,7 @@ stage.addEventListener("pointerdown",e=>{
   if(linkFrom){linkFrom=null;stage.style.cursor="";toast("")}
   if(e.button===2)return;
   if(selFrame){selFrame=null;renderFrames()}
+  clearTbSel();
   if(lock&&e.detail===2){fit();return}
   const wantPan=lock||e.button===1||spaceDown||e.altKey;
   if(wantPan){startPan(e);return}
@@ -2363,14 +2481,34 @@ addEventListener("keydown",e=>{
     return;
   }
   if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?applyUndo(redo,undo):applyUndo(undo,redo);return}
-  if((e.metaKey||e.ctrlKey)&&k==="a"){e.preventDefault();sel=S.cards.map(c=>c.id);paintSel();return}
+  if((e.metaKey||e.ctrlKey)&&k==="a"){
+    e.preventDefault();
+    const one=sel.length===1?card(sel[0]):null;
+    if(one&&isTable(one)){                       // 选中表格时：全选它的单元格
+      const tb=orig(one).tb;
+      tbSel={id:one.id,r1:0,c1:0,r2:tb.rows.length-1,c2:tb.cols.length-1};
+      paintTbSel();syncBar();return;
+    }
+    sel=S.cards.map(c=>c.id);paintSel();return;
+  }
   if((e.metaKey||e.ctrlKey)&&k==="d"){e.preventDefault();dupe();return}
   if((e.metaKey||e.ctrlKey)&&k==="l"&&sel.length){e.preventDefault();
     setCardLock(null,!sel.map(card).filter(Boolean).every(z=>z.lock));return}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="c"){e.preventDefault();clipCards("twin");return}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="v"){e.preventDefault();pasteClip(toW(mouse.x,mouse.y));return}
+  if(e.key==="Escape"&&tbRect()){clearTbSel();syncBar();return}
   if(e.key==="Escape"){closeMenus();sel=[];selLink=null;linkFrom=null;stage.style.cursor="";toast("");paintSel()}
-  if(e.key==="Backspace"||e.key==="Delete"){if(sel.length||selLink){e.preventDefault();del()}}
+  if(e.key==="Backspace"||e.key==="Delete"){
+    const R2=tbRect();
+    if(R2){                                       // 表格选区：清空内容而不是删卡片
+      e.preventDefault();
+      const c2=card(R2.id);
+      if(c2&&!isLocked(c2.id))tbOp(c2,g=>{
+        for(let i=R2.r1;i<=R2.r2;i++)for(let j=R2.c1;j<=R2.c2;j++)g.rows[i][j]=""});
+      return;
+    }
+    if(sel.length||selLink){e.preventDefault();del()}
+  }
   if(k==="f")fit();
   if(k==="z"&&!e.metaKey&&!e.ctrlKey)focusSel();
   if(k==="0")camTo(tgt.x,tgt.y,1);
@@ -2677,12 +2815,14 @@ const MANUAL=[
   <p><b>编辑</b>：双击任意单元格进入编辑。<kbd>Tab</kbd> 移到右邻单元格，<kbd>Shift</kbd> + <kbd>Tab</kbd> 向左，行尾会自动折到下一行开头。<kbd>Enter</kbd> 移到下一行同列，在最后一行按 <kbd>Enter</kbd> 会自动新增一行，所以连续录入不用碰菜单。<kbd>Esc</kbd> 退出编辑。</p>
   <p><b>列宽</b>：每两列之间有一条贯穿整个表格高度的分隔线，在任意行的位置都能拖动，选中表格时会显出一条淡线提示位置。默认是在相邻两列之间挪动边界，表格总宽不变；按住 <kbd>Alt</kbd> 拖动则只加宽当前列，整个表格随之变宽。右键菜单里有<b>列宽均分</b>。</p>
   <p><b>整体缩放</b>：拖动卡片四周的控制点可以等比缩放整张表，所有列宽按同一比例跟随，表格不会溢出选中框。新建时的列宽按当前基准字号推算，一开始就是舒服的宽度，输入文字之后也不会再变。</p>
-  <p><b>增删行列</b>：右键某个单元格，可在其上下左右插入，或删除所在行列。</p>
+  <p><b>选中单元格</b>：在单元格上拖动即可框选一片区域，<kbd>Shift</kbd> 点击扩展选区，选中表格后按 <kbd>Ctrl/Cmd</kbd> + <kbd>A</kbd> 选中全部单元格。右键菜单里有<b>选中整行</b>和<b>选中整列</b>。选中的格子会有淡蓝底色，按 <kbd>Esc</kbd> 取消。</p>
+  <p><b>逐格排版</b>：有选区时，工具栏的对齐、加粗、斜体、文字颜色、底色都只作用于选中的格子，所以可以让数字列居中、否定项标红、重点行加底色。没有选区时这些操作作用于整张表。<b>清除</b>会去掉选中格子的全部逐格设定。</p>
+  <p><b>增删行列</b>：右键某个单元格，可在其上下左右插入或删除。若当前有选区，插入和删除会按选区的行列数批量进行，比如选中三行后删除即一次删掉三行。菜单里另有<b>清空选中单元格</b>，只清内容不动结构；直接按 <kbd>Delete</kbd> 效果相同。</p>
   <p><b>标题栏</b>：右键菜单里可分别开关<b>标题行</b>和<b>标题列</b>，两者可以同时开启。标题会加粗并带浅底色，导出时映射为真正的表头。</p>
   <p><b>单元格内换行</b>：<kbd>Shift</kbd> + <kbd>Enter</kbd> 或 <kbd>Alt</kbd> + <kbd>Enter</kbd>。单独按 <kbd>Enter</kbd> 是移到下一行的单元格。</p>
   <p><b>与 Excel 互通</b>：从 Excel、Word 或网页表格复制的内容，粘进任意单元格会自动铺开成多行多列，行列不够自动补齐；粘在画布空白处则直接生成一张新表。含换行、制表符或引号的单元格都能正确还原，不会串行。</p>
   <p>反向也通：选中表格（不进入编辑）按 <kbd>Ctrl/Cmd</kbd> + <kbd>C</kbd>，或用右键菜单的<b>复制整张表格</b>，粘进 Excel 就是规规矩矩的单元格，不是一整坨文字。</p>
-  <p><b>导出</b>：Word 里是真正的表格对象，可继续编辑；PDF 和 HTML 是标准表格标签；Markdown 是管道表格，能被任何 Markdown 编辑器识别。表格内容也纳入全文检索。</p>
+  <p><b>导出</b>：Word 里是真正的表格对象，可继续编辑；PDF 和 HTML 是标准表格标签；Markdown 是管道表格，能被任何 Markdown 编辑器识别。逐格设定的对齐会一并带过去（Markdown 写在分隔行里，取每列的第一个设定）。表格内容也纳入全文检索。</p>
   <p>右键菜单底部的<b>转为纯文字</b>可以把表格拆回普通文字卡片，内容以制表符分隔保留。</p>
   <p class="tip">与页面的区别：页面管的是输出单元的划分，表格管的是结构化内容本身。文献对照、方法比较、时间线这类信息用表格比用一堆卡片清楚得多。</p>`],
 
@@ -3256,8 +3396,13 @@ async function exportDocx(D,o,tree){
           rows:g.rows.map((row,ri)=>new TableRow({
             tableHeader:!!(g.head&&ri===0),
             children:row.map((cell,ci)=>new TableCell({
-              children:[new Paragraph({children:[new TextRun({text:String(cell||""),
-                bold:!!((g.head&&ri===0)||(g.headCol&&ci===0))})]})]
+              children:[new Paragraph({
+                alignment:(()=>{const f=g.fmt&&g.fmt[ri+","+ci];
+                  if(!f||!f.al)return undefined;
+                  return f.al==="center"?AlignmentType.CENTER
+                    :f.al==="right"?AlignmentType.RIGHT:AlignmentType.LEFT})(),
+                children:[new TextRun({text:String(cell||""),
+                  bold:!!((g.head&&ri===0)||(g.headCol&&ci===0)||(g.fmt&&g.fmt[ri+","+ci]&&g.fmt[ri+","+ci].b))})]})]
             }))
           }))
         }));
@@ -3468,11 +3613,20 @@ function docMD(o,tree){
       const g=oc.tb;
       const esc2=v=>String(v==null?"":v).replace(/\|/g,"\\|").replace(/\n/g," ");
       const rows=g.rows.map(r=>"| "+r.map(esc2).join(" | ")+" |");
+      // Markdown 的对齐写在分隔行里，取每列第一行的设定
+      const colAl=g.cols.map((_,ci)=>{
+        for(let ri=0;ri<g.rows.length;ri++){
+          const f=g.fmt&&g.fmt[ri+","+ci];
+          if(f&&f.al)return f.al;
+        }
+        return null;
+      });
+      const sepFor=al=>al==="center"?" :---: ":al==="right"?" ---: ":" --- ";
       if(g.head&&rows.length){
-        rows.splice(1,0,"|"+g.cols.map(()=>" --- ").join("|")+"|");
+        rows.splice(1,0,"|"+colAl.map(sepFor).join("|")+"|");
       }else{
         rows.unshift("|"+g.cols.map(()=>"   ").join("|")+"|",
-                     "|"+g.cols.map(()=>" --- ").join("|")+"|");
+                     "|"+colAl.map(sepFor).join("|")+"|");
       }
       lines.push(...rows,"");
       return;
@@ -3532,7 +3686,11 @@ function docHTML(o,tree,forPrint){
       const g=orig(c).tb;
       h+=`<table class="tbx">`+g.rows.map((row,ri)=>"<tr>"+row.map((cell,ci)=>{
         const hd=(g.head&&ri===0)||(g.headCol&&ci===0);
-        return `<${hd?"th":"td"}>${esc(String(cell||""))}</${hd?"th":"td"}>`;
+        const f=g.fmt&&g.fmt[ri+","+ci];
+        const st2=[f&&f.al?"text-align:"+f.al:"",f&&f.b?"font-weight:700":"",
+          f&&f.bg?"background:"+f.bg:"",f&&f.co?"color:"+f.co:""].filter(Boolean).join(";");
+        return `<${hd?"th":"td"}${st2?` style="${esc(st2)}"`:""}>`
+          +esc(String(cell||"")).replace(/\n/g,"<br>")+`</${hd?"th":"td"}>`;
       }).join("")+"</tr>").join("")+`</table>`;
       if(wrapBg)h+="</div>";
       return;
@@ -3851,6 +4009,7 @@ function askRescale(){
   rescaleAll(n/cur);
 }
 function setCardBg(v){
+  if(applyCellFmt("bg",v||null))return;            // 表格选区：给选中的格子上底色
   const cs=targets().filter(z=>!isLocked(z.id));
   if(!cs.length)return;
   snap();
@@ -3859,6 +4018,15 @@ function setCardBg(v){
 }
 function setAlign(v){
   const c=barCard();if(!c)return;
+  if(applyCellFmt("al",v))return;                 // 有选区：只改选中的单元格
+  if(isTable(c)&&!isLocked(c.id)){                // 整张表：连同逐格覆盖一起清掉
+    const tb=orig(c).tb;
+    snap();
+    if(tb.fmt)Object.keys(tb.fmt).forEach(k=>{delete tb.fmt[k].al;
+      if(!Object.keys(tb.fmt[k]).length)delete tb.fmt[k]});
+    c.s={...DEF,...S.textDef,...(c.s||{}),align:v};c.sMan=true;
+    render();save();return;
+  }
   cardSnapStyle(()=>setStyle("align",v));
   syncBar();
 }
@@ -3868,6 +4036,13 @@ function afterInline(){
   syncBar();
 }
 function cmd(name){
+  if(tbRect()&&(name==="bold"||name==="italic")){   // 表格选区：整格加粗或斜体
+    const r=tbRect(),c=card(r.id),tb=orig(c).tb;
+    const key=name==="bold"?"b":"i";
+    const allOn=tbCells().every(([i,j])=>{const f=tb.fmt&&tb.fmt[i+","+j];return f&&f[key]});
+    applyCellFmt(key,allOn?null:true);
+    return;
+  }
   if(!ensureSel()){                                 // 没划选就作用于整张卡片
     const c=barCard();if(!c)return;
     const cur={...DEF,...S.textDef,...(c.s||{})};
@@ -3883,6 +4058,7 @@ function cmd(name){
   afterInline();
 }
 function setInkColor(v){
+  if(applyCellFmt("co",v))return;
   if(!ensureSel()){cardSnapStyle(()=>setStyle("color",v));return}
   document.execCommand("styleWithCSS",false,true);
   document.execCommand("foreColor",false,v);
@@ -3908,6 +4084,17 @@ function setHighlight(v){
   afterInline();
 }
 function clearFmt(){
+  const r0=tbRect();
+  if(r0){
+    const c0=card(r0.id);
+    if(c0&&!isLocked(c0.id)){
+      const tb=orig(c0).tb;
+      snap();tbCells().forEach(([i,j])=>{if(tb.fmt)delete tb.fmt[i+","+j]});
+      if(tb.fmt&&!Object.keys(tb.fmt).length)delete tb.fmt;
+      render();save();
+    }
+    return;
+  }
   if(!ensureSel()){const c=barCard();if(!c)return;
     snap();delete c.rich;c.s={...DEF,...S.textDef};render();save();return}
   document.execCommand("styleWithCSS",false,true);
@@ -4276,10 +4463,17 @@ function syncBar(){
   b.classList.add("on");
   const bw=b.offsetWidth||300;
   b.style.left=clamp(r.left+r.width/2-bw/2,8,innerWidth-bw-8)+"px";
-  // 始终贴在卡片上沿之上；上方空间不足时钉在视口顶部，不跟随卡片下沿浮动，
-  // 否则改字号导致卡片变高时工具条会在指针下方乱跳
-  const top=r.top-b.offsetHeight-12;
-  b.style.top=(top<8?8:top)+"px";
+  // 始终贴在卡片上沿之上；上方空间不足时改贴在卡片下沿，避免压住内容。
+  // 不用"钉在视口顶部"，那样会盖住表头这类必须看得见的东西。
+  const bh=b.offsetHeight;
+  const above=r.top-bh-12, below=r.bottom+12;
+  let top;
+  if(above>=8)top=above;                       // 上方放得下：贴上沿
+  else if(below+bh<=innerHeight-8)top=below;   // 否则贴下沿
+  else top=Math.max(8,Math.min(above>=0?above:8,innerHeight-bh-8));
+  b.style.top=top+"px";
+  // 实在挤不下时压在卡片上，至少让它半透明，不完全遮住内容
+  b.classList.toggle("overlap",above<8&&below+bh>innerHeight-8);
   const szi=b.querySelector("#szi");
   const cs2=curSize();
   if(szi&&!sizeEdit)szi.textContent=cs2;
@@ -4299,7 +4493,14 @@ function syncBar(){
     tl.textContent=nm.length>8?nm.slice(0,8)+"\u2026":nm;
     const mb=b.querySelector(".tplbtn");if(mb)mb.style.opacity=tp?"":"0.5";}
   const par=b.querySelector("#parlab");
-  if(par)par.innerHTML=alSvg(st.align||"left");
+  const rr=tbRect();
+  let alNow=st.align||"left";
+  if(rr){
+    const tb=orig(card(rr.id)).tb;
+    const f=tb.fmt&&tb.fmt[rr.r1+","+rr.c1];
+    if(f&&f.al)alNow=f.al;
+  }
+  if(par)par.innerHTML=alSvg(alNow);
   try{
     b.querySelector('[data-k="b"]').classList.toggle("on",document.queryCommandState("bold"));
     b.querySelector('[data-k="i"]').classList.toggle("on",document.queryCommandState("italic"));

@@ -883,6 +883,91 @@ group("tablesize 表格尺寸", async (c) => {
   c.ok("输入长文字后宽度不变", (await c.run((i) => card(i).w, id)) === w0);
 });
 
+group("cells 单元格选择", async (c) => {
+  await c.run(() => {
+    S.textDef = { ...DEF, size: 16 };
+    S.cards = []; S.links = []; S.frames = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    const cc = newTable({ x: 0, y: -100 }, 4, 4);
+    cc.tb.rows = [["甲", "乙", "丙", "丁"], ["1", "2", "3", "4"], ["5", "6", "7", "8"], ["9", "10", "11", "12"]];
+    syncTable(cc); sel = []; render();
+  });
+  await c.wait(500);
+  const id = await c.run(() => S.cards[0].id);
+
+  // 点表格必须能选中并弹出工具栏（曾因抽出 finishCard 时漏改一处引用而整个抛错）
+  const pt = await c.run((i) => {
+    const r = nodes.get(i).querySelector('td[data-r="1"][data-c="1"]').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }, id);
+  await c.page.mouse.click(pt.x, pt.y);
+  await c.wait(400);
+  c.ok("点击表格即选中并显示工具栏",
+    await c.run(() => $("bar").classList.contains("on") && sel.length === 1));
+  c.ok("点击单元格建立选区", await c.run(() => !!tbSel && tbSel.r1 === 1 && tbSel.c1 === 1));
+
+  const pt2 = await c.run((i) => {
+    const r = nodes.get(i).querySelector('td[data-r="2"][data-c="3"]').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }, id);
+  await c.page.mouse.move(pt.x, pt.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(pt2.x, pt2.y, { steps: 8 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  const rect = await c.run(() => tbRect());
+  c.ok("拖动可框选多个单元格", rect.r1 === 1 && rect.r2 === 2 && rect.c1 === 1 && rect.c2 === 3);
+  c.ok("选中的单元格有高亮", (await c.run((i) => nodes.get(i).querySelectorAll("td.tsel").length, id)) === 6);
+
+  await c.run(() => setAlign("center"));
+  await c.wait(400);
+  const al = await c.run((i) => ({
+    inside: getComputedStyle(nodes.get(i).querySelector('td[data-r="1"][data-c="1"]')).textAlign,
+    outside: getComputedStyle(nodes.get(i).querySelector('td[data-r="0"][data-c="0"]')).textAlign,
+  }), id);
+  c.ok("对齐只作用于选中的单元格", al.inside === "center" && al.outside === "left");
+
+  await c.run(() => cmd("bold"));
+  await c.wait(400);
+  c.ok("可以加粗选中的单元格",
+    (await c.run((i) => getComputedStyle(nodes.get(i).querySelector('td[data-r="1"][data-c="1"]')).fontWeight, id)) === "700");
+
+  await c.run((i) => { const tb = card(i).tb; tbSel = { id: i, r1: 0, c1: 0, r2: 0, c2: tb.cols.length - 1 }; paintTbSel(); }, id);
+  await c.wait(300);
+  c.ok("可以选中整行", (await c.run((i) => nodes.get(i).querySelectorAll("td.tsel").length, id)) === 4);
+  await c.run((i) => { const tb = card(i).tb; tbSel = { id: i, r1: 0, c1: 2, r2: tb.rows.length - 1, c2: 2 }; paintTbSel(); }, id);
+  await c.wait(300);
+  c.ok("可以选中整列", (await c.run((i) => nodes.get(i).querySelectorAll("td.tsel").length, id)) === 4);
+
+  await c.run((i) => { tbSel = { id: i, r1: 1, c1: 0, r2: 2, c2: 0 }; tbOp(card(i), (g) => g.rows.splice(1, 2)); clearTbSel(); }, id);
+  await c.wait(400);
+  c.ok("可按选区批量删行", (await c.run((i) => card(i).tb.rows.length, id)) === 2);
+
+  await c.run((i) => { clearTbSel(); sel = [i]; paintSel(); setAlign("right"); }, id);
+  await c.wait(400);
+  c.ok("无选区时对齐整张表",
+    await c.run((i) => [...nodes.get(i).querySelectorAll("td")].every((td) => getComputedStyle(td).textAlign === "right"), id));
+
+  const out = await c.run((i) => {
+    tbSel = { id: i, r1: 0, c1: 1, r2: 1, c2: 1 }; applyCellFmt("al", "center");
+    const tree = buildTree();
+    return {
+      md: docMD({ title: "T", img: 0, tags: 0, refs: 0, table: 0 }, tree),
+      html: docHTML({ title: "T", img: 0, tags: 0, refs: 0, table: 0 }, tree, false),
+    };
+  }, id);
+  c.ok("Markdown 导出带对齐", /:---:/.test(out.md));
+  c.ok("HTML 导出带对齐", /text-align:center/.test(out.html));
+
+  // 工具栏不能压住卡片内容
+  await c.run((i) => { clearTbSel(); sel = [i]; paintSel(); camTo(0, 0, 1, true); syncBar(); }, id);
+  await c.wait(400);
+  c.ok("工具栏不遮挡表格", await c.run((i) => {
+    const br = $("bar").getBoundingClientRect(), cr = nodes.get(i).getBoundingClientRect();
+    return br.bottom <= cr.top + 1 || br.top >= cr.bottom - 1 || $("bar").classList.contains("overlap");
+  }, id));
+});
+
 group("excel 表格与 Excel 互通", async (c) => {
   await c.run(() => {
     S.textDef = { ...DEF, size: 18 };
