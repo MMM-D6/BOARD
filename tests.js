@@ -817,6 +817,72 @@ group("table 表格", async (c) => {
   c.ok("可以转为纯文字", await c.run((i) => !card(i).tb && card(i).text.includes("Bulley"), id));
 });
 
+group("tablesize 表格尺寸", async (c) => {
+  await c.run(() => {
+    S.textDef = { ...DEF, size: 18 };
+    S.cards = []; S.links = []; S.frames = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    newTable({ x: 0, y: -200 }, 3, 4);
+  });
+  await c.wait(500);
+  const id = await c.run(() => S.cards[0].id);
+  const init = await c.run((i) => ({
+    w: card(i).w, col: card(i).tb.cols[0],
+    tbl: nodes.get(i).querySelector("table").getBoundingClientRect().width,
+  }), id);
+  c.ok("新建列宽按字号给足（实测 " + init.col + "px）", init.col >= 200);
+  c.ok("表格宽度与卡片一致", Math.abs(init.tbl - init.w) < 3);
+
+  // 用控制点拉窄：列宽必须跟着缩，否则表格会溢出选中框
+  const h = await c.run((i) => {
+    const r = nodes.get(i).querySelector(".hnd.se").getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }, id);
+  await c.page.mouse.move(h.x, h.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(h.x - 500, h.y, { steps: 12 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  const nar = await c.run((i) => ({
+    w: card(i).w, sum: card(i).tb.cols.reduce((a, b) => a + b, 0),
+    tbl: nodes.get(i).querySelector("table").getBoundingClientRect().width,
+    el: nodes.get(i).getBoundingClientRect().width,
+  }), id);
+  c.ok("拉窄时列宽按比例跟随", nar.sum === nar.w);
+  c.ok("表格不再溢出选中框", Math.abs(nar.tbl - nar.el) < 3);
+
+  // 分隔线：每两列之间一条，贯穿整表高度，任意位置可拖
+  const g = await c.run((i) => {
+    const el = nodes.get(i), gs = el.querySelectorAll(".cgrip");
+    const r = gs[1].getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height * 0.7, n: gs.length, h: r.height,
+      tblH: el.querySelector("table").getBoundingClientRect().height };
+  }, id);
+  c.ok("每两列之间都有分隔把手", g.n === 3);
+  c.ok("把手贯穿整个表格高度", Math.abs(g.h - g.tblH) < 4);
+
+  const before = await c.run((i) => [...card(i).tb.cols], id);
+  await c.page.mouse.move(g.x, g.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(g.x + 60, g.y, { steps: 10 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  const after = await c.run((i) => [...card(i).tb.cols], id);
+  c.ok("可以在表格中部拖动分隔线", after[1] > before[1]);
+  c.ok("相邻列反向让位且总宽不变",
+    after[2] < before[2] &&
+    Math.abs(after.reduce((a, b) => a + b, 0) - before.reduce((a, b) => a + b, 0)) < 3);
+
+  const w0 = await c.run((i) => card(i).w, id);
+  await c.run((i) => {
+    const cc = card(i);
+    cc.tb.rows[1][0] = "这是一段比较长的内容用来验证输入之后列宽是否保持稳定";
+    syncTable(cc); render();
+  }, id);
+  await c.wait(400);
+  c.ok("输入长文字后宽度不变", (await c.run((i) => card(i).w, id)) === w0);
+});
+
 group("scale 整体缩放", async (c) => {
   const r = await c.run(() => {
     S.textDef = { ...DEF, size: 18 };

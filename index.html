@@ -52,9 +52,13 @@
   .card table.tb tr.hd td{font-weight:600;background:var(--tbhd)}
   .card table.tb td.hc{font-weight:600;background:var(--tbhd)}
   .card table.tb td[contenteditable=true]{outline:none;background:var(--tbedit)}
-  .card .cgrip{position:absolute;top:0;right:calc(-4px * var(--iz));width:calc(8px * var(--iz));
-    height:100%;cursor:col-resize;z-index:2}
-  .card .cgrip:hover{background:var(--frame);opacity:.35}
+  .card .tbwrap{position:relative}
+  .card .cgrip{position:absolute;top:0;bottom:0;width:calc(11px * var(--iz));
+    margin-left:calc(-5.5px * var(--iz));cursor:col-resize;z-index:4;background:transparent}
+  .card .cgrip:after{content:"";position:absolute;left:50%;top:0;bottom:0;
+    width:calc(2px * var(--iz));margin-left:calc(-1px * var(--iz));background:var(--frame);
+    opacity:0;transition:opacity .12s}
+  .card .cgrip:hover:after,.card .cgrip.on:after{opacity:.75}
   body.lock .card .cgrip{display:none}
   .card .cap{margin-top:10px;white-space:pre-wrap;word-break:break-word;min-height:1em}
   .card .cap:empty:before{content:attr(data-ph);opacity:.28}
@@ -1260,7 +1264,8 @@ function badgeOf(c){
 const isTable=c=>!!(c&&orig(c).tb);
 function newTable(p,rows,cols){
   rows=rows||3;cols=cols||3;
-  const cw=180;
+  // 列宽按当前基准字号推算，保证新建时就是一个舒服的宽度，输入文字后不会再变
+  const cw=Math.max(120,Math.round(baseSize()*13));
   const tb={head:true,headCol:false,cols:new Array(cols).fill(cw),
     rows:Array.from({length:rows},()=>new Array(cols).fill(""))};
   const w=cols*cw;
@@ -1371,33 +1376,49 @@ function buildTable(el,c,oc,s){
         syncTable(oc);measure();drawLinksSoon();save();
       });
       td.addEventListener("pointerdown",e=>{if(td.isContentEditable)e.stopPropagation()});
-      // 列宽拖动：每列右缘一条把手
-      if(ri===0&&ci<tb.cols.length){
-        const gp=document.createElement("div");gp.className="cgrip";
-        gp.addEventListener("pointerdown",e=>{
-          if(lock||isLocked(c.id))return;
-          e.preventDefault();e.stopPropagation();
-          const sx=e.clientX,w0=tb.cols[ci];
-          snap();
-          const mv=ev=>{
-            tb.cols[ci]=Math.max(40,Math.round(w0+(ev.clientX-sx)/cam.z));
-            cg.children[ci].style.width=tb.cols[ci]+"px";
-            oc.w=Math.round(tb.cols.reduce((a,b)=>a+b,0));
-            el.style.width=oc.w+"px";
-            measure();drawLinksSoon();
-          };
-          const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
-            syncTable(oc);save()};
-          addEventListener("pointermove",mv);addEventListener("pointerup",up);
-        });
-        td.appendChild(gp);
-      }
       tr.appendChild(td);
     });
     body.appendChild(tr);
   });
   table.appendChild(body);
-  el.appendChild(table);
+  const wrap=document.createElement("div");wrap.className="tbwrap";
+  wrap.appendChild(table);
+  // 列分隔线：贯穿整个表格高度，任意位置都能拖
+  let acc=0;
+  tb.cols.forEach((w,ci)=>{
+    acc+=w;
+    if(ci===tb.cols.length-1)return;
+    const gp=document.createElement("div");gp.className="cgrip";
+    gp.style.left=acc+"px";
+    gp.addEventListener("pointerdown",e=>{
+      if(lock||isLocked(c.id))return;
+      e.preventDefault();e.stopPropagation();
+      gp.classList.add("on");
+      const sx=e.clientX,w0=tb.cols[ci],w1=tb.cols[ci+1];
+      snap();
+      const mv=ev=>{
+        const d=(ev.clientX-sx)/cam.z;
+        // 默认在相邻两列之间挪动边界，总宽不变；按住 Alt 则只加宽当前列
+        if(ev.altKey){
+          tb.cols[ci]=Math.max(40,Math.round(w0+d));
+        }else{
+          const dd=clamp(d,-(w0-40),w1-40);
+          tb.cols[ci]=Math.round(w0+dd);tb.cols[ci+1]=Math.round(w1-dd);
+        }
+        oc.w=Math.round(tb.cols.reduce((a,b)=>a+b,0));
+        el.style.width=oc.w+"px";
+        [...cg.children].forEach((col,i)=>col.style.width=tb.cols[i]+"px");
+        let a2=0;[...wrap.querySelectorAll(".cgrip")].forEach((g2,i)=>{
+          a2+=tb.cols[i];g2.style.left=a2+"px"});
+        measure();drawLinksSoon();
+      };
+      const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+        gp.classList.remove("on");syncTable(oc);save()};
+      addEventListener("pointermove",mv);addEventListener("pointerup",up);
+    });
+    wrap.appendChild(gp);
+  });
+  el.appendChild(wrap);
 }
 function tableMenu(x,y,c,target){
   const oc=orig(c),tb=oc.tb;
@@ -2043,6 +2064,7 @@ function startMove(e,onClick){
 function startResize(e,c,dir){
   if(isLocked(c.id))return;
   snap();
+  const tb0=orig(c).tb?[...orig(c).tb.cols]:null;   // 表格：列宽按同一比例跟随卡片宽度
   const d=dir||"se";
   const sx=e.clientX,sy=e.clientY,ow=c.w,ox=c.x,oy=c.y,oh=hOf(c)||c.w;
   const right=ox+ow,bottom=oy+oh;
@@ -2054,7 +2076,15 @@ function startResize(e,c,dir){
     else if(d.includes("w"))w=ow-dx;
     else if(d==="s")w=ow*Math.max(.08,(oh+dy)/oh);
     else if(d==="n")w=ow*Math.max(.08,(oh-dy)/oh);
-    c.w=Math.round(clamp(w,60,4000));
+    c.w=Math.round(clamp(w,tb0?tb0.length*40:60,6000));
+    if(tb0){
+      const kk=c.w/tb0.reduce((a,b)=>a+b,0);
+      const o=orig(c);
+      o.tb.cols=tb0.map(v=>Math.max(40,Math.round(v*kk)));
+      o.w=o.tb.cols.reduce((a,b)=>a+b,0);c.w=o.w;
+      const cg=el.querySelector("colgroup");
+      if(cg)[...cg.children].forEach((col,i)=>col.style.width=o.tb.cols[i]+"px");
+    }
     if(d.includes("w"))c.x=Math.round(right-c.w);
     el.style.width=c.w+"px";el.style.left=c.x+"px";
     measure();
@@ -2062,6 +2092,7 @@ function startResize(e,c,dir){
     drawLinksSoon();
   };
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    if(tb0)syncTable(orig(c));
     measure();drawLinks();save()};
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
@@ -2507,7 +2538,8 @@ const MANUAL=[
  ["表格","BIAOGE",`
   <p>右键空白处选<b>插入表格</b>，从预设的行列数里挑一个即可。表格是卡片的一种形态，所以移动、选中、锁定、页面归属、导出顺序、整体缩放全都和普通卡片一样。</p>
   <p><b>编辑</b>：双击任意单元格进入编辑。<kbd>Tab</kbd> 移到右邻单元格，<kbd>Shift</kbd> + <kbd>Tab</kbd> 向左，行尾会自动折到下一行开头。<kbd>Enter</kbd> 移到下一行同列，在最后一行按 <kbd>Enter</kbd> 会自动新增一行，所以连续录入不用碰菜单。<kbd>Esc</kbd> 退出编辑。</p>
-  <p><b>列宽</b>：把鼠标移到列的右边界拖动即可，卡片宽度自动跟随列宽之和。右键菜单里有<b>列宽均分</b>。</p>
+  <p><b>列宽</b>：每两列之间有一条贯穿整个表格高度的分隔线，在任意行的位置都能拖动，靠近时会显现。默认是在相邻两列之间挪动边界，表格总宽不变；按住 <kbd>Alt</kbd> 拖动则只加宽当前列，整个表格随之变宽。右键菜单里有<b>列宽均分</b>。</p>
+  <p><b>整体缩放</b>：拖动卡片四周的控制点可以等比缩放整张表，所有列宽按同一比例跟随，表格不会溢出选中框。新建时的列宽按当前基准字号推算，一开始就是舒服的宽度，输入文字之后也不会再变。</p>
   <p><b>增删行列</b>：右键某个单元格，可在其上下左右插入，或删除所在行列。</p>
   <p><b>标题栏</b>：右键菜单里可分别开关<b>标题行</b>和<b>标题列</b>，两者可以同时开启。标题会加粗并带浅底色，导出时映射为真正的表头。</p>
   <p><b>粘贴</b>：从 Excel、Word 或网页表格里复制的内容，粘进任意单元格会自动铺开成多行多列，不够的行列自动补齐。</p>
