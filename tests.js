@@ -412,8 +412,9 @@ group("lock 锁定", async (c) => {
   c.ok("全锁后隐藏缩放控制点",
     await c.run(() => getComputedStyle(nodes.get("a").querySelector(".hnd")).display === "none"));
   c.ok("锁定不显示额外标注", await c.run(() => !nodes.get("a").querySelector(".lockmk")));
-  c.ok("锁定后文字仍可选中复制",
+  c.ok("全锁后文字仍可选中复制",
     await c.run(() => getComputedStyle(nodes.get("a").querySelector(".cap")).userSelect === "text"));
+
 
   /* --- 两种解锁 --- */
   await c.run(() => setCardLock(["a"], "text"));
@@ -460,6 +461,48 @@ group("lock 锁定", async (c) => {
   await c.run(() => setFrameLock(S.frames[0], null));
   await c.wait(300);
   c.ok("整页可解锁", await c.run(() => !isLocked("a") && !isLocked("b")));
+
+
+  /* --- 划选行为：能移动的拖动即移动，钉住的拖动才选字 --- */
+  await c.run(() => {
+    S.cards = [{ id: "a", x: -200, y: 0, w: 400, text: "这是一段用于测试拖动行为的文字内容，需要足够长以便划选。", s: {} }];
+    S.links = []; S.frames = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    setCardLock(["a"], "text"); sel = ["a"]; paintSel(); getSelection().removeAllRanges();
+  });
+  await c.wait(300);
+  c.ok("仅锁内容时文字不参与划选",
+    await c.run(() => getComputedStyle(nodes.get("a").querySelector(".cap")).userSelect === "none"));
+  const tp = await c.run(() => {
+    const r = nodes.get("a").querySelector(".cap").getBoundingClientRect();
+    return { x: r.x + 8, y: r.y + 8, cx: card("a").x };
+  });
+  await c.page.mouse.move(tp.x, tp.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(tp.x + 90, tp.y + 30, { steps: 8 });
+  await c.page.mouse.up();
+  await c.wait(350);
+  c.ok("仅锁内容时拖动是移动卡片",
+    Math.abs((await c.run(() => card("a").x)) - tp.cx - 90) < 8);
+  c.ok("仅锁内容时不会误选文字", (await c.run(() => getSelection().toString())) === "");
+
+  await c.run(() => { setCardLock(["a"], "all"); sel = ["a"]; paintSel(); getSelection().removeAllRanges(); });
+  await c.wait(300);
+  const tp2 = await c.run(() => {
+    const r = nodes.get("a").querySelector(".cap").getBoundingClientRect();
+    return { x: r.x + 8, y: r.y + 8, cx: card("a").x };
+  });
+  await c.page.mouse.move(tp2.x, tp2.y);
+  await c.page.mouse.down();
+  for (let i = 1; i <= 6; i++) {           // 慢一点，浏览器才会真的产生选择
+    await c.page.mouse.move(tp2.x + i * 28, tp2.y + 2);
+    await c.wait(40);
+  }
+  await c.page.mouse.up();
+  await c.wait(300);
+  c.ok("全锁时拖动可划选文字", (await c.run(() => getSelection().toString())).length > 2);
+  c.ok("全锁时拖动不会移动卡片", (await c.run(() => card("a").x)) === tp2.cx);
+  await c.run(() => getSelection().removeAllRanges());
 
   const mig = await c.run(() =>
     migrate({ v: 4, cards: [{ id: "x", x: 0, y: 0, w: 200, text: "", lock: true }], links: [], frames: [] }));

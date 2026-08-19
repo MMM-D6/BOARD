@@ -71,7 +71,6 @@
   body.lock .card .cgrip{display:none}
   .card .cap{margin-top:10px;white-space:pre-wrap;word-break:break-word;min-height:1em}
   .card .cap:empty:before{content:attr(data-ph);opacity:.28}
-  .card.lk .cap{user-select:text;cursor:text}
   .card .cap[contenteditable=true]{user-select:text;cursor:text;
     box-shadow:0 0 0 calc(1px * var(--iz)) rgba(0,0,0,.18);border-radius:2px}
   .card.sel .ring{position:absolute;inset:calc(-7px * var(--iz));pointer-events:none;
@@ -159,7 +158,14 @@
   body.hidecur,body.hidecur *{cursor:none !important}
   .card.lkpos .hnd{display:none !important}
   /* 锁定的卡片仍可划选文字以便复制引文，只是不能编辑 */
-  .card.lk .cap{user-select:text;-webkit-user-select:text;cursor:text}
+  /* 仅锁内容的卡片还能拖动，所以拖动用于移动，不去选文字 */
+  .card.lk .cap,.card.lk table.tb td{user-select:none;-webkit-user-select:none}
+  /* 位置已钉住的卡片拖不动，此时把拖动让给文字选择。
+     外层 .card 是 user-select:none，必须在卡片这一层一起放开，
+     否则浏览器不会把这块区域纳入选择范围 */
+  .card.lkpos{user-select:text;-webkit-user-select:text}
+  .card.lk.lkpos .cap,.card.lk.lkpos table.tb td{
+    user-select:text;-webkit-user-select:text;cursor:text}
   #find{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:70;display:none;
     align-items:center;gap:8px;padding:6px 10px;border-radius:9px;background:var(--panel);
     color:var(--pfg);border:1px solid var(--pline);box-shadow:0 8px 26px rgba(0,0,0,.13)}
@@ -1806,6 +1812,14 @@ function finishCard(el,c,s){
     const capNow=el.querySelector(".cap");
     if(editing&&((capNow&&capNow.isContentEditable)||
       (e.target.closest&&e.target.closest("td[contenteditable=true]"))))return;
+    if(isPinned(c.id)&&e.target.closest&&
+       (e.target.closest(".cap")||e.target.closest("td"))){
+      // 钉住的卡片本来就挪不动，此时把拖动让给浏览器用于划选文字。
+      // 仍要拦下事件，否则画布会当成框选；但不能 preventDefault，否则选不了字。
+      e.stopPropagation();
+      if(!sel.includes(c.id)){sel=[c.id];selLink=null;paintSel()}
+      return;
+    }
     e.stopPropagation();
     if(linkFrom){finishLinkClick(c);return}
     const ids=expand([c.id]);
@@ -2283,7 +2297,7 @@ function startMove(e,onClick){
   if(lock)return;
   snap();
   const list=movableSel().map(card).filter(Boolean).map(o=>({o,x:o.x,y:o.y}));
-  if(!list.length){if(sel.length)toast(t("lockedNote"));return}
+  if(!list.length)return;
   const moving=new Set(list.map(z=>z.o.id));
   const liveLinks=S.links.filter(l=>moving.has(l.a)||moving.has(l.b));
   const sx=e.clientX,sy=e.clientY;let moved=false;
@@ -2929,7 +2943,8 @@ const MANUAL=[
   </ul>
   <p><b>解锁同样分两级</b>：<b>解除位置锁定</b>降回仅锁内容，方便临时挪一挪；<b>完全解锁</b>则彻底放开。</p>
   <p>快捷键 <kbd>Ctrl/Cmd</kbd> + <kbd>L</kbd> 切换仅锁内容，加 <kbd>Shift</kbd> 切换锁内容与位置。</p>
-  <p>锁定没有任何视觉标注，因为一旦动不了你自然就知道它锁着了。锁定只挡编辑，不挡阅读，文字依然可以划选复制。</p>
+  <p>锁定没有任何视觉标注，因为一旦动不了你自然就知道它锁着了。</p>
+  <p><b>拖动的含义随锁定级别而变</b>：仅锁定内容时卡片还能移动，所以在卡片上拖动就是移动它；锁定内容与位置之后卡片挪不动了，此时拖动改为划选文字，方便复制引用。两者不会互相干扰。</p>
   <p><b>相关的连线也随之锁定</b>：只要连线的任意一端被锁，这条线就不能删除、不能改样式，但仍可写备注。</p>
   <p><b>整页锁定</b>：右键页面标题的<b>锁定本页</b>，两级模式与解锁选项同样齐全，一次作用于页内全部卡片。需要改其中一张时单独解锁，改完再整页锁一次即可全部锁回，不必记住谁被解过。</p>
   <p><b>分身默认为仅锁定内容</b>。因为分身与源共享同一份内容，在分身上误改就是改到原文。默认锁上之后，你可以放心把分身摆到任何地方作为索引和线索，需要修改时到源头改，或先解锁再改。分身仍可自由移动和缩放，不影响布局。</p>
