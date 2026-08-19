@@ -198,6 +198,14 @@
   .card .lvl{position:absolute;left:0;top:calc(-16px * var(--iz));opacity:.38;
     font:500 calc(9px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
   body.lock .card .lvl{display:none}
+  /* 层级用左侧竖条表示，粗细即层级，不写字母 */
+  .card .hbar{position:absolute;left:calc(-12px * var(--iz));top:0;
+    border-radius:calc(2px * var(--iz));background:currentColor;pointer-events:none}
+  /* 一级最粗最长，逐级递减，同时用长度区分，缩小时也分得清 */
+  .card.h1 .hbar{width:calc(4px * var(--iz));height:100%;opacity:.5}
+  .card.h2 .hbar{width:calc(2.5px * var(--iz));height:68%;opacity:.38}
+  .card.h3 .hbar{width:calc(1.5px * var(--iz));height:42%;opacity:.3}
+  body.lock .card .hbar{display:none}
   .card .tags{margin-top:7px;display:flex;flex-wrap:wrap;gap:5px}
   .card .tg{font:400 .68em/1.5 "IBM Plex Mono",monospace;padding:1px 7px;border-radius:99px;
     border:1px solid currentColor;opacity:.42;cursor:pointer}
@@ -275,7 +283,7 @@
   #bar .szi.editing{background:var(--phi);box-shadow:inset 0 0 0 1px var(--frame)}
   #bar .pp{position:absolute;top:100%;left:0;margin-top:7px;z-index:6;display:none;padding:7px;
     border-radius:10px;background:var(--panel);border:1px solid var(--pline);
-    box-shadow:0 16px 40px rgba(0,0,0,.2);min-width:150px;white-space:normal}
+    box-shadow:0 16px 40px rgba(0,0,0,.2);min-width:186px;white-space:normal}
   #bar .pp .scroll{min-width:198px}
   #bar .pp.on{display:block}
   #bar .pp.right{left:auto;right:0}
@@ -302,7 +310,7 @@
   #bar .pp .rowp .val{width:30px;text-align:right;opacity:.5;font:400 10.5px/1 "IBM Plex Mono",monospace}
   #bar .pp .seg{display:flex;margin:3px 3px 8px}
   #bar .pp .seg button{flex:1;height:26px;border:1px solid var(--pline);background:none;cursor:pointer;
-    color:inherit;font-size:11.5px;margin-left:-1px}
+    color:inherit;font-size:11.5px;margin-left:-1px;white-space:nowrap;padding:0 2px}
   #bar .pp .seg button:first-child{border-radius:6px 0 0 6px;margin-left:0}
   #bar .pp .seg button:last-child{border-radius:0 6px 6px 0}
   #bar .pp .seg button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
@@ -417,6 +425,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   trackShort:"Track",leadShort:"Lead",cardBg:"Card background",hlNone:"No highlight",
   unifyHint:"Style one card first, then apply it to every card of that level.",
   clearFmt:"Clear",unify:"Unify",unifyGo:"Apply to level",bodyShort:"Body",
+  lvShort1:"Level 1",lvShort2:"Level 2",lvShort3:"Level 3",
   exclManual:"skip cards styled by hand",unifyDone:"Cards updated:",needTextSel:"Select some text first",textBar:"Text toolbar",
   zoomTo:"Zoom to this",
   clipTwinDo:"Put a twin on the clipboard",clipCopyDo:"Copy card to the clipboard",
@@ -534,6 +543,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   trackShort:"字距",leadShort:"行距",cardBg:"卡片底色",hlNone:"取消高亮",
   unifyHint:"先把一张卡片调好，再统一到该层级的全部卡片",
   clearFmt:"清除",unify:"分级统一",unifyGo:"统一该层级",bodyShort:"正文",
+  lvShort1:"一级",lvShort2:"二级",lvShort3:"三级",
   exclManual:"跳过手动调整过的",unifyDone:"已统一卡片：",needTextSel:"请先划选文字",textBar:"文字工具条",
   zoomTo:"放大居中",
   clipTwinDo:"把分身放入剪贴板",clipCopyDo:"复制卡片到剪贴板",
@@ -1317,7 +1327,8 @@ function badgeOf(c){
   if(c.role==="apx")return S.autoNum?(NUM.get(c.id)||t("apxLabel")):t("apxLabel");
   if(c.role==="aside")return t("asideTag");
   if(!c.level)return "";
-  return S.autoNum?(NUM.get(c.id)||("H"+c.level)):("H"+c.level);
+  // 层级本身由左侧竖条表示，这里只在开启自动编号时显示编号
+  return S.autoNum?(NUM.get(c.id)||""):"";
 }
 // 表格是卡片的一种形态：位置、选中、移动、锁定、页面归属、导出顺序全部复用卡片逻辑
 const isTable=c=>!!(c&&orig(c).tb);
@@ -1714,7 +1725,7 @@ function syncCap(c0,cap){
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
-  el.className="card"+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
+  el.className="card"+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
   if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
@@ -1779,6 +1790,10 @@ function makeCard(c){
     tw.addEventListener("contextmenu",e=>{if(lock)return;e.preventDefault();e.stopPropagation();
       sel=[c.id];paintSel();twinMenu(e.clientX,e.clientY,c)});
     el.appendChild(tw);
+  }
+  if(c.level&&!c.role){
+    const hb=document.createElement("div");hb.className="hbar";
+    hb.style.color=s.color;el.appendChild(hb);
   }
   const badge=badgeOf(c);
   if(badge){const lb=document.createElement("div");lb.className="lvl";
@@ -2804,6 +2819,7 @@ const MANUAL=[
   <p class="tip">与分级统一的分工：分级统一是把某一层级刷成同一个样子，会抹掉差异；整体缩放是等比例改变尺度，保留全部差异。</p>`],
 
  ["分级统一","FENJITONGYI",`
+  <p>层级在画布上由卡片左侧的竖条表示，一级最粗、逐级递减，不写 H1 这类字母。开启自动编号后竖条上方会显示编号。</p>
   <p>工具条第二行右侧用来统一某一层级的排印。做法是：先把一张卡片调成你想要的样子，再选择层级（正文 / H1 / H2 / H3），点<b>统一该层级</b>，画布上该层级的所有卡片一并采用这套字体、字号、字重、字距、行距和颜色。</p>
   <p><b>跳过手动调整过的</b>默认勾选。凡是你单独动过格式的卡片会被保护，不会被批量覆盖，适合保留特意做了标记或强调的那几张。取消勾选则是全部统一，无一例外。</p>
   <p>统一之后该层级的样式会被记住，之后新设为这个层级的卡片自动采用它；统一"正文"同时也决定新建卡片的起始格式。</p>
@@ -4443,7 +4459,7 @@ function buildBar(){
     pop.appendChild(h);
     const seg=document.createElement("div");seg.className="seg";
     let lv=0;
-    [[0,t("bodyShort")],[1,"H1"],[2,"H2"],[3,"H3"]].forEach(([v,txt],i)=>{
+    [[0,t("bodyShort")],[1,t("lvShort1")],[2,t("lvShort2")],[3,t("lvShort3")]].forEach(([v,txt],i)=>{
       const x=document.createElement("button");x.textContent=txt;
       if(i===0)x.classList.add("on");
       x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});

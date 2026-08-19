@@ -331,6 +331,41 @@ group("twins 分身", async (c) => {
    5. 页面、层级与阅读顺序
    ===================================================================== */
 
+group("levelmark 层级标记", async (c) => {
+  await c.run(() => {
+    S.textDef = { ...DEF, size: 16 }; S.autoNum = false;
+    S.cards = [
+      { id: "h1", x: -260, y: -220, w: 520, text: "Introduction", level: 1, s: { ...DEF, ...levelStyle(1) } },
+      { id: "h2", x: -260, y: -100, w: 520, text: "Background", level: 2, s: { ...DEF, ...levelStyle(2) } },
+      { id: "h3", x: -260, y: -10, w: 520, text: "Early studies", level: 3, s: { ...DEF, ...levelStyle(3) } },
+      { id: "p", x: -260, y: 70, w: 520, text: "正文", s: { ...DEF } },
+    ];
+    S.links = []; S.frames = [];
+    invalidateIndex(); render(); fit(true);
+  });
+  await c.wait(500);
+  c.ok("标题不再显示 H1 字样", await c.run(() =>
+    ["h1", "h2", "h3"].every((i) => {
+      const b2 = nodes.get(i).querySelector(".lvl");
+      return !b2 || !/^H\d/.test(b2.textContent);
+    })));
+  c.ok("标题带左侧层级竖条",
+    await c.run(() => ["h1", "h2", "h3"].every((i) => !!nodes.get(i).querySelector(".hbar"))));
+  c.ok("正文没有竖条", await c.run(() => !nodes.get("p").querySelector(".hbar")));
+  const bars = await c.run(() => ["h1", "h2", "h3"].map((i) => {
+    const r = nodes.get(i).querySelector(".hbar").getBoundingClientRect();
+    return { w: +r.width.toFixed(1), h: +r.height.toFixed(1) };
+  }));
+  c.ok("竖条按层级递减（粗细）", bars[0].w > bars[1].w && bars[1].w > bars[2].w);
+  c.ok("竖条按层级递减（长度）", bars[0].h > bars[1].h && bars[1].h > bars[2].h);
+
+  await c.run(() => { S.autoNum = true; render(); });
+  await c.wait(400);
+  c.ok("开启自动编号后显示编号",
+    (await c.run(() => nodes.get("h3").querySelector(".lvl").textContent)) === "1.1.1");
+  c.ok("编号与竖条同时存在", await c.run(() => !!nodes.get("h3").querySelector(".hbar")));
+});
+
 group("pages 页面与层级", async (c) => {
   await c.board(
     [
