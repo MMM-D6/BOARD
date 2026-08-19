@@ -151,8 +151,8 @@ group("connectors 连线", async (c) => {
   // 松手移开后连线必须仍然清晰可见（聚焦模式曾让它淡到看不见）
   await c.page.mouse.move(30, 700);
   await c.wait(1800);
-  const op = await c.run(() => document.querySelector("#links path.ln")?.getAttribute("stroke-opacity"));
-  c.ok("连线在鼠标移开后依然可见", op === "1");
+  const op = await c.run(() => +document.querySelector("#links path.ln")?.getAttribute("stroke-opacity"));
+  c.ok("连线在鼠标移开后依然可见", op === 1);
 
   // 箭头必须真的画出来（曾被 #links path{fill:none} 覆盖而隐形）
   const arrows = await c.run(() => {
@@ -330,6 +330,65 @@ group("twins 分身", async (c) => {
 /* =====================================================================
    5. 页面、层级与阅读顺序
    ===================================================================== */
+
+group("outline 结构连线", async (c) => {
+  // 位置故意摆得与阅读顺序不符，验证大纲来自连线而不是位置
+  const r = await c.run(() => {
+    S.cards = [
+      { id: "A", x: 0, y: 0, w: 300, text: "Background", level: 1, s: {} },
+      { id: "A1", x: 900, y: 600, w: 300, text: "讨论中", level: 2, s: {} },
+      { id: "A2", x: 900, y: 200, w: 300, text: "根本差异", level: 2, s: {} },
+      { id: "B", x: 0, y: 1200, w: 300, text: "理论框架", level: 1, s: {} },
+      { id: "B1", x: 900, y: 1500, w: 300, text: "digital body", level: 2, s: {} },
+      { id: "B1a", x: 1700, y: 1500, w: 300, text: "可编辑的流动的", s: {} },
+      { id: "X", x: 0, y: 2400, w: 300, text: "散落的卡片", s: {} },
+    ];
+    S.links = [
+      { id: "l1", a: "A", b: "A1", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l2", a: "A", b: "A2", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l3", a: "B", b: "B1", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l4", a: "B1", b: "B1a", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l5", a: "A2", b: "B1", kind: "curve", w: 1.4, color: "#888" },
+    ];
+    S.frames = []; S.autoNum = true; S.outline = true;
+    invalidateIndex(); render();
+    const tree = buildTree();
+    return {
+      nums: tree.flat.map((n) => [n.c.id, n.num, n.lv]),
+      md: docMD({ title: "T", img: 0, tags: 0, refs: 1, table: 0 }, tree),
+    };
+  });
+  const num = (id) => (r.nums.find((x) => x[0] === id) || [])[1];
+  c.ok("一级按连线的根排序", num("A") === "1" && num("B") === "2");
+  c.ok("二级按连线归属而非位置", num("A2") === "1.1" && num("A1") === "1.2");
+  c.ok("第二棵树独立计数", num("B1") === "2.1");
+  c.ok("叶子内容不占编号", !num("B1a"));
+  c.ok("散落卡片仍被收进文档", r.nums.some((x) => x[0] === "X"));
+  c.ok("导出层级与编号一致",
+    /## 1 Background/.test(r.md) && /### 1\.1 根本差异/.test(r.md) && /## 2 理论框架/.test(r.md));
+  c.ok("结构连线不重复写成交叉引用", (r.md.match(/See §/g) || []).length === 1);
+
+  await c.run(() => { sel = []; render(); fit(true); });
+  await c.wait(500);
+  const vis = await c.run(() => {
+    const st = document.querySelector("#links path.ln.st");
+    const rel = [...document.querySelectorAll("#links path.ln")].find((z) => !z.classList.contains("st"));
+    return {
+      stDash: st.getAttribute("stroke-dasharray"), stW: +st.getAttribute("stroke-width"),
+      stOp: +st.getAttribute("stroke-opacity"), relDash: rel.getAttribute("stroke-dasharray"),
+      relW: +rel.getAttribute("stroke-width"), relOp: +rel.getAttribute("stroke-opacity"),
+    };
+  });
+  c.ok("结构连线是实线且更实", !vis.stDash && vis.stOp === 1);
+  c.ok("关联连线是虚线且更淡", !!vis.relDash && vis.relOp < 1);
+  c.ok("结构连线略粗", vis.stW > vis.relW);
+
+  await c.run(() => { S.outline = false; });
+  const n2 = await c.run(() => buildTree().flat.map((n) => [n.c.id, n.num]));
+  c.ok("可关闭大纲模式回到空间顺序",
+    JSON.stringify(n2) !== JSON.stringify(r.nums.map((x) => [x[0], x[1]])));
+  await c.run(() => { S.outline = true; });
+});
 
 group("levelmark 层级标记", async (c) => {
   await c.run(() => {
