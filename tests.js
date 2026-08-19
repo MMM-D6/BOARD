@@ -504,6 +504,44 @@ group("lock 锁定", async (c) => {
   c.ok("全锁时拖动不会移动卡片", (await c.run(() => card("a").x)) === tp2.cx);
   await c.run(() => getSelection().removeAllRanges());
 
+  /* --- 框选：锁定的卡片也要能选中，否则连批量解锁都做不到 --- */
+  await c.run(() => {
+    S.cards = [
+      { id: "m1", x: -500, y: -150, w: 260, text: "仅锁内容", s: {} },
+      { id: "m2", x: -100, y: -150, w: 260, text: "全锁", s: {} },
+      { id: "m3", x: 300, y: -150, w: 260, text: "未锁", s: {} },
+    ];
+    S.links = []; S.frames = [];
+    invalidateIndex(); render(); camTo(0, 0, 0.7, true);
+    setCardLock(["m1"], "text"); setCardLock(["m2"], "all"); sel = [];
+  });
+  await c.wait(500);
+  const mb = await c.run(() => {
+    const rs = ["m1", "m2", "m3"].map((i) => nodes.get(i).getBoundingClientRect());
+    return {
+      x1: Math.min(...rs.map((r) => r.x)) - 40, y1: Math.min(...rs.map((r) => r.y)) - 40,
+      x2: Math.max(...rs.map((r) => r.right)) + 40, y2: Math.max(...rs.map((r) => r.bottom)) + 40,
+    };
+  });
+  await c.page.mouse.move(mb.x1, mb.y1);
+  await c.page.mouse.down();
+  await c.page.mouse.move(mb.x2, mb.y2, { steps: 12 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  const picked = await c.run(() => sel.slice().sort());
+  c.ok("框选能选中锁定的卡片", picked.length === 3 && picked.includes("m1") && picked.includes("m2"));
+  await c.run(() => setCardLock(null, null));
+  await c.wait(350);
+  c.ok("框选后可批量解锁", await c.run(() => !isLocked("m1") && !isLocked("m2")));
+  await c.run(() => {
+    setCardLock(["m1"], "text"); setCardLock(["m2"], "all");
+    sel = ["m1", "m2", "m3"]; paintSel(); del();
+  });
+  await c.wait(400);
+  c.ok("批量删除仍跳过锁定的卡片", (await c.run(() => S.cards.length)) === 2);
+  c.ok("批量移动只包含未钉住的",
+    JSON.stringify(await c.run(() => { sel = ["m1", "m2"]; return movableSel(); })) === '["m1"]');
+
   const mig = await c.run(() =>
     migrate({ v: 4, cards: [{ id: "x", x: 0, y: 0, w: 200, text: "", lock: true }], links: [], frames: [] }));
   c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 5);
