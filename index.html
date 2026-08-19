@@ -157,7 +157,7 @@
   #hint{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;
     font-size:13px;opacity:.32;line-height:2;pointer-events:none;z-index:5}
   body.hidecur,body.hidecur *{cursor:none !important}
-  .card.lk .hnd{display:none !important}
+  .card.lkpos .hnd{display:none !important}
   /* 锁定的卡片仍可划选文字以便复制引文，只是不能编辑 */
   .card.lk .cap{user-select:text;-webkit-user-select:text;cursor:text}
   #find{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:70;display:none;
@@ -468,9 +468,11 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   tagsMenu:"Tags…",tagTitle:"Tags",tagsPh:"tag1, tag2",allTags:"Tags on this board",tagHint:"Also picks up #tag written in the text",
   imgSize:"Image size on import",fitSel:"Resize selected images to this",
   fitAllImg:"Resize every image to this",px:"px",
-  pageLock:"Lock everything on this page",pageUnlock:"Unlock everything on this page",
+  pageLock:"Lock this page",
   pageEmpty:"This page has no cards",
-  lockCard:"Lock",unlockCard:"Unlock",lockOn2:"Locked",lockOff:"Unlocked",
+  lockMenu:"Lock",lockText:"Lock the content only",lockAll:"Lock content and position",
+  unlockPos:"Release the position",unlockAll:"Unlock completely",
+  lockOnText:"Content locked:",lockOnAll:"Content and position locked:",lockOff:"Unlocked:",
   linkLocked:"This connector is locked with its cards",
   lockedNote:"This card is locked",defaultText:"Default text style…",defTitle:"Default text style",
   defHint:"Setting the starting style for new cards. Esc to leave.",
@@ -584,9 +586,11 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   tagsMenu:"标签…",tagTitle:"标签",tagsPh:"标签1, 标签2",allTags:"画布中已有标签",tagHint:"正文里写的 #标签 也会自动识别",
   imgSize:"导入图片尺寸",fitSel:"把选中图片调成该尺寸",
   fitAllImg:"把所有图片调成该尺寸",px:"px",
-  pageLock:"锁定本页全部内容",pageUnlock:"解锁本页全部内容",
+  pageLock:"锁定本页",
   pageEmpty:"这个页面里没有卡片",
-  lockCard:"锁定",unlockCard:"解锁",lockOn2:"已锁定",lockOff:"已解锁",
+  lockMenu:"锁定",lockText:"仅锁定内容",lockAll:"锁定内容与位置",
+  unlockPos:"解除位置锁定",unlockAll:"完全解锁",
+  lockOnText:"已锁定内容：",lockOnAll:"已锁定内容与位置：",lockOff:"已解锁：",
   linkLocked:"该连线随两端卡片一同锁定",
   lockedNote:"该卡片已锁定",defaultText:"默认文字格式…",defTitle:"默认文字格式",
   defHint:"正在设定新建卡片的起始格式，按 Esc 退出",
@@ -707,7 +711,7 @@ function sendTo(target,mode){
       ? (()=>{const v=toW(innerWidth/2,innerHeight/2);return {x:Math.round(v.x-c.w/2),y:Math.round(v.y-h/2)}})()
       : freeSpotIn(target,c.w,h);
     if(mode==="twin"){
-      const n={id:uid(),ref:orig(c).id,x:p.x,y:p.y,w:c.w,s:{...(c.s||{})}};
+      const n={id:uid(),ref:orig(c).id,x:p.x,y:p.y,w:c.w,s:{...(c.s||{})},lock:"text"};
       if(c.bg)n.bg=c.bg;
       invalidateIndex();S.cards.push(n);ns.push(n.id);
     }else{
@@ -746,9 +750,9 @@ function pasteClip(p){
     const base={id:uid(),x:Math.round(p.x+it.dx),y:Math.round(p.y+it.dy),w:it.w,s:{...it.s}};
     if(it.bg)base.bg=it.bg;
     if(CLIP.mode==="twin"&&S.cards.some(z=>z.id===it.src)){
-      invalidateIndex();S.cards.push({...base,ref:it.src});
+      invalidateIndex();S.cards.push({...base,ref:it.src,lock:"text"});  // 分身默认锁内容
     }else{
-      const cp={...it.snap,...base};delete cp.ref;
+      const cp={...it.snap,...base};delete cp.ref;delete cp.lock;
       invalidateIndex();S.cards.push(cp);
     }
     ns.push(base.id);
@@ -767,7 +771,7 @@ function makeTwin(){   // 锁定不影响创建分身
     const o=orig(c);
     const n={id:uid(),ref:o.id,
       x:Math.round(ctr.x+(c.x-b.x)-b.w/2),y:Math.round(ctr.y+(c.y-b.y)-b.h/2),
-      w:c.w,s:{...(c.s||{})}};
+      w:c.w,s:{...(c.s||{})},lock:"text"};   // 分身默认锁住内容
     invalidateIndex();S.cards.push(n);ns.push(n.id);
   });
   sel=ns;render();save();toast(t("twinMade"));
@@ -827,23 +831,43 @@ async function migrateInline(cards){
     }catch(e){/* 保留 c.src，图片照样能显示 */}
   }
 }
-const isLocked=id=>{const c=card(id);return !!(c&&c.lock)};
+// 两级锁定：
+//   "text" 仅锁内容，仍可移动、缩放、连线，但改不动文字与格式，也删不掉
+//   "all"  内容与位置都锁，完全不动
+const lockOf=id=>{const c=card(id);return c&&c.lock?c.lock:null};
+const isLocked=id=>!!lockOf(id);                       // 内容层面的锁（含两种）
+const isPinned=id=>lockOf(id)==="all";                 // 位置层面的锁
 const isLinkLocked=l=>isLocked(l.a)||isLocked(l.b);   // 连线随两端卡片一同锁定
-function setCardLock(ids,v){
+// mode: "text" | "all" | null（解锁）
+function setCardLock(ids,mode){
   const cs=(ids||sel).map(card).filter(Boolean);
   if(!cs.length)return;
   snap();
-  cs.forEach(c=>{if(v)c.lock=true;else delete c.lock});
+  cs.forEach(c=>{if(mode)c.lock=mode;else delete c.lock});
   render();save();
-  toast((v?t("lockOn2"):t("lockOff"))+" "+cs.length);
+  toast((mode==="all"?t("lockOnAll"):mode==="text"?t("lockOnText"):t("lockOff"))+" "+cs.length);
 }
-function setFrameLock(f,v){
+function setFrameLock(f,mode){
   const cs=inFrame(f);
   if(!cs.length){toast(t("pageEmpty"));return}
-  setCardLock(cs.map(c=>c.id),v);
+  setCardLock(cs.map(c=>c.id),mode);
+}
+function lockItems(getIds){
+  const ids=getIds();
+  const modes=[...new Set(ids.map(i=>lockOf(i)))];
+  const anyText=modes.includes("text"),anyAll=modes.includes("all"),anyFree=modes.includes(null);
+  const out=[];
+  if(anyFree||anyAll)out.push({label:t("lockText"),check:!anyFree&&!anyAll&&anyText,
+    on:()=>setCardLock(ids,"text")});
+  if(anyFree||anyText)out.push({label:t("lockAll"),check:!anyFree&&!anyText&&anyAll,
+    on:()=>setCardLock(ids,"all")});
+  if(anyAll)out.push({label:t("unlockPos"),on:()=>setCardLock(ids,"text")});
+  if(anyText||anyAll)out.push({label:t("unlockAll"),on:()=>setCardLock(ids,null)});
+  return out;
 }
 const expand=ids=>[...new Set(ids.filter(i=>card(i)))];
-const freeSel=()=>sel.filter(i=>!isLocked(i));
+const freeSel=()=>sel.filter(i=>!isLocked(i));        // 可改内容的
+const movableSel=()=>sel.filter(i=>!isPinned(i));     // 可移动的
 
 const size={};
 const cleanCard=c=>{const o={...c};delete o._tg;return o};
@@ -858,7 +882,7 @@ function applyUndo(stack,other){
 }
 
 /* ================= storage ================= */
-const SCHEMA=4;                         // 数据结构版本，只增不减
+const SCHEMA=5;                         // 数据结构版本，只增不减
 function migrate(d){
   if(!d||typeof d!=="object")return d;
   const from=+d.v||1;
@@ -876,6 +900,9 @@ function migrate(d){
       if(g&&g.locked&&Array.isArray(g.ids))g.ids.forEach(i=>locked.add(i))});
     (d.cards||[]).forEach(c=>{if(locked.has(c.id))c.lock=true});
     delete d.groups;
+  }
+  if(from<5){                            // 4 -> 5 锁定分两级，旧的布尔锁等同全锁
+    (d.cards||[]).forEach(c=>{if(c.lock===true)c.lock="all"});
   }
   d.v=Math.max(from,SCHEMA);
   return d;
@@ -955,7 +982,8 @@ function normCard(c){
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
   if(o.bg&&typeof o.bg!=="string")delete o.bg;
   if(o.url&&typeof o.url!=="string")delete o.url;
-  if(o.lock!==true)delete o.lock;
+  if(o.lock===true)o.lock="all";                    // 旧数据：布尔值等同全锁
+  if(o.lock!=="text"&&o.lock!=="all")delete o.lock;
   if(o.tb){
     const g=o.tb;
     if(!Array.isArray(g.rows)||!Array.isArray(g.cols)||!g.rows.length||!g.cols.length)delete o.tb;
@@ -1563,7 +1591,7 @@ function buildTable(el,c,oc,s){
     const gp=document.createElement("div");gp.className="cgrip";
     gp.style.left=acc+"px";
     gp.addEventListener("pointerdown",e=>{
-      if(lock||isLocked(c.id))return;
+      if(lock||isPinned(c.id))return;
       e.preventDefault();e.stopPropagation();
       gp.classList.add("on");
       const sx=e.clientX,w0=tb.cols[ci],w1=tb.cols[ci+1];
@@ -1670,7 +1698,7 @@ function syncCap(c0,cap){
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
-  el.className="card"+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"");
+  el.className="card"+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
   if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
@@ -1759,7 +1787,7 @@ function finishCard(el,c,s){
     const h=document.createElement("div");h.className="hnd "+d;
     h.style.left=`calc(${L} + ${d.includes("w")?"-7px":d.includes("e")?"7px":"0px"} * var(--iz))`;
     h.style.top=`calc(${T} + ${d.includes("n")?"-7px":d.includes("s")?"7px":"0px"} * var(--iz))`;
-    h.addEventListener("pointerdown",e=>{if(lock||isLocked(c.id))return;
+    h.addEventListener("pointerdown",e=>{if(lock||isPinned(c.id))return;
       e.stopPropagation();startResize(e,c,d)});
     el.appendChild(h);
   });
@@ -1768,7 +1796,7 @@ function finishCard(el,c,s){
     const d=document.createElement("div");d.className="port";d.dataset.side=k;
     d.style.left=`calc(${L} + ${k==="l"?"-15px":k==="r"?"15px":"0px"} * var(--iz))`;
     d.style.top=`calc(${TP} + ${k==="t"?"-15px":k==="b"?"15px":"0px"} * var(--iz))`;
-    d.addEventListener("pointerdown",e=>{if(lock||isLocked(c.id))return;e.stopPropagation();startLink(e,c,k)});
+    d.addEventListener("pointerdown",e=>{if(lock||isPinned(c.id))return;e.stopPropagation();startLink(e,c,k)});
     el.appendChild(d);
   });
 
@@ -1941,8 +1969,8 @@ function frameMenu(x,y,f){
     {label:t("pageRename"),on:()=>{const v=prompt(t("pageRename"),f.title||"");
       if(v!==null){snap();f.title=v.trim();renderFrames();save()}}},
     {label:t("pageSelect"),on:()=>{sel=inFrame(f).map(c=>c.id);selFrame=null;render();paintSel()}},
-    {label:t("pageLock"),on:()=>setFrameLock(f,true)},
-    {label:t("pageUnlock"),on:()=>setFrameLock(f,false)},
+    {label:t("pageLock"),sub:[{head:t("pageLock")},
+      ...lockItems(()=>inFrame(f).map(z=>z.id))]},
     {label:t("pageFit"),on:()=>{const cs=inFrame(f);
       if(cs.length){const bb=bbox(cs);snap();
         f.x=Math.round(bb.x-70);f.y=Math.round(bb.y-70);
@@ -2254,7 +2282,7 @@ function finishLinkClick(c){
 function startMove(e,onClick){
   if(lock)return;
   snap();
-  const list=freeSel().map(card).filter(Boolean).map(o=>({o,x:o.x,y:o.y}));
+  const list=movableSel().map(card).filter(Boolean).map(o=>({o,x:o.x,y:o.y}));
   if(!list.length){if(sel.length)toast(t("lockedNote"));return}
   const moving=new Set(list.map(z=>z.o.id));
   const liveLinks=S.links.filter(l=>moving.has(l.a)||moving.has(l.b));
@@ -2275,7 +2303,7 @@ function startMove(e,onClick){
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
 function startResize(e,c,dir){
-  if(isLocked(c.id))return;
+  if(isPinned(c.id))return;
   snap();
   const tb0=orig(c).tb?[...orig(c).tb.cols]:null;   // 表格：列宽按同一比例跟随卡片宽度
   const d=dir||"se";
@@ -2492,8 +2520,14 @@ addEventListener("keydown",e=>{
     sel=S.cards.map(c=>c.id);paintSel();return;
   }
   if((e.metaKey||e.ctrlKey)&&k==="d"){e.preventDefault();dupe();return}
-  if((e.metaKey||e.ctrlKey)&&k==="l"&&sel.length){e.preventDefault();
-    setCardLock(null,!sel.map(card).filter(Boolean).every(z=>z.lock));return}
+  if((e.metaKey||e.ctrlKey)&&k==="l"&&sel.length){
+    e.preventDefault();
+    const cur=sel.map(card).filter(Boolean);
+    const want=e.shiftKey?"all":"text";
+    const same=cur.every(z=>z.lock===want);
+    setCardLock(null,same?null:want);
+    return;
+  }
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="c"){e.preventDefault();clipCards("twin");return}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="v"){e.preventDefault();pasteClip(toW(mouse.x,mouse.y));return}
   if(e.key==="Escape"&&tbRect()){clearTbSel();syncBar();return}
@@ -2514,7 +2548,7 @@ addEventListener("keydown",e=>{
   if(k==="0")camTo(tgt.x,tgt.y,1);
   if(k==="t"&&sel.length)syncBar();
   if(sel.length&&e.key.startsWith("Arrow")){e.preventDefault();const d=e.shiftKey?10:1;
-    freeSel().map(card).filter(Boolean).forEach(c=>{if(e.key==="ArrowUp")c.y-=d;if(e.key==="ArrowDown")c.y+=d;
+    movableSel().map(card).filter(Boolean).forEach(c=>{if(e.key==="ArrowUp")c.y-=d;if(e.key==="ArrowDown")c.y+=d;
       if(e.key==="ArrowLeft")c.x-=d;if(e.key==="ArrowRight")c.x+=d});
     render();save()}
 });
@@ -2554,9 +2588,9 @@ function order(dir){if(!sel.length)return;snap();
   S.cards=dir>0?[...rest,...picked]:[...picked,...rest];render();save();
 }
 function align(mode){
-  if(freeSel().length<2){if(sel.length)toast(t("lockedNote"));return}
+  if(movableSel().length<2){if(sel.length)toast(t("lockedNote"));return}
   snap();
-  const cs=freeSel().map(card).filter(Boolean),hh=hOf;
+  const cs=movableSel().map(card).filter(Boolean),hh=hOf;
   const mn=f=>cs.reduce((a,c)=>Math.min(a,f(c)),Infinity);
   const mx=f=>cs.reduce((a,c)=>Math.max(a,f(c)),-Infinity);
   if(mode==="left"){const v=mn(c=>c.x);cs.forEach(c=>c.x=v)}
@@ -2571,10 +2605,10 @@ function align(mode){
 }
 function sizeImages(all){
   const cap=S.imgMax||360;
-  const list=(all?S.cards:freeSel().map(card).filter(Boolean)).filter(c=>srcOf(c));
+  const list=(all?S.cards:movableSel().map(card).filter(Boolean)).filter(c=>srcOf(c));
   if(!list.length)return;
   snap();
-  list.forEach(c=>{if(isLocked(c.id))return;
+  list.forEach(c=>{if(isPinned(c.id))return;
     const ar=c.ar||1;
     c.w=Math.round(ar>=1?cap/ar:cap);
   });
@@ -2787,6 +2821,7 @@ const MANUAL=[
   <p><b>用途</b>：想法之间距离太远时，与其拉一条横跨画布的连线，不如在需要的地方放一个分身。既保持了上下文，又不会让连线变成乱麻。</p>
   <p><b>创建与放置</b>：选中卡片后右键<b>把分身放入剪贴板</b>（或按 Ctrl/Cmd + Shift + C），然后移动到目标位置，在空白处右键<b>在此处粘贴分身</b>（或 Ctrl/Cmd + Shift + V 粘贴在鼠标处）。跨多少距离都不用拖动。多选时相对位置会保持。</p>
   <p>另有<b>移动到…</b>可以直接把选中卡片送到某个页面或视野中央，由程序在该页面里找一块空位放置，页面装不下会自动撑高。</p>
+  <p>新建的分身默认为<b>仅锁定内容</b>，因为在分身上误改就是改到原文。它仍可自由移动和缩放，只是改不动文字。需要修改时到源头改，或先解锁。</p>
   <p><b>串联与溯源</b>：有分身的卡片右上角出现菱形标记，写着「2/4」表示这是四处出现中的第二处。点标记跳到下一处，按住 <kbd>Shift</kbd> 点跳回源头，右键标记打开分身菜单，可以一次选中全部出现位置。顺着标记点下去，就能走完一条信息在画布上的完整轨迹。</p>
   <p><b>与检索的关系</b>：分身共享源的文字和标签，所以天然进入检索结果。回车逐个跳转时，跳的是这条信息的所有出现位置。菜单里的<b>检索时合并分身</b>可以切换：关注内容时合并成一条，巡视位置时展开为多条。</p>
   <p><b>与导出的关系</b>：分身不重复正文，而是在它所在的位置生成一行「同一条目，另见 §2.1」，接入交叉引用体系；编号也只算源，同一段不会被编两次号。</p>
@@ -2887,16 +2922,18 @@ const MANUAL=[
   <p>输入即时过滤，命中项加虚线框，其余淡出但保留位置，画布结构依然可见。回车逐个跳转并居中，<kbd>Shift</kbd> + 回车反向。输入框带自动补全。</p>`],
 
  ["锁定","SUODING",`
-  <p>用来保护已经定稿的内容，避免整理其他材料时误碰。选中一张或多张卡片，右键选<b>锁定</b>，或按 <kbd>Ctrl/Cmd</kbd> + <kbd>L</kbd>。</p>
-  <p>锁定没有任何视觉标注，因为一旦动不了你自然就知道它锁着了，不必用符号占据画面。</p>
-  <p><b>锁定后不能做的事</b>：拖动、改大小、编辑文字、改格式、删除。缩放控制点不再出现，框选时会被跳过，批量操作也不会波及。</p>
-  <p><b>可以选中文字</b>：锁定只挡编辑，不挡阅读。你依然可以划选锁定卡片里的文字并复制，只是改不动它。</p>
-  <p><b>整页锁定</b>：右键页面标题选<b>锁定本页全部内容</b>，页面里的卡片一次全部锁住；<b>解锁本页全部内容</b>同理。这是最常用的做法：一章写定之后整页锁上，之后无论怎么整理别处都碰不到它。</p>
-  <p>需要改其中一张时，选中它单独解锁，改完再整页锁一次即可全部锁回。不必记住哪几张单独解过锁，整页锁定是覆盖式的。</p>
-  <p>相关的连线也随之锁定：只要任意一端是锁定卡片，这条线就不能删除、不能改样式，批量套用连线样式时会跳过它。但仍可给它写备注，因为备注是思考记录，不属于会被弄坏的内容。</p>
-  <p><b>仍然可以做的事</b>：创建分身、被别的卡片连线指向、随页面整体移动。页面移动时锁定卡片照常跟随，锁定只是把它在页面内钉住，不是把它钉死在画布上。</p>
-  <p>再次右键选<b>解锁</b>或按同样的快捷键即可恢复。</p>
-  <p class="tip">建议把已经写定的引文、原始摘录、关键论点锁起来。后续大量整理、批量改格式、框选移动时，它们都不会被意外改动。</p>`],
+  <p>用来保护已经定稿的内容，避免整理其他材料时误碰。分两级，都在右键菜单的<b>锁定</b>子菜单里：</p>
+  <ul>
+    <li><b>仅锁定内容</b>：改不动文字、格式、层级，也删不掉，但仍可移动、缩放、连线。适合已经写定但位置还要调的内容。</li>
+    <li><b>锁定内容与位置</b>：连位置和尺寸也钉住，缩放控制点不再出现，完全不动。适合已经排好版、不希望再有任何变化的部分。</li>
+  </ul>
+  <p><b>解锁同样分两级</b>：<b>解除位置锁定</b>降回仅锁内容，方便临时挪一挪；<b>完全解锁</b>则彻底放开。</p>
+  <p>快捷键 <kbd>Ctrl/Cmd</kbd> + <kbd>L</kbd> 切换仅锁内容，加 <kbd>Shift</kbd> 切换锁内容与位置。</p>
+  <p>锁定没有任何视觉标注，因为一旦动不了你自然就知道它锁着了。锁定只挡编辑，不挡阅读，文字依然可以划选复制。</p>
+  <p><b>相关的连线也随之锁定</b>：只要连线的任意一端被锁，这条线就不能删除、不能改样式，但仍可写备注。</p>
+  <p><b>整页锁定</b>：右键页面标题的<b>锁定本页</b>，两级模式与解锁选项同样齐全，一次作用于页内全部卡片。需要改其中一张时单独解锁，改完再整页锁一次即可全部锁回，不必记住谁被解过。</p>
+  <p><b>分身默认为仅锁定内容</b>。因为分身与源共享同一份内容，在分身上误改就是改到原文。默认锁上之后，你可以放心把分身摆到任何地方作为索引和线索，需要修改时到源头改，或先解锁再改。分身仍可自由移动和缩放，不影响布局。</p>
+  <p class="tip">建议把已经写定的引文、原始摘录、关键论点设为仅锁定内容；整章排好版之后再整页升级为锁定内容与位置。</p>`],
 
  ["图片尺寸","TUPIANCHICUN",`
   <p>右键菜单的<b>导入图片尺寸</b>限制新图的<b>长边</b>上限，横图竖图因此视觉体量一致。可选 220 到 760，默认 360。数值是 100% 缩放时的实际像素。</p>
@@ -5073,9 +5110,7 @@ function cardItems(x,y){
       const r=await putImg(d);one.ih=r.h;if(r.ok)delete one.src;else one.src=d;
       one.ar=h/w;render();save()})};
     inp.click()}});
-  const allLocked=sel.map(card).filter(Boolean).every(z=>z.lock);
-  items.push(allLocked?{label:t("unlockCard"),key:"⌘L",on:()=>setCardLock(null,false)}
-                     :{label:t("lockCard"),key:"⌘L",on:()=>setCardLock(null,true)});
+  items.push({label:t("lockMenu"),sub:[{head:t("lockMenu")},...lockItems(()=>sel.slice())]});
   if(sel.length>1)items.push({label:t("alignDistribute"),sub:[
     {head:t("align")},
     {label:t("alLeft"),on:()=>align("left")},{label:t("alCX"),on:()=>align("cx")},{label:t("alRight"),on:()=>align("right")},

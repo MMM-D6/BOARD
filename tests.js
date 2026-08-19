@@ -372,82 +372,98 @@ group("lock 锁定", async (c) => {
     [{ id: "L", a: "a", b: "b", kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85" }],
     { frames: [{ id: "f1", x: -400, y: -100, w: 800, h: 300, title: "页" }] }
   );
-  await c.run(() => { sel = ["a"]; setCardLock(null, true); });
+
+  /* --- 仅锁内容：改不动也删不掉，但还能挪 --- */
+  await c.run(() => setCardLock(["a"], "text"));
   await c.wait(300);
-  c.ok("卡片可以单独锁定", (await c.run(() => isLocked("a"))) === true);
-  c.ok("锁定后不显示额外标注", await c.run(() => !nodes.get("a")?.querySelector(".lockmk")));
-  c.ok("锁定后隐藏缩放控制点", await c.run(() => getComputedStyle(nodes.get("a").querySelector(".hnd")).display === "none"));
-  c.ok("只锁定选中的卡片，不牵连他人", (await c.run(() => isLocked("b"))) === false);
+  c.ok("仅锁内容时内容被锁", await c.run(() => isLocked("a")));
+  c.ok("仅锁内容时位置不锁", await c.run(() => !isPinned("a")));
+  const x0 = await c.run(() => card("a").x);
+  await c.run(() => { sel = ["a"]; movableSel().map(card).forEach((z) => (z.x += 50)); render(); });
+  await c.wait(250);
+  c.ok("仅锁内容仍可移动", (await c.run(() => card("a").x)) === x0 + 50);
+  await c.run(() => { sel = ["a"]; editText(card("a")); });
+  await c.wait(250);
+  c.ok("锁定后不可编辑文字",
+    await c.run(() => !nodes.get("a").querySelector(".cap").isContentEditable));
+  await c.run(() => { sel = ["a"]; setStyle("size", 40); });
+  await c.wait(250);
+  c.ok("锁定后不可改格式", await c.run(() => !card("a").s || card("a").s.size !== 40));
+  await c.run(() => { sel = ["a"]; del(); });
+  await c.wait(250);
+  c.ok("锁定后不可删除", (await c.run(() => S.cards.length)) === 2);
+  await c.run(() => { selLink = "L"; sel = []; del(); });
+  await c.wait(250);
+  c.ok("相连的连线也不可删除", (await c.run(() => S.links.length)) === 1);
+  await c.run(() => { sel = ["a"]; paintSel(); });
+  await c.wait(250);
+  c.ok("仅锁内容时缩放控制点仍在",
+    await c.run(() => getComputedStyle(nodes.get("a").querySelector(".hnd")).display !== "none"));
+
+  /* --- 全锁：位置也钉住 --- */
+  await c.run(() => setCardLock(["a"], "all"));
+  await c.wait(300);
+  const x1 = await c.run(() => card("a").x);
+  await c.run(() => { sel = ["a"]; movableSel().map(card).forEach((z) => (z.x += 50)); render(); });
+  await c.wait(250);
+  c.ok("全锁后不可移动", (await c.run(() => card("a").x)) === x1);
+  await c.run(() => { sel = ["a"]; paintSel(); });
+  await c.wait(250);
+  c.ok("全锁后隐藏缩放控制点",
+    await c.run(() => getComputedStyle(nodes.get("a").querySelector(".hnd")).display === "none"));
+  c.ok("锁定不显示额外标注", await c.run(() => !nodes.get("a").querySelector(".lockmk")));
   c.ok("锁定后文字仍可选中复制",
     await c.run(() => getComputedStyle(nodes.get("a").querySelector(".cap")).userSelect === "text"));
 
-  // 锁定后不可移动、不可编辑、不可删除
-  const x0 = await c.run(() => card("a").x);
-  await c.run(() => { sel = ["a"]; startMove({ clientX: 0, clientY: 0, shiftKey: false }); });
-  await c.wait(150);
-  c.ok("锁定后不可移动", (await c.run(() => card("a").x)) === x0);
-  await c.run(() => { sel = ["a"]; editText(card("a")); });
-  await c.wait(200);
-  c.ok(
-    "锁定后不可编辑文字",
-    await c.run(() => !nodes.get("a").querySelector(".cap").isContentEditable)
-  );
-  await c.run(() => { sel = ["a"]; setStyle("size", 40); });
-  await c.wait(200);
-  c.ok("锁定后不可改样式", await c.run(() => !card("a").s || card("a").s.size !== 40));
-  await c.run(() => { sel = ["a"]; del(); });
-  await c.wait(200);
-  c.ok("锁定后不可删除", (await c.run(() => S.cards.length)) === 2);
+  /* --- 两种解锁 --- */
+  await c.run(() => setCardLock(["a"], "text"));
+  await c.wait(250);
+  c.ok("可以只解除位置锁定", await c.run(() => isLocked("a") && !isPinned("a")));
+  await c.run(() => setCardLock(["a"], null));
+  await c.wait(250);
+  c.ok("可以完全解锁", await c.run(() => !isLocked("a")));
 
-  // 连线随卡片一同锁定
-  await c.run(() => { selLink = "L"; sel = []; del(); });
-  await c.wait(200);
-  c.ok("相连的连线也不可删除", (await c.run(() => S.links.length)) === 1);
-
-  // 页面整体移动时锁定卡片仍然跟随
+  /* --- 页面移动时锁定卡片跟随 --- */
   await c.run(() => {
-    const f = S.frames[0];
-    const kids = inFrame(f);
-    const dx = 500;
-    f.x += dx;
-    kids.forEach((z) => (z.x += dx));
-    render();
+    setCardLock(["a"], "all");
+    const f = S.frames[0], kids = inFrame(f);
+    f.x += 500; kids.forEach((z) => (z.x += 500)); render();
   });
   await c.wait(250);
-  c.ok("页面移动时锁定卡片跟随", (await c.run(() => card("a").x)) === x0 + 500);
+  c.ok("页面整体移动时锁定卡片跟随", (await c.run(() => card("a").x)) === x1 + 500);
 
-  // 锁定状态下仍可创建分身
-  await c.run(() => { sel = ["a"]; clipCards("twin"); pasteClip({ x: 3000, y: 3000 }); });
+  /* --- 分身：默认仅锁内容，保护原文 --- */
+  await c.run(() => { setCardLock(["a"], null); sel = ["a"]; makeTwin(); });
   await c.wait(400);
-  c.ok("锁定状态下仍可创建分身", (await c.run(() => S.cards.filter((z) => z.ref === "a").length)) === 1);
-  c.ok("新建的分身本身未被锁定", await c.run(() => !S.cards.find((z) => z.ref === "a").lock));
-
-  await c.run(() => { sel = ["a"]; setCardLock(null, false); });
-  await c.wait(250);
-  c.ok("可以解锁", (await c.run(() => isLocked("a"))) === false);
-
-  // 整页锁定：页面里的全部卡片一次锁住
-  await c.run(() => setFrameLock(S.frames[0], true));
-  await c.wait(350);
-  c.ok("整页锁定覆盖页内全部卡片",
-    await c.run(() => isLocked("a") && isLocked("b")));
-  await c.run(() => { sel = ["b"]; setCardLock(null, false); });
-  await c.wait(250);
-  c.ok("可以单独解锁其中一张", await c.run(() => isLocked("a") && !isLocked("b")));
-  await c.run(() => setFrameLock(S.frames[0], true));
-  await c.wait(300);
-  c.ok("再次整页锁定即可全部锁回", await c.run(() => isLocked("a") && isLocked("b")));
-  await c.run(() => setFrameLock(S.frames[0], false));
-  await c.wait(300);
-  c.ok("整页解锁", await c.run(() => !isLocked("a") && !isLocked("b")));
-
-  // 页面外的卡片不受整页锁定影响
-  await c.run(() => {
-    S.cards.push({ id: "z", x: 3000, y: 3000, w: 200, text: "页外", s: {} });
-    render(); setFrameLock(S.frames[0], true);
+  const tw = await c.run(() => {
+    const n = S.cards.find((z) => z.ref === "a");
+    return n ? { lock: n.lock, pinned: isPinned(n.id) } : null;
   });
-  await c.wait(350);
-  c.ok("页面外的卡片不受影响", (await c.run(() => !isLocked("z"))) === true);
+  c.ok("分身默认仅锁内容", tw && tw.lock === "text" && !tw.pinned);
+  await c.run(() => { sel = ["a"]; clipCards("twin"); pasteClip({ x: 2000, y: 2000 }); });
+  await c.wait(400);
+  c.ok("剪贴板分身同样默认锁内容",
+    await c.run(() => S.cards.filter((z) => z.ref === "a").every((z) => z.lock === "text")));
+  await c.run(() => { setCardLock(["a"], "all"); sel = ["a"]; clipCards("copy"); pasteClip({ x: 3000, y: 3000 }); });
+  await c.wait(400);
+  c.ok("复制出的独立卡片不继承锁定",
+    await c.run(() => { const n = S.cards.find((z) => z.x === 3000); return n && !n.lock; }));
+
+  /* --- 整页锁定 --- */
+  await c.run(() => { setCardLock(["a"], null); setFrameLock(S.frames[0], "all"); });
+  await c.wait(400);
+  c.ok("整页可全锁", await c.run(() => isPinned("a") && isPinned("b")));
+  await c.run(() => setFrameLock(S.frames[0], "text"));
+  await c.wait(400);
+  c.ok("整页可降为仅锁内容",
+    await c.run(() => isLocked("a") && !isPinned("a") && isLocked("b") && !isPinned("b")));
+  await c.run(() => setFrameLock(S.frames[0], null));
+  await c.wait(300);
+  c.ok("整页可解锁", await c.run(() => !isLocked("a") && !isLocked("b")));
+
+  const mig = await c.run(() =>
+    migrate({ v: 4, cards: [{ id: "x", x: 0, y: 0, w: 200, text: "", lock: true }], links: [], frames: [] }));
+  c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 5);
 });
 
 /* =====================================================================
@@ -1084,7 +1100,7 @@ group("scale 整体缩放", async (c) => {
 
 group("data 数据安全", async (c) => {
   await c.board([{ id: "a", x: 0, y: 0, w: 300, text: "内容", s: {} }], []);
-  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 4);
+  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 5);
 
   // 旧版的"已锁定编组"要迁移成卡片自身的锁定，锁定状态不能丢
   const mig = await c.run(() =>
@@ -1094,8 +1110,8 @@ group("data 数据安全", async (c) => {
       groups: [{ id: "gg", ids: ["g1"], locked: true }],
     })
   );
-  c.ok("旧编组的锁定状态迁移到卡片", mig.cards[0].lock === true && !mig.cards[1].lock);
-  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 4);
+  c.ok("旧编组的锁定状态迁移到卡片", mig.cards[0].lock === "all" && !mig.cards[1].lock);
+  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 5);
 
   await c.run(async () => { await autoBackup(true); });
   await c.wait(500);
