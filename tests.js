@@ -914,6 +914,74 @@ group("table 表格", async (c) => {
   c.ok("可以转为纯文字", await c.run((i) => !card(i).tb && card(i).text.includes("Bulley"), id));
 });
 
+group("tablemove 表格移动与删除", async (c) => {
+  const mk = async () => {
+    await c.run(() => {
+      S.cards = []; S.links = []; S.frames = [];
+      invalidateIndex(); render(); camTo(0, 0, 1, true);
+      const cc = newTable({ x: 0, y: -100 }, 3, 3);
+      cc.tb.rows = [["甲", "乙", "丙"], ["1", "2", "3"], ["4", "5", "6"]];
+      syncTable(cc); sel = []; clearTbSel(); render();
+    });
+    await c.wait(500);
+    return c.run(() => S.cards[0].id);
+  };
+  const cellPt = (id, r, cc) => c.run(([i, a2, b2]) => {
+    const td = nodes.get(i).querySelector(`td[data-r="${a2}"][data-c="${b2}"]`);
+    const q = td.getBoundingClientRect();
+    return { x: q.x + q.width / 2, y: q.y + q.height / 2 };
+  }, [id, r, cc]);
+
+  let id = await mk();
+  let pt = await cellPt(id, 1, 1);
+  await c.page.mouse.click(pt.x, pt.y);
+  await c.wait(400);
+  c.ok("点击表格即选中卡片", (await c.run(() => sel.length)) === 1);
+  c.ok("首次点击不产生单元格选区", await c.run(() => !tbSel));
+
+  // 未选中时拖动整张表：移动手势与格子选择不能抢同一个动作
+  await c.run(() => { sel = []; clearTbSel(); paintSel(); });
+  await c.wait(250);
+  const x0 = await c.run((i) => card(i).x, id);
+  pt = await cellPt(id, 1, 1);
+  await c.page.mouse.move(pt.x, pt.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(pt.x + 150, pt.y + 80, { steps: 10 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  c.ok("拖动可移动整张表格", Math.abs((await c.run((i) => card(i).x, id)) - x0 - 150) < 8);
+
+  await c.page.keyboard.press("Delete");
+  await c.wait(400);
+  c.ok("可以删除表格", (await c.run(() => S.cards.length)) === 0);
+
+  // 选中之后再拖，才是框选单元格
+  id = await mk();
+  pt = await cellPt(id, 1, 1);
+  await c.page.mouse.click(pt.x, pt.y);
+  await c.wait(300);
+  const x1 = await c.run((i) => card(i).x, id);
+  const pt2 = await cellPt(id, 2, 2);
+  await c.page.mouse.move(pt.x, pt.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(pt2.x, pt2.y, { steps: 8 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  const rect = await c.run(() => tbRect());
+  c.ok("选中后拖动是框选单元格", rect && rect.r1 === 1 && rect.r2 === 2 && rect.c1 === 1 && rect.c2 === 2);
+  c.ok("框选单元格时表格不移动", (await c.run((i) => card(i).x, id)) === x1);
+
+  await c.page.keyboard.press("Delete");
+  await c.wait(400);
+  c.ok("有选区时删除键清空单元格",
+    await c.run((i) => S.cards.length === 1 && card(i).tb.rows[1][1] === "" && card(i).tb.rows[0][0] === "甲", id));
+  await c.page.keyboard.press("Escape");
+  await c.wait(250);
+  await c.page.keyboard.press("Delete");
+  await c.wait(400);
+  c.ok("取消选区后可删除整张表", (await c.run(() => S.cards.length)) === 0);
+});
+
 group("tablesize 表格尺寸", async (c) => {
   await c.run(() => {
     S.textDef = { ...DEF, size: 18 };
@@ -1001,7 +1069,11 @@ group("cells 单元格选择", async (c) => {
   await c.wait(400);
   c.ok("点击表格即选中并显示工具栏",
     await c.run(() => $("bar").classList.contains("on") && sel.length === 1));
-  c.ok("点击单元格建立选区", await c.run(() => !!tbSel && tbSel.r1 === 1 && tbSel.c1 === 1));
+  // 首次点击只选中卡片，再点一次才进入单元格选择（这样拖动可以直接移动整张表）
+  c.ok("首次点击只选中卡片", await c.run(() => !tbSel));
+  await c.page.mouse.click(pt.x, pt.y);
+  await c.wait(300);
+  c.ok("再次点击建立单元格选区", await c.run(() => !!tbSel && tbSel.r1 === 1 && tbSel.c1 === 1));
 
   const pt2 = await c.run((i) => {
     const r = nodes.get(i).querySelector('td[data-r="2"][data-c="3"]').getBoundingClientRect();

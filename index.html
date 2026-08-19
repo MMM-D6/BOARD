@@ -1379,7 +1379,7 @@ function newTable(p,rows,cols){
     rows:Array.from({length:rows},()=>new Array(cols).fill(""))};
   const w=cols*cw;
   const c={id:uid(),x:Math.round(p.x-w/2),y:Math.round(p.y-40),w,tb,text:"",s:newStyle()};
-  snap();S.cards.push(c);sel=[c.id];invalidateIndex();render();save();
+  snap();invalidateIndex();S.cards.push(c);invalidateIndex();sel=[c.id];render();save();
   setTimeout(()=>{const el=nodes.get(c.id);const td=el&&el.querySelector("td");
     if(td)editCell(td)},40);
   return c;
@@ -1513,8 +1513,18 @@ function buildTable(el,c,oc,s){
       // 未进入编辑时，在单元格上拖动即框选，Shift 点击扩展
       td.addEventListener("pointerdown",e=>{
         if(lock||e.button!==0||td.isContentEditable)return;
+        // 表格未被选中时，第一下按普通卡片处理：选中并可直接拖动整张表。
+        // 选中之后再在格子上拖动，才是框选单元格。这样"移动表格"和"选格子"不抢同一个手势。
+        // 表格还没被选中时，这一下按普通卡片处理：选中并可直接拖动整张表。
+        // 已经选中之后，在格子上按下才进入单元格选择。两个手势因此不冲突。
+        const already=sel.length===1&&sel[0]===c.id;
+        if(!already){
+          clearTbSel();
+          sel=[c.id];selLink=null;paintSel();
+          startMove(e);
+          return;
+        }
         e.stopPropagation();
-        if(!sel.includes(c.id)){sel=[c.id];selLink=null;paintSel()}
         if(e.shiftKey&&tbSel&&tbSel.id===oc.id){tbSel.r2=ri;tbSel.c2=ci}
         else tbSel={id:c.id,r1:ri,c1:ci,r2:ri,c2:ci};
         paintTbSel();syncBar();
@@ -2865,7 +2875,8 @@ const MANUAL=[
   <p><b>编辑</b>：双击任意单元格进入编辑。<kbd>Tab</kbd> 移到右邻单元格，<kbd>Shift</kbd> + <kbd>Tab</kbd> 向左，行尾会自动折到下一行开头。<kbd>Enter</kbd> 移到下一行同列，在最后一行按 <kbd>Enter</kbd> 会自动新增一行，所以连续录入不用碰菜单。<kbd>Esc</kbd> 退出编辑。</p>
   <p><b>列宽</b>：每两列之间有一条贯穿整个表格高度的分隔线，在任意行的位置都能拖动，选中表格时会显出一条淡线提示位置。默认是在相邻两列之间挪动边界，表格总宽不变；按住 <kbd>Alt</kbd> 拖动则只加宽当前列，整个表格随之变宽。右键菜单里有<b>列宽均分</b>。</p>
   <p><b>整体缩放</b>：拖动卡片四周的控制点可以等比缩放整张表，所有列宽按同一比例跟随，表格不会溢出选中框。新建时的列宽按当前基准字号推算，一开始就是舒服的宽度，输入文字之后也不会再变。</p>
-  <p><b>选中单元格</b>：在单元格上拖动即可框选一片区域，<kbd>Shift</kbd> 点击扩展选区，选中表格后按 <kbd>Ctrl/Cmd</kbd> + <kbd>A</kbd> 选中全部单元格。右键菜单里有<b>选中整行</b>和<b>选中整列</b>。选中的格子会有淡蓝底色，按 <kbd>Esc</kbd> 取消。</p>
+  <p><b>移动整张表</b>：表格未被选中时，在它上面拖动就是移动整张表，和普通卡片一样。选中之后在格子上拖动才是框选单元格，两个手势因此不冲突。删除也一样：没有单元格选区时按 <kbd>Delete</kbd> 删掉整张表，有选区时则只清空选中格子的内容，按 <kbd>Esc</kbd> 可取消选区。</p>
+  <p><b>选中单元格</b>：表格选中后在单元格上拖动即可框选一片区域，<kbd>Shift</kbd> 点击扩展选区，选中表格后按 <kbd>Ctrl/Cmd</kbd> + <kbd>A</kbd> 选中全部单元格。右键菜单里有<b>选中整行</b>和<b>选中整列</b>。选中的格子会有淡蓝底色，按 <kbd>Esc</kbd> 取消。</p>
   <p><b>逐格排版</b>：有选区时，工具栏的对齐、加粗、斜体、文字颜色、底色都只作用于选中的格子，所以可以让数字列居中、否定项标红、重点行加底色。没有选区时这些操作作用于整张表。<b>清除</b>会去掉选中格子的全部逐格设定。</p>
   <p><b>增删行列</b>：右键某个单元格，可在其上下左右插入或删除。若当前有选区，插入和删除会按选区的行列数批量进行，比如选中三行后删除即一次删掉三行。菜单里另有<b>清空选中单元格</b>，只清内容不动结构；直接按 <kbd>Delete</kbd> 效果相同。</p>
   <p><b>标题栏</b>：右键菜单里可分别开关<b>标题行</b>和<b>标题列</b>，两者可以同时开启。标题会加粗并带浅底色，导出时映射为真正的表头。</p>
