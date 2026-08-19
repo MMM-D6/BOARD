@@ -460,6 +460,9 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   tplDel:"Delete this template",tplEmpty:"No templates yet",tplAsk:"Template name",
   tplUnnamed:"Template",tplSaved:"Template saved:",tplApplied:"Cards restyled:",
   tplRemoved:"Template deleted",tplNeedCard:"Select a card first",tplIsDefault:"New cards will use it",
+  pageLinks:"Connectors on this page",pageLinkStruct:"Make them all structural",
+  pageLinkRelate:"Make them all relational",pageNoLinks:"No connectors inside this page",
+  linkNowStruct:"Now structural:",linkNowRelate:"Now relational:",
   linkRole:"What this connector means",linkStruct:"Structure: the target is a sub-item",
   linkRelate:"Relation: the two are merely related",linkNewStruct:"New connectors are structural",
   outlineMode:"Outline follows the connectors",
@@ -582,6 +585,9 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   tplDel:"删除该模板",tplEmpty:"还没有模板",tplAsk:"模板名称",
   tplUnnamed:"模板",tplSaved:"模板已保存：",tplApplied:"已套用卡片：",
   tplRemoved:"模板已删除",tplNeedCard:"请先选中一张卡片",tplIsDefault:"新建卡片将采用它",
+  pageLinks:"本页的连线",pageLinkStruct:"全部设为结构连线",
+  pageLinkRelate:"全部设为关联连线",pageNoLinks:"这个页面里没有连线",
+  linkNowStruct:"已设为结构连线：",linkNowRelate:"已设为关联连线：",
   linkRole:"这条连线的含义",linkStruct:"结构：指向的是下级",
   linkRelate:"关联：两者只是相关",linkNewStruct:"新连线默认为结构连线",
   outlineMode:"大纲跟随连线",
@@ -868,6 +874,15 @@ function setCardLock(ids,mode){
   cs.forEach(c=>{if(mode)c.lock=mode;else delete c.lock});
   render();save();
   toast((mode==="all"?t("lockOnAll"):mode==="text"?t("lockOnText"):t("lockOff"))+" "+cs.length);
+}
+function setFrameLinks(f,st){
+  const ids=new Set(inFrame(f).map(c=>c.id));
+  const ls=S.links.filter(l=>ids.has(l.a)&&ids.has(l.b));   // 两端都在本页才算本页的连线
+  if(!ls.length){toast(t("pageNoLinks"));return}
+  snap();
+  ls.forEach(l=>{if(st)l.st=true;else delete l.st});
+  render();save();
+  toast((st?t("linkNowStruct"):t("linkNowRelate"))+" "+ls.length);
 }
 function setFrameLock(f,mode){
   const cs=inFrame(f);
@@ -2016,6 +2031,9 @@ function frameMenu(x,y,f){
     {label:t("pageSelect"),on:()=>{sel=inFrame(f).map(c=>c.id);selFrame=null;render();paintSel()}},
     {label:t("pageLock"),sub:[{head:t("pageLock")},
       ...lockItems(()=>inFrame(f).map(z=>z.id))]},
+    {label:t("pageLinks"),sub:[{head:t("pageLinks")},
+      {label:t("pageLinkStruct"),on:()=>setFrameLinks(f,true)},
+      {label:t("pageLinkRelate"),on:()=>setFrameLinks(f,false)}]},
     {label:t("pageFit"),on:()=>{const cs=inFrame(f);
       if(cs.length){const bb=bbox(cs);snap();
         f.x=Math.round(bb.x-70);f.y=Math.round(bb.y-70);
@@ -2962,6 +2980,8 @@ const MANUAL=[
   </ul>
   <p>之所以要明确标记而不是靠样式约定，是因为这两者的语义完全不同：一个决定文档骨架，一个是横向参照。靠看线的样子去猜迟早会混。</p>
   <p><b>大纲跟随连线</b>：只要画布上存在结构连线，编号和导出层级就由连线的树形关系决定，而不再依赖卡片的空间位置。所以你可以随意挪动卡片，编号不会乱。同级之间按位置从上到下、从左到右排序。</p>
+  <p><b>方向由标题层级决定，不看你怎么画的</b>：一级标题永远是上级，二级在它之下，以此类推；没有标层级的卡片永远是末端内容。所以连线时完全不用管从哪头拉到哪头，也不需要箭头。只有两端层级相同时，才会退回到按连线本身的方向判断。</p>
+  <p><b>批量转换</b>：右键页面标题的<b>本页的连线</b>，可以把这一页内部的连线一次全部设为结构连线或关联连线。只影响两端都在本页内的连线，跨页的连线不受影响。</p>
   <p>规则是：有下级的卡片、或自己标了层级的卡片算标题，参与编号；纯末端且没标层级的卡片算正文内容，挂在上级标题之下。没有被任何结构连线串起来的卡片，仍按原来的空间顺序接在文档后面，不会丢失。</p>
   <p>结构连线不会重复写成"另见"，因为它已经体现为文档的层级关系；只有关联连线才进入交叉引用和关系表。</p>
   <p>右键空白处的<b>默认连线样式</b>里可以设定新连线默认是哪一种。整套机制可以在视图菜单里用<b>大纲跟随连线</b>关掉，关掉后回到按空间位置推断层级的老办法。</p>
@@ -3185,14 +3205,30 @@ function docOrder(list){
 // 结构连线（l.st）表示"下级"，据此可以直接把思维导图变成文档大纲。
 // 普通连线只表示"相关"，导出时作为交叉引用，不参与层级与编号。
 const structLinks=()=>S.links.filter(l=>l.st);
+// 层级越浅越靠上：一级标题永远是上级，没标层级的正文永远是末端。
+// 这样连线时不必在意方向，也不需要箭头。
+function lvRank(c){
+  if(!c)return 99;
+  if(c.role==="apx")return 1;
+  return c.level?c.level:99;
+}
+function structPair(l){
+  const A=card(l.a),B=card(l.b);
+  if(!A||!B)return null;
+  const ra=lvRank(A),rb=lvRank(B);
+  if(ra<rb)return {p:A.id,k:B.id};
+  if(rb<ra)return {p:B.id,k:A.id};
+  return {p:l.a,k:l.b};            // 同级时才回退到连线本身的方向
+}
 function outlineForest(list){
   const set=new Set((list||S.cards).map(c=>c.id));
   const ls=structLinks().filter(l=>set.has(l.a)&&set.has(l.b));
   if(!ls.length)return null;
   const kids=new Map(),hasParent=new Set();
   ls.forEach(l=>{
-    if(!kids.has(l.a))kids.set(l.a,[]);
-    if(!kids.get(l.a).includes(l.b)){kids.get(l.a).push(l.b);hasParent.add(l.b)}
+    const pr=structPair(l);if(!pr)return;
+    if(!kids.has(pr.p))kids.set(pr.p,[]);
+    if(!kids.get(pr.p).includes(pr.k)){kids.get(pr.p).push(pr.k);hasParent.add(pr.k)}
   });
   const pos=c=>(c.y*100000+c.x);                 // 同级按位置排，上到下、左到右
   const seen=new Set();

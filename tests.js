@@ -390,6 +390,55 @@ group("outline 结构连线", async (c) => {
   await c.run(() => { S.outline = true; });
 });
 
+group("outdir 结构方向与批量转换", async (c) => {
+  // 连线方向故意画反，验证归属由标题层级决定而不是画线方向
+  const r = await c.run(() => {
+    S.cards = [
+      { id: "A", x: 0, y: 0, w: 300, text: "一级", level: 1, s: {} },
+      { id: "A1", x: 600, y: -100, w: 300, text: "二级甲", level: 2, s: {} },
+      { id: "A2", x: 600, y: 100, w: 300, text: "二级乙", level: 2, s: {} },
+      { id: "A2a", x: 1200, y: 100, w: 300, text: "正文内容", s: {} },
+      { id: "C", x: 600, y: 400, w: 300, text: "三级", level: 3, s: {} },
+    ];
+    S.links = [
+      { id: "l1", a: "A1", b: "A", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l2", a: "A", b: "A2", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l3", a: "A2a", b: "A2", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l4", a: "C", b: "A2", st: true, kind: "curve", w: 1.4, color: "#888" },
+    ];
+    S.frames = []; S.autoNum = true; S.outline = true;
+    invalidateIndex(); render();
+    return buildTree().flat.map((n) => [n.c.id, n.num, n.lv, n.parent ? n.parent.c.id : null]);
+  });
+  const f = (id) => r.find((x) => x[0] === id) || [];
+  c.ok("一级永远是根", f("A")[1] === "1" && f("A")[3] === null);
+  c.ok("反向画的连线仍能正确归位", f("A1")[3] === "A" && /^1\./.test(f("A1")[1]));
+  c.ok("三级归到二级之下", f("C")[3] === "A2" && f("C")[2] === 3);
+  c.ok("正文归到标题之下且不编号", f("A2a")[3] === "A2" && !f("A2a")[1]);
+
+  const r2 = await c.run(() => {
+    S.frames = [{ id: "f", x: -80, y: -260, w: 1650, h: 900, title: "页" }];
+    S.links.forEach((l) => delete l.st);
+    render();
+    const before = S.links.filter((l) => l.st).length;
+    setFrameLinks(S.frames[0], true);
+    const after = S.links.filter((l) => l.st).length;
+    setFrameLinks(S.frames[0], false);
+    return { before, after, back: S.links.filter((l) => l.st).length };
+  });
+  c.ok("可整页设为结构连线", r2.before === 0 && r2.after === 4);
+  c.ok("可整页设回关联连线", r2.back === 0);
+
+  const r3 = await c.run(() => {
+    S.cards.push({ id: "OUT", x: 4000, y: 4000, w: 200, text: "页外", s: {} });
+    S.links.push({ id: "lx", a: "A", b: "OUT", kind: "curve", w: 1.4, color: "#888" });
+    invalidateIndex(); render();
+    setFrameLinks(S.frames[0], true);
+    return { inPage: S.links.filter((l) => l.st).length, outside: !!S.links.find((l) => l.id === "lx").st };
+  });
+  c.ok("整页转换不影响页外的连线", r3.inPage === 4 && r3.outside === false);
+});
+
 group("levelmark 层级标记", async (c) => {
   await c.run(() => {
     S.textDef = { ...DEF, size: 16 }; S.autoNum = false;
