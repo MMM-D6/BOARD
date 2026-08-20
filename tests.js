@@ -315,8 +315,12 @@ group("twins 分身", async (c) => {
   const doc = await c.run(() =>
     docHTML({ title: "T", img: false, tags: false, refs: false, table: false }, buildTree(), false)
   );
-  c.ok("导出时源正文只出现一次", (doc.match(/<p>改过的内容[^<]*<\/p>/g) || []).length === 1);
-  c.ok("导出时分身写成引用行", /class="rel">&#9672;/.test(doc));
+  // 默认：分身在每一处都完整呈现内容，便于用分身构建文献引用
+  c.ok("分身处也完整呈现内容", (doc.match(/改过的内容/g) || []).length >= 2);
+  const docRef = await c.run(() =>
+    docHTML({ title: "T", img: false, tags: false, refs: false, table: false, twinRef: true },
+      buildTree(), false));
+  c.ok("可切换为交叉引用", /class="rel">&#9672;/.test(docRef));
 
   // 删源不丢内容
   await c.run(() => { sel = ["a"]; del(); });
@@ -437,6 +441,54 @@ group("outdir 结构方向与批量转换", async (c) => {
     return { inPage: S.links.filter((l) => l.st).length, outside: !!S.links.find((l) => l.id === "lx").st };
   });
   c.ok("整页转换不影响页外的连线", r3.inPage === 4 && r3.outside === false);
+});
+
+group("quote 原文记录", async (c) => {
+  const r = await c.run(() => {
+    const L = (a2, b2) => ({ id: uid(), a: a2, b: b2, st: true, kind: "curve", w: 1.4, color: "#888" });
+    S.cards = [
+      { id: "H", x: 0, y: 0, w: 300, text: "理论框架", level: 1, s: {} },
+      { id: "P", x: 600, y: 0, w: 300, text: "身体是可编辑的", level: 2, s: {} },
+      { id: "Q", x: 1200, y: 0, w: 340, role: "quote", text: "Codification is vital", s: {} },
+      { id: "H2", x: 0, y: 600, w: 300, text: "方法论", level: 1, s: {} },
+      { id: "Q2", ref: "Q", x: 600, y: 600, w: 340, role: "quote", lock: "text", s: {} },
+    ];
+    S.links = [L("H", "P"), L("P", "Q"), L("H2", "Q2")];
+    S.frames = []; S.autoNum = true; S.outline = true;
+    invalidateIndex(); render();
+    const tree = buildTree();
+    const O = { title: "论文", img: 0, tags: 0, refs: 0, table: 0 };
+    return {
+      flat: tree.flat.map((n) => [n.c.id, n.num, n.lv, !!n.quote, !!n.isRef]),
+      md: docMD(O, tree), mdRef: docMD({ ...O, twinRef: true }, tree),
+      html: docHTML(O, tree, false),
+    };
+  });
+  const f = (id) => r.flat.find((x) => x[0] === id) || [];
+  c.ok("原文记录不参与编号", !f("Q")[1] && f("Q")[2] === 0);
+  c.ok("原文记录被识别为引文", f("Q")[3] === true);
+  c.ok("原文挂在最近的标题之下", f("P")[1] === "1.1");
+  c.ok("原文导出为引用块", /^> Codification/m.test(r.md));
+  c.ok("HTML 导出为引用块", /<blockquote class="qt">/.test(r.html));
+
+  // 分身默认直接呈现原文，这样同一条引文在两章都完整可读
+  c.ok("分身直接呈现原文", (r.md.match(/Codification/g) || []).length === 2);
+  c.ok("默认不再写成另见", !/Same entry|同一条目/.test(r.md));
+  c.ok("可选择改回交叉引用", /§/.test(r.mdRef) && /Same entry|同一条目/.test(r.mdRef));
+
+  await c.run(() => { sel = []; render(); fit(true); });
+  await c.wait(500);
+  c.ok("画布上显示为引文样式", await c.run(() => {
+    const el = nodes.get("Q"), cs = getComputedStyle(el.querySelector(".cap"));
+    return el.className.includes("qt") && parseFloat(cs.borderLeftWidth) > 0 && parseFloat(cs.paddingLeft) > 0;
+  }));
+
+  // 原文永远是最末端，连线画反也归位
+  c.ok("原文永远是末端", await c.run(() => {
+    S.links = [{ id: "x", a: "Q", b: "P", st: true, kind: "curve", w: 1.4, color: "#888" }];
+    const n = buildTree().flat.find((z) => z.c.id === "Q");
+    return n && n.parent && n.parent.c.id === "P";
+  }));
 });
 
 group("levelmark 层级标记", async (c) => {

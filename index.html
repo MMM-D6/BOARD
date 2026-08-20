@@ -199,6 +199,9 @@
     font:500 calc(9px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
   body.lock .card .lvl{display:none}
   /* 层级用左侧竖条表示，粗细即层级，不写字母 */
+  .card.qt .cap{border-left:calc(2px * var(--iz)) solid currentColor;
+    padding-left:calc(11px * var(--iz));opacity:.82}
+  .card.qt .lvl{opacity:.3;letter-spacing:0}
   .card .hbar{position:absolute;left:calc(-12px * var(--iz));top:0;
     border-radius:calc(2px * var(--iz));background:currentColor;pointer-events:none}
   /* 一级最粗最长，逐级递减，同时用长度区分，缩小时也分得清 */
@@ -408,6 +411,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   newWindow:"New window",agoNow:"just now",agoMin:"m ago",agoHour:"h ago",agoDay:"d ago",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
+  roleQuote:"Source quotation",quoteTag:"\u201C\u201D",
+  twinRefOpt:"Twins as cross-references instead of full text",
   roleHead:"Outside the sequence",roleApx:"Appendix",roleAside:"Other, not numbered",
   linkAdd:"Add a link…",linkEdit:"Edit the link…",linkOpen:"Open the link",
   linkPrompt:"Web address: a PDF link, a Google Scholar entry, or a DOI. Empty removes it.",linkLabel:"Link",
@@ -532,6 +537,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   newWindow:"新建窗口",agoNow:"刚刚",agoMin:" 分钟前",agoHour:" 小时前",agoDay:" 天前",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
+  roleQuote:"原文记录",quoteTag:"\u201C\u201D",
+  twinRefOpt:"分身写成交叉引用而非完整内容",
   roleHead:"不参与排序",roleApx:"附录",roleAside:"其他（不编号）",
   linkAdd:"添加链接…",linkEdit:"修改链接…",linkOpen:"打开链接",
   linkPrompt:"网址：PDF 链接、Google Scholar 条目、或直接粘 DOI。留空则移除",linkLabel:"链接",
@@ -1015,7 +1022,7 @@ function normCard(c){
   if(o.rich&&typeof o.rich!=="string")delete o.rich;
   o.s=(o.s&&typeof o.s==="object")?o.s:{};
   if(o.level&&![1,2,3].includes(+o.level))delete o.level;
-  if(o.role&&!["apx","aside"].includes(o.role))delete o.role;
+  if(o.role&&!["apx","aside","quote"].includes(o.role))delete o.role;
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
   if(o.bg&&typeof o.bg!=="string")delete o.bg;
   if(o.url&&typeof o.url!=="string")delete o.url;
@@ -1347,6 +1354,7 @@ function computeNums(){
 function badgeOf(c){
   if(c.role==="apx")return S.autoNum?(NUM.get(c.id)||t("apxLabel")):t("apxLabel");
   if(c.role==="aside")return t("asideTag");
+  if(c.role==="quote")return t("quoteTag");
   if(!c.level)return "";
   // 层级本身由左侧竖条表示，这里只在开启自动编号时显示编号
   return S.autoNum?(NUM.get(c.id)||""):"";
@@ -1746,7 +1754,7 @@ function syncCap(c0,cap){
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
-  el.className="card"+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
+  el.className="card"+(c.role==="quote"?" qt":"")+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
   if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
@@ -2890,6 +2898,13 @@ const MANUAL=[
   <p>导出 Word 和 PDF 文档时，链接会作为可点击的超链接附在该段之后。分身共享源的链接。演示模式下链接依然可点，方便当场打开原文。</p>
   <p class="tip">建议配合标签使用：链接解决"去哪里找原文"，标签解决"这是什么类型的材料"。</p>`],
 
+ ["原文记录","YUANWENJILU",`
+  <p>右键卡片 → <b>层级</b> → <b>原文记录</b>，把一张卡片标为原文摘录。它是最低的一层，永远排在末端，不参与编号。</p>
+  <p>用途是保留观点的来源：某个论断出自哪篇文献的哪一句，原样抄在这里，随时可以回看。画布上显示为引文样式，左侧一条竖线加缩进，与正文一眼可分。</p>
+  <p><b>方向自动判定</b>：原文记录的层级永远最低，所以从它连出去还是连进来都无所谓，一律挂在最近的标题之下。</p>
+  <p><b>导出</b>：Word 里是缩进的斜体引文，PDF 和 HTML 是标准引用块，Markdown 是以 &gt; 开头的引用行。都能与正文明确区分。</p>
+  <p class="tip">配合分身使用最顺手：同一条原文如果在多章都要引用，做几个分身放到各章之下，导出时每一处都会完整呈现原文，不是"另见某节"。</p>`],
+
  ["分身","FENSHEN",`
   <p>分身不是复制，而是<b>同一条内容在多处出现</b>。内容只有一个源，分身是它的投影：文字和图片共享，位置、尺寸、字号各自独立。改任意一处的文字，所有位置同步更新。</p>
   <p><b>用途</b>：想法之间距离太远时，与其拉一条横跨画布的连线，不如在需要的地方放一个分身。既保持了上下文，又不会让连线变成乱麻。</p>
@@ -2898,7 +2913,8 @@ const MANUAL=[
   <p>新建的分身默认为<b>仅锁定内容</b>，因为在分身上误改就是改到原文。它仍可自由移动和缩放，只是改不动文字。需要修改时到源头改，或先解锁。</p>
   <p><b>串联与溯源</b>：有分身的卡片右上角出现菱形标记，写着「2/4」表示这是四处出现中的第二处。点标记跳到下一处，按住 <kbd>Shift</kbd> 点跳回源头，右键标记打开分身菜单，可以一次选中全部出现位置。顺着标记点下去，就能走完一条信息在画布上的完整轨迹。</p>
   <p><b>与检索的关系</b>：分身共享源的文字和标签，所以天然进入检索结果。回车逐个跳转时，跳的是这条信息的所有出现位置。菜单里的<b>检索时合并分身</b>可以切换：关注内容时合并成一条，巡视位置时展开为多条。</p>
-  <p><b>与导出的关系</b>：分身不重复正文，而是在它所在的位置生成一行「同一条目，另见 §2.1」，接入交叉引用体系；编号也只算源，同一段不会被编两次号。</p>
+  <p><b>与导出的关系</b>：分身在每一处都<b>完整呈现原文内容</b>，因为用分身构建文献引用时，同一条引文在不同章节都应当读得到，让读者跳去别处查看并不合理。编号仍只算源，同一段不会被编两次号。</p>
+  <p>如果你确实希望它写成「同一条目，另见 §2.1」那种交叉引用，导出面板里有一个开关可以切换。</p>
   <p><b>脱离</b>：右键分身选<b>脱离为独立卡片</b>，它会就地固化成一张普通卡片，此后与源各改各的。删除源时，第一个分身会自动继承内容成为新的源，内容不会丢。</p>
   <p class="tip">分身和页面、锁定互不冲突：页面管输出单元，锁定管防误碰，分身管同一内容的多处呈现。锁定的卡片同样可以创建分身。</p>`],
 
@@ -3210,6 +3226,7 @@ const structLinks=()=>S.links.filter(l=>l.st);
 function lvRank(c){
   if(!c)return 99;
   if(c.role==="apx")return 1;
+  if(c.role==="quote")return 100;      // 原文记录永远是最末端
   return c.level?c.level:99;
 }
 function structPair(l){
@@ -3251,10 +3268,10 @@ function buildTree(list,depth,prefix){
   if(forest)return buildFromForest(forest,list,shift,prefix);
   const order=docOrder(list),stack=[],roots=[];
   order.forEach(c=>{
-    const apx=c.role==="apx",aside=c.role==="aside";
+    const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote";
     const isRef=!!c.ref;
-    const lv=(aside||isRef)?0:(apx?1:(c.level||0));
-    const node={c,lv,apx,aside,isRef,children:[],num:"",sec:""};
+    const lv=(aside||quote||isRef)?0:(apx?1:(c.level||0));
+    const node={c,lv,apx,aside,quote,isRef,children:[],num:"",sec:""};
     if(lv===0){const p=stack[stack.length-1];(p?p.node.children:roots).push(node);node.parent=p?p.node:null}
     else{
       while(stack.length&&stack[stack.length-1].lv>=lv)stack.pop();
@@ -3288,11 +3305,11 @@ function buildFromForest(forest,list,shift,prefix){
   const roots=[],flat=[];
   const mk=(t2,parent)=>{
     const c=t2.c;
-    const apx=c.role==="apx",aside=c.role==="aside",isRef=!!c.ref;
-    // 有下级、或自己标了层级的，算标题；纯叶子且没标层级的算正文
-    const isHead=!aside&&!isRef&&(t2.kids.length>0||!!c.level);
+    const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",isRef=!!c.ref;
+    // 有下级、或自己标了层级的，算标题；原文记录与纯叶子算内容
+    const isHead=!aside&&!quote&&!isRef&&(t2.kids.length>0||!!c.level);
     const lv=isHead?t2.depth:0;
-    const node={c,lv,apx,aside,isRef,children:[],num:"",sec:"",parent:parent||null};
+    const node={c,lv,apx,aside,quote,isRef,children:[],num:"",sec:"",parent:parent||null};
     (parent?parent.children:roots).push(node);
     t2.kids.forEach(k=>mk(k,node));
     return node;
@@ -3303,9 +3320,9 @@ function buildFromForest(forest,list,shift,prefix){
   if(rest.length){
     const order=docOrder(rest),stack=[];
     order.forEach(c=>{
-      const apx=c.role==="apx",aside=c.role==="aside",isRef=!!c.ref;
-      const lv=(aside||isRef)?0:(apx?1:(c.level||0));
-      const node={c,lv,apx,aside,isRef,children:[],num:"",sec:""};
+      const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",isRef=!!c.ref;
+      const lv=(aside||quote||isRef)?0:(apx?1:(c.level||0));
+      const node={c,lv,apx,aside,quote,isRef,children:[],num:"",sec:""};
       if(lv===0){const p=stack[stack.length-1];(p?p.node.children:roots).push(node);
         node.parent=p?p.node:null}
       else{
@@ -3341,7 +3358,7 @@ function secTag(n){
   if(n.apx||(n.parent&&n.parent.apx))return t("apxLabel")+" "+(n.num||n.sec)+" ";
   return n.num?("\u00A7"+n.num+" "):(n.sec?("\u00A7"+n.sec+" "):"");
 }
-function refLabel(n){return secTag(n)+snippet(n.c,26)}
+function refLabel(n){return secTag(n)+snippet(orig(n.c),26)}
 function relName(l){return t(RELMAP[l.color]||"relPlain")+(l.arrow==="both"?" / "+t("relBoth"):"")}
 function relationsFor(id,byId){
   // 结构连线已经体现为文档层级，不再重复写成"另见"
@@ -3383,6 +3400,7 @@ function openExport(x,y){
       <label class="opt"><input type="checkbox" id="ex3" checked> ${t("expRef")}</label>
       <label class="opt"><input type="checkbox" id="ex4"> ${t("expTable")}</label>
       <label class="opt"><input type="checkbox" id="ex5" checked> ${t("byPageDoc")}</label>
+      <label class="opt"><input type="checkbox" id="ex6"> ${t("twinRefOpt")}</label>
     </div>
     <div id="eximg" style="display:none">
       <label class="opt"><input type="checkbox" id="exbp" checked> ${t("byPage")}</label>
@@ -3415,7 +3433,8 @@ function openExport(x,y){
       title:stampName(p.querySelector("#exn").value.trim()||"Board"),
       img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
       refs:p.querySelector("#ex3").checked,table:p.querySelector("#ex4").checked,
-      byPageDoc:!!p.querySelector("#ex5")?.checked};
+      byPageDoc:!!p.querySelector("#ex5")?.checked,
+      twinRef:!!p.querySelector("#ex6")?.checked};
     p.classList.remove("on","wide");
     toast(o.fmt==="jpg"||o.fmt==="pdfview"?t("expShot"):t("expWork"));
     setTimeout(()=>doExport(o),60);
@@ -3612,7 +3631,7 @@ async function exportDocx(D,o,tree){
       try{kids.push(new Paragraph({children:[new ImageRun({
         data:srcOf(c).split(",")[1],transformation:{width:d.w,height:d.h}})]}))}catch(e){}
     }
-    if(n.isRef){
+    if(n.isRef&&o.twinRef){                     // 只有勾选了才写成交叉引用
       const src=tree.byId[orig(c).id];
       if(src&&src!==n)kids.push(new Paragraph({children:[new TextRun({
         text:"\u25C8 "+t("twinSee")+" "+refLabel(src),italics:true,size:18,color:"777777"})]}));
@@ -3642,14 +3661,18 @@ async function exportDocx(D,o,tree){
       }
       return;
     }
-    const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
-    const rich=c.rich?paraFrom(c,D,n.out?{heading:hl(n.out)}:null):null;
+    const oc2=orig(c);
+    const txt=(oc2.text||"").split(/\n+/).filter(z=>z.trim());
+    const rich=oc2.rich?paraFrom(oc2,D,n.out?{heading:hl(n.out)}:null):null;
     if(rich&&rich.length){
       if(n.out){kids.push(rich[0]);rich.slice(1).forEach(p=>kids.push(p))}
       else rich.forEach(p=>kids.push(p));
     }
-    else if(n.out){kids.push(new Paragraph({text:(txt[0]||snippet(c)),heading:hl(n.out)}));
+    else if(n.out){kids.push(new Paragraph({text:(txt[0]||snippet(oc2)),heading:hl(n.out)}));
       txt.slice(1).forEach(z=>kids.push(new Paragraph({text:z})))}
+    else if(n.quote)txt.forEach(z=>kids.push(new Paragraph({
+      indent:{left:560},
+      children:[new TextRun({text:z,italics:true,color:"444444"})]})));
     else txt.forEach(z=>kids.push(new Paragraph({text:z})));
     if(o2u(c)){
       try{
@@ -3835,7 +3858,7 @@ function docMD(o,tree){
   const lines=["# "+o.title,""];
   const emit=(n)=>{
     const c=n.c,oc=orig(c);
-    if(n.isRef){
+    if(n.isRef&&o.twinRef){
       const src=tree.byId[oc.id];
       if(src&&src!==n)lines.push("> "+t("twinSee")+" "+refLabel(src),"");
       return;
@@ -3867,7 +3890,9 @@ function docMD(o,tree){
     if(n.out){
       lines.push("#".repeat(Math.min(6,n.out+1))+" "+(n.num?n.num+" ":"")+(txt[0]||snippet(oc)),"");
       txt.slice(1).forEach(z=>lines.push(z,""));
-    }else txt.forEach(z=>lines.push(z,""));
+    }
+    else if(n.quote)txt.forEach(z=>lines.push("> "+z.replace(/\n/g," "),""));
+    else txt.forEach(z=>lines.push(z,""));
     if(o.tags){const tg=cardTags(oc);if(tg.length)lines.push(tg.map(x=>"#"+x).join(" "),"")}
     if(o2u(oc))lines.push("<"+o2u(oc)+">","");
     if(o.refs){
@@ -3903,10 +3928,11 @@ function docHTML(o,tree,forPrint){
   table.tbx{border-collapse:collapse;margin:8pt 0;width:100%}
   table.tbx td,table.tbx th{border:1px solid #999;padding:4pt 6pt;text-align:left;vertical-align:top}
   table.tbx th{background:#f0f0f0;font-weight:600}
+  blockquote.qt{margin:8pt 0 8pt 12pt;padding-left:10pt;border-left:2pt solid #bbb;color:#444}
   img{max-width:460px;height:auto}</style></head><body><h1>${esc(o.title)}</h1>`;
   const emit=(n)=>{
     const c=n.c;
-    if(n.isRef){
+    if(n.isRef&&o.twinRef){
       const src=tree.byId[orig(c).id];
       if(src&&src!==n)h+=`<p class="rel">&#9672; ${esc(t("twinSee")+" "+refLabel(src))}</p>`;
       return;
@@ -3927,12 +3953,17 @@ function docHTML(o,tree,forPrint){
       return;
     }
     if(o.img&&srcOf(c)){const d=imgDims(c);h+=`<p><img src="${srcOf(c)}" width="${d.w}" height="${d.h}"></p>`}
-    const txt=(c.text||"").split(/\n+/).filter(z=>z.trim());
-    if(c.rich){
-      const body=safeRich(c.rich);
-      if(n.out)h+=`<h${Math.min(6,n.out+1)}>${body}</h${Math.min(6,n.out+1)}>`;else h+=`<p>${body}</p>`;
+    const oc2=orig(c);
+    const txt=(oc2.text||"").split(/\n+/).filter(z=>z.trim());
+    if(oc2.rich){
+      const body=safeRich(oc2.rich);
+      if(n.out)h+=`<h${Math.min(6,n.out+1)}>${body}</h${Math.min(6,n.out+1)}>`;
+      else if(n.quote)h+=`<blockquote class="qt"><p>${body}</p></blockquote>`;
+      else h+=`<p>${body}</p>`;
     }
-    else if(n.out){const hn=Math.min(6,n.out+1);h+=`<h${hn}>${esc(txt[0]||snippet(c))}</h${hn}>`;
+    else if(n.quote){h+=`<blockquote class="qt">`
+      +txt.map(z=>`<p>${esc(z)}</p>`).join("")+`</blockquote>`}
+    else if(n.out){const hn=Math.min(6,n.out+1);h+=`<h${hn}>${esc(txt[0]||snippet(oc2))}</h${hn}>`;
       txt.slice(1).forEach(z=>h+=`<p>${esc(z)}</p>`)}
     else txt.forEach(z=>h+=`<p>${esc(z)}</p>`);
     if(o2u(c))h+=`<p class="rel"><a href="${esc(o2u(c))}">${esc(o2u(c))}</a></p>`;
@@ -5301,7 +5332,8 @@ function cardItems(x,y){
         check:!card(sel[0])?.role&&(card(sel[0])?.level||0)===v,on:()=>setLevel(v)})),
       {head:t("roleHead")},
       {label:t("roleApx"),check:card(sel[0])?.role==="apx",on:()=>setRole("apx")},
-      {label:t("roleAside"),check:card(sel[0])?.role==="aside",on:()=>setRole("aside")}]},
+      {label:t("roleAside"),check:card(sel[0])?.role==="aside",on:()=>setRole("aside")},
+      {label:t("roleQuote"),check:card(sel[0])?.role==="quote",on:()=>setRole("quote")}]},
     "-",
     {label:t("linkFromHere"),on:()=>{linkFrom=sel[0];stage.style.cursor="crosshair";toast(t("clickTarget"))}}
   ];
