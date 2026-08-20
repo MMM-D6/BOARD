@@ -777,9 +777,17 @@ group("lock 锁定", async (c) => {
   await c.run(() => { sel = ["a"]; del(); });
   await c.wait(250);
   c.ok("锁定后不可删除", (await c.run(() => S.cards.length)) === 2);
-  await c.run(() => { selLink = "L"; sel = []; del(); });
+  // 只有结构连线随卡片锁定；关联连线是横向参照，随时可改
+  await c.run(() => { S.links[0].st = true; selLink = "L"; sel = []; del(); });
   await c.wait(250);
-  c.ok("相连的连线也不可删除", (await c.run(() => S.links.length)) === 1);
+  c.ok("相连的结构连线不可删除", (await c.run(() => S.links.length)) === 1);
+  await c.run(() => { delete S.links[0].st; selLink = "L"; sel = []; del(); });
+  await c.wait(250);
+  c.ok("关联连线不受卡片锁定影响", (await c.run(() => S.links.length)) === 0);
+  await c.run(() => {
+    S.links = [{ id: "L", a: "a", b: "b", kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85" }];
+    markLinksDirty(); drawLinks();
+  });
   await c.run(() => { sel = ["a"]; paintSel(); });
   await c.wait(250);
   c.ok("仅锁内容时缩放控制点仍在",
@@ -1737,6 +1745,40 @@ group("data 数据安全", async (c) => {
 /* =====================================================================
    12. 静态检查：文案对齐、无自我调用、DOM 引用存在
    ===================================================================== */
+
+group("image 图片导入", async (c) => {
+  const r = await c.run(async () => {
+    S.cards = []; S.links = []; S.frames = []; S.sheets = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    const cv = document.createElement("canvas"); cv.width = 200; cv.height = 120;
+    const g = cv.getContext("2d");
+    g.clearRect(0, 0, 200, 120);                 // 留出透明区域
+    g.fillStyle = "rgba(200,60,60,.85)"; g.fillRect(20, 20, 160, 80);
+    const blob = await new Promise((z) => cv.toBlob(z, "image/png"));
+    const file = new File([blob], "test.png", { type: "image/png" });
+    await new Promise((z) => { addImages([file], { x: 0, y: 0 }); setTimeout(z, 700); });
+    const cc = S.cards[0];
+    return cc ? { n: S.cards.length, ih: !!cc.ih, src: (srcOf(cc) || "").slice(0, 22),
+      ar: +(cc.ar || 0).toFixed(2) } : null;
+  });
+  c.ok("PNG 可以导入", !!r && r.n === 1 && r.ih);
+  c.ok("以 PNG 存储，保留透明通道", /^data:image\/png/.test(r.src));
+  c.ok("宽高比正确", Math.abs(r.ar - 0.6) < 0.02);
+
+  const r2 = await c.run(async () => {
+    const cv = document.createElement("canvas"); cv.width = 160; cv.height = 160;
+    cv.getContext("2d").fillRect(0, 0, 160, 160);
+    const blob = await new Promise((z) => cv.toBlob(z, "image/png"));
+    const dt = new DataTransfer();
+    dt.items.add(new File([blob], "p.png", { type: "image/png" }));
+    const before = S.cards.length;
+    document.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true }));
+    await new Promise((z) => setTimeout(z, 700));
+    return { before, after: S.cards.length, ih: !!S.cards[S.cards.length - 1]?.ih };
+  });
+  c.ok("可以直接粘贴 PNG", r2.after === r2.before + 1 && r2.ih);
+  c.ok("图片按内容哈希单独存放", await c.run(() => S.cards.every((z) => !z.src || z.ih)));
+});
 
 group("perf 性能守卫", async (c) => {
   // 虚线的绘制代价与路径长度成正比。历史上跨越整张画布的长虚线曾让单帧涨到三秒，
