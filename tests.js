@@ -860,6 +860,61 @@ group("lock 锁定", async (c) => {
   c.ok("批量移动只包含未钉住的",
     JSON.stringify(await c.run(() => { sel = ["m1", "m2"]; return movableSel(); })) === '["m1"]');
 
+  /* --- 工具栏上的锁定控件 --- */
+  await c.run(() => {
+    S.cards = [{ id: "L1", x: -200, y: 100, w: 400, text: "内容", s: {} },
+      { id: "L2", x: 400, y: 100, w: 300, text: "另一张", s: {} }];
+    S.links = []; S.frames = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    sel = ["L1"]; paintSel(); syncBar();
+  });
+  await c.wait(500);
+  c.ok("工具栏有锁定按钮", await c.run(() => !!document.querySelector(".lockbtn")));
+  const lockBtn = () => c.run(() => {
+    const q = document.querySelector(".lockbtn").getBoundingClientRect();
+    return { x: q.x + q.width / 2, y: q.y + q.height / 2 };
+  });
+  let bp = await lockBtn();
+  await c.page.mouse.click(bp.x, bp.y);
+  await c.wait(450);
+  c.ok("点一下锁定内容", (await c.run(() => card("L1").lock)) === "text");
+  c.ok("按钮进入选中态", await c.run(() => document.querySelector(".lockbtn").classList.contains("on")));
+  bp = await lockBtn();
+  await c.page.mouse.click(bp.x, bp.y);
+  await c.wait(450);
+  c.ok("再点一下解锁", await c.run(() => !card("L1").lock));
+
+  const caret = await c.run(() => {
+    const q = document.querySelector(".lockbtn").parentNode.querySelector(".caret").getBoundingClientRect();
+    return { x: q.x + q.width / 2, y: q.y + q.height / 2 };
+  });
+  await c.page.mouse.click(caret.x, caret.y);
+  await c.wait(400);
+  c.ok("展开可选两级锁定",
+    (await c.run(() => document.querySelectorAll("#bar .pp.on .item").length)) === 2);
+  await c.run(() => { const its = [...document.querySelectorAll("#bar .pp.on .item")]; its[its.length - 1].click(); });
+  await c.wait(450);
+  c.ok("可从菜单选锁定内容与位置", (await c.run(() => card("L1").lock)) === "all");
+  // 锁定控件本身不能被锁定挡住，否则会锁死
+  bp = await lockBtn();
+  await c.page.mouse.click(bp.x, bp.y);
+  await c.wait(450);
+  c.ok("锁定后仍能通过按钮解锁", await c.run(() => !card("L1").lock));
+
+  await c.run(() => { sel = ["L1", "L2"]; paintSel(); syncBar(); });
+  await c.wait(400);
+  bp = await lockBtn();
+  await c.page.mouse.click(bp.x, bp.y);
+  await c.wait(450);
+  c.ok("多选时一起锁定",
+    await c.run(() => card("L1").lock === "text" && card("L2").lock === "text"));
+  const ic1 = await c.run(() => document.querySelector("#lockic").innerHTML);
+  await c.run(() => { setCardLock(["L1", "L2"], "all"); sel = ["L1", "L2"]; paintSel(); syncBar(); });
+  await c.wait(450);
+  const ic2 = await c.run(() => document.querySelector("#lockic").innerHTML);
+  c.ok("图标区分两种锁定级别", ic1 !== ic2 && /circle/.test(ic2));
+  await c.run(() => setCardLock(["L1", "L2"], null));
+
   const mig = await c.run(() =>
     migrate({ v: 4, cards: [{ id: "x", x: 0, y: 0, w: 200, text: "", lock: true }], links: [], frames: [] }));
   c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 6);

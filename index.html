@@ -290,6 +290,7 @@
   #bar .ctl.lnkbtn{font-size:12px;filter:grayscale(1)}
   #bar .ctl .sw{width:14px;height:14px;border-radius:50%;border:1px solid var(--pline);flex:none}
   #bar .ctl .swb{width:14px;height:11px;border-radius:2px;border:1px solid var(--pline);flex:none}
+  #bar .lockbtn svg{display:block}
   #bar .ctl .swc{width:14px;height:14px;border-radius:3px;flex:none;
     border:1px solid var(--pline);box-shadow:inset 0 0 0 1px rgba(255,255,255,.5)}
   #bar .ctl .swc.act{box-shadow:inset 0 0 0 1px rgba(255,255,255,.5),0 0 0 1.5px var(--frame)}
@@ -3141,6 +3142,7 @@ const MANUAL=[
     <li><b>锁定内容与位置</b>：连位置和尺寸也钉住，缩放控制点不再出现，完全不动。适合已经排好版、不希望再有任何变化的部分。</li>
   </ul>
   <p><b>解锁同样分两级</b>：<b>解除位置锁定</b>降回仅锁内容，方便临时挪一挪；<b>完全解锁</b>则彻底放开。</p>
+  <p><b>工具栏</b>上也有一个锁形按钮（在"清除"和"分级统一"之间）：点一下切换仅锁定内容，右侧小三角展开四种操作。图标会随状态变化，未锁是开口的锁，仅锁内容是闭合的锁，连位置也锁则多一个钉点，扫一眼就知道当前是哪一级。</p>
   <p>快捷键 <kbd>Ctrl/Cmd</kbd> + <kbd>L</kbd> 切换仅锁内容，加 <kbd>Shift</kbd> 切换锁内容与位置。</p>
   <p>锁定没有任何视觉标注，因为一旦动不了你自然就知道它锁着了。</p>
   <p><b>拖动的含义随锁定级别而变</b>：仅锁定内容时卡片还能移动，所以在卡片上拖动就是移动它；锁定内容与位置之后卡片挪不动了，此时拖动改为划选文字，方便复制引用。两者不会互相干扰。</p>
@@ -4732,6 +4734,38 @@ function buildBar(){
   btn(b,t("clearFmt"),clearFmt);
   div();
 
+  /* 7.5 锁定：点图标切换仅锁内容，小三角展开四种操作 */
+  {
+    const cell=document.createElement("div");cell.className="cell split";b.appendChild(cell);
+    btn(cell,`<span id="lockic"></span>`,()=>{
+      const cur=sel.map(card).filter(Boolean);
+      if(!cur.length)return;
+      setCardLock(null,cur.every(z=>z.lock)?null:"text");
+    },"half lockbtn");
+    const pop=document.createElement("div");pop.className="pp";
+    pop.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    const trig=btn(cell,car,()=>{
+      const was=pop.classList.contains("on");closePops();
+      if(was)return;
+      pop.innerHTML="";
+      const h=document.createElement("div");h.className="hd2";h.textContent=t("lockMenu");
+      pop.appendChild(h);
+      lockItems(()=>sel.slice()).forEach(it=>{
+        const x=document.createElement("button");
+        x.className="item"+(it.check?" on":"");
+        x.textContent=it.label;
+        x.addEventListener("pointerdown",e2=>{e2.preventDefault();e2.stopPropagation()});
+        x.addEventListener("click",e2=>{e2.stopPropagation();it.on();closePops()});
+        pop.appendChild(x);
+      });
+      pop.classList.remove("right");pop.classList.add("on");
+      b.classList.add("open");trig.classList.add("on");
+      if(pop.getBoundingClientRect().right>innerWidth-10)pop.classList.add("right");
+    },"caret");
+    cell.appendChild(pop);
+  }
+  div();
+
   /* 8. 分级统一 */
   cellWith(`${t("unify")}${car}`,(pop,close)=>{
     const h=document.createElement("div");h.className="hd2";h.textContent=t("unify");
@@ -4758,6 +4792,15 @@ function buildBar(){
     const n=document.createElement("div");n.className="note2";n.textContent=t("unifyHint");
     pop.appendChild(n);
   },null,"right");
+}
+function lockSvg(mode){
+  // 未锁：开口的锁；仅锁内容：闭合的锁；连位置也锁：闭合的锁加一个钉点
+  const body=`<rect x="4.5" y="10.5" width="15" height="10" rx="2.2"/>`;
+  const shackle=mode?`<path d="M8 10.5V7.6a4 4 0 0 1 8 0v2.9"/>`
+    :`<path d="M8 10.5V7.6a4 4 0 0 1 7.6-1.4"/>`;
+  const pin=mode==="all"?`<circle cx="12" cy="15.4" r="1.5" fill="currentColor" stroke="none"/>`:"";
+  return `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${body}${shackle}${pin}</svg>`;
 }
 function alSvg(v){
   return `<svg width="14" height="11" viewBox="0 0 14 11" fill="currentColor">`+
@@ -4852,6 +4895,16 @@ function syncBar(){
     const nm=tp?tp.name:t("tplShort");
     tl.textContent=nm.length>8?nm.slice(0,8)+"\u2026":nm;
     const mb=b.querySelector(".tplbtn");if(mb)mb.style.opacity=tp?"":"0.5";}
+  const lk=b.querySelector("#lockic");
+  if(lk){
+    const cur=sel.map(card).filter(Boolean);
+    const mode=cur.length&&cur.every(z=>z.lock==="all")?"all"
+      :(cur.length&&cur.every(z=>z.lock)?"text":null);
+    lk.innerHTML=lockSvg(mode);
+    const mb=b.querySelector(".lockbtn");
+    if(mb){mb.classList.toggle("on",!!mode);
+      mb.title=mode==="all"?t("lockAll"):mode?t("lockText"):t("lockMenu")}
+  }
   const par=b.querySelector("#parlab");
   const rr=tbRect();
   let alNow=st.align||"left";
