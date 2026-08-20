@@ -199,6 +199,19 @@
     font:500 calc(9px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
   body.lock .card .lvl{display:none}
   /* 层级用左侧竖条表示，粗细即层级，不写字母 */
+  .card.bib .cap{padding-left:calc(16px * var(--iz));text-indent:calc(-16px * var(--iz));
+    font-weight:600}
+  /* 圆点在卡片外侧，必须抬到选中框与控制点之上，否则点不到 */
+  .card .bibdot{position:absolute;left:calc(-16px * var(--iz));top:calc(3px * var(--iz));
+    width:calc(9px * var(--iz));height:calc(9px * var(--iz));border-radius:50%;
+    border:calc(1.5px * var(--iz)) solid currentColor;opacity:.35;cursor:pointer;
+    pointer-events:auto;z-index:8}
+  .card .bibdot:hover{opacity:.9}
+  .card .bibdot.act{background:currentColor;opacity:.85}
+  body.bibfocus .card{opacity:.12;transition:opacity .18s}
+  body.bibfocus .card.bibon{opacity:1}
+  body.bibfocus #links{opacity:.12}
+  body.lock .card .bibdot{display:none}
   .card.qt .cap{border-left:calc(2px * var(--iz)) solid currentColor;
     padding-left:calc(11px * var(--iz));opacity:.82}
   .card.qt .lvl{opacity:.3;letter-spacing:0}
@@ -412,6 +425,12 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   roleQuote:"Source quotation",quoteTag:"\u201C\u201D",
+  bibShow:"Show what is filed under this entry",bibShowFrom:"Show the entry this came from",
+  unbindBib:"Detach from the bibliography entry",bibNoBind:"Nothing here is attached to an entry",
+  bibUnbound:"Detached:",
+  roleBib:"Bibliography entry",bibTag:"\u25A4",bindBib:"Attach these to the bibliography entry",
+  bibNeedOne:"Select exactly one bibliography entry",bibNeedQuote:"Also select the quotations to attach",
+  bibBound:"Attached:",
   twinRefOpt:"Twins as cross-references instead of full text",
   roleHead:"Outside the sequence",roleApx:"Appendix",roleAside:"Other, not numbered",
   linkAdd:"Add a link…",linkEdit:"Edit the link…",linkOpen:"Open the link",
@@ -471,6 +490,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   linkRole:"What this connector means",linkStruct:"Structure: the target is a sub-item",
   linkRelate:"Relation: the two are merely related",linkNewStruct:"New connectors are structural",
   outlineMode:"Outline follows the connectors",
+  relAdjacent:"Related cards are placed together",
   linkApplyAll:"Apply this style to every connector",linkApplied:"Connectors updated:",
   linkView:"Connector display",lvAll:"Always visible",lvFocus:"Focus on hover",lvOff:"Hidden",
   linkLabel:"Note marker",llDot:"Dot only",llText:"Short label",llNone:"None",
@@ -538,6 +558,12 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   roleQuote:"原文记录",quoteTag:"\u201C\u201D",
+  bibShow:"显示归在这条文献下的原文",bibShowFrom:"显示它出自哪条文献",
+  unbindBib:"从文献条目解除绑定",bibNoBind:"选中的卡片没有绑定到文献条目",
+  bibUnbound:"已解除绑定：",
+  roleBib:"文献条目",bibTag:"\u25A4",bindBib:"绑定到该文献条目",
+  bibNeedOne:"请恰好选中一条文献条目",bibNeedQuote:"请同时选中要绑定的原文卡片",
+  bibBound:"已绑定：",
   twinRefOpt:"分身写成交叉引用而非完整内容",
   roleHead:"不参与排序",roleApx:"附录",roleAside:"其他（不编号）",
   linkAdd:"添加链接…",linkEdit:"修改链接…",linkOpen:"打开链接",
@@ -598,6 +624,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   linkRole:"这条连线的含义",linkStruct:"结构：指向的是下级",
   linkRelate:"关联：两者只是相关",linkNewStruct:"新连线默认为结构连线",
   outlineMode:"大纲跟随连线",
+  relAdjacent:"关联的内容排在一起",
   linkApplyAll:"套用到全部连线",linkApplied:"已更新连线：",
   linkView:"连线显示",lvAll:"始终显示",lvFocus:"聚焦时显示",lvOff:"隐藏",
   linkLabel:"批注标记",llDot:"仅圆点",llText:"简短标签",llNone:"不显示",
@@ -926,7 +953,7 @@ function applyUndo(stack,other){
 }
 
 /* ================= storage ================= */
-const SCHEMA=5;                         // 数据结构版本，只增不减
+const SCHEMA=6;                         // 数据结构版本，只增不减
 function migrate(d){
   if(!d||typeof d!=="object")return d;
   const from=+d.v||1;
@@ -947,6 +974,18 @@ function migrate(d){
   }
   if(from<5){                            // 4 -> 5 锁定分两级，旧的布尔锁等同全锁
     (d.cards||[]).forEach(c=>{if(c.lock===true)c.lock="all"});
+  }
+  if(from<6){                            // 5 -> 6 文献条目的归属不再用连线表达
+    const byId={};(d.cards||[]).forEach(c=>byId[c.id]=c);
+    const keep=[];
+    (d.links||[]).forEach(l=>{
+      const A=byId[l.a],B=byId[l.b];
+      const bib=A&&A.role==="bib"?A:(B&&B.role==="bib"?B:null);
+      const other=bib===A?B:A;
+      if(l.st&&bib&&other&&other.role!=="bib"){other.bib=bib.id;return}
+      keep.push(l);
+    });
+    d.links=keep;
   }
   d.v=Math.max(from,SCHEMA);
   return d;
@@ -1022,7 +1061,8 @@ function normCard(c){
   if(o.rich&&typeof o.rich!=="string")delete o.rich;
   o.s=(o.s&&typeof o.s==="object")?o.s:{};
   if(o.level&&![1,2,3].includes(+o.level))delete o.level;
-  if(o.role&&!["apx","aside","quote"].includes(o.role))delete o.role;
+  if(o.role&&!["apx","aside","quote","bib"].includes(o.role))delete o.role;
+  if(o.bib&&typeof o.bib!=="string")delete o.bib;
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
   if(o.bg&&typeof o.bg!=="string")delete o.bg;
   if(o.url&&typeof o.url!=="string")delete o.url;
@@ -1334,7 +1374,7 @@ function renderNow(){
   nodes.forEach(el=>el.remove());nodes.clear();
   syncCards();
   measure();drawLinks();statusBar();paintFind();refreshTagList();syncFindMode();
-  paintTbSel();syncBar();
+  paintTbSel();paintBibFocus();syncBar();
   $("hint").innerHTML=(S.cards.length||lock)?"":t("hint");
 }
 function isDark(h){if(!h||h[0]!=="#")return false;
@@ -1355,6 +1395,7 @@ function badgeOf(c){
   if(c.role==="apx")return S.autoNum?(NUM.get(c.id)||t("apxLabel")):t("apxLabel");
   if(c.role==="aside")return t("asideTag");
   if(c.role==="quote")return t("quoteTag");
+  if(c.role==="bib")return t("bibTag");
   if(!c.level)return "";
   // 层级本身由左侧竖条表示，这里只在开启自动编号时显示编号
   return S.autoNum?(NUM.get(c.id)||""):"";
@@ -1754,7 +1795,7 @@ function syncCap(c0,cap){
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
-  el.className="card"+(c.role==="quote"?" qt":"")+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
+  el.className="card"+(c.role==="quote"?" qt":"")+(c.role==="bib"?" bib":"")+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
   if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
@@ -1823,6 +1864,24 @@ function makeCard(c){
   if(c.level&&!c.role){
     const hb=document.createElement("div");hb.className="hbar";
     hb.style.color=s.color;el.appendChild(hb);
+  }
+  const oc3=orig(c);
+  if(c.role==="bib"||oc3.bib){
+    const d=document.createElement("div");d.className="bibdot";
+    const gid=c.role==="bib"?c.id:oc3.bib;
+    d.style.color=s.color;
+    if(bibFocus&&bibFocus===gid)d.classList.add("act");
+    d.title=c.role==="bib"?t("bibShow"):t("bibShowFrom");
+    // 按下时先拦住，避免卡片被拖动；真正的切换放在 click，保证点击一定生效
+    d.addEventListener("pointerdown",e=>{
+      if(lock)return;
+      e.stopPropagation();e.preventDefault();
+    });
+    d.addEventListener("click",e=>{
+      if(lock)return;
+      e.stopPropagation();e.preventDefault();setBibFocus(gid);
+    });
+    el.appendChild(d);
   }
   const badge=badgeOf(c);
   if(badge){const lb=document.createElement("div");lb.className="lvl";
@@ -2611,6 +2670,7 @@ addEventListener("keydown",e=>{
   }
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="c"){e.preventDefault();clipCards("twin");return}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="v"){e.preventDefault();pasteClip(toW(mouse.x,mouse.y));return}
+  if(e.key==="Escape"&&bibFocus){bibFocus=null;paintBibFocus();return}
   if(e.key==="Escape"&&tbRect()){clearTbSel();syncBar();return}
   if(e.key==="Escape"){closeMenus();sel=[];selLink=null;linkFrom=null;stage.style.cursor="";toast("");paintSel()}
   if(e.key==="Backspace"||e.key==="Delete"){
@@ -2703,6 +2763,50 @@ function levelStyle(v){
   const [k,w]=LVSCALE[v];
   return {size:Math.round(base.size*k),weight:w,
     spacing:Math.max(-0.02,+(base.spacing-(v===1?0.02:v===2?0.012:0.006)).toFixed(3))};
+}
+// 文献条目与原文之间是归属关系，不是画布上的走向，所以用数据字段而不是连线表达。
+// 原文卡片记 c.src = 文献条目 id，画布上不画任何线。
+const bibOf=c=>{const o=orig(c);return o.bib?card(o.bib):null};
+const bibKids=id=>S.cards.filter(c=>orig(c).bib===id);
+function bindToBib(){
+  const cs=sel.map(card).filter(Boolean);
+  const bibs=cs.filter(c=>c.role==="bib");
+  if(bibs.length!==1){toast(t("bibNeedOne"));return}
+  const bib=bibs[0];
+  const kids=cs.filter(c=>c!==bib&&!isLocked(c.id));
+  if(!kids.length){toast(t("bibNeedQuote"));return}
+  snap();
+  kids.forEach(c=>{
+    const o=orig(c);
+    if(!o.role&&!o.level)o.role="quote";      // 没标角色的默认当作原文
+    o.bib=bib.id;                             // 注意：c.src 是内联图片字段，不能复用
+  });
+  sel=[bib.id];bibFocus=bib.id;render();save();
+  toast(t("bibBound")+" "+kids.length);
+}
+function unbindBib(){
+  const cs=sel.map(card).filter(Boolean).filter(c=>!isLocked(c.id));
+  const n=cs.filter(c=>orig(c).bib).length;
+  if(!n){toast(t("bibNoBind"));return}
+  snap();cs.forEach(c=>{delete orig(c).bib});
+  render();save();toast(t("bibUnbound")+" "+n);
+}
+// 点文献条目上的小圆点：用透明度强调它名下的原文，画布其余部分淡下去
+let bibFocus=null;
+function setBibFocus(id){
+  bibFocus=(bibFocus===id)?null:id;
+  paintBibFocus();
+}
+function paintBibFocus(){
+  const on=!!bibFocus;
+  document.body.classList.toggle("bibfocus",on);
+  const keep=new Set();
+  if(on){
+    keep.add(bibFocus);
+    bibKids(bibFocus).forEach(c=>keep.add(c.id));
+    S.cards.forEach(c=>{if(orig(c).id===bibFocus)keep.add(c.id)});
+  }
+  nodes.forEach((el,id)=>el.classList.toggle("bibon",on&&keep.has(id)));
 }
 function setRole(r){
   const cs=targets().filter(c=>!isLocked(c.id));if(!cs.length)return;
@@ -2898,6 +3002,14 @@ const MANUAL=[
   <p>导出 Word 和 PDF 文档时，链接会作为可点击的超链接附在该段之后。分身共享源的链接。演示模式下链接依然可点，方便当场打开原文。</p>
   <p class="tip">建议配合标签使用：链接解决"去哪里找原文"，标签解决"这是什么类型的材料"。</p>`],
 
+ ["文献条目","WENXIANTIAOMU",`
+  <p>右键卡片 → <b>层级</b> → <b>文献条目</b>，把一张卡片标为一条参考文献的母信息，里面写完整的著录（作者、年份、题名、出处）。</p>
+  <p><b>绑定原文</b>：选中这条文献条目，再加选若干原文卡片（按住 Shift 或框选），右键选<b>绑定到该文献条目</b>。没标角色的卡片会自动视为原文记录。</p>
+  <p><b>不画连线</b>：文献与它的摘录之间是归属关系，不是画布上的走向，所以这层绑定用数据记录，画布上不会多出任何线。文献条目和它名下的原文左侧各有一个小圆点，<b>点圆点即用透明度强调这一组</b>：该文献与它的全部摘录保持清晰，画布其余部分淡下去，一眼就能看清一条文献究竟被摘了哪些句子。再点一次或按 <kbd>Esc</kbd> 恢复。从原文卡片上的圆点点进去，则是反查它出自哪条文献。</p>
+  <p>绑定与位置无关，所以摘录随便怎么挪、放在哪一页都不会散。要解除就右键选<b>从文献条目解除绑定</b>。</p>
+  <p><b>导出结构</b>：Word 里文献条目是悬挂缩进的加粗段落（与参考文献惯例一致），它的原文群紧随其后，逐条缩进为引文。Markdown 是加粗条目加 &gt; 引用行，HTML 是悬挂缩进的条目加引用块。呈现出来就是"一条文献 + 它的全部摘录"这种结构。</p>
+  <p class="tip">配合分身：同一条摘录如果在正文某章要引用，做一个分身放到那一章之下，原处仍挂在文献条目里。导出时两处都完整呈现，你既有按文献归档的全貌，又有按论述展开的正文。</p>`],
+
  ["原文记录","YUANWENJILU",`
   <p>右键卡片 → <b>层级</b> → <b>原文记录</b>，把一张卡片标为原文摘录。它是最低的一层，永远排在末端，不参与编号。</p>
   <p>用途是保留观点的来源：某个论断出自哪篇文献的哪一句，原样抄在这里，随时可以回看。画布上显示为引文样式，左侧一条竖线加缩进，与正文一眼可分。</p>
@@ -2999,7 +3111,9 @@ const MANUAL=[
   <p><b>方向由标题层级决定，不看你怎么画的</b>：一级标题永远是上级，二级在它之下，以此类推；没有标层级的卡片永远是末端内容。所以连线时完全不用管从哪头拉到哪头，也不需要箭头。只有两端层级相同时，才会退回到按连线本身的方向判断。</p>
   <p><b>批量转换</b>：右键页面标题的<b>本页的连线</b>，可以把这一页内部的连线一次全部设为结构连线或关联连线。只影响两端都在本页内的连线，跨页的连线不受影响。</p>
   <p>规则是：有下级的卡片、或自己标了层级的卡片算标题，参与编号；纯末端且没标层级的卡片算正文内容，挂在上级标题之下。没有被任何结构连线串起来的卡片，仍按原来的空间顺序接在文档后面，不会丢失。</p>
-  <p>结构连线不会重复写成"另见"，因为它已经体现为文档的层级关系；只有关联连线才进入交叉引用和关系表。</p>
+  <p><b>关联连线的含义是"这两处属于一起"</b>：导出时程序会把相连的内容拉到相邻位置，而不是写一行"另见某节"，也不重复输出。所以你在画布上把有关的两段连起来，导出的文档里它们就是挨着的。这比让读者跳去别处查看要顺畅得多。</p>
+  <p>只有标题不会被拉动，因为那是文档骨架。可以在视图菜单里用<b>关联的内容排在一起</b>关掉这个行为。</p>
+  <p>两类连线都不再产生"另见"：结构连线已经体现为层级，关联连线已经体现为相邻排列。</p>
   <p>右键空白处的<b>默认连线样式</b>里可以设定新连线默认是哪一种。整套机制可以在视图菜单里用<b>大纲跟随连线</b>关掉，关掉后回到按空间位置推断层级的老办法。</p>
   <p class="tip">这样画布本身就是一张思维导图，导出的 Word 文档结构与你在画布上看到的完全一致。</p>`],
 
@@ -3226,6 +3340,7 @@ const structLinks=()=>S.links.filter(l=>l.st);
 function lvRank(c){
   if(!c)return 99;
   if(c.role==="apx")return 1;
+  if(c.role==="bib")return 95;         // 文献条目：原文的母信息，比正文更靠上
   if(c.role==="quote")return 100;      // 原文记录永远是最末端
   return c.level?c.level:99;
 }
@@ -3262,16 +3377,72 @@ function outlineForest(list){
   if(!roots.length)return null;
   return {roots,seen};
 }
+// 关联连线的语义：这两张卡片属于一处，导出时排在一起。
+// 不再写成"另见"，也不重复输出，只是把它们的顺序拉到相邻。
+function pullTogether(flat){
+  if(S.relAdjacent===false)return flat;
+  const rel=S.links.filter(l=>!l.st);
+  if(!rel.length)return flat;
+  const idx=new Map();flat.forEach((n,i)=>{if(!idx.has(n.c.id))idx.set(n.c.id,n)});
+  const nbr=new Map();
+  rel.forEach(l=>{
+    const A=idx.get(l.a),B=idx.get(l.b);
+    if(!A||!B||A===B)return;
+    if(!nbr.has(A))nbr.set(A,[]);if(!nbr.has(B))nbr.set(B,[]);
+    if(!nbr.get(A).includes(B))nbr.get(A).push(B);
+    if(!nbr.get(B).includes(A))nbr.get(B).push(A);
+  });
+  if(!nbr.size)return flat;
+  const out=[],done=new Set();
+  flat.forEach(n=>{
+    if(done.has(n))return;
+    out.push(n);done.add(n);
+    // 只把"标题以外"的相关内容拉过来，不去动文档骨架
+    const queue=[...(nbr.get(n)||[])];
+    while(queue.length){
+      const m=queue.shift();
+      if(done.has(m)||m.lv||m.apx)continue;
+      out.push(m);done.add(m);
+      (nbr.get(m)||[]).forEach(z=>{if(!done.has(z))queue.push(z)});
+    }
+  });
+  flat.forEach(n=>{if(!done.has(n))out.push(n)});
+  return out;
+}
+// 归在文献条目名下的原文，跟着条目走，不参与空间顺序也不单独出现
+function attachBibKids(flat){
+  const has=flat.some(n=>n.c.role==="bib");
+  if(!has)return flat;
+  const byBib=new Map();
+  flat.forEach(n=>{
+    const bid=orig(n.c).bib;
+    if(bid){if(!byBib.has(bid))byBib.set(bid,[]);byBib.get(bid).push(n)}
+  });
+  if(!byBib.size)return flat;
+  const moved=new Set();byBib.forEach(a=>a.forEach(n=>moved.add(n)));
+  const out=[];
+  flat.forEach(n=>{
+    if(moved.has(n))return;                 // 稍后跟着它的条目一起出现
+    out.push(n);
+    const kids=byBib.get(n.c.id);
+    if(kids){
+      // 同一条文献名下的原文按位置排，保证顺序稳定
+      kids.slice().sort((p,q)=>(p.c.y-q.c.y)||(p.c.x-q.c.x))
+        .forEach(k=>{k.parent=n;out.push(k)});
+    }
+  });
+  return out;
+}
 function buildTree(list,depth,prefix){
   const shift=depth||0;
   const forest=S.outline!==false?outlineForest(list):null;
   if(forest)return buildFromForest(forest,list,shift,prefix);
   const order=docOrder(list),stack=[],roots=[];
   order.forEach(c=>{
-    const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote";
+    const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",bib=c.role==="bib";
     const isRef=!!c.ref;
-    const lv=(aside||quote||isRef)?0:(apx?1:(c.level||0));
-    const node={c,lv,apx,aside,quote,isRef,children:[],num:"",sec:""};
+    const lv=(aside||quote||bib||isRef)?0:(apx?1:(c.level||0));
+    const node={c,lv,apx,aside,quote,bib,isRef,children:[],num:"",sec:""};
     if(lv===0){const p=stack[stack.length-1];(p?p.node.children:roots).push(node);node.parent=p?p.node:null}
     else{
       while(stack.length&&stack[stack.length-1].lv>=lv)stack.pop();
@@ -3294,22 +3465,24 @@ function buildTree(list,depth,prefix){
     walk(n.children);
   });
   walk(roots);
-  const flat=[];const flatten=l=>l.forEach(n=>{flat.push(n);flatten(n.children)});flatten(roots);
+  let flat=[];const flatten=l=>l.forEach(n=>{flat.push(n);flatten(n.children)});flatten(roots);
   flat.forEach(n=>{if(n.out===undefined)n.out=n.lv?n.lv+shift:0});
+  flat=attachBibKids(pullTogether(flat));
   const byId={};flat.forEach(n=>{byId[n.c.id]=n;
     if(!n.isRef&&!byId[orig(n.c).id])byId[orig(n.c).id]=n});
   return {roots,flat,byId};
 }
 // 按结构连线搭出的树生成节点，编号与层级都来自树的深度
 function buildFromForest(forest,list,shift,prefix){
-  const roots=[],flat=[];
+  const roots=[];let flat=[];
   const mk=(t2,parent)=>{
     const c=t2.c;
-    const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",isRef=!!c.ref;
-    // 有下级、或自己标了层级的，算标题；原文记录与纯叶子算内容
-    const isHead=!aside&&!quote&&!isRef&&(t2.kids.length>0||!!c.level);
+    const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",
+      bib=c.role==="bib",isRef=!!c.ref;
+    // 有下级、或自己标了层级的算标题；文献条目与原文记录始终是内容
+    const isHead=!aside&&!quote&&!bib&&!isRef&&(t2.kids.length>0||!!c.level);
     const lv=isHead?t2.depth:0;
-    const node={c,lv,apx,aside,quote,isRef,children:[],num:"",sec:"",parent:parent||null};
+    const node={c,lv,apx,aside,quote,bib,isRef,children:[],num:"",sec:"",parent:parent||null};
     (parent?parent.children:roots).push(node);
     t2.kids.forEach(k=>mk(k,node));
     return node;
@@ -3320,9 +3493,10 @@ function buildFromForest(forest,list,shift,prefix){
   if(rest.length){
     const order=docOrder(rest),stack=[];
     order.forEach(c=>{
-      const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",isRef=!!c.ref;
-      const lv=(aside||quote||isRef)?0:(apx?1:(c.level||0));
-      const node={c,lv,apx,aside,quote,isRef,children:[],num:"",sec:""};
+      const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",
+        bib=c.role==="bib",isRef=!!c.ref;
+      const lv=(aside||quote||bib||isRef)?0:(apx?1:(c.level||0));
+      const node={c,lv,apx,aside,quote,bib,isRef,children:[],num:"",sec:""};
       if(lv===0){const p=stack[stack.length-1];(p?p.node.children:roots).push(node);
         node.parent=p?p.node:null}
       else{
@@ -3349,6 +3523,7 @@ function buildFromForest(forest,list,shift,prefix){
   walk(roots);
   const flatten=l=>l.forEach(n=>{flat.push(n);flatten(n.children)});
   flatten(roots);
+  flat=attachBibKids(pullTogether(flat));
   const byId={};flat.forEach(n=>{byId[n.c.id]=n;
     if(!n.isRef&&!byId[orig(n.c).id])byId[orig(n.c).id]=n});
   return {roots,flat,byId};
@@ -3365,7 +3540,8 @@ function relationsFor(id,byId){
 
   const out=[],inn=[];
   S.links.forEach(l=>{
-    if(l.st&&S.outline!==false)return;
+    if(l.st&&S.outline!==false)return;        // 结构连线已体现为层级
+    if(!l.st&&S.relAdjacent!==false)return;   // 关联连线已体现为相邻排列
     if(l.a===id&&byId[l.b])out.push({n:byId[l.b],l});
     if(l.b===id&&byId[l.a])inn.push({n:byId[l.a],l});
   });
@@ -3670,6 +3846,11 @@ async function exportDocx(D,o,tree){
     }
     else if(n.out){kids.push(new Paragraph({text:(txt[0]||snippet(oc2)),heading:hl(n.out)}));
       txt.slice(1).forEach(z=>kids.push(new Paragraph({text:z})))}
+    else if(n.bib){
+      kids.push(new Paragraph({
+        indent:{left:360,hanging:360},          // 文献条目用悬挂缩进，与参考文献惯例一致
+        children:[new TextRun({text:txt.join(" "),bold:true})]}));
+    }
     else if(n.quote)txt.forEach(z=>kids.push(new Paragraph({
       indent:{left:560},
       children:[new TextRun({text:z,italics:true,color:"444444"})]})));
@@ -3891,6 +4072,8 @@ function docMD(o,tree){
       lines.push("#".repeat(Math.min(6,n.out+1))+" "+(n.num?n.num+" ":"")+(txt[0]||snippet(oc)),"");
       txt.slice(1).forEach(z=>lines.push(z,""));
     }
+    else if(n.bib){lines.push("**"+(txt[0]||snippet(oc))+"**","");
+      txt.slice(1).forEach(z=>lines.push(z,""))}
     else if(n.quote)txt.forEach(z=>lines.push("> "+z.replace(/\n/g," "),""));
     else txt.forEach(z=>lines.push(z,""));
     if(o.tags){const tg=cardTags(oc);if(tg.length)lines.push(tg.map(x=>"#"+x).join(" "),"")}
@@ -3929,6 +4112,7 @@ function docHTML(o,tree,forPrint){
   table.tbx td,table.tbx th{border:1px solid #999;padding:4pt 6pt;text-align:left;vertical-align:top}
   table.tbx th{background:#f0f0f0;font-weight:600}
   blockquote.qt{margin:8pt 0 8pt 12pt;padding-left:10pt;border-left:2pt solid #bbb;color:#444}
+  p.bib{margin:10pt 0 4pt 0;padding-left:18pt;text-indent:-18pt;font-weight:600}
   img{max-width:460px;height:auto}</style></head><body><h1>${esc(o.title)}</h1>`;
   const emit=(n)=>{
     const c=n.c;
@@ -3961,6 +4145,7 @@ function docHTML(o,tree,forPrint){
       else if(n.quote)h+=`<blockquote class="qt"><p>${body}</p></blockquote>`;
       else h+=`<p>${body}</p>`;
     }
+    else if(n.bib){h+=`<p class="bib">`+esc(txt.join(" "))+`</p>`}
     else if(n.quote){h+=`<blockquote class="qt">`
       +txt.map(z=>`<p>${esc(z)}</p>`).join("")+`</blockquote>`}
     else if(n.out){const hn=Math.min(6,n.out+1);h+=`<h${hn}>${esc(txt[0]||snippet(oc2))}</h${hn}>`;
@@ -5219,6 +5404,8 @@ function viewItems(x,y){
     ]},
     {label:t("outlineMode"),check:S.outline!==false,
       on:()=>{S.outline=S.outline===false;render();save()}},
+    {label:t("relAdjacent"),check:S.relAdjacent!==false,
+      on:()=>{S.relAdjacent=S.relAdjacent===false;save()}},
     {label:t("linkDefaults"),sub:[
       {head:t("linkRole")},
       {label:t("linkNewStruct"),check:!!S.linkDef.st,
@@ -5333,7 +5520,8 @@ function cardItems(x,y){
       {head:t("roleHead")},
       {label:t("roleApx"),check:card(sel[0])?.role==="apx",on:()=>setRole("apx")},
       {label:t("roleAside"),check:card(sel[0])?.role==="aside",on:()=>setRole("aside")},
-      {label:t("roleQuote"),check:card(sel[0])?.role==="quote",on:()=>setRole("quote")}]},
+      {label:t("roleQuote"),check:card(sel[0])?.role==="quote",on:()=>setRole("quote")},
+      {label:t("roleBib"),check:card(sel[0])?.role==="bib",on:()=>setRole("bib")}]},
     "-",
     {label:t("linkFromHere"),on:()=>{linkFrom=sel[0];stage.style.cursor="crosshair";toast(t("clickTarget"))}}
   ];
@@ -5353,6 +5541,10 @@ function cardItems(x,y){
   const one2=sel.length===1?orig(card(sel[0])):null;
   items.push({label:one2&&one2.url?t("linkEdit"):t("linkAdd"),on:setCardUrl});
   if(one2&&one2.url)items.push({label:t("linkOpen"),on:()=>openUrl(one2.url)});
+  if(sel.length>1&&sel.map(card).filter(z=>z&&z.role==="bib").length===1)
+    items.push({label:t("bindBib"),on:bindToBib});
+  if(sel.map(card).some(z=>z&&orig(z).bib))
+    items.push({label:t("unbindBib"),on:unbindBib});
   items.push({label:t("clipTwinDo"),key:"⌘⇧C",on:()=>clipCards("twin")});
   items.push({label:t("clipCopyDo"),on:()=>clipCards("copy")});
   items.push({label:t("sendMove"),sub:sendItems("move")});

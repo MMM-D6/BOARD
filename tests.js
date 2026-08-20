@@ -370,7 +370,8 @@ group("outline 结构连线", async (c) => {
   c.ok("散落卡片仍被收进文档", r.nums.some((x) => x[0] === "X"));
   c.ok("导出层级与编号一致",
     /## 1 Background/.test(r.md) && /### 1\.1 根本差异/.test(r.md) && /## 2 理论框架/.test(r.md));
-  c.ok("结构连线不重复写成交叉引用", (r.md.match(/See §/g) || []).length === 1);
+  // 结构连线体现为层级，关联连线体现为相邻排列，两者都不再写成"另见"
+  c.ok("两类连线都不重复写成交叉引用", (r.md.match(/See §/g) || []).length === 0);
 
   await c.run(() => { sel = []; render(); fit(true); });
   await c.wait(500);
@@ -489,6 +490,120 @@ group("quote 原文记录", async (c) => {
     const n = buildTree().flat.find((z) => z.c.id === "Q");
     return n && n.parent && n.parent.c.id === "P";
   }));
+});
+
+group("bib 文献条目", async (c) => {
+  const r = await c.run(() => {
+    S.cards = [
+      { id: "H", x: 0, y: 0, w: 300, text: "文献综述", level: 1, s: {} },
+      { id: "B1", x: 0, y: 200, w: 420, role: "bib", text: "Bulley & Sahin (2021).", s: {} },
+      { id: "Q1", x: 0, y: 340, w: 340, role: "quote", bib: "B1", text: "Codification is vital (p.3)", s: {} },
+      { id: "Q2", x: 0, y: 460, w: 340, role: "quote", bib: "B1", text: "新的结构与系统 (p.7)", s: {} },
+      { id: "B2", x: 600, y: 200, w: 420, role: "bib", text: "Candy (2006).", s: {} },
+      { id: "Q3", x: 600, y: 340, w: 340, role: "quote", bib: "B2", text: "实践主导与实践本位 (p.1)", s: {} },
+    ];
+    S.links = []; S.frames = []; S.autoNum = true; S.outline = true;
+    invalidateIndex(); render();
+    const tree = buildTree();
+    const O = { title: "论文", img: 0, tags: 0, refs: 0, table: 0 };
+    return { order: tree.flat.map((n) => n.c.id).join(","), md: docMD(O, tree),
+      html: docHTML(O, tree, false), links: S.links.length };
+  });
+  // 归属是数据关系，画布上不画任何线
+  c.ok("文献归属不产生连线", r.links === 0);
+  c.ok("原文跟着它的文献条目走", r.order === "H,B1,Q1,Q2,B2,Q3");
+  c.ok("导出为条目加原文群", /\*\*Bulley/.test(r.md) && /^> Codification/m.test(r.md));
+  c.ok("HTML 用悬挂缩进的条目样式", /<p class="bib">/.test(r.html));
+
+  await c.run(() => { sel = []; render(); fit(true); });
+  await c.wait(500);
+  c.ok("文献条目与原文上都有小圆点",
+    await c.run(() => !!nodes.get("B1").querySelector(".bibdot") && !!nodes.get("Q1").querySelector(".bibdot")));
+
+  const dot = await c.run(() => {
+    const q = nodes.get("B1").querySelector(".bibdot").getBoundingClientRect();
+    return { x: q.x + q.width / 2, y: q.y + q.height / 2 };
+  });
+  await c.page.mouse.click(dot.x, dot.y);
+  await c.wait(400);
+  const hi = await c.run(() => ({
+    focus: bibFocus,
+    on: ["B1", "Q1", "Q2"].every((i) => nodes.get(i).classList.contains("bibon")),
+    off: ["H", "B2", "Q3"].some((i) => nodes.get(i).classList.contains("bibon")),
+    opOn: +getComputedStyle(nodes.get("B1")).opacity,
+    opOff: +getComputedStyle(nodes.get("H")).opacity,
+  }));
+  c.ok("点圆点强调该条文献名下的原文", hi.focus === "B1" && hi.on && !hi.off);
+  c.ok("其余内容用透明度淡下去", hi.opOn > 0.9 && hi.opOff < 0.3);
+  await c.page.mouse.click(dot.x, dot.y);
+  await c.wait(350);
+  c.ok("再点一次取消强调", await c.run(() => !bibFocus));
+
+  const dq = await c.run(() => {
+    const q = nodes.get("Q3").querySelector(".bibdot").getBoundingClientRect();
+    return { x: q.x + q.width / 2, y: q.y + q.height / 2 };
+  });
+  await c.page.mouse.click(dq.x, dq.y);
+  await c.wait(350);
+  c.ok("从原文可反查它出自哪条文献", await c.run(() => bibFocus === "B2"));
+  await c.run(() => { bibFocus = null; paintBibFocus(); });
+
+  // 多选一次绑定，不依赖空间位置也不画线
+  const bind = await c.run(() => {
+    S.cards.forEach((z) => delete z.bib);
+    S.cards.push({ id: "Q4", x: 0, y: 700, w: 340, text: "新摘的一句", s: {} });
+    invalidateIndex(); render();
+    sel = ["B1", "Q1", "Q2", "Q4"];
+    bindToBib();
+    return { kids: bibKids("B1").map((z) => z.id).sort(), role: card("Q4").role, links: S.links.length };
+  });
+  c.ok("可把多选原文一次绑定到条目", JSON.stringify(bind.kids) === '["Q1","Q2","Q4"]');
+  c.ok("未标角色的自动视为原文", bind.role === "quote");
+  c.ok("绑定不产生连线", bind.links === 0);
+  await c.run(() => { sel = ["Q4"]; unbindBib(); });
+  await c.wait(300);
+  c.ok("可以解除绑定", (await c.run(() => bibKids("B1").length)) === 2);
+
+  const mig = await c.run(() => migrate({
+    v: 5,
+    cards: [{ id: "b", x: 0, y: 0, w: 200, text: "条目", role: "bib" },
+      { id: "q", x: 0, y: 100, w: 200, text: "原文", role: "quote" }],
+    links: [{ id: "l", a: "b", b: "q", st: true }], frames: [],
+  }));
+  c.ok("旧的连线绑定迁移为归属字段",
+    mig.cards[1].bib === "b" && mig.links.length === 0 && mig.v === 6);
+});
+
+group("adjacent 关联相邻", async (c) => {
+  const r = await c.run(() => {
+    S.cards = [
+      { id: "H", x: 0, y: 0, w: 300, text: "章", level: 1, s: {} },
+      { id: "A", x: 600, y: 0, w: 300, text: "甲的论述", s: {} },
+      { id: "Z", x: 600, y: 900, w: 300, text: "乙的补充", s: {} },
+      { id: "M", x: 600, y: 400, w: 300, text: "中间隔着的内容", s: {} },
+    ];
+    S.links = [
+      { id: "s1", a: "H", b: "A", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "s2", a: "H", b: "M", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "s3", a: "H", b: "Z", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "r1", a: "A", b: "Z", kind: "curve", w: 1.4, color: "#888" },
+    ];
+    S.frames = []; S.outline = true; S.relAdjacent = true;
+    invalidateIndex(); render();
+    const tree = buildTree();
+    return { order: tree.flat.map((n) => n.c.id).join(","),
+      md: docMD({ title: "T", img: 0, tags: 0, refs: 1, table: 0 }, tree) };
+  });
+  c.ok("关联的内容被拉到相邻", r.order === "H,A,Z,M");
+  c.ok("不再输出另见", !/§|See |另见/.test(r.md));
+  c.ok("内容不重复", (r.md.match(/乙的补充/g) || []).length === 1);
+  const off = await c.run(() => {
+    S.relAdjacent = false;
+    const o = buildTree().flat.map((n) => n.c.id).join(",");
+    S.relAdjacent = true;
+    return o;
+  });
+  c.ok("可关闭相邻排列", off !== r.order);
 });
 
 group("levelmark 层级标记", async (c) => {
@@ -739,7 +854,7 @@ group("lock 锁定", async (c) => {
 
   const mig = await c.run(() =>
     migrate({ v: 4, cards: [{ id: "x", x: 0, y: 0, w: 200, text: "", lock: true }], links: [], frames: [] }));
-  c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 5);
+  c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 6);
 });
 
 /* =====================================================================
@@ -1448,7 +1563,7 @@ group("scale 整体缩放", async (c) => {
 
 group("data 数据安全", async (c) => {
   await c.board([{ id: "a", x: 0, y: 0, w: 300, text: "内容", s: {} }], []);
-  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 5);
+  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 6);
 
   // 旧版的"已锁定编组"要迁移成卡片自身的锁定，锁定状态不能丢
   const mig = await c.run(() =>
@@ -1459,7 +1574,7 @@ group("data 数据安全", async (c) => {
     })
   );
   c.ok("旧编组的锁定状态迁移到卡片", mig.cards[0].lock === "all" && !mig.cards[1].lock);
-  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 5);
+  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 6);
 
   await c.run(async () => { await autoBackup(true); });
   await c.wait(500);
