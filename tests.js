@@ -517,8 +517,18 @@ group("bib 文献条目", async (c) => {
 
   await c.run(() => { sel = []; render(); fit(true); });
   await c.wait(500);
-  c.ok("文献条目与原文上都有小圆点",
-    await c.run(() => !!nodes.get("B1").querySelector(".bibdot") && !!nodes.get("Q1").querySelector(".bibdot")));
+  // 只有文献条目本身带圆点，归档在它名下的卡片保持干净
+  c.ok("只有文献条目带小圆点",
+    await c.run(() => !!nodes.get("B1").querySelector(".bibdot") && !nodes.get("Q1").querySelector(".bibdot")));
+  c.ok("圆点不喧宾夺主",
+    (await c.run(() => nodes.get("B1").querySelector(".bibdot").getBoundingClientRect().width)) <= 8);
+  c.ok("文献条目不带徽标",
+    await c.run(() => { const b2 = nodes.get("B1").querySelector(".lvl"); return !b2 || !b2.textContent.trim(); }));
+  c.ok("文献条目文字不做悬挂缩进（缩放时不变形）",
+    await c.run(() => {
+      const cs = getComputedStyle(nodes.get("B1").querySelector(".cap"));
+      return cs.textIndent === "0px" && parseFloat(cs.paddingLeft) < 2;
+    }));
 
   const dot = await c.run(() => {
     const q = nodes.get("B1").querySelector(".bibdot").getBoundingClientRect();
@@ -539,14 +549,15 @@ group("bib 文献条目", async (c) => {
   await c.wait(350);
   c.ok("再点一次取消强调", await c.run(() => !bibFocus));
 
-  const dq = await c.run(() => {
-    const q = nodes.get("Q3").querySelector(".bibdot").getBoundingClientRect();
-    return { x: q.x + q.width / 2, y: q.y + q.height / 2 };
+  // 强调时不应把跨页面的分身一起点亮
+  const twin = await c.run(() => {
+    S.cards.push({ id: "T1", ref: "Q1", bib: "B1", x: 4000, y: 4000, w: 340, s: {} });
+    invalidateIndex(); render();
+    bibFocus = "B1"; paintBibFocus();
+    return { kids: bibKids("B1").map((z) => z.id), lit: nodes.get("T1") ? nodes.get("T1").classList.contains("bibon") : false };
   });
-  await c.page.mouse.click(dq.x, dq.y);
-  await c.wait(350);
-  c.ok("从原文可反查它出自哪条文献", await c.run(() => bibFocus === "B2"));
-  await c.run(() => { bibFocus = null; paintBibFocus(); });
+  c.ok("强调时不带出分身", !twin.kids.includes("T1") && !twin.lit);
+  await c.run(() => { bibFocus = null; paintBibFocus(); S.cards = S.cards.filter((z) => z.id !== "T1"); invalidateIndex(); render(); });
 
   // 多选一次绑定，不依赖空间位置也不画线
   const bind = await c.run(() => {
@@ -555,10 +566,11 @@ group("bib 文献条目", async (c) => {
     invalidateIndex(); render();
     sel = ["B1", "Q1", "Q2", "Q4"];
     bindToBib();
-    return { kids: bibKids("B1").map((z) => z.id).sort(), role: card("Q4").role, links: S.links.length };
+    return { kids: bibKids("B1").map((z) => z.id).sort(), role: card("Q4").role || null, links: S.links.length };
   });
-  c.ok("可把多选原文一次绑定到条目", JSON.stringify(bind.kids) === '["Q1","Q2","Q4"]');
-  c.ok("未标角色的自动视为原文", bind.role === "quote");
+  c.ok("可把多选卡片一次归档到条目", JSON.stringify(bind.kids) === '["Q1","Q2","Q4"]');
+  // 归档与"是不是引文"是两回事，绑定不应擅自改变卡片角色
+  c.ok("绑定不改变卡片角色", bind.role === null);
   c.ok("绑定不产生连线", bind.links === 0);
   await c.run(() => { sel = ["Q4"]; unbindBib(); });
   await c.wait(300);

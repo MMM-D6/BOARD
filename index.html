@@ -199,12 +199,13 @@
     font:500 calc(9px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
   body.lock .card .lvl{display:none}
   /* 层级用左侧竖条表示，粗细即层级，不写字母 */
-  .card.bib .cap{padding-left:calc(16px * var(--iz));text-indent:calc(-16px * var(--iz));
-    font-weight:600}
+  /* 画布上只加粗，不做悬挂缩进：缩进量随缩放变化会让文字重排、看起来变形。
+     悬挂缩进只在导出的文档里使用 */
+  .card.bib .cap{font-weight:600}
   /* 圆点在卡片外侧，必须抬到选中框与控制点之上，否则点不到 */
-  .card .bibdot{position:absolute;left:calc(-16px * var(--iz));top:calc(3px * var(--iz));
-    width:calc(9px * var(--iz));height:calc(9px * var(--iz));border-radius:50%;
-    border:calc(1.5px * var(--iz)) solid currentColor;opacity:.35;cursor:pointer;
+  .card .bibdot{position:absolute;left:calc(-12px * var(--iz));top:calc(4px * var(--iz));
+    width:calc(6px * var(--iz));height:calc(6px * var(--iz));border-radius:50%;
+    border:calc(1.2px * var(--iz)) solid currentColor;opacity:.3;cursor:pointer;
     pointer-events:auto;z-index:8}
   .card .bibdot:hover{opacity:.9}
   .card .bibdot.act{background:currentColor;opacity:.85}
@@ -424,11 +425,11 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   newWindow:"New window",agoNow:"just now",agoMin:"m ago",agoHour:"h ago",agoDay:"d ago",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
-  roleQuote:"Source quotation",quoteTag:"\u201C\u201D",
-  bibShow:"Show what is filed under this entry",bibShowFrom:"Show the entry this came from",
+  roleQuote:"Citation",quoteTag:"\u201C\u201D",
+  bibShow:"Show what is filed under this entry",
   unbindBib:"Detach from the bibliography entry",bibNoBind:"Nothing here is attached to an entry",
   bibUnbound:"Detached:",
-  roleBib:"Bibliography entry",bibTag:"\u25A4",bindBib:"Attach these to the bibliography entry",
+  roleBib:"Bibliography entry",bindBib:"Attach these to the bibliography entry",
   bibNeedOne:"Select exactly one bibliography entry",bibNeedQuote:"Also select the quotations to attach",
   bibBound:"Attached:",
   twinRefOpt:"Twins as cross-references instead of full text",
@@ -557,11 +558,11 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   newWindow:"新建窗口",agoNow:"刚刚",agoMin:" 分钟前",agoHour:" 小时前",agoDay:" 天前",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
-  roleQuote:"原文记录",quoteTag:"\u201C\u201D",
-  bibShow:"显示归在这条文献下的原文",bibShowFrom:"显示它出自哪条文献",
+  roleQuote:"引文",quoteTag:"\u201C\u201D",
+  bibShow:"显示归在这条文献下的原文",
   unbindBib:"从文献条目解除绑定",bibNoBind:"选中的卡片没有绑定到文献条目",
   bibUnbound:"已解除绑定：",
-  roleBib:"文献条目",bibTag:"\u25A4",bindBib:"绑定到该文献条目",
+  roleBib:"文献条目",bindBib:"绑定到该文献条目",
   bibNeedOne:"请恰好选中一条文献条目",bibNeedQuote:"请同时选中要绑定的原文卡片",
   bibBound:"已绑定：",
   twinRefOpt:"分身写成交叉引用而非完整内容",
@@ -1395,7 +1396,7 @@ function badgeOf(c){
   if(c.role==="apx")return S.autoNum?(NUM.get(c.id)||t("apxLabel")):t("apxLabel");
   if(c.role==="aside")return t("asideTag");
   if(c.role==="quote")return t("quoteTag");
-  if(c.role==="bib")return t("bibTag");
+  if(c.role==="bib")return "";
   if(!c.level)return "";
   // 层级本身由左侧竖条表示，这里只在开启自动编号时显示编号
   return S.autoNum?(NUM.get(c.id)||""):"";
@@ -1866,12 +1867,12 @@ function makeCard(c){
     hb.style.color=s.color;el.appendChild(hb);
   }
   const oc3=orig(c);
-  if(c.role==="bib"||oc3.bib){
+  if(c.role==="bib"){                        // 只有文献条目本身带圆点，归档在它名下的卡片不加标识
     const d=document.createElement("div");d.className="bibdot";
-    const gid=c.role==="bib"?c.id:oc3.bib;
+    const gid=c.id;
     d.style.color=s.color;
     if(bibFocus&&bibFocus===gid)d.classList.add("act");
-    d.title=c.role==="bib"?t("bibShow"):t("bibShowFrom");
+    d.title=t("bibShow");
     // 按下时先拦住，避免卡片被拖动；真正的切换放在 click，保证点击一定生效
     d.addEventListener("pointerdown",e=>{
       if(lock)return;
@@ -2767,7 +2768,7 @@ function levelStyle(v){
 // 文献条目与原文之间是归属关系，不是画布上的走向，所以用数据字段而不是连线表达。
 // 原文卡片记 c.src = 文献条目 id，画布上不画任何线。
 const bibOf=c=>{const o=orig(c);return o.bib?card(o.bib):null};
-const bibKids=id=>S.cards.filter(c=>orig(c).bib===id);
+const bibKids=id=>S.cards.filter(c=>c.bib===id&&!c.ref);   // 只算本体，分身不重复计入
 function bindToBib(){
   const cs=sel.map(card).filter(Boolean);
   const bibs=cs.filter(c=>c.role==="bib");
@@ -2776,11 +2777,8 @@ function bindToBib(){
   const kids=cs.filter(c=>c!==bib&&!isLocked(c.id));
   if(!kids.length){toast(t("bibNeedQuote"));return}
   snap();
-  kids.forEach(c=>{
-    const o=orig(c);
-    if(!o.role&&!o.level)o.role="quote";      // 没标角色的默认当作原文
-    o.bib=bib.id;                             // 注意：c.src 是内联图片字段，不能复用
-  });
+  // 归档到文献条目是一回事，卡片本身是不是引文是另一回事，两者互不干涉
+  kids.forEach(c=>{orig(c).bib=bib.id});      // 注意：c.src 是内联图片字段，不能复用
   sel=[bib.id];bibFocus=bib.id;render();save();
   toast(t("bibBound")+" "+kids.length);
 }
@@ -2803,8 +2801,8 @@ function paintBibFocus(){
   const keep=new Set();
   if(on){
     keep.add(bibFocus);
-    bibKids(bibFocus).forEach(c=>keep.add(c.id));
-    S.cards.forEach(c=>{if(orig(c).id===bibFocus)keep.add(c.id)});
+    // 只强调本体，不把分身一起点亮，否则会跳出一堆跨页面的重复卡片
+    bibKids(bibFocus).forEach(c=>{if(!c.ref)keep.add(c.id)});
   }
   nodes.forEach((el,id)=>el.classList.toggle("bibon",on&&keep.has(id)));
 }
@@ -3004,18 +3002,20 @@ const MANUAL=[
 
  ["文献条目","WENXIANTIAOMU",`
   <p>右键卡片 → <b>层级</b> → <b>文献条目</b>，把一张卡片标为一条参考文献的母信息，里面写完整的著录（作者、年份、题名、出处）。</p>
-  <p><b>绑定原文</b>：选中这条文献条目，再加选若干原文卡片（按住 Shift 或框选），右键选<b>绑定到该文献条目</b>。没标角色的卡片会自动视为原文记录。</p>
-  <p><b>不画连线</b>：文献与它的摘录之间是归属关系，不是画布上的走向，所以这层绑定用数据记录，画布上不会多出任何线。文献条目和它名下的原文左侧各有一个小圆点，<b>点圆点即用透明度强调这一组</b>：该文献与它的全部摘录保持清晰，画布其余部分淡下去，一眼就能看清一条文献究竟被摘了哪些句子。再点一次或按 <kbd>Esc</kbd> 恢复。从原文卡片上的圆点点进去，则是反查它出自哪条文献。</p>
+  <p><b>归档卡片</b>：选中这条文献条目，再加选若干卡片（按住 Shift 或框选），右键选<b>绑定到该文献条目</b>。归档只是记录"这些材料出自这本文献"，<b>不会改变卡片本身的身份</b>：摘录、评注、待读提示都可以归在同一条文献下，各自保持原样。</p>
+  <p><b>不画连线</b>：文献与它的材料之间是归属关系，不是画布上的走向，所以这层绑定用数据记录，画布上不会多出任何线。<b>只有文献条目本身左侧带一个小圆点</b>，归档在它名下的卡片不加任何标识，保持干净。</p>
+  <p><b>点圆点即用透明度强调这一组</b>：该文献与归在它名下的材料保持清晰，画布其余部分淡下去，一眼就能看清一条文献究竟被摘了哪些内容。再点一次或按 <kbd>Esc</kbd> 恢复。强调时不会把跨页面的分身一起点亮，免得跳出一堆重复卡片。</p>
   <p>绑定与位置无关，所以摘录随便怎么挪、放在哪一页都不会散。要解除就右键选<b>从文献条目解除绑定</b>。</p>
   <p><b>导出结构</b>：Word 里文献条目是悬挂缩进的加粗段落（与参考文献惯例一致），它的原文群紧随其后，逐条缩进为引文。Markdown 是加粗条目加 &gt; 引用行，HTML 是悬挂缩进的条目加引用块。呈现出来就是"一条文献 + 它的全部摘录"这种结构。</p>
-  <p class="tip">配合分身：同一条摘录如果在正文某章要引用，做一个分身放到那一章之下，原处仍挂在文献条目里。导出时两处都完整呈现，你既有按文献归档的全貌，又有按论述展开的正文。</p>`],
+  <p class="tip">配合分身：同一条摘录如果在正文某章要用，做一个分身放到那一章之下，原处仍归在文献条目里。导出时两处都完整呈现，你既有按文献归档的全貌，又有按论述展开的正文。</p>`],
 
- ["原文记录","YUANWENJILU",`
-  <p>右键卡片 → <b>层级</b> → <b>原文记录</b>，把一张卡片标为原文摘录。它是最低的一层，永远排在末端，不参与编号。</p>
+ ["引文","YINWEN",`
+  <p>右键卡片 → <b>层级</b> → <b>引文</b>，把一张卡片标为引文。它是最低的一层，永远排在末端，不参与编号。</p>
   <p>用途是保留观点的来源：某个论断出自哪篇文献的哪一句，原样抄在这里，随时可以回看。画布上显示为引文样式，左侧一条竖线加缩进，与正文一眼可分。</p>
   <p><b>方向自动判定</b>：原文记录的层级永远最低，所以从它连出去还是连进来都无所谓，一律挂在最近的标题之下。</p>
   <p><b>导出</b>：Word 里是缩进的斜体引文，PDF 和 HTML 是标准引用块，Markdown 是以 &gt; 开头的引用行。都能与正文明确区分。</p>
-  <p class="tip">配合分身使用最顺手：同一条原文如果在多章都要引用，做几个分身放到各章之下，导出时每一处都会完整呈现原文，不是"另见某节"。</p>`],
+  <p class="tip">配合分身使用最顺手：同一条引文如果在多章都要用，做几个分身放到各章之下，导出时每一处都会完整呈现，不是"另见某节"。</p>
+  <p class="tip">引文与文献条目是两套独立的东西：引文说的是"这段文字在写作中的身份"，文献条目说的是"这段材料归档在哪本文献名下"。一张卡片可以只是其中之一，也可以两者兼备。</p>`],
 
  ["分身","FENSHEN",`
   <p>分身不是复制，而是<b>同一条内容在多处出现</b>。内容只有一个源，分身是它的投影：文字和图片共享，位置、尺寸、字号各自独立。改任意一处的文字，所有位置同步更新。</p>
