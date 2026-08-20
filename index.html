@@ -918,7 +918,14 @@ function setCardLock(ids,mode){
   if(!cs.length)return;
   snap();
   cs.forEach(c=>{if(mode)c.lock=mode;else delete c.lock});
-  render();save();
+  // 锁定只改一个字段，不必重建整页：就地更新受影响卡片的类名即可。
+  // 整页重建在三万卡片时要一秒以上，而这类"只改属性"的操作应当是瞬时的。
+  cs.forEach(c=>{
+    const el=nodes.get(c.id);if(!el)return;
+    el.classList.toggle("lk",!!c.lock);
+    el.classList.toggle("lkpos",c.lock==="all");
+  });
+  drawLinksSoon();syncBar();save();
   toast((mode==="all"?t("lockOnAll"):mode==="text"?t("lockOnText"):t("lockOff"))+" "+cs.length);
 }
 function setFrameLinks(f,st){
@@ -953,7 +960,7 @@ const freeSel=()=>sel.filter(i=>!isLocked(i));        // 可改内容的
 const movableSel=()=>sel.filter(i=>!isPinned(i));     // 可移动的
 
 const size={};
-const cleanCard=c=>{const o={...c};delete o._tg;return o};
+const cleanCard=c=>{const o={...c};delete o._tg;delete o._pg;return o};
 function packState(){return JSON.stringify({sheets:S.sheets,frames:S.frames,links:S.links,cards:S.cards.map(cleanCard)})}
 function unpackState(str){return JSON.parse(str)}
 // 快照要序列化整张画布，两万卡片时约 2.4MB、18ms。拖动每次按下都调它会明显掉帧，
@@ -980,11 +987,16 @@ function snapLazy(items){
 function snapCommitIfMoved(moved){
   const before=lazySnap;lazySnap=null;
   if(!before||!moved)return;
-  // 先把位置还原到移动前，拍下快照，再恢复现状
-  const now=before.map(z=>{const c=card(z.id);return c?{c,x:c.x,y:c.y}:null}).filter(Boolean);
-  now.forEach((z,i)=>{z.c.x=before[i].x;z.c.y=before[i].y});
-  pushSnap();
-  now.forEach(z=>{z.c.x=z.x;z.c.y=z.y});
+  // 快照本身在大画布上要两三百毫秒，放到空闲时做，松手立刻可以继续操作。
+  // 记录的是移动前的位置，所以延后执行不影响撤销的正确性。
+  const run=()=>{
+    const now=before.map(z=>{const c=card(z.id);return c?{c,x:c.x,y:c.y}:null}).filter(Boolean);
+    now.forEach((z,i)=>{z.c.x=before[i].x;z.c.y=before[i].y});
+    pushSnap();
+    now.forEach(z=>{z.c.x=z.x;z.c.y=z.y});
+  };
+  if(window.requestIdleCallback)requestIdleCallback(run,{timeout:1500});
+  else setTimeout(run,60);
 }
 function commitSnap(){lazySnap=null}
 function applyUndo(stack,other){
@@ -1453,6 +1465,16 @@ function computeNums(){
   catch(e){}
 }
 // 只重算编号并就地更新徽标文字，避免为了编号而重建整个画布
+// 重算编号在六万卡片时要半秒。拖动一结束就算会让松手有明显停顿，
+// 而编号晚一瞬出现并不影响使用，所以放到浏览器空闲时做。
+let numT=null;
+function refreshNumsSoon(){
+  clearTimeout(numT);
+  numT=setTimeout(()=>{
+    if(window.requestIdleCallback)requestIdleCallback(()=>refreshNums(),{timeout:1500});
+    else refreshNums();
+  },150);
+}
 function refreshNums(){
   markNumsDirty();computeNums();
   nodes.forEach((el,id)=>{
@@ -2680,7 +2702,7 @@ function startMove(e,onClick){
     save();
     // 位置变了可能影响阅读顺序，进而影响编号；但整页重建在大画布上要几百毫秒，
     // 所以只重算编号并就地更新徽标，不重建 DOM
-    if(S.autoNum)refreshNums();
+    if(S.autoNum)refreshNumsSoon();
   };
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }

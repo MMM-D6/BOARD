@@ -1771,6 +1771,46 @@ group("perf 性能守卫", async (c) => {
   c.ok("仍有虚线用于区分两类连线", r.dashed > 0);
 });
 
+group("interact 交互响应", async (c) => {
+  // 这些"只改一个属性"的操作必须是瞬时的，不能触发整页重建
+  const r = await c.run(() => {
+    const N = 8000, perPage = 60, pages = Math.ceil(N / perPage);
+    const cards = [], links = [], frames = [];
+    for (let f = 0; f < pages; f++) {
+      const fx = f * 2000;
+      frames.push({ id: "if" + f, x: fx - 40, y: -40, w: 1900, h: 4000, title: "第" + (f + 1) + "章" });
+      for (let i = 0; i < perPage; i++) {
+        const id = "ic" + f + "_" + i;
+        const role = i % 7 === 0 ? "quote" : (i % 23 === 0 ? "bib" : undefined);
+        cards.push({ id, x: fx + (i % 4) * 460, y: Math.floor(i / 4) * 260, w: 400,
+          text: "第" + f + "-" + i + "条内容 #标签" + (i % 5), level: i === 0 ? 1 : 0, role, s: {} });
+        if (i > 0 && i % 3 !== 0) links.push({ id: "iL" + f + "_" + i, a: "ic" + f + "_" + (i - 1), b: id,
+          kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85", ...(i % 2 ? { st: true } : {}) });
+      }
+      const bib = cards.find((z) => z.id.startsWith("ic" + f + "_") && z.role === "bib");
+      if (bib) cards.filter((z) => z.id.startsWith("ic" + f + "_") && z.role === "quote")
+        .slice(0, 8).forEach((z) => (z.bib = bib.id));
+    }
+    S.cards = cards; S.links = links; S.frames = frames; S.sheets = [];
+    S.autoNum = true; S.outline = true; invalidateIndex(); render(); camTo(0, 0, 1, true);
+    const T = {}; let t;
+    t = performance.now(); setCardLock(cards.slice(0, 50).map((z) => z.id), "text");
+    T.lock = performance.now() - t;
+    setCardLock(cards.slice(0, 50).map((z) => z.id), null);
+    t = performance.now(); bibFocus = cards.find((z) => z.role === "bib").id; paintBibFocus();
+    T.bib = performance.now() - t; bibFocus = null; paintBibFocus();
+    t = performance.now(); mapOn = true; $("map").classList.add("on"); drawMap();
+    T.map = performance.now() - t; mapOn = false; $("map").classList.remove("on");
+    t = performance.now(); S.findMode = "all"; showFind(true); $("findq").value = "内容"; runFind();
+    T.find = performance.now() - t; $("findq").value = ""; runFind(); showFind(false);
+    return T;
+  });
+  c.ok("锁定 50 张是瞬时的（实测 " + r.lock.toFixed(0) + "ms）", r.lock < 120);
+  c.ok("文献强调是瞬时的（实测 " + r.bib.toFixed(0) + "ms）", r.bib < 60);
+  c.ok("地图绘制够快（实测 " + r.map.toFixed(0) + "ms）", r.map < 150);
+  c.ok("检索够快（实测 " + r.find.toFixed(0) + "ms）", r.find < 200);
+});
+
 group("static 静态检查", async (c) => {
   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");
   const js = src.split("<script>").pop().split("</script>")[0];
