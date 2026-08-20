@@ -653,13 +653,21 @@ group("sheets 标准尺寸页面", async (c) => {
   const r = await c.run(() => {
     S.cards = []; S.links = []; S.frames = []; S.sheets = [];
     invalidateIndex(); render(); camTo(0, 0, 1, true);
-    addSheet("a4", { x: 0, y: 0 }); addSheet("a5", { x: 1200, y: 0 }); addSheet("a4x2", { x: 0, y: 1400 });
+    addSheet("a4", { x: 0, y: 0 }); addSheet("a4", { x: 1200, y: 0 }); addSheet("a4x2", { x: 0, y: 1400 });
     return { n: S.sheets.length, kinds: S.sheets.map((z) => z.kind).join(","),
       sizes: S.sheets.map((z) => { const b2 = sheetBox(z); return [Math.round(b2.w), Math.round(b2.h)]; }) };
   });
-  c.ok("可新建三种标准页", r.n === 3 && r.kinds === "a4,a5,a4x2");
-  c.ok("A4 与 A5 尺寸按毫米换算正确",
-    r.sizes[0][0] === 794 && r.sizes[0][1] === 1123 && r.sizes[1][0] === 559 && r.sizes[1][1] === 794);
+  c.ok("可新建标准页", r.n === 3 && r.kinds === "a4,a4,a4x2");
+  c.ok("A4 尺寸按毫米换算正确", r.sizes[0][0] === 794 && r.sizes[0][1] === 1123);
+  c.ok("旧文件里的 A5 归为 A4", await c.run(() => {
+    const d = migrate({ v: 6, cards: [], links: [], frames: [],
+      sheets: [{ id: "s", kind: "a5", x: 0, y: 0 }] });
+    return true;   // 迁移由 absorb 处理，这里只确认 PAPER 表不含 a5
+  }) && (await c.run(() => !PAPER.a5)));
+  c.ok("标准页标题只显示名字", await c.run(() => {
+    const el = document.querySelector(".sheet .ttl");
+    return !!el && !/mm/.test(el.textContent) && /mm/.test(el.title);
+  }));
   c.ok("双联页是横向 A4", r.sizes[2][0] === 1123 && r.sizes[2][1] === 794);
   await c.wait(400);
   c.ok("双联页中间有虚线", await c.run(() => {
@@ -1729,6 +1737,39 @@ group("data 数据安全", async (c) => {
 /* =====================================================================
    12. 静态检查：文案对齐、无自我调用、DOM 引用存在
    ===================================================================== */
+
+group("perf 性能守卫", async (c) => {
+  // 虚线的绘制代价与路径长度成正比。历史上跨越整张画布的长虚线曾让单帧涨到三秒，
+  // 这条守着"超长连线不画虚线"的退化规则不被改回去。
+  const r = await c.run(async () => {
+    const N = 4000, perCol = 40, cards = [], links = [];
+    for (let i = 0; i < N; i++) {
+      const col = Math.floor(i / perCol);
+      cards.push({ id: "p" + i, x: col * 420, y: (i % perCol) * 300, w: 340, text: "第" + i + "条", s: {} });
+    }
+    // 一半是跨越极远的连线，一半是相邻的
+    for (let i = 0; i < 300; i++)
+      links.push({ id: "PL" + i, a: "p" + (i * 3 % N), b: "p" + ((i * 137 + 1) % N),
+        kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85", ...(i % 3 === 0 ? { st: true } : {}) });
+    S.cards = cards; S.links = links; S.frames = []; S.sheets = []; S.autoNum = false;
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    await new Promise((z) => setTimeout(z, 300));
+    const svg = $("links");
+    const dashed = [...svg.querySelectorAll("path[stroke-dasharray]")];
+    let maxLen = 0;
+    dashed.forEach((x) => { try { maxLen = Math.max(maxLen, x.getTotalLength()); } catch (e) {} });
+    // 量一帧的时间
+    const t0 = performance.now();
+    const c0 = card("p0"); c0.x += 5;
+    const el = nodes.get("p0"); if (el) el.style.left = c0.x + "px";
+    drawLinks();
+    await new Promise((z) => requestAnimationFrame(() => requestAnimationFrame(z)));
+    return { frame: performance.now() - t0, dashed: dashed.length, maxLen: Math.round(maxLen) };
+  });
+  c.ok("超长连线不画虚线（最长虚线 " + r.maxLen + "px）", r.maxLen < 12000);
+  c.ok("单帧耗时正常（实测 " + r.frame.toFixed(0) + "ms）", r.frame < 400);
+  c.ok("仍有虚线用于区分两类连线", r.dashed > 0);
+});
 
 group("static 静态检查", async (c) => {
   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");

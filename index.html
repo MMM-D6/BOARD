@@ -956,8 +956,39 @@ const size={};
 const cleanCard=c=>{const o={...c};delete o._tg;return o};
 function packState(){return JSON.stringify({sheets:S.sheets,frames:S.frames,links:S.links,cards:S.cards.map(cleanCard)})}
 function unpackState(str){return JSON.parse(str)}
-function snap(){undo.push(packState());if(undo.length>40)undo.shift();redo=[]}
+// 快照要序列化整张画布，两万卡片时约 2.4MB、18ms。拖动每次按下都调它会明显掉帧，
+// 而且大多数按下并没有真正改动内容。所以改为"先记账、真的改了再落盘"：
+// snap() 只标记一个待办，第一次实际发生改动时才生成快照。
+// 快照要序列化整张画布，两万卡片时约 2.4MB、18ms。
+// 拖动每次按下都调它会明显掉帧，而大多数按下其实什么都没改。
+// 所以拖动改用 snapLazy：先挂起，确认真的动了再写入撤销栈。
+// 快照要序列化整张画布，两万卡片时约 2.4MB、18ms。拖动每次按下都调它会明显掉帧，
+// 而大多数按下其实什么都没改。
+// 做法：按下时只记录"哪些卡片可能被改、它们原来的位置"，等真的动了再据此还原出移动前的
+// 状态并入栈。代价与选中数量成正比，与画布总量无关。
+let lazySnap=null;
+function pushSnap(){
+  undo.push(packState());
+  if(undo.length>40)undo.shift();
+  redo=[];
+}
+function snap(){lazySnap=null;pushSnap()}
+function snapLazy(items){
+  // items: [{o,x,y}]，o 是卡片对象，x/y 是它此刻的位置
+  lazySnap=items.map(z=>({id:z.o.id,x:z.o.x,y:z.o.y}));
+}
+function snapCommitIfMoved(moved){
+  const before=lazySnap;lazySnap=null;
+  if(!before||!moved)return;
+  // 先把位置还原到移动前，拍下快照，再恢复现状
+  const now=before.map(z=>{const c=card(z.id);return c?{c,x:c.x,y:c.y}:null}).filter(Boolean);
+  now.forEach((z,i)=>{z.c.x=before[i].x;z.c.y=before[i].y});
+  pushSnap();
+  now.forEach(z=>{z.c.x=z.x;z.c.y=z.y});
+}
+function commitSnap(){lazySnap=null}
 function applyUndo(stack,other){
+  commitSnap();
   if(!stack.length)return;
   other.push(packState());
   const p=unpackState(stack.pop());S.cards=p.cards;S.links=p.links;S.frames=p.frames||[];S.sheets=p.sheets||[];
@@ -1109,6 +1140,7 @@ async function absorb(data,merge){
     cards.forEach(c=>{if(c.ref&&!cards.some(z=>z.id===c.ref))delete c.ref});
     const ids0=new Set(cards.map(c=>c.id));
     data=migrate(data);
+    (data.sheets||[]).forEach(z=>{if(z&&z.kind==="a5")z.kind="a4"});   // A5 预设已取消
     data.sheets=(data.sheets||[]).filter(z=>z&&PAPER[z.kind])
       .map(z=>({id:z.id||uid(),kind:z.kind,x:+z.x||0,y:+z.y||0,
         title:typeof z.title==="string"?z.title:""}));
@@ -1419,6 +1451,20 @@ function computeNums(){
   if(!S.autoNum)return;
   try{buildTree().flat.forEach(n=>{if(n.num)NUM.set(n.c.id,n.apx?t("apxLabel")+" "+n.num:n.num)})}
   catch(e){}
+}
+// 只重算编号并就地更新徽标文字，避免为了编号而重建整个画布
+function refreshNums(){
+  markNumsDirty();computeNums();
+  nodes.forEach((el,id)=>{
+    const c=card(id);if(!c)return;
+    const lb=el.querySelector(".lvl");
+    const txt=badgeOf(c);
+    if(lb){if(lb.textContent!==txt)lb.textContent=txt}
+    else if(txt){
+      const d=document.createElement("div");d.className="lvl";d.textContent=txt;
+      el.appendChild(d);
+    }
+  });
 }
 function badgeOf(c){
   if(c.role==="apx")return S.autoNum?(NUM.get(c.id)||t("apxLabel")):t("apxLabel");
@@ -2067,10 +2113,11 @@ function startFrameMove(e,f){
     f.x=Math.round(ox+dx);f.y=Math.round(oy+dy);
     kids.forEach(({c,x,y})=>{c.x=Math.round(x+dx);c.y=Math.round(y+dy);
       const el2=nodes.get(c.id);if(el2){el2.style.left=c.x+"px";el2.style.top=c.y+"px"}});
-    renderFrames();if(fLinks)drawLinksSoon();
+    renderFrames();
+    if(fLinks)drawLinksLive(S.links.filter(l=>inSet.has(l.a)||inSet.has(l.b)));
   };
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
-    cullSoon();save()};
+    endLinksLive();drawLinks();cullSoon();save()};
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
 function startFrameResize(e,f){
@@ -2089,7 +2136,6 @@ function startFrameResize(e,f){
 const MM=96/25.4;                                   // 96dpi 下 1 毫米对应的像素
 const PAPER={
   a4:{w:210,h:297,label:"A4"},
-  a5:{w:148,h:210,label:"A5"},
   a4x2:{w:297,h:210,label:"A4 · 2×A5",split:"v"},   // 横向 A4，中间一条虚线分成两张 A5
 };
 function addSheet(kind,p){
@@ -2124,7 +2170,8 @@ function renderSheets(){
       const ln=document.createElement("div");ln.className="split";el.appendChild(ln);
     }
     const ttl=document.createElement("div");ttl.className="ttl";
-    ttl.textContent=(sh.title||d.label)+"　"+d.w+"×"+d.h+" mm";
+    ttl.textContent=sh.title||d.label;
+    ttl.title=d.label+"　"+d.w+"×"+d.h+" mm";      // 尺寸放在悬停提示里，不占画面
     ttl.addEventListener("pointerdown",e=>{
       if(lock||e.button!==0)return;
       e.stopPropagation();startSheetMove(e,sh);
@@ -2140,16 +2187,18 @@ function renderSheets(){
 function startSheetMove(e,sh){
   snap();
   const kids=inSheet(sh).filter(c=>!isPinned(c.id)).map(c=>({c,x:c.x,y:c.y}));
+  const ids=new Set(kids.map(z=>z.c.id));
   const sx=e.clientX,sy=e.clientY,ox=sh.x,oy=sh.y;
   const mv=ev=>{
     const dx=(ev.clientX-sx)/cam.z,dy=(ev.clientY-sy)/cam.z;
     sh.x=Math.round(ox+dx);sh.y=Math.round(oy+dy);
     kids.forEach(({c,x,y})=>{c.x=Math.round(x+dx);c.y=Math.round(y+dy);
       const el2=nodes.get(c.id);if(el2){el2.style.left=c.x+"px";el2.style.top=c.y+"px"}});
-    renderSheets();drawLinksSoon();
+    renderSheets();
+    drawLinksLive(S.links.filter(l=>ids.has(l.a)||ids.has(l.b)));
   };
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
-    cullSoon();save()};
+    endLinksLive();drawLinks();cullSoon();save()};
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
 function sheetMenu(x,y,sh){
@@ -2376,7 +2425,7 @@ function cardIndex(){
 }
 function invalidateIndex(){CIDX=null;CIDXsrc=null;CIDXn=-1;markLinksDirty()}
 let linksDirty=true;
-function markLinksDirty(){linksDirty=true;LGRID=null}
+function markLinksDirty(){linksDirty=true;LGRID=null;structCache=null}
 // 连线空间网格：把每条线按其包围盒登记到格子里，绘制时只取视野附近的格子。
 // 连线很多时（十万卡片对应数万条线）每帧全量遍历会明显掉帧。
 const LCELL=4000;
@@ -2399,6 +2448,13 @@ function linkGrid(){
   LGRIDn=S.links.length;
   return LGRID;
 }
+// 画布上是否用了结构连线。每帧全量扫描连线数组代价不小，缓存起来，
+// 连线集合变化时（markLinksDirty）自动失效。
+let structCache=null;
+function structFlag(){
+  if(structCache===null)structCache=S.links.some(l=>l.st);
+  return structCache;
+}
 function linksNear(r){
   if(S.links.length<400)return S.links;      // 数量不多时直接全量，省去建网格
   const g=linkGrid(),out=new Set();
@@ -2409,12 +2465,44 @@ function linksNear(r){
     }
   return [...out];
 }
+// 单独算一条连线的路径，增量更新时复用，避免重建整个 SVG
+const DASH_MAX=6000;        // 超过这个跨度的连线不画虚线，改用浅色区分
+function linkPath(l){
+  const idx=cardIndex();
+  const A=idx.get(l.a),B=idx.get(l.b);
+  if(!A||!B)return null;
+  const au=autoSides(A,B);
+  const s1=l.sa||au[0],s2=l.sb||au[1];
+  return pathOf(anchor(A,s1),anchor(B,s2),s1,s2,l.kind||"curve");
+}
+// 拖动时只更新被牵动的那几条连线的 d 属性。
+// 关键在于不碰其余路径：整块重建 innerHTML 会让浏览器把所有虚线重新光栅化，
+// 实测两万卡片时会把拖动从 60 帧压到 17 帧。
+let liveArrowsHidden=false;
+function drawLinksLive(links){
+  const svg=$("links");if(!svg||!links||!links.length)return;
+  links.forEach(l=>{
+    const d=linkPath(l);if(!d)return;
+    svg.querySelectorAll(`path[data-link="${l.id}"]`).forEach(p=>p.setAttribute("d",d));
+  });
+  // 箭头与备注标记的位置依赖路径几何，拖动过程中先隐藏，松手后随整体重绘复原
+  if(!liveArrowsHidden){
+    liveArrowsHidden=true;
+    svg.querySelectorAll("g").forEach(g=>g.style.display="none");
+  }
+}
+function endLinksLive(){
+  if(!liveArrowsHidden)return;
+  liveArrowsHidden=false;
+  const svg=$("links");
+  if(svg)svg.querySelectorAll("g").forEach(g=>g.style.display="");
+}
 function drawLinks(){
   const idx=cardIndex();
   // 清理断头连线是 O(连线数)，只在卡片集合可能变化后做一次，不必每帧重来
   if(linksDirty){S.links=S.links.filter(l=>idx.has(l.a)&&idx.has(l.b));linksDirty=false}
   let defs="",out="";const seen={},r=viewRect(MARGIN),mark=[],arrows=[];
-  const hasStruct=S.links.some(l=>l.st);
+  const hasStruct=structFlag();
   linksNear(r).forEach(l=>{
     const A=idx.get(l.a),B=idx.get(l.b);
     if(!A||!B)return;
@@ -2433,15 +2521,24 @@ function drawLinks(){
     // 只有画布上确实用了结构连线时，才把两类连线在视觉上区分开；
     // 否则全部按用户自己设定的样式绘制，不擅自把所有线改成虚线
     const mixed=hasStruct&&!isSt;
-    const dashArr=(l.dash||mixed)?`stroke-dasharray="${w*(mixed?3.2:4.5)} ${w*(mixed?3:3.5)}"`:"";
-    out+=`<path class="ln${isSt?" st":""}" data-link="${l.id}" d="${d}" stroke="${col}" stroke-opacity="${dim?.38:(mixed?.75:1)}" stroke-width="${on?w+1.4:(isSt?w*1.5:w)}" stroke-linejoin="round" stroke-linecap="round" ${dashArr} fill="none"/>`;
+    // 虚线的代价与路径长度成正比：跨越整张画布的长连线，浏览器要逐段计算虚线分段，
+    // 实测几十条超长虚线就能让单帧涨到三秒。超过阈值就退化为实线加浅色，
+    // 视觉上仍能与结构连线区分，但不再有逐段计算的开销。
+    const far=Math.abs(A.x-B.x)+Math.abs(A.y-B.y)>DASH_MAX;
+    const dashArr=((l.dash||mixed)&&!far)
+      ?`stroke-dasharray="${w*(mixed?3.2:4.5)} ${w*(mixed?3:3.5)}"`:"";
+    out+=`<path class="ln${isSt?" st":""}" data-link="${l.id}" d="${d}" stroke="${col}" stroke-opacity="${dim?.38:(mixed?(far?.42:.75):1)}" stroke-width="${on?w+1.4:(isSt?w*1.5:w)}" stroke-linejoin="round" stroke-linecap="round" ${dashArr} fill="none"/>`;
     if(!dim&&ar!=="none")arrows.push(l);
     if(!lock&&S.linkView!=="off")out+=`<path class="hit" d="${d}" data-link="${l.id}">${l.note?`<title>${esc(l.note)}</title>`:""}</path>`;
     if(!dim&&l.note&&S.linkLabel!=="none")mark.push(l);
   });
   const svg=$("links");
-  if(S.linkView==="off"){svg.innerHTML="";return}
-  svg.innerHTML=`<defs>${defs}</defs>`+out;
+  if(S.linkView==="off"){if(svg._html!==""){svg._html="";svg.innerHTML=""}return}
+  // 整块重建 innerHTML 时，若各条连线样式不一致，浏览器无法复用上一帧的绘制结果，
+  // 每帧都要重新解析并光栅化，实测会把拖动从 60 帧压到 17 帧。
+  // 内容没变就不写入，能挡掉绝大多数无谓的重建。
+  const html=`<defs>${defs}</defs>`+out;
+  if(svg._html!==html){svg._html=html;svg.innerHTML=html}
   if(arrows.length)drawArrows(svg,arrows);
   if(mark.length)drawMarks(svg,mark);
   svg.querySelectorAll(".hit").forEach(p=>{
@@ -2559,9 +2656,9 @@ function finishLinkClick(c){
 /* ================= drag and resize ================= */
 function startMove(e,onClick){
   if(lock)return;
-  snap();
   const list=movableSel().map(card).filter(Boolean).map(o=>({o,x:o.x,y:o.y}));
   if(!list.length)return;
+  snapLazy(list);                          // 真的挪动了才写入撤销栈
   const moving=new Set(list.map(z=>z.o.id));
   const liveLinks=S.links.filter(l=>moving.has(l.a)||moving.has(l.b));
   const sx=e.clientX,sy=e.clientY;let moved=false;
@@ -2572,12 +2669,19 @@ function startMove(e,onClick){
     list.forEach(({o,x,y})=>{o.x=Math.round(x+dx);o.y=Math.round(y+dy);
       const el=nodes.get(o.id);
       if(el){el.style.left=o.x+"px";el.style.top=o.y+"px"}});
-    if(liveLinks.length)drawLinksSoon();     // 只有确实牵动了连线才重画
+    if(liveLinks.length)drawLinksLive(liveLinks);   // 只动这几条，其余不重画
   };
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
     LGRID=null;                                  // 位置变了，网格重建
-    if(!moved){undo.pop();onClick&&onClick()}
-    else{save();if(S.autoNum)render()}};
+    snapCommitIfMoved(moved);          // 先落快照（内部会短暂还原位置），再重绘
+    endLinksLive();
+    if(moved)drawLinks();
+    if(!moved){onClick&&onClick();return}
+    save();
+    // 位置变了可能影响阅读顺序，进而影响编号；但整页重建在大画布上要几百毫秒，
+    // 所以只重算编号并就地更新徽标，不重建 DOM
+    if(S.autoNum)refreshNums();
+  };
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
 function startResize(e,c,dir){
@@ -3251,6 +3355,7 @@ const MANUAL=[
     <li><b>关联</b>：两者只是相关。这类连线不参与层级，画成虚线、略淡，导出时作为交叉引用出现。</li>
   </ul>
   <p>之所以要明确标记而不是靠样式约定，是因为这两者的语义完全不同：一个决定文档骨架，一个是横向参照。靠看线的样子去猜迟早会混。</p>
+  <p>跨度很大的连线不画虚线，改用更浅的颜色区分，因为超长虚线的绘制代价极高，会明显拖慢拖动。</p>
   <p><b>大纲跟随连线</b>：只要画布上存在结构连线，编号和导出层级就由连线的树形关系决定，而不再依赖卡片的空间位置。所以你可以随意挪动卡片，编号不会乱。同级之间按位置从上到下、从左到右排序。</p>
   <p><b>方向由标题层级决定，不看你怎么画的</b>：一级标题永远是上级，二级在它之下，以此类推；没有标层级的卡片永远是末端内容。所以连线时完全不用管从哪头拉到哪头，也不需要箭头。只有两端层级相同时，才会退回到按连线本身的方向判断。</p>
   <p><b>批量转换</b>：右键页面标题的<b>本页的连线</b>，可以把这一页内部的连线一次全部设为结构连线或关联连线。只影响两端都在本页内的连线，跨页的连线不受影响。</p>
@@ -5509,7 +5614,6 @@ function viewItems(x,y){
     {label:t("readOrder"),sub:[{head:t("readOrder")},
       ...[["auto","roAuto"],["col","roCol"],["row","roRow"]].map(([v,k])=>({label:t(k),
         check:(S.readOrder||"auto")===v,on:()=>{S.readOrder=v;render();save()}}))]},
-    {label:t("zoomTo"),key:"Z",on:focusSel},
     {head:t("vwContent")},
     {label:t("linkView"),sub:[
       {head:t("linkView")},
@@ -5538,7 +5642,7 @@ function viewItems(x,y){
       }}]},
     {label:t("imgSize"),sub:[
       {head:t("imgSize")},
-      ...[220,280,360,460,600,760].map(v=>({label:v+" "+t("px"),check:(S.imgMax||360)===v,
+      ...[280,360,460,600].map(v=>({label:v+" "+t("px"),check:(S.imgMax||360)===v,
         on:()=>{S.imgMax=v;save()}})),
       "-",
       {label:t("fitSel"),on:()=>sizeImages(false)},
@@ -5592,7 +5696,7 @@ function boardMenu(x,y){
     {label:t("insertImage"),on:()=>$("imgfile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("insertTable"),sub:[{head:t("tbSize")},
-      ...[[2,2],[3,2],[3,3],[4,3],[5,3],[3,4],[6,4]].map(([r,cc])=>({
+      ...[[3,2],[3,3],[5,3],[3,4]].map(([r,cc])=>({
         label:r+" \u00D7 "+cc,on:()=>newTable(toW(x,y),r,cc)}))]},
     ...(CLIP?[{label:CLIP.mode==="twin"?t("pasteTwinHere"):t("pasteHere"),key:"⌘⇧V",
       on:()=>pasteClip(toW(x,y))}]:[]),
@@ -5672,7 +5776,7 @@ function cardItems(x,y){
     {label:t("twinSrc"),on:()=>gotoTwin(card(sel[0]),true)},
     {label:t("twinUnlink"),on:()=>unlinkTwin(card(sel[0]))});
   items.push({label:t("tplMenu"),sub:tplItems("card",toW(x,y))});
-  items.push({label:t("pageAdd"),on:addFrame},"-",
+  items.push("-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
     {label:t("duplicate"),key:"⌘D",on:dupe},
     {label:t("toFront"),on:()=>order(1)},
