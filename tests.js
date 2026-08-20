@@ -649,6 +649,65 @@ group("levelmark 层级标记", async (c) => {
   c.ok("编号与竖条同时存在", await c.run(() => !!nodes.get("h3").querySelector(".hbar")));
 });
 
+group("sheets 标准尺寸页面", async (c) => {
+  const r = await c.run(() => {
+    S.cards = []; S.links = []; S.frames = []; S.sheets = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    addSheet("a4", { x: 0, y: 0 }); addSheet("a5", { x: 1200, y: 0 }); addSheet("a4x2", { x: 0, y: 1400 });
+    return { n: S.sheets.length, kinds: S.sheets.map((z) => z.kind).join(","),
+      sizes: S.sheets.map((z) => { const b2 = sheetBox(z); return [Math.round(b2.w), Math.round(b2.h)]; }) };
+  });
+  c.ok("可新建三种标准页", r.n === 3 && r.kinds === "a4,a5,a4x2");
+  c.ok("A4 与 A5 尺寸按毫米换算正确",
+    r.sizes[0][0] === 794 && r.sizes[0][1] === 1123 && r.sizes[1][0] === 559 && r.sizes[1][1] === 794);
+  c.ok("双联页是横向 A4", r.sizes[2][0] === 1123 && r.sizes[2][1] === 794);
+  await c.wait(400);
+  c.ok("双联页中间有虚线", await c.run(() => {
+    const el = [...document.querySelectorAll(".sheet")].find((z) => z.querySelector(".split"));
+    return !!el && getComputedStyle(el.querySelector(".split")).borderLeftStyle === "dashed";
+  }));
+
+  // 与"页面"是两套东西，完全不互通
+  const iso = await c.run(() => {
+    S.cards = [{ id: "c1", x: 100, y: 100, w: 300, text: "纸面上的卡片", s: {} }];
+    invalidateIndex(); render();
+    return { frameOf: frameOf(card("c1")), frames: S.frames.length,
+      groups: pageGroups(null).length, inSheet: inSheet(S.sheets[0]).map((z) => z.id).join(",") };
+  });
+  c.ok("标准页不会被当作页面", iso.frameOf === null && iso.frames === 0);
+  c.ok("标准页不参与分页导出", iso.groups === 1);
+  c.ok("但能识别落在纸面内的卡片", iso.inSheet === "c1");
+
+  const mv = await c.run(() => {
+    const sh = S.sheets[0], x0 = card("c1").x, sx = sh.x;
+    const kids = inSheet(sh);
+    sh.x += 300; kids.forEach((z) => (z.x += 300)); render();
+    return { card: card("c1").x - x0, sheet: sh.x - sx };
+  });
+  c.ok("移动标准页带走纸面内容", mv.card === 300 && mv.sheet === 300);
+
+  c.ok("标准页随文件保存", (await c.run(() => JSON.parse(packState()).sheets.length)) === 3);
+  c.ok("导出画布文件包含标准页", (await c.run(() => bundle(null).sheets.length)) === 3);
+  await c.run(() => { snap(); S.sheets = []; render(); applyUndo(undo, redo); });
+  await c.wait(400);
+  c.ok("可撤销", (await c.run(() => S.sheets.length)) === 3);
+
+  // 打印要按纸张边界精确截取，不能带留白
+  const cap = await c.run(async () => {
+    try {
+      const b2 = sheetBox(S.sheets[0]);
+      const cv = await captureCanvas(1, inSheet(S.sheets[0]), b2);
+      return { w: cv.width, h: cv.height, pw: Math.round(b2.w), ph: Math.round(b2.h) };
+    } catch (e) { return { err: e.message }; }
+  });
+  c.ok("按纸张边界精确截取", !cap.err && cap.w === cap.pw && cap.h === cap.ph);
+  c.ok("适应画面把标准页算进取景", await c.run(() => {
+    S.cards = []; invalidateIndex(); render();
+    const b2 = worldBox();
+    return !!b2 && b2.w > 700;
+  }));
+});
+
 group("pages 页面与层级", async (c) => {
   await c.board(
     [

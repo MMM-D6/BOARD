@@ -67,7 +67,8 @@ S = {
   v: 5,              // 数据结构版本，见"版本迁移"
   cards: [...],      // 卡片（表格是卡片的一种形态，不是独立实体）
   links: [...],      // 连线
-  frames: [...],     // 页面
+  frames: [...],     // 页面（输出单元）
+  sheets: [...],     // 标准尺寸页面（打印用），与 frames 完全独立
   templates: [...],  // 本文件的卡片模板
   outline: true,     // 大纲是否跟随结构连线
   autoNum, readOrder, lvStyle, textDef, linkDef, linkView, linkLabel,
@@ -149,6 +150,13 @@ S = {
 
 **框选不排除锁定卡片。** 选中本身不改变任何东西，保护在每个操作里各自判断。
 早期版本在框选阶段就把锁定卡片剔除，结果是锁上之后连"选中它们一起解锁"都做不到。
+
+**标准尺寸页面（`S.sheets`）与页面（`S.frames`）是两套东西，不要合并。**
+标准页只按毫米画出纸张区域供打印存档，不参与 `frameOf` / `pageGroups` / `docOrder` / 编号 /
+分页导出。尺寸由 `PAPER` 表加 `MM`（96dpi）算出，不存宽高，改尺寸只换 `kind`。
+打印走 `printSheets`，用 `captureCanvas(scale,list,rect)` 的第三个参数按纸张边界精确截取
+（`pad` 置零，不加留白），并把 `@page size` 设成对应毫米数。
+`worldBox()` 让"适应画面"把 frames 与 sheets 一并算进取景，否则只有它们没有卡片时取不到景。
 
 **页面归属靠位置算，不存名单。** `frameOf(c)` 用卡片中心点判断落在哪个框里，
 配合 `frameIndex()` 的二分查找。拖进拖出自动生效，永远不会出现"名单和实际位置对不上"。
