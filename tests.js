@@ -317,10 +317,7 @@ group("twins 分身", async (c) => {
   );
   // 默认：分身在每一处都完整呈现内容，便于用分身构建文献引用
   c.ok("分身处也完整呈现内容", (doc.match(/改过的内容/g) || []).length >= 2);
-  const docRef = await c.run(() =>
-    docHTML({ title: "T", img: false, tags: false, refs: false, table: false, twinRef: true },
-      buildTree(), false));
-  c.ok("可切换为交叉引用", /class="rel">&#9672;/.test(docRef));
+  c.ok("不再产生交叉引用式的指路文字", !/&#9672;|Same entry|同一条目/.test(doc));
 
   // 删源不丢内容
   await c.run(() => { sel = ["a"]; del(); });
@@ -461,8 +458,7 @@ group("quote 原文记录", async (c) => {
     const O = { title: "论文", img: 0, tags: 0, refs: 0, table: 0 };
     return {
       flat: tree.flat.map((n) => [n.c.id, n.num, n.lv, !!n.quote, !!n.isRef]),
-      md: docMD(O, tree), mdRef: docMD({ ...O, twinRef: true }, tree),
-      html: docHTML(O, tree, false),
+      md: docMD(O, tree), html: docHTML(O, tree, false),
     };
   });
   const f = (id) => r.flat.find((x) => x[0] === id) || [];
@@ -475,7 +471,7 @@ group("quote 原文记录", async (c) => {
   // 分身默认直接呈现原文，这样同一条引文在两章都完整可读
   c.ok("分身直接呈现原文", (r.md.match(/Codification/g) || []).length === 2);
   c.ok("默认不再写成另见", !/Same entry|同一条目/.test(r.md));
-  c.ok("可选择改回交叉引用", /§/.test(r.mdRef) && /Same entry|同一条目/.test(r.mdRef));
+  c.ok("导出里没有多余的指路文字", !/Same entry|同一条目|See §/.test(r.md));
 
   await c.run(() => { sel = []; render(); fit(true); });
   await c.wait(500);

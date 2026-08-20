@@ -432,7 +432,6 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   roleBib:"Bibliography entry",bindBib:"Attach these to the bibliography entry",
   bibNeedOne:"Select exactly one bibliography entry",bibNeedQuote:"Also select the quotations to attach",
   bibBound:"Attached:",
-  twinRefOpt:"Twins as cross-references instead of full text",
   roleHead:"Outside the sequence",roleApx:"Appendix",roleAside:"Other, not numbered",
   linkAdd:"Add a link…",linkEdit:"Edit the link…",linkOpen:"Open the link",
   linkPrompt:"Web address: a PDF link, a Google Scholar entry, or a DOI. Empty removes it.",linkLabel:"Link",
@@ -507,11 +506,9 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   expOpts:"Options",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   scale:"Scale",expPrint:"The print dialog opens. Choose Save as PDF.",expShot:"Rendering the canvas…",
-  expImg:"Include images",expTags:"Include tags",expRef:"Cross references",expTable:"Relation appendix",
+  expImg:"Include images",expTags:"Include tags",
   errCDN:"The rendering library could not be loaded.",errShot:"Canvas export failed.",
   expGo:"Export",expWork:"Building the document…",expDone:"Document exported",
-  relSee:"See",relFrom:"From",relTable:"Relations",relPlain:"related to",relAgainst:"contrasts with",
-  relCite:"extends",relSupport:"supports",relBoth:"mutual",
   tagsMenu:"Tags…",tagTitle:"Tags",tagsPh:"tag1, tag2",allTags:"Tags on this board",tagHint:"Also picks up #tag written in the text",
   imgSize:"Image size on import",fitSel:"Resize selected images to this",
   fitAllImg:"Resize every image to this",px:"px",
@@ -565,7 +562,6 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   roleBib:"文献条目",bindBib:"绑定到该文献条目",
   bibNeedOne:"请恰好选中一条文献条目",bibNeedQuote:"请同时选中要绑定的原文卡片",
   bibBound:"已绑定：",
-  twinRefOpt:"分身写成交叉引用而非完整内容",
   roleHead:"不参与排序",roleApx:"附录",roleAside:"其他（不编号）",
   linkAdd:"添加链接…",linkEdit:"修改链接…",linkOpen:"打开链接",
   linkPrompt:"网址：PDF 链接、Google Scholar 条目、或直接粘 DOI。留空则移除",linkLabel:"链接",
@@ -641,11 +637,9 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   expOpts:"包含内容",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   scale:"倍率",expPrint:"打印窗口已打开，目标选择另存为 PDF 即可。",expShot:"正在渲染画布…",
-  expImg:"包含图片",expTags:"包含标签",expRef:"生成交叉引用",expTable:"附录关系表",
+  expImg:"包含图片",expTags:"包含标签",
   errCDN:"渲染库加载失败，请检查网络连接。",errShot:"画面导出未完成。",
   expGo:"导出",expWork:"正在生成文档…",expDone:"文档已导出",
-  relSee:"参见",relFrom:"来自",relTable:"关联总览",relPlain:"关联",relAgainst:"对立",
-  relCite:"延伸",relSupport:"印证",relBoth:"互为关联",
   tagsMenu:"标签…",tagTitle:"标签",tagsPh:"标签1, 标签2",allTags:"画布中已有标签",tagHint:"正文里写的 #标签 也会自动识别",
   imgSize:"导入图片尺寸",fitSel:"把选中图片调成该尺寸",
   fitAllImg:"把所有图片调成该尺寸",px:"px",
@@ -3026,7 +3020,6 @@ const MANUAL=[
   <p><b>串联与溯源</b>：有分身的卡片右上角出现菱形标记，写着「2/4」表示这是四处出现中的第二处。点标记跳到下一处，按住 <kbd>Shift</kbd> 点跳回源头，右键标记打开分身菜单，可以一次选中全部出现位置。顺着标记点下去，就能走完一条信息在画布上的完整轨迹。</p>
   <p><b>与检索的关系</b>：分身共享源的文字和标签，所以天然进入检索结果。回车逐个跳转时，跳的是这条信息的所有出现位置。菜单里的<b>检索时合并分身</b>可以切换：关注内容时合并成一条，巡视位置时展开为多条。</p>
   <p><b>与导出的关系</b>：分身在每一处都<b>完整呈现原文内容</b>，因为用分身构建文献引用时，同一条引文在不同章节都应当读得到，让读者跳去别处查看并不合理。编号仍只算源，同一段不会被编两次号。</p>
-  <p>如果你确实希望它写成「同一条目，另见 §2.1」那种交叉引用，导出面板里有一个开关可以切换。</p>
   <p><b>脱离</b>：右键分身选<b>脱离为独立卡片</b>，它会就地固化成一张普通卡片，此后与源各改各的。删除源时，第一个分身会自动继承内容成为新的源，内容不会丢。</p>
   <p class="tip">分身和页面、锁定互不冲突：页面管输出单元，锁定管防误碰，分身管同一内容的多处呈现。锁定的卡片同样可以创建分身。</p>`],
 
@@ -3271,8 +3264,6 @@ function safeName(x,i){
 }
 
 /* ================= document export ================= */
-const RELMAP={"#8A8A85":"relPlain","#111111":"relPlain","#EFEFEC":"relPlain",
-  "#C0392B":"relAgainst","#2D6CDF":"relCite","#1F8A70":"relSupport"};
 function snippet(c0,n){
   const c=orig(c0);
   const s=(c.text||"").replace(/\s+/g," ").trim();
@@ -3534,19 +3525,6 @@ function secTag(n){
   return n.num?("\u00A7"+n.num+" "):(n.sec?("\u00A7"+n.sec+" "):"");
 }
 function refLabel(n){return secTag(n)+snippet(orig(n.c),26)}
-function relName(l){return t(RELMAP[l.color]||"relPlain")+(l.arrow==="both"?" / "+t("relBoth"):"")}
-function relationsFor(id,byId){
-  // 结构连线已经体现为文档层级，不再重复写成"另见"
-
-  const out=[],inn=[];
-  S.links.forEach(l=>{
-    if(l.st&&S.outline!==false)return;        // 结构连线已体现为层级
-    if(!l.st&&S.relAdjacent!==false)return;   // 关联连线已体现为相邻排列
-    if(l.a===id&&byId[l.b])out.push({n:byId[l.b],l});
-    if(l.b===id&&byId[l.a])inn.push({n:byId[l.a],l});
-  });
-  return {out,inn};
-}
 function openExport(x,y){
   if(lock)return;
   const p=$("pop");
@@ -3573,10 +3551,7 @@ function openExport(x,y){
       <div class="sec">${t("expOpts")}</div>
       <label class="opt"><input type="checkbox" id="ex1" checked> ${t("expImg")}</label>
       <label class="opt"><input type="checkbox" id="ex2" checked> ${t("expTags")}</label>
-      <label class="opt"><input type="checkbox" id="ex3" checked> ${t("expRef")}</label>
-      <label class="opt"><input type="checkbox" id="ex4"> ${t("expTable")}</label>
       <label class="opt"><input type="checkbox" id="ex5" checked> ${t("byPageDoc")}</label>
-      <label class="opt"><input type="checkbox" id="ex6"> ${t("twinRefOpt")}</label>
     </div>
     <div id="eximg" style="display:none">
       <label class="opt"><input type="checkbox" id="exbp" checked> ${t("byPage")}</label>
@@ -3608,9 +3583,7 @@ function openExport(x,y){
       shots:!!p.querySelector("#exshot")?.checked,
       title:stampName(p.querySelector("#exn").value.trim()||"Board"),
       img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
-      refs:p.querySelector("#ex3").checked,table:p.querySelector("#ex4").checked,
-      byPageDoc:!!p.querySelector("#ex5")?.checked,
-      twinRef:!!p.querySelector("#ex6")?.checked};
+      byPageDoc:!!p.querySelector("#ex5")?.checked};
     p.classList.remove("on","wide");
     toast(o.fmt==="jpg"||o.fmt==="pdfview"?t("expShot"):t("expWork"));
     setTimeout(()=>doExport(o),60);
@@ -3807,12 +3780,6 @@ async function exportDocx(D,o,tree){
       try{kids.push(new Paragraph({children:[new ImageRun({
         data:srcOf(c).split(",")[1],transformation:{width:d.w,height:d.h}})]}))}catch(e){}
     }
-    if(n.isRef&&o.twinRef){                     // 只有勾选了才写成交叉引用
-      const src=tree.byId[orig(c).id];
-      if(src&&src!==n)kids.push(new Paragraph({children:[new TextRun({
-        text:"\u25C8 "+t("twinSee")+" "+refLabel(src),italics:true,size:18,color:"777777"})]}));
-      return;
-    }
     if(orig(c).tb){                          // 表格：导出成 Word 真表格
       const g=orig(c).tb;
       try{
@@ -3867,15 +3834,6 @@ async function exportDocx(D,o,tree){
     if(o.tags){const tg=cardTags(c);
       if(tg.length)kids.push(new Paragraph({children:[new TextRun({
         text:tg.map(x=>"#"+x).join("  "),italics:true,size:18,color:"888888"})]}))}
-    if(o.refs){
-      const r=relationsFor(c.id,tree.byId);
-      r.out.forEach(({n:m,l})=>kids.push(new Paragraph({children:[new TextRun({
-        text:"\u2192 "+t("relSee")+" "+refLabel(m)+"\uFF08"+relName(l)+"\uFF09"+(l.note?"  "+l.note.replace(/\n+/g," "):""),
-        italics:true,size:18,color:"777777"})]})));
-      r.inn.forEach(({n:m,l})=>{if(l.arrow!=="none"&&l.arrow!=="both")
-        kids.push(new Paragraph({children:[new TextRun({
-          text:"\u2190 "+t("relFrom")+" "+refLabel(m),italics:true,size:18,color:"999999"})]}))});
-    }
   };
   if(o.byPageDoc){
     // 页面标题作为最高一级，页内卡片层级整体下移一级
@@ -3884,15 +3842,6 @@ async function exportDocx(D,o,tree){
       buildTree(g.cards,1,gi+1).flat.forEach(emit);
     });
   }else tree.flat.forEach(emit);
-  const links=S.links.filter(l=>tree.byId[l.a]&&tree.byId[l.b]&&
-    !(l.st&&S.outline!==false));
-  if(o.table&&links.length){
-    kids.push(new Paragraph({text:t("relTable"),heading:HeadingLevel.HEADING_1}));
-    links.forEach(l=>{const a=tree.byId[l.a],b=tree.byId[l.b];if(!a||!b)return;
-      kids.push(new Paragraph({children:[new TextRun({
-        text:refLabel(a)+"  \u2192  "+refLabel(b)+"   \u00B7 "+relName(l)+(l.note?"   \u00B7 "+l.note.replace(/\n+/g," "):""),
-        size:20})]}))});
-  }
   const doc=new Document({sections:[{children:kids}]});
   const blob=await Packer.toBlob(doc);
   dl(blob,o.title+".docx");
@@ -4039,11 +3988,6 @@ function docMD(o,tree){
   const lines=["# "+o.title,""];
   const emit=(n)=>{
     const c=n.c,oc=orig(c);
-    if(n.isRef&&o.twinRef){
-      const src=tree.byId[oc.id];
-      if(src&&src!==n)lines.push("> "+t("twinSee")+" "+refLabel(src),"");
-      return;
-    }
     if(oc.tb){                              // 表格：导出成 Markdown 管道表格
       const g=oc.tb;
       const esc2=v=>String(v==null?"":v).replace(/\|/g,"\\|").replace(/\n/g," ");
@@ -4078,12 +4022,6 @@ function docMD(o,tree){
     else txt.forEach(z=>lines.push(z,""));
     if(o.tags){const tg=cardTags(oc);if(tg.length)lines.push(tg.map(x=>"#"+x).join(" "),"")}
     if(o2u(oc))lines.push("<"+o2u(oc)+">","");
-    if(o.refs){
-      const r=relationsFor(c.id,tree.byId);
-      r.out.forEach(({n:m,l})=>lines.push("- \u2192 "+t("relSee")+" "+refLabel(m)
-        +"（"+relName(l)+"）"+(l.note?" "+l.note.replace(/\n+/g," "):"")));
-      if(r.out.length)lines.push("");
-    }
   };
   if(o.byPageDoc){
     pageGroups(null).forEach((g,gi)=>{
@@ -4091,14 +4029,6 @@ function docMD(o,tree){
       buildTree(g.cards,1,gi+1).flat.forEach(emit);
     });
   }else tree.flat.forEach(emit);
-  const links=S.links.filter(l=>tree.byId[l.a]&&tree.byId[l.b]);
-  if(o.table&&links.length){
-    lines.push("## "+t("relTable"),"");
-    links.forEach(l=>{const a=tree.byId[l.a],b2=tree.byId[l.b];if(!a||!b2)return;
-      lines.push("- "+refLabel(a)+" \u2192 "+refLabel(b2)+" \u00B7 "+relName(l)
-        +(l.note?" \u00B7 "+l.note.replace(/\n+/g," "):""))});
-    lines.push("");
-  }
   return lines.join("\n");
 }
 function docHTML(o,tree,forPrint){
@@ -4116,11 +4046,6 @@ function docHTML(o,tree,forPrint){
   img{max-width:460px;height:auto}</style></head><body><h1>${esc(o.title)}</h1>`;
   const emit=(n)=>{
     const c=n.c;
-    if(n.isRef&&o.twinRef){
-      const src=tree.byId[orig(c).id];
-      if(src&&src!==n)h+=`<p class="rel">&#9672; ${esc(t("twinSee")+" "+refLabel(src))}</p>`;
-      return;
-    }
     const wrapBg=c.bg?`<div style="background:${esc(c.bg)};padding:10px 12px;border-radius:3px">`:"";
     if(wrapBg)h+=wrapBg;
     if(orig(c).tb){
@@ -4154,11 +4079,6 @@ function docHTML(o,tree,forPrint){
     if(o2u(c))h+=`<p class="rel"><a href="${esc(o2u(c))}">${esc(o2u(c))}</a></p>`;
     if(wrapBg)h+="</div>";
     if(o.tags){const tg=cardTags(c);if(tg.length)h+=`<p class="tg">${esc(tg.map(x=>"#"+x).join("  "))}</p>`}
-    if(o.refs){const r=relationsFor(c.id,tree.byId);
-      r.out.forEach(({n:m,l})=>h+=`<p class="rel">&#8594; ${esc(t("relSee")+" "+refLabel(m))}\uFF08${esc(relName(l))}\uFF09${l.note?"  "+esc(l.note.replace(/\n+/g," ")):""}</p>`);
-      r.inn.forEach(({n:m,l})=>{if(l.arrow!=="none"&&l.arrow!=="both")
-        h+=`<p class="rel">&#8592; ${esc(t("relFrom")+" "+refLabel(m))}</p>`});
-    }
   };
   if(o.byPageDoc){
     pageGroups(null).forEach((g,gi)=>{
@@ -4166,13 +4086,6 @@ function docHTML(o,tree,forPrint){
       buildTree(g.cards,1,gi+1).flat.forEach(emit);
     });
   }else tree.flat.forEach(emit);
-  const links2=S.links.filter(l=>tree.byId[l.a]&&tree.byId[l.b]);
-  if(o.table&&links2.length){
-    h+=`<h1>${esc(t("relTable"))}</h1><table border="1" cellspacing="0" cellpadding="5">`;
-    links2.forEach(l=>{const a=tree.byId[l.a],b=tree.byId[l.b];if(!a||!b)return;
-      h+=`<tr><td>${esc(refLabel(a))}</td><td>&#8594;</td><td>${esc(refLabel(b))}</td><td>${esc(relName(l))}</td><td>${esc((l.note||"").replace(/\n+/g," "))}</td></tr>`});
-    h+=`</table>`;
-  }
   h+="</body></html>";
   return h;
 }
