@@ -422,7 +422,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   alBottom:"Bottom",rowGap:"Space out in a row",colGap:"Space out in a column",
   duplicate:"Duplicate",toFront:"Bring to front",toBack:"Send to back",del:"Delete",
   kind:"Shape",curve:"Curved",elbow:"Right angle",straight:"Straight",
-  stroke:"Stroke",solid:"Solid",dashed:"Dashed",thin:"Thin",medium:"Medium",thick:"Thick",
+  stroke:"Stroke",thin:"Thin",medium:"Medium",thick:"Thick",
   arrow:"Arrow",arrNone:"No arrow",arrEnd:"One way",arrBoth:"Both ways",
   colour:"Colour",cGray:"Grey",cBlack:"Black",cWhite:"White",cRed:"Red",cBlue:"Blue",cGreen:"Green",
   reverse:"Reverse direction",delLink:"Delete connector",
@@ -520,7 +520,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   expOpts:"Options",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   scale:"Scale",expPrint:"The print dialog opens. Choose Save as PDF.",expShot:"Rendering the canvas…",
-  expImg:"Include images",expTags:"Include tags",
+  expRender:"Rendering…",expImg:"Include images",expTags:"Include tags",
   errCDN:"The rendering library could not be loaded.",errShot:"Canvas export failed.",
   expGo:"Export",expWork:"Building the document…",expDone:"Document exported",
   tagsMenu:"Tags…",tagTitle:"Tags",tagsPh:"tag1, tag2",allTags:"Tags on this board",tagHint:"Also picks up #tag written in the text",
@@ -555,7 +555,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   alBottom:"底对齐",rowGap:"横向等距排列",colGap:"纵向等距排列",
   duplicate:"复制一份",toFront:"置于顶层",toBack:"置于底层",del:"删除",
   kind:"线型",curve:"曲线",elbow:"折线",straight:"直线",
-  stroke:"笔画",solid:"实线",dashed:"虚线",thin:"细",medium:"中",thick:"粗",
+  stroke:"笔画",thin:"细",medium:"中",thick:"粗",
   arrow:"箭头",arrNone:"无箭头",arrEnd:"单向箭头",arrBoth:"双向箭头",
   colour:"颜色",cGray:"灰",cBlack:"黑",cWhite:"白",cRed:"红",cBlue:"蓝",cGreen:"绿",
   reverse:"反转方向",delLink:"删除连线",
@@ -654,7 +654,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   expOpts:"包含内容",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   scale:"倍率",expPrint:"打印窗口已打开，目标选择另存为 PDF 即可。",expShot:"正在渲染画布…",
-  expImg:"包含图片",expTags:"包含标签",
+  expRender:"正在渲染…",expImg:"包含图片",expTags:"包含标签",
   errCDN:"渲染库加载失败，请检查网络连接。",errShot:"画面导出未完成。",
   expGo:"导出",expWork:"正在生成文档…",expDone:"文档已导出",
   tagsMenu:"标签…",tagTitle:"标签",tagsPh:"标签1, 标签2",allTags:"画布中已有标签",tagHint:"正文里写的 #标签 也会自动识别",
@@ -720,7 +720,7 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 
 /* ================= state ================= */
 const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",italic:false,color:"#111111"};
-const DEFLINK={kind:"curve",dash:false,arrow:"none",w:1.4,color:"#8A8A85"};
+const DEFLINK={kind:"curve",arrow:"none",w:1.4,color:"#8A8A85"};
 let S={bg:"#F4F4F2",cards:[],links:[],sheets:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"all",linkLabel:"dot"};
 let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
@@ -1168,8 +1168,12 @@ async function absorb(data,merge){
     c.x=Math.round(c.x-nb.x+ox);c.y=Math.round(c.y-nb.y+oy)});
   cards.forEach(c=>{if(c.ref)c.ref=map[c.ref]||undefined;if(c.ref===undefined)delete c.ref});
   invalidateIndex();S.cards=S.cards.concat(cards);
-  (data.links||[]).forEach(l=>{if(l&&map[l.a]&&map[l.b])
-    S.links.push({...l,id:uid(),a:map[l.a],b:map[l.b]})});
+  (data.links||[]).forEach(l=>{if(l&&map[l.a]&&map[l.b]){
+    const nl={...l,id:uid(),a:map[l.a],b:map[l.b]};
+    delete nl.dash;                       // 虚实只由连线身份决定，旧的手动设定一律丢弃
+    if(nl.st!==true)delete nl.st;
+    S.links.push(nl);
+  }});
   (data.frames||[]).forEach(f=>{if(!f)return;
     S.frames=(S.frames||[]).concat([{...f,id:uid(),
       x:Math.round((+f.x||0)-nb.x+ox),y:Math.round((+f.y||0)-nb.y+oy),
@@ -2488,7 +2492,10 @@ function linksNear(r){
   return [...out];
 }
 // 单独算一条连线的路径，增量更新时复用，避免重建整个 SVG
-const DASH_MAX=6000;        // 超过这个跨度的连线不画虚线，改用浅色区分
+// 虚线的绘制代价与路径长度成正比。阈值按"在屏幕上有多长"来判断，而不是世界坐标的
+// 绝对距离：缩小画布时长连线在屏幕上也短，本来就不贵；只有真正横跨大片区域的才退化。
+// 阈值取得足够宽松，正常页面内、相邻章节之间的连线都仍是虚线。
+const DASH_MAX_SCREEN=5200;
 function linkPath(l){
   const idx=cardIndex();
   const A=idx.get(l.a),B=idx.get(l.b);
@@ -2543,13 +2550,12 @@ function drawLinks(){
     // 只有画布上确实用了结构连线时，才把两类连线在视觉上区分开；
     // 否则全部按用户自己设定的样式绘制，不擅自把所有线改成虚线
     const mixed=hasStruct&&!isSt;
-    // 虚线的代价与路径长度成正比：跨越整张画布的长连线，浏览器要逐段计算虚线分段，
-    // 实测几十条超长虚线就能让单帧涨到三秒。超过阈值就退化为实线加浅色，
-    // 视觉上仍能与结构连线区分，但不再有逐段计算的开销。
-    const far=Math.abs(A.x-B.x)+Math.abs(A.y-B.y)>DASH_MAX;
-    const dashArr=((l.dash||mixed)&&!far)
-      ?`stroke-dasharray="${w*(mixed?3.2:4.5)} ${w*(mixed?3:3.5)}"`:"";
-    out+=`<path class="ln${isSt?" st":""}" data-link="${l.id}" d="${d}" stroke="${col}" stroke-opacity="${dim?.38:(mixed?(far?.42:.75):1)}" stroke-width="${on?w+1.4:(isSt?w*1.5:w)}" stroke-linejoin="round" stroke-linecap="round" ${dashArr} fill="none"/>`;
+    // 规则只有一条：结构连线是实线，关联连线是虚线。
+    // 唯一的例外是超长连线，虚线的绘制代价与路径长度成正比，几十条横跨画布的长虚线
+    // 就能让单帧涨到三秒，那种情况下退化为实线并大幅调淡，仍能与结构连线区分。
+    const far=(Math.abs(A.x-B.x)+Math.abs(A.y-B.y))*cam.z>DASH_MAX_SCREEN;
+    const dashArr=(mixed&&!far)?`stroke-dasharray="${w*3.2} ${w*3}"`:"";
+    out+=`<path class="ln${isSt?" st":""}" data-link="${l.id}" d="${d}" stroke="${col}" stroke-opacity="${dim?.38:(mixed?(far?.35:.8):1)}" stroke-width="${on?w+1.4:(isSt?w*1.5:w)}" stroke-linejoin="round" stroke-linecap="round" ${dashArr} fill="none"/>`;
     if(!dim&&ar!=="none")arrows.push(l);
     if(!lock&&S.linkView!=="off")out+=`<path class="hit" d="${d}" data-link="${l.id}">${l.note?`<title>${esc(l.note)}</title>`:""}</path>`;
     if(!dim&&l.note&&S.linkLabel!=="none")mark.push(l);
@@ -3377,7 +3383,8 @@ const MANUAL=[
     <li><b>关联</b>：两者只是相关。这类连线不参与层级，画成虚线、略淡，导出时作为交叉引用出现。</li>
   </ul>
   <p>之所以要明确标记而不是靠样式约定，是因为这两者的语义完全不同：一个决定文档骨架，一个是横向参照。靠看线的样子去猜迟早会混。</p>
-  <p>跨度很大的连线不画虚线，改用更浅的颜色区分，因为超长虚线的绘制代价极高，会明显拖慢拖动。</p>
+  <p>虚实由连线的身份决定，没有手动开关：<b>结构连线一律实线，关联连线一律虚线</b>。线型、粗细、箭头、颜色仍可自行设定。</p>
+  <p>只有横跨大半个屏幕的超长连线例外，会退化为实线并大幅调淡，因为超长虚线的绘制代价极高。日常范围内的连线都是虚线，画布缩小后即使跨度大也会恢复虚线。</p>
   <p><b>大纲跟随连线</b>：只要画布上存在结构连线，编号和导出层级就由连线的树形关系决定，而不再依赖卡片的空间位置。所以你可以随意挪动卡片，编号不会乱。同级之间按位置从上到下、从左到右排序。</p>
   <p><b>方向由标题层级决定，不看你怎么画的</b>：一级标题永远是上级，二级在它之下，以此类推；没有标层级的卡片永远是末端内容。所以连线时完全不用管从哪头拉到哪头，也不需要箭头。只有两端层级相同时，才会退回到按连线本身的方向判断。</p>
   <p><b>批量转换</b>：右键页面标题的<b>本页的连线</b>，可以把这一页内部的连线一次全部设为结构连线或关联连线。只影响两端都在本页内的连线，跨页的连线不受影响。</p>
@@ -5658,7 +5665,7 @@ function viewItems(x,y){
       {label:t("linkApplyAll"),on:()=>{
         if(!S.links.length)return;
         snap();
-        S.links.filter(l=>!isLinkLocked(l)).forEach(l=>Object.assign(l,{kind:S.linkDef.kind,dash:S.linkDef.dash,
+        S.links.filter(l=>!isLinkLocked(l)).forEach(l=>Object.assign(l,{kind:S.linkDef.kind,
           arrow:S.linkDef.arrow,w:S.linkDef.w,color:S.linkDef.color}));
         drawLinks();save();toast(t("linkApplied")+" "+S.links.length);
       }}]},
@@ -5814,8 +5821,6 @@ function linkStyleItems(target,after){
     {label:t("elbow"),check:target.kind==="elbow",on:()=>set({kind:"elbow"})},
     {label:t("straight"),check:target.kind==="straight",on:()=>set({kind:"straight"})},
     {head:t("stroke")},
-    {label:t("solid"),check:!target.dash,on:()=>set({dash:false})},
-    {label:t("dashed"),check:!!target.dash,on:()=>set({dash:true})},
     {label:t("thin"),check:target.w<=1.4,on:()=>set({w:1.2})},
     {label:t("medium"),check:target.w>1.4&&target.w<3,on:()=>set({w:2})},
     {label:t("thick"),check:target.w>=3,on:()=>set({w:3.4})},
@@ -5918,7 +5923,8 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
 (async()=>{
   try{if(navigator.storage&&navigator.storage.persist)await navigator.storage.persist()}catch(e){}
   const saved=await loadState();
-  if(saved&&saved.cards){S={...S,...migrate(saved)};S.links=S.links||[];S.frames=S.frames||[];S.sheets=S.sheets||[];
+  if(saved&&saved.cards){S={...S,...migrate(saved)};
+    (S.links||[]).forEach(l=>{if(l)delete l.dash});S.links=S.links||[];S.frames=S.frames||[];S.sheets=S.sheets||[];
     if(!S.lvMigrated){S.linkView="all";S.lvMigrated=true}
     S.linkDef={...DEFLINK,...(saved.linkDef||{})};S.textDef={...DEF,...(saved.textDef||{})}}
   LANG=S.lang||"en";

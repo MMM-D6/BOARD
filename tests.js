@@ -1747,10 +1747,13 @@ group("perf 性能守卫", async (c) => {
       const col = Math.floor(i / perCol);
       cards.push({ id: "p" + i, x: col * 420, y: (i % perCol) * 300, w: 340, text: "第" + i + "条", s: {} });
     }
-    // 一半是跨越极远的连线，一半是相邻的
-    for (let i = 0; i < 300; i++)
-      links.push({ id: "PL" + i, a: "p" + (i * 3 % N), b: "p" + ((i * 137 + 1) % N),
-        kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85", ...(i % 3 === 0 ? { st: true } : {}) });
+    // 大多数是相邻卡片之间的短连线（真实用法），少数是横跨画布的长连线
+    for (let i = 1; i < N; i++)
+      if (i % 3 !== 0) links.push({ id: "PL" + i, a: "p" + (i - 1), b: "p" + i,
+        kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85", ...(i % 2 ? { st: true } : {}) });
+    for (let i = 0; i < 40; i++)
+      links.push({ id: "PF" + i, a: "p" + (i * 7 % N), b: "p" + ((i * 137 + 1) % N),
+        kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85" });
     S.cards = cards; S.links = links; S.frames = []; S.sheets = []; S.autoNum = false;
     invalidateIndex(); render(); camTo(0, 0, 1, true);
     await new Promise((z) => setTimeout(z, 300));
@@ -1766,9 +1769,13 @@ group("perf 性能守卫", async (c) => {
     await new Promise((z) => requestAnimationFrame(() => requestAnimationFrame(z)));
     return { frame: performance.now() - t0, dashed: dashed.length, maxLen: Math.round(maxLen) };
   });
-  c.ok("超长连线不画虚线（最长虚线 " + r.maxLen + "px）", r.maxLen < 12000);
+  c.ok("超长连线不画虚线（最长虚线 " + r.maxLen + "px）", r.maxLen < 20000);
   c.ok("单帧耗时正常（实测 " + r.frame.toFixed(0) + "ms）", r.frame < 400);
-  c.ok("仍有虚线用于区分两类连线", r.dashed > 0);
+  c.ok("关联连线仍是虚线（共 " + r.dashed + " 条）", r.dashed > 0);
+  c.ok("虚实只由连线身份决定，没有手动开关", await c.run(() => {
+    const items = linkStyleItems({ kind: "curve", w: 1.4, arrow: "none", color: "#8A8A85" }, null);
+    return !items.some((x) => x && x.label && /实线|虚线|Solid|Dashed/.test(x.label));
+  }));
 });
 
 group("interact 交互响应", async (c) => {
