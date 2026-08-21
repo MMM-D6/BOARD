@@ -31,21 +31,25 @@
   #links path.hit{stroke:transparent;stroke-width:16px;pointer-events:stroke;cursor:pointer}
 
   #docs{position:absolute;left:0;top:0;pointer-events:none}
-  .doc{position:absolute;pointer-events:auto;cursor:pointer;
-    padding:calc(15px * var(--iz)) calc(17px * var(--iz));border-radius:calc(4px * var(--iz));
-    background:var(--panel);border:1px solid var(--pline);
-    box-shadow:0 calc(2px * var(--iz)) calc(10px * var(--iz)) rgba(0,0,0,.06);
-    transition:box-shadow .14s,border-color .14s}
-  .doc:hover{border-color:var(--frame);
-    box-shadow:0 calc(4px * var(--iz)) calc(18px * var(--iz)) rgba(0,0,0,.12)}
-  .doc .dt{font-size:calc(16px * var(--iz));font-weight:600;line-height:1.35;
-    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .doc .dm{margin-top:calc(6px * var(--iz));opacity:.4;
-    font:400 calc(10.5px * var(--iz))/1.4 "IBM Plex Mono",monospace}
-  .doc:before{content:"";position:absolute;left:0;top:calc(13px * var(--iz));
-    bottom:calc(13px * var(--iz));width:calc(2.5px * var(--iz));
-    background:var(--frame);opacity:.5;border-radius:0 2px 2px 0}
-  body.lock .doc{cursor:zoom-in}
+  /* 稿子是画布上真正的一页：尺寸在世界坐标里固定，随画布一起缩放。
+     内部一律用普通像素，不要乘 --iz，那是给固定大小的界面元素用的。 */
+  .doc{position:absolute;pointer-events:auto;background:var(--panel);
+    border:1px solid var(--pline);border-radius:3px;
+    box-shadow:0 2px 14px rgba(0,0,0,.05);padding:52px 64px 64px}
+  .doc.on{box-shadow:0 4px 26px rgba(0,0,0,.10);border-color:var(--frame)}
+  .doc .dhead{display:flex;align-items:baseline;gap:12px;margin:0 0 34px;
+    padding-bottom:14px;border-bottom:1px solid var(--pline)}
+  .doc .dt{font-size:23px;font-weight:600;line-height:1.3;cursor:text;flex:1;
+    outline:none;word-break:break-word}
+  .doc .dm{opacity:.32;font:400 11px/1.4 "IBM Plex Mono",monospace;flex:none;white-space:nowrap}
+  .doc .dtool{display:flex;gap:2px;opacity:0;transition:opacity .14s;flex:none}
+  .doc:hover .dtool{opacity:1}
+  .doc .dtool button{border:none;background:none;cursor:pointer;color:inherit;opacity:.45;
+    font-size:11px;padding:2px 7px;border-radius:5px;font-family:"IBM Plex Mono",monospace}
+  .doc .dtool button:hover{background:var(--phi);opacity:.95}
+  .doc .dtool button.on{background:var(--pfg);color:var(--panel);opacity:1}
+  .doc .dempty{opacity:.32;font-size:13px;line-height:2;padding:20px 0}
+  body.lock .doc .dtool{display:none}
   .sheet{position:absolute;background:var(--shbg);border:1px solid var(--shln);
     border-radius:1px;pointer-events:none;box-shadow:0 1px 6px rgba(0,0,0,.06)}
   .sheet .split{position:absolute;left:50%;top:0;bottom:0;width:0;
@@ -458,7 +462,11 @@
   .blk.ctx .gut{display:none}
   .blk.ctx{margin-bottom:2px}
   .blk .h{font-weight:600;letter-spacing:-.01em}
-  .blk{margin-bottom:14px}
+  .blk{margin-bottom:14px;position:relative}
+  .doc .blk .gut{position:absolute;right:100%;top:0;width:88px;padding-right:14px;
+    display:flex;align-items:center;justify-content:flex-end;gap:4px;opacity:0;
+    transition:opacity .14s}
+  .doc .blk:hover .gut{opacity:1}
   .blk .cap.lv1{margin:40px 0 6px}
   .blk .cap.lv2{margin:30px 0 5px}
   .blk .cap.lv3{margin:22px 0 4px}
@@ -589,7 +597,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrTitle:"Outline",wrBack:"Back to canvas",
   wrIter:"Iterate",wrCtx:"Context",
   wrDocAdd:"New writing page",wrDocNew:"Draft",wrDocOpen:"Open",wrDocRename:"Rename this draft",
-  wrDocExport:"Export this draft…",wrDocDel:"Delete this draft",wrNoDoc:"No writing page yet",
+  wrFocus:"Focus",wrDocExport:"Export this draft…",wrDocDel:"Delete this draft",wrNoDoc:"No writing page yet",
   wrDocMeta:"{n} cards · {w} characters",
   wrSend:"Send to a writing page",wrSendNew:"replace",wrSendAdd:"append",
   wrSendMake:"Into a new writing page",
@@ -742,7 +750,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrTitle:"目录",wrBack:"返回画布",
   wrIter:"迭代",wrCtx:"Context",
   wrDocAdd:"新建写作页",wrDocNew:"稿子",wrDocOpen:"打开",wrDocRename:"重命名",
-  wrDocExport:"导出这份稿子…",wrDocDel:"删除这份稿子",wrNoDoc:"还没有写作页",
+  wrFocus:"专注",wrDocExport:"导出这份稿子…",wrDocDel:"删除这份稿子",wrNoDoc:"还没有写作页",
   wrDocMeta:"{n} 张卡片 · {w} 字",
   wrSend:"送入写作页",wrSendNew:"替换",wrSendAdd:"追加",
   wrSendMake:"新建一份写作页",
@@ -3456,13 +3464,15 @@ const MANUAL=[
 
  ["写作页","XIEZUOYE",`
   <p>画布擅长摆结构，不擅长顺着读。<b>写作页</b>把排好的卡片展开成一份可以从头读到尾的稿子。它是画布上的一个独立对象，<b>可以有很多份、各自命名</b>，所以不同的文稿互不干扰。</p>
-  <p><b>新建</b>：右键空白处选「新建写作页」。画布上会出现一张带名字和字数的小卡，双击或单击打开，右键可重命名、导出、删除。</p>
+  <p><b>新建</b>：右键空白处选「新建写作页」。稿子会作为画布上的一页出现，<b>正文直接展开在上面，点进去就能改</b>，不需要切换到别的界面。放大只是看得更清楚。</p>
+  <p>标题直接点一下就能改名。右上角有几个小按钮（鼠标移上去才显示）：切换迭代与 Context、进入专注模式、导出。拖标题以外的空白处可以移动整页。</p>
   <p><b>送入内容</b>：在画布上多选卡片，右键选「送入写作页」，可以选择送进哪一份、替换还是追加，也可以直接新建一份。送进来时按文档顺序而非点选顺序排列。</p>
   <p><b>侧栏目录</b>由分级标题自动生成，与画布上的层级系统是同一套，点一下跳到对应位置。</p>
   <p><b>所见即所得</b>：每一段都保留卡片本身的字体、字号、颜色、底色和局部格式，画布上什么样这里就什么样，导出也是同一副样子。写作时选中文字会浮出与画布上完全一致的文字工具栏。</p>
   <h4>两种模式</h4>
   <p><b>迭代</b>：对着一张一张卡片写。每段左侧有版本切换器，下方有一个折叠框，可以放该段相关的引用与分身，随时展开对照。</p>
   <p><b>Context</b>：只呈现连贯文本，把所有当前选中的版本串起来通读，用于检查前后逻辑与语气是否一致。版本条和折叠框都会收起。</p>
+  <p><b>专注模式</b>：点页内的「专注」进入全屏，左侧多一栏目录，适合长时间集中写作。它和画布上的稿子是同一份内容，改哪边都一样。</p>
   <h4>版本迭代</h4>
   <p>把鼠标移到某一段左侧会出现 <b>I II III</b> 这样的版本号和一个加号。点加号基于当前内容新建一版，此后放开手改，原来那版完整保留。点版本号随时切回去比较。右键还能给版本命名、删除某一版、或新建一个空白版本从头写。</p>
   <p>所有版本都存在同一个文件里，但只有当前选中的那一版参与阅读、检索、导出和画布显示，其余的静静待着。<b>版本会连同字体、颜色、底色一起保存</b>，所以换个写法也可以换个样子。</p>
@@ -5735,7 +5745,8 @@ function addDoc(p,title){
     title:title||(t("wrDocNew")+" "+(docs().length+1)),ids:[],mode:"iter",open:{}};
   snap();docs().push(d);render();save();return d;
 }
-const DOCW=340;
+const DOCW=760;                              // 稿子在世界坐标里的宽度
+// 把稿子直接画在画布上：正文就地可编辑，放大只是看得更清楚，不切换到别的界面
 function renderDocs(){
   const box=$("docs");if(!box)return;
   box.innerHTML="";
@@ -5744,39 +5755,27 @@ function renderDocs(){
     Object.assign(el.style,{left:d.x+"px",top:d.y+"px",width:DOCW+"px"});
     const n=d.ids.filter(id=>card(id)).length;
     const w=d.ids.reduce((z,id)=>z+((orig(card(id)||{}).text||"").replace(/\s/g,"").length),0);
-    el.innerHTML=`<div class="dt">${esc(d.title)}</div>
-      <div class="dm">${esc(t("wrDocMeta").replace("{n}",n).replace("{w}",w))}</div>`;
-    el.addEventListener("pointerdown",e=>{
-      if(lock){e.stopPropagation();openWrite(d.id);return}
-      if(e.button!==0)return;
-      e.stopPropagation();startDocMove(e,d);
-    });
-    el.addEventListener("dblclick",e=>{e.stopPropagation();openWrite(d.id)});
-    el.addEventListener("contextmenu",e=>{
-      if(lock)return;e.preventDefault();e.stopPropagation();docMenu(e.clientX,e.clientY,d);
-    });
+    el.innerHTML=`<div class="dhead">
+        <div class="dt" contenteditable="${lock?"false":"true"}" spellcheck="false"
+          >${esc(d.title)}</div>
+        <div class="dtool">
+          <button data-m="iter" class="${d.mode!=="ctx"?"on":""}">${esc(t("wrIter"))}</button>
+          <button data-m="ctx" class="${d.mode==="ctx"?"on":""}">${esc(t("wrCtx"))}</button>
+          <button data-a="focus">${esc(t("wrFocus"))}</button>
+          <button data-a="exp">${esc(t("expGo"))}</button>
+        </div>
+        <div class="dm">${esc(t("wrDocMeta").replace("{n}",n).replace("{w}",w))}</div>
+      </div>
+      <div class="dbody">${docBodyHTML(d)}</div>`;
+    bindDoc(el,d);
     box.appendChild(el);
   });
-}
-function startDocMove(e,d){
-  const sx=e.clientX,sy=e.clientY,ox=d.x,oy=d.y;
-  let moved=false;
-  const mv=ev=>{
-    const dx=(ev.clientX-sx)/cam.z,dy=(ev.clientY-sy)/cam.z;
-    if(!moved&&Math.abs(dx)+Math.abs(dy)<3)return;
-    if(!moved){snap();moved=true}
-    d.x=Math.round(ox+dx);d.y=Math.round(oy+dy);renderDocs();
-  };
-  const up=ev=>{
-    removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
-    if(moved)save();else openWrite(d.id);      // 没拖动就是点击，直接打开
-  };
-  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+  applyDocStyles();
 }
 function docMenu(x,y,d){
   menuAt(x,y,[
     {head:d.title},
-    {label:t("wrDocOpen"),on:()=>openWrite(d.id)},
+    {label:t("wrFocus"),on:()=>openWrite(d.id)},
     {label:t("wrDocRename"),on:()=>{const v=prompt(t("wrDocRename"),d.title);
       if(v!==null){snap();d.title=v.trim()||d.title;render();save()}}},
     "-",
@@ -5835,6 +5834,13 @@ function verToClip(c,vid){
   CLIP={mode:"copy",items:[{src:o.id,snap:sn,dx:0,dy:0}]};
   toast(t("wrVerCopied"));
 }
+function wrStyleObj(o,lv){
+  const st={...DEF,...S.textDef,...(o.s||{})};
+  return {fontFamily:famCSS(st.family),fontSize:st.size+"px",
+    fontWeight:String(lv?600:st.weight),lineHeight:String(st.lh),
+    letterSpacing:st.spacing+"em",textAlign:st.align,color:st.color,
+    fontStyle:st.italic?"italic":"normal"};
+}
 
 /* ---- 从画布导入 ---- */
 function wrImport(ids,append,docId){
@@ -5852,7 +5858,7 @@ function wrImport(ids,append,docId){
   toast(t("wrAdded").replace("{n}",seq.length).replace("{d}",d.title));
 }
 
-/* ---- 打开与渲染 ---- */
+/* ---- 专注模式的开关 ---- */
 function openWrite(id){
   const d=docs().find(z=>z.id===id)||docs()[0];
   if(!d){toast(t("wrNoDoc"));return}
@@ -5866,31 +5872,19 @@ function closeWrite(){
   $("write").classList.remove("on");
   wrId=null;sel=[];editing=false;render();
 }
-function wrStyleObj(o,lv){
-  const st={...DEF,...S.textDef,...(o.s||{})};
-  return {fontFamily:famCSS(st.family),fontSize:st.size+"px",
-    fontWeight:String(lv?600:st.weight),lineHeight:String(st.lh),
-    letterSpacing:st.spacing+"em",textAlign:st.align,color:st.color,
-    fontStyle:st.italic?"italic":"normal"};
-}
-// 字体名里带引号，拼进 style="" 会把属性截断，所以渲染完再逐个赋值
-function wrApplyStyles(){
-  $("wrmain").querySelectorAll(".cap[data-id]").forEach(el=>{
-    const c=card(el.dataset.id);if(!c)return;
-    const o=orig(c);
-    Object.assign(el.style,wrStyleObj(o,wrLevelOf(c)));
-  });
-  $("wrmain").querySelectorAll(".ref[data-id]").forEach(el=>{
-    const c=card(el.dataset.id);if(!c)return;
-    Object.assign(el.style,wrStyleObj(orig(c),0));
-  });
-}
-function drawWrite(){
-  if(!wrOpenState())return;
-  const d=wrDoc();if(!d)return;
-  const list=wrCards();
-  $("wrtitle").textContent=d.title;
 
+// 字体名里含引号，拼进 style="" 会把属性截断，所以渲染完再逐个赋值
+function applyDocStyles(root){
+  (root||document).querySelectorAll(".cap[data-id],.ref[data-id]").forEach(el=>{
+    const c=card(el.dataset.id);if(!c)return;
+    Object.assign(el.style,wrStyleObj(orig(c),
+      el.classList.contains("ref")?0:wrLevelOf(c)));
+  });
+}
+// 正文块的 HTML，画布上的稿子与专注模式共用同一份
+function docBodyHTML(d){
+  const list=d.ids.map(card).filter(Boolean);
+  if(!list.length)return `<div class="dempty">${esc(t("wrEmpty"))}</div>`;
   const nums=[],counters=[];
   list.forEach(c=>{
     const lv=wrLevelOf(c);
@@ -5898,14 +5892,6 @@ function drawWrite(){
     counters[lv-1]=(counters[lv-1]||0)+1;counters.length=lv;
     nums.push(counters.map(x=>x||0).join("."));
   });
-  let sh="";
-  list.forEach((c,i)=>{
-    const lv=wrLevelOf(c);if(!lv)return;
-    sh+=`<button class="wrnav l${Math.min(lv,4)}" data-i="${i}">
-      <span class="n">${nums[i]}</span><span class="t">${esc(snippet(orig(c),40)||t("wrUntitled"))}</span></button>`;
-  });
-  $("wrside").innerHTML=sh||`<div class="wrempty">${esc(t("wrNoHead"))}</div>`;
-
   const ctx=d.mode==="ctx";
   let h="";
   list.forEach((c,i)=>{
@@ -5913,10 +5899,9 @@ function drawWrite(){
     const wrapS=o.bg?`background:${esc(o.bg)};padding:12px 14px;border-radius:3px`:"";
     const locked=isLocked(c.id);
     const body=`<div class="cap${lv?" hd lv"+Math.min(lv,4):""}"
-      contenteditable="${locked?"false":"true"}" data-id="${c.id}"
+      contenteditable="${locked||lock?"false":"true"}" data-id="${c.id}" spellcheck="false"
       >${o.rich?safeRich(o.rich):esc(o.text||"")}</div>`;
     if(ctx){
-      // 连贯文本：只呈现当前选中的那一版，串起来通读
       h+=`<div class="blk ctx${locked?" lk":""}" data-i="${i}" data-id="${c.id}">
         <div class="wrap" style="${wrapS}">${body}</div></div>`;
       return;
@@ -5943,87 +5928,186 @@ function drawWrite(){
       </div>
     </div>`;
   });
-  $("wrmain").innerHTML=h||`<div class="wrempty">${esc(t("wrEmpty"))}</div>`;
-  wrApplyStyles();
+  return h;
+}
+function bindDoc(el,d){
+  const dt=el.querySelector(".dt");
+  dt.addEventListener("pointerdown",e=>e.stopPropagation());
+  dt.addEventListener("blur",()=>{
+    const v=dt.innerText.trim();
+    if(v&&v!==d.title){snap();d.title=v;save();renderDocs()}else dt.innerText=d.title;
+  });
+  dt.addEventListener("keydown",e=>{
+    e.stopPropagation();
+    if(e.key==="Enter"){e.preventDefault();dt.blur()}
+    if(e.key==="Escape"){dt.innerText=d.title;dt.blur()}
+  });
+  el.querySelectorAll(".dtool button").forEach(b=>{
+    b.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    b.addEventListener("click",e=>{
+      e.stopPropagation();
+      if(b.dataset.m){snap();d.mode=b.dataset.m;save();renderDocs();return}
+      if(b.dataset.a==="focus"){openWrite(d.id);return}
+      if(b.dataset.a==="exp")openWrExport(d);
+    });
+  });
+  // 空白处拖动整页；正文里的操作不触发移动
+  el.addEventListener("pointerdown",e=>{
+    if(lock){e.stopPropagation();return}
+    if(e.button!==0)return;
+    if(e.target.closest(".cap,.dt,.dtool,.vv,.vadd,.fh,.ref"))return;
+    e.stopPropagation();startDocMove(e,d);
+  });
+  el.addEventListener("contextmenu",e=>{
+    if(lock)return;
+    const blk=e.target.closest(".blk");
+    e.preventDefault();e.stopPropagation();
+    if(blk){
+      const c=card(blk.dataset.id);
+      if(c){wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i,d);return}
+    }
+    docMenu(e.clientX,e.clientY,d);
+  });
+  bindBody(el,d);
+}
+function startDocMove(e,d){
+  const sx=e.clientX,sy=e.clientY,ox=d.x,oy=d.y;
+  let moved=false;
+  const mv=ev=>{
+    const dx=(ev.clientX-sx)/cam.z,dy=(ev.clientY-sy)/cam.z;
+    if(!moved&&Math.abs(dx)+Math.abs(dy)<3)return;
+    if(!moved){snap();moved=true}
+    d.x=Math.round(ox+dx);d.y=Math.round(oy+dy);
+    const el=$("docs").querySelector(`.doc[data-id="${d.id}"]`);
+    if(el){el.style.left=d.x+"px";el.style.top=d.y+"px"}
+  };
+  const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    if(moved)save()};
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+}
+// 专注模式：同一份正文加一个侧栏目录，用于长时间集中写作
+function drawWrite(){
+  if(!wrOpenState())return;
+  const d=wrDoc();if(!d)return;
+  const list=wrCards();
+  $("wrtitle").textContent=d.title;
+  const nums=[],counters=[];
+  list.forEach(c=>{
+    const lv=wrLevelOf(c);
+    if(!lv){nums.push("");return}
+    counters[lv-1]=(counters[lv-1]||0)+1;counters.length=lv;
+    nums.push(counters.map(x=>x||0).join("."));
+  });
+  let sh="";
+  list.forEach((c,i)=>{
+    const lv=wrLevelOf(c);if(!lv)return;
+    sh+=`<button class="wrnav l${Math.min(lv,4)}" data-i="${i}">
+      <span class="n">${nums[i]}</span><span class="t">${esc(snippet(orig(c),40)||t("wrUntitled"))}</span></button>`;
+  });
+  $("wrside").innerHTML=sh||`<div class="wrempty">${esc(t("wrNoHead"))}</div>`;
+  $("wrmain").innerHTML=docBodyHTML(d);
+  applyDocStyles($("wrmain"));
   $("wrcount").textContent=t("wrWords").replace("{n}",
     list.reduce((n,c)=>n+((orig(c).text||"").replace(/\s/g,"").length),0));
 }
 
+
 /* ---- 交互 ---- */
 let wrT,wrSideT;
 function wrSideSoon(){clearTimeout(wrSideT);wrSideT=setTimeout(drawWrite,700)}
-function wrBind(){
-  const main=$("wrmain");
-  main.addEventListener("input",e=>{
+// 正文块的交互，画布上的稿子与专注模式共用同一套
+function bindBody(root,getDoc){
+  const doc=()=>typeof getDoc==="function"?getDoc():getDoc;
+  root.addEventListener("input",e=>{
     const el=e.target.closest(".cap");if(!el)return;
     const c=card(el.dataset.id);if(!c||isLocked(c.id))return;
     const o=orig(c);
     o.text=el.innerText;
     if(el.querySelector("span,b,i,u,a,mark,strong,em"))o.rich=el.innerHTML;else delete o.rich;
     verStash(o);
-    clearTimeout(wrT);wrT=setTimeout(()=>{save();wrSideSoon()},280);
+    clearTimeout(wrT);wrT=setTimeout(()=>{save();refreshDocMeta()},320);
   });
-  // 聚焦某段即设为当前选中，文字工具栏随之出现，与画布上是同一套
-  main.addEventListener("focusin",e=>{
+  // 聚焦某段即设为当前选中，文字工具栏随之出现，与画布上的卡片完全一致
+  root.addEventListener("focusin",e=>{
     const el=e.target.closest(".cap");if(!el)return;
-    sel=[el.dataset.id];editing=true;syncBar();
+    sel=[el.dataset.id];editing=true;selLink=null;paintSel();syncBar();
   });
-  main.addEventListener("keydown",e=>{
-    if(e.target.closest(".cap")){
-      e.stopPropagation();
-      if(e.key==="Escape"){e.target.blur();editing=false;syncBar()}
-    }
+  root.addEventListener("keydown",e=>{
+    if(!e.target.closest(".cap"))return;
+    e.stopPropagation();
+    if(e.key==="Escape"){e.target.blur();editing=false;syncBar()}
   });
-  main.addEventListener("click",e=>{
+  root.addEventListener("click",e=>{
+    const d=doc();
     const fh=e.target.closest(".fh");
     if(fh){
-      const d=wrDoc();if(!d)return;
+      if(!d)return;
       d.open=d.open||{};d.open[fh.dataset.id]=!d.open[fh.dataset.id];
       fh.closest(".fold").classList.toggle("on",!!d.open[fh.dataset.id]);
       save();return;
     }
+    const blk=e.target.closest(".blk");
     const v=e.target.closest(".vv");
-    if(v){const c=wrCards()[+v.dataset.i];if(c){verUse(c,v.dataset.v);drawWrite()}return}
+    if(v&&blk){const c=card(blk.dataset.id);if(c){verUse(c,v.dataset.v);redrawDocs(d)}return}
     const a=e.target.closest(".vadd");
-    if(a){
-      const c=wrCards()[+a.dataset.i];if(!c)return;
+    if(a&&blk){
+      const c=card(blk.dataset.id);if(!c)return;
       if(isLocked(c.id)){toast(t("lockedNote"));return}
-      verNew(c,true);drawWrite();toast(t("wrVerMade"));return;
+      verNew(c,true);redrawDocs(d);toast(t("wrVerMade"));
     }
   });
-  main.addEventListener("contextmenu",e=>{
-    const blk=e.target.closest(".blk");if(!blk)return;
-    e.preventDefault();e.stopPropagation();
-    const c=card(blk.dataset.id);if(!c)return;
-    wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i);
+}
+// 内容变了就重画：画布上的稿子和专注模式都刷一遍，两边始终一致
+function redrawDocs(){
+  renderDocs();
+  if(wrOpenState())drawWrite();
+}
+function refreshDocMeta(){
+  document.querySelectorAll("#docs .doc").forEach(el=>{
+    const d=docs().find(z=>z.id===el.dataset.id);if(!d)return;
+    const n=d.ids.filter(id=>card(id)).length;
+    const w=d.ids.reduce((z,id)=>z+((orig(card(id)||{}).text||"").replace(/\s/g,"").length),0);
+    const m=el.querySelector(".dm");
+    if(m)m.textContent=t("wrDocMeta").replace("{n}",n).replace("{w}",w);
   });
+  if(wrOpenState())wrSideSoon();
+}
+function wrBind(){
+  bindBody($("wrmain"),()=>wrDoc());
   $("wrside").addEventListener("click",e=>{
     const b=e.target.closest(".wrnav");if(!b)return;
     const el=$("wrmain").querySelector(`.blk[data-i="${b.dataset.i}"]`);
     if(el)el.scrollIntoView({behavior:"smooth",block:"start"});
   });
+  $("wrmain").addEventListener("contextmenu",e=>{
+    const blk=e.target.closest(".blk");if(!blk)return;
+    e.preventDefault();e.stopPropagation();
+    const c=card(blk.dataset.id);if(!c)return;
+    wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i,wrDoc());
+  });
 }
-function wrBlockMenu(x,y,c,i){
-  const o=orig(c),vs=verList(o),d=wrDoc();
+function wrBlockMenu(x,y,c,i,d){
+  const o=orig(c),vs=verList(o);
+  d=d||wrDoc();
   const items=[{head:snippet(o,26)||t("wrUntitled")}];
-  items.push({label:t("wrVerNew"),on:()=>{verNew(c,true);drawWrite()}});
-  items.push({label:t("wrVerBlank"),on:()=>{verNew(c,false);drawWrite()}});
+  items.push({label:t("wrVerNew"),on:()=>{verNew(c,true);redrawDocs()}});
+  items.push({label:t("wrVerBlank"),on:()=>{verNew(c,false);redrawDocs()}});
   if(vs.length>1){
     items.push({label:t("wrVerPick"),sub:[{head:t("wrVerPick")},
       ...vs.map((v,k)=>({label:verLabel(v,k)+"　"+new Date(v.t).toLocaleDateString(),
-        check:v.id===o.verOn,on:()=>{verUse(c,v.id);drawWrite()}}))]});
+        check:v.id===o.verOn,on:()=>{verUse(c,v.id);redrawDocs()}}))]});
     items.push({label:t("wrVerName"),on:()=>{
       const v=vs.find(z=>z.id===o.verOn);if(!v)return;
       const n=prompt(t("wrVerName"),v.name||"");
-      if(n!==null){snap();v.name=n.trim();save();drawWrite()}}});
-    items.push({label:t("wrVerDel"),danger:true,on:()=>{verDel(c,o.verOn);drawWrite()}});
+      if(n!==null){snap();v.name=n.trim();save();redrawDocs()}}});
+    items.push({label:t("wrVerDel"),danger:true,on:()=>{verDel(c,o.verOn);redrawDocs()}});
   }
   items.push("-",{label:t("wrVerCopy"),on:()=>verToClip(c,o.verOn)});
   items.push("-",{label:isLocked(c.id)?t("unlockAll"):t("lockText"),
-    on:()=>{setCardLock([c.id],isLocked(c.id)?null:"text");drawWrite()}});
+    on:()=>{setCardLock([c.id],isLocked(c.id)?null:"text");redrawDocs()}});
   items.push("-",
     {label:t("wrGoCanvas"),on:()=>{const id=c.id;closeWrite();sel=[id];paintSel();focusOn([card(id)])}},
-    {label:t("wrRemove"),on:()=>{if(!d)return;snap();d.ids.splice(i,1);save();drawWrite()}});
+    {label:t("wrRemove"),on:()=>{if(!d)return;snap();d.ids.splice(i,1);save();redrawDocs()}});
   menuAt(x,y,items);
 }
 

@@ -1733,6 +1733,79 @@ group("image 图片导入", async (c) => {
   c.ok("图片按内容哈希单独存放", await c.run(() => S.cards.every((z) => !z.src || z.ih)));
 });
 
+group("docpage 稿子在画布上", async (c) => {
+  await c.run(() => {
+    S.cards = [
+      { id: "h1", x: 0, y: 0, w: 400, text: "理论框架", level: 1, s: { ...DEF, size: 22 } },
+      { id: "p1", x: 0, y: 400, w: 400, text: "第一段内容在这里。", s: { ...DEF, size: 15 } },
+      { id: "p2", x: 0, y: 800, w: 400, text: "第二段内容。", s: { ...DEF, size: 15 } },
+    ];
+    S.links = []; S.frames = []; S.sheets = []; S.docs = [];
+    invalidateIndex(); render();
+    const d = addDoc({ x: 1200, y: 0 }, "我的稿子");
+    wrImport(["h1", "p1", "p2"], false, d.id);
+    camTo(0, 0, 1, true);
+  });
+  await c.wait(600);
+  const st = await c.run(() => {
+    const el = document.querySelector("#docs .doc");
+    return { w: Math.round(el.getBoundingClientRect().width),
+      blocks: el.querySelectorAll(".blk").length,
+      editable: el.querySelector(".cap").getAttribute("contenteditable"),
+      capSize: getComputedStyle(el.querySelector('.blk[data-id="p1"] .cap')).fontSize,
+      headSize: getComputedStyle(el.querySelector('.blk[data-id="h1"] .cap')).fontSize };
+  });
+  c.ok("稿子直接在画布上展开正文", st.blocks === 3);
+  c.ok("宽度是世界坐标里的固定值", Math.abs(st.w - 760) < 4);
+  c.ok("正文可以就地编辑", st.editable === "true");
+  c.ok("保留卡片本身的字号", st.capSize === "15px" && st.headSize === "22px");
+
+  // 内部尺寸不能乘反向缩放系数，否则缩小画布时会把文字挤成一列
+  const zoomed = await c.run(() => {
+    camTo(0, 0, 0.4, true);
+    const el = document.querySelector("#docs .doc");
+    return { declared: el.querySelector('.blk[data-id="p1"] .cap').style.fontSize,
+      ratio: el.getBoundingClientRect().width / 760 };
+  });
+  c.ok("缩放时内部比例不变形",
+    zoomed.declared === "15px" && Math.abs(zoomed.ratio - 0.4) < 0.03);
+  await c.run(() => camTo(0, 0, 1, true));
+  await c.wait(300);
+
+  await c.run(() => {
+    const cap = document.querySelector('#docs .doc .blk[data-id="p2"] .cap');
+    cap.focus(); cap.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  });
+  await c.wait(400);
+  c.ok("在画布上编辑时出现文字工具栏",
+    await c.run(() => $("bar").classList.contains("on") && sel[0] === "p2"));
+
+  await c.run(() => {
+    const cap = document.querySelector('#docs .doc .blk[data-id="p2"] .cap');
+    cap.innerText = "就地改写过了。";
+    cap.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await c.wait(600);
+  c.ok("就地编辑直接改到卡片", (await c.run(() => card("p2").text)) === "就地改写过了。");
+
+  await c.run(() => {
+    const dt = document.querySelector("#docs .doc .dt");
+    dt.innerText = "改了名字"; dt.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+  });
+  await c.wait(400);
+  c.ok("标题可以就地改名", (await c.run(() => S.docs[0].title)) === "改了名字");
+
+  c.ok("页内有模式与导出按钮",
+    (await c.run(() => document.querySelectorAll("#docs .doc .dtool button").length)) === 4);
+  c.ok("可以在页内切换模式", await c.run(() => {
+    document.querySelector('#docs .doc .dtool button[data-m="ctx"]').click();
+    const ok2 = S.docs[0].mode === "ctx";
+    document.querySelector('#docs .doc .dtool button[data-m="iter"]').click();
+    return ok2;
+  }));
+  await c.run(() => { S.docs = []; render(); });
+});
+
 group("write 写作页", async (c) => {
   const r = await c.run(() => {
     S.cards = [
@@ -1763,22 +1836,22 @@ group("write 写作页", async (c) => {
     const cap = document.querySelector('#wrmain .blk[data-id="p1"] .cap');
     const wrap = document.querySelector('#wrmain .blk[data-id="p1"] .wrap');
     return { size: getComputedStyle(cap).fontSize, bg: getComputedStyle(wrap).background,
-      h1: getComputedStyle(document.querySelector('.blk[data-id="h1"] .cap')).fontSize };
+      h1: getComputedStyle(document.querySelector('#wrmain .blk[data-id="h1"] .cap')).fontSize };
   });
   c.ok("保留卡片字号", sty.size === "15px" && sty.h1 === "22px");
   c.ok("保留卡片底色", /rgba?\(/.test(sty.bg));
 
   const rn = await c.run(() => {
-    verNew(card("p2"), true); drawWrite();
-    return [...document.querySelectorAll('.blk[data-id="p2"] .vv')].map((z) => z.textContent.trim());
+    verNew(card("p2"), true); redrawDocs();
+    return [...document.querySelectorAll('#wrmain .blk[data-id="p2"] .vv')].map((z) => z.textContent.trim());
   });
   c.ok("版本用罗马数字", rn[0] === "I" && rn[1] === "II");
 
   c.ok("每段下方有折叠框",
-    await c.run(() => !!document.querySelector('.blk[data-id="p1"] .fold .fh')));
+    await c.run(() => !!document.querySelector('#wrmain .blk[data-id="p1"] .fold .fh')));
   const fold = await c.run(() => {
-    card("tw").wrUnder = "p1"; drawWrite();
-    const f = document.querySelector('.blk[data-id="p1"] .fold');
+    card("tw").wrUnder = "p1"; redrawDocs();
+    const f = document.querySelector('#wrmain .blk[data-id="p1"] .fold');
     f.querySelector(".fh").click();
     return { refs: f.querySelectorAll(".ref").length, open: f.classList.contains("on") };
   });
@@ -1798,7 +1871,7 @@ group("write 写作页", async (c) => {
   }));
 
   await c.run(() => {
-    const cap = document.querySelector('.blk[data-id="p2"] .cap');
+    const cap = document.querySelector('#wrmain .blk[data-id="p2"] .cap');
     cap.focus(); cap.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
   });
   await c.wait(400);
@@ -1814,7 +1887,7 @@ group("write 写作页", async (c) => {
 
   // 写作页编辑就是改卡片本身
   await c.run(() => {
-    const el = document.querySelector('.blk[data-id="p2"] .cap');
+    const el = document.querySelector('#wrmain .blk[data-id="p2"] .cap');
     el.focus(); el.innerText = "改写过的第二段。";
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });

@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>抠图</title>
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<style>
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0;overflow:hidden;
+    font-family:"IBM Plex Sans","Noto Sans SC",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  body{background:#F4F4F2;color:#111;
+    --panel:#fff;--pfg:#111;--pline:rgba(0,0,0,.12);--phi:rgba(0,0,0,.05);
+    --glass:rgba(255,255,255,.62);--glassSoft:rgba(255,255,255,.3);
+    --glassline:rgba(0,0,0,.08);--frame:#2F3437;--acc:#2D6CDF}
+  button,input,select{font:inherit;color:inherit}
+
+  /* ---------- 画布 ---------- */
+  #stage{position:fixed;inset:0;overflow:hidden;touch-action:none}
+  #stage.pan{cursor:grabbing}
+  #wrap{position:absolute;left:50%;top:50%;transform-origin:0 0}
+  #img{position:absolute;left:0;top:0;display:block;image-rendering:auto;user-select:none;
+    -webkit-user-drag:none}
+  #ov{position:absolute;left:0;top:0;overflow:visible}
+  #ov path.cut{fill:rgba(45,108,223,.10);stroke:var(--acc);stroke-width:calc(1.6px * var(--iz));
+    stroke-linejoin:round;vector-effect:non-scaling-stroke}
+  #ov path.hair{fill:none;stroke:#fff;stroke-width:calc(3px * var(--iz));opacity:.55;
+    vector-effect:non-scaling-stroke}
+  #ov line.hd{stroke:var(--acc);stroke-width:calc(1px * var(--iz));opacity:.5;
+    vector-effect:non-scaling-stroke}
+  #ov circle.an{fill:#fff;stroke:var(--acc);stroke-width:calc(1.6px * var(--iz));
+    cursor:move;vector-effect:non-scaling-stroke}
+  #ov circle.an.corner{fill:var(--acc)}
+  #ov circle.an.on{fill:var(--acc);stroke:#fff;stroke-width:calc(2.4px * var(--iz))}
+  #ov circle.hp{fill:#fff;stroke:var(--acc);stroke-width:calc(1.4px * var(--iz));
+    cursor:move;vector-effect:non-scaling-stroke}
+  #ov line.hd{stroke:var(--acc);stroke-width:calc(1.2px * var(--iz));opacity:.75;
+    vector-effect:non-scaling-stroke}
+  #ov path.seg{fill:none;stroke:transparent;stroke-width:calc(14px * var(--iz));
+    cursor:copy;pointer-events:stroke}
+
+  /* ---------- 顶部工具栏，与 board 同一套语言 ---------- */
+  #bar{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:60;
+    display:flex;align-items:center;gap:1px;padding:4px 5px;border-radius:10px;
+    background:var(--glass);border:1px solid var(--glassline);
+    backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
+    white-space:nowrap;font-size:12.5px;transition:background-color .16s,border-color .16s}
+  #bar:not(:hover):not(.open){background:var(--glassSoft);border-color:transparent}
+  #bar:not(:hover):not(.open) .ctl{opacity:.68}
+  .cell{position:relative;display:flex;align-items:center}
+  .ctl{height:26px;display:flex;align-items:center;gap:5px;padding:0 8px;border:none;
+    background:none;border-radius:7px;cursor:pointer;color:inherit;font-size:12.5px;line-height:1;
+    transition:background-color .12s,opacity .16s}
+  .ctl:hover{background:var(--phi)}
+  .ctl.on{background:var(--pfg);color:var(--panel)}
+  .ctl:disabled{opacity:.3;cursor:default}
+  .ctl .car{font-size:7px;opacity:.4;margin-left:1px}
+  .div{width:1px;height:15px;background:var(--pline);margin:0 5px;flex:none;opacity:.7}
+  .pp{position:absolute;top:100%;left:0;margin-top:7px;z-index:6;display:none;padding:8px;
+    border-radius:10px;background:var(--panel);border:1px solid var(--pline);
+    box-shadow:0 16px 40px rgba(0,0,0,.2);min-width:210px;white-space:normal}
+  .pp.on{display:block}
+  .pp.right{left:auto;right:0}
+  .hd2{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
+    opacity:.4;padding:6px 4px}
+  .rowp{display:flex;align-items:center;gap:8px;margin:7px 3px}
+  .rowp label{width:52px;flex:none;opacity:.5;font-size:11px}
+  .rowp input[type=range]{flex:1;accent-color:var(--pfg);height:15px}
+  .rowp .val{width:34px;text-align:right;opacity:.5;font:400 10.5px/1 "IBM Plex Mono",monospace}
+  .note2{font-size:10.5px;opacity:.45;padding:6px 4px 2px;line-height:1.6}
+  .go{width:100%;height:30px;border:none;border-radius:7px;background:var(--pfg);
+    color:var(--panel);cursor:pointer;font-size:12.5px;margin-top:4px}
+  .seg2{display:flex;margin:3px 3px 6px}
+  .seg2 button{flex:1;height:26px;border:1px solid var(--pline);background:none;cursor:pointer;
+    color:inherit;font-size:11.5px;margin-left:-1px;white-space:nowrap}
+  .seg2 button:first-child{border-radius:6px 0 0 6px;margin-left:0}
+  .seg2 button:last-child{border-radius:0 6px 6px 0}
+  .seg2 button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+
+  /* ---------- 结果预览 ---------- */
+  #prev{position:fixed;right:16px;bottom:16px;z-index:55;width:260px;border-radius:12px;
+    background:var(--glass);border:1px solid var(--glassline);overflow:hidden;display:none;
+    backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
+    box-shadow:0 14px 40px rgba(0,0,0,.16)}
+  #prev.on{display:block}
+  #prevc{display:block;width:100%;height:190px;
+    background-image:linear-gradient(45deg,#e3e3e0 25%,transparent 25%),
+      linear-gradient(-45deg,#e3e3e0 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#e3e3e0 75%),
+      linear-gradient(-45deg,transparent 75%,#e3e3e0 75%);
+    background-size:14px 14px;background-position:0 0,0 7px,7px -7px,-7px 0}
+  #prev .ft{display:flex;align-items:center;gap:6px;padding:6px 8px;
+    border-top:1px solid var(--glassline);font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.55}
+  #prev .ft button{margin-left:auto}
+
+  /* ---------- 空态与提示 ---------- */
+  #empty{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:8px;color:#8A8A85;font-size:13px;pointer-events:none;text-align:center}
+  #empty b{font-size:15px;color:#5A5A55;font-weight:500}
+  #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:80;
+    background:rgba(20,20,20,.86);color:#fff;padding:7px 14px;border-radius:8px;font-size:12.5px;
+    opacity:0;transition:opacity .18s;pointer-events:none}
+  #toast.on{opacity:1}
+  #zoom{position:fixed;right:14px;top:14px;z-index:50;font:400 10.5px/1 "IBM Plex Mono",monospace;
+    opacity:.35}
+  #busy{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;
+    background:rgba(244,244,242,.6);font-size:13px;color:#5A5A55}
+  #busy.on{display:flex}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="wrap">
+    <img id="img" alt="">
+    <svg id="ov" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+</div>
+
+<div id="empty">
+  <b>抠图</b>
+  <div>把图片拖进来，或按 Ctrl / Cmd + V 粘贴</div>
+  <div>也可以点上方的「打开图片」</div>
+</div>
+
+<div id="bar"></div>
+
+<div id="prev">
+  <canvas id="prevc"></canvas>
+  <div class="ft"><span id="prevn"></span><button class="ctl" id="prevx">×</button></div>
+</div>
+
+<div id="zoom">100%</div>
+<div id="busy">正在识别边缘…</div>
+<div id="toast"></div>
+<input type="file" id="file" accept="image/*" hidden>
+
+<script>
+const $=id=>document.getElementById(id);
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+let toastT;
+function toast(m){const el=$("toast");el.textContent=m;el.classList.add("on");
+  clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("on"),1900)}
+function busy(on,txt){const el=$("busy");if(txt)el.textContent=txt;el.classList.toggle("on",!!on)}
+
+/* ================= 状态 ================= */
+let IMG=null;                       // 原图 Image
+let IW=0,IH=0;                      // 原图尺寸
+let cam={x:0,y:0,z:1};
+let paths=[];                       // 轮廓：[{pts:[{x,y,hx,hy,corner}], closed:true}]
+let sel={p:-1,i:-1,h:0};            // 选中的锚点，h: 0 锚点 1 前手柄 2 后手柄
+const opt={tol:32,smooth:2.2,detail:2.4,feather:0.6,mode:"border",invert:false};
+
+/* ================= 视图 ================= */
+function applyCam(){
+  $("wrap").style.transform=`translate(${cam.x}px,${cam.y}px) scale(${cam.z})`;
+  $("wrap").style.setProperty("--iz",1/cam.z);
+  $("zoom").textContent=Math.round(cam.z*100)+"%";
+}
+function fit(){
+  if(!IW)return;
+  const m=90;
+  const z=Math.min((innerWidth-m*2)/IW,(innerHeight-m*2)/IH,1);
+  cam.z=z;cam.x=-IW*z/2;cam.y=-IH*z/2;applyCam();
+}
+$("stage").addEventListener("wheel",e=>{
+  if(!IW)return;
+  e.preventDefault();
+  const r=$("stage").getBoundingClientRect();
+  const cx=e.clientX-r.left-r.width/2, cy=e.clientY-r.top-r.height/2;
+  const k=Math.exp(-e.deltaY*0.0016);
+  const nz=clamp(cam.z*k,0.05,20);
+  cam.x=cx-(cx-cam.x)*(nz/cam.z);
+  cam.y=cy-(cy-cam.y)*(nz/cam.z);
+  cam.z=nz;applyCam();
+},{passive:false});
+let panning=null;
+$("stage").addEventListener("pointerdown",e=>{
+  if(e.target.closest("#bar")||e.target.closest("#prev"))return;
+  const onNode=e.target.closest("circle,path.seg");
+  if(onNode)return;
+  if(e.button===1||e.button===0||e.altKey||e.button===2){
+    panning={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};
+    $("stage").classList.add("pan");
+    if(e.button===0&&!e.altKey)sel={p:-1,i:-1,h:0},draw();
+  }
+});
+addEventListener("pointermove",e=>{
+  if(!panning)return;
+  cam.x=panning.cx+(e.clientX-panning.x);
+  cam.y=panning.cy+(e.clientY-panning.y);applyCam();
+});
+addEventListener("pointerup",()=>{panning=null;$("stage").classList.remove("pan")});
+addEventListener("contextmenu",e=>{if(!e.target.closest("#bar"))e.preventDefault()});
+addEventListener("resize",()=>{if(IW&&!paths.length)fit()});
+const toImg=(cx,cy)=>{
+  const r=$("stage").getBoundingClientRect();
+  return {x:(cx-r.left-r.width/2-cam.x)/cam.z, y:(cy-r.top-r.height/2-cam.y)/cam.z};
+};
+
+/* ================= 载入图片 ================= */
+function loadImage(src,name){
+  const im=new Image();
+  im.onload=()=>{
+    IMG=im;IW=im.naturalWidth;IH=im.naturalHeight;
+    $("img").src=src;
+    $("img").style.width=IW+"px";$("img").style.height=IH+"px";
+    $("ov").setAttribute("viewBox",`0 0 ${IW} ${IH}`);
+    $("ov").setAttribute("width",IW);$("ov").setAttribute("height",IH);
+    $("empty").style.display="none";
+    paths=[];sel={p:-1,i:-1,h:0};
+    fit();buildBar();draw();
+    setTimeout(()=>autoTrace(),60);
+  };
+  im.onerror=()=>toast("这张图片打不开");
+  im.src=src;
+}
+function readFile(f){
+  if(!f||!/^image\//.test(f.type)){toast("请选择图片文件");return}
+  const rd=new FileReader();
+  rd.onload=()=>loadImage(rd.result,f.name);
+  rd.readAsDataURL(f);
+}
+$("file").onchange=e=>{readFile(e.target.files[0]);e.target.value=""};
+addEventListener("dragover",e=>e.preventDefault());
+addEventListener("drop",e=>{e.preventDefault();readFile(e.dataTransfer.files[0])});
+addEventListener("paste",e=>{
+  const it=[...(e.clipboardData?.items||[])].find(x=>x.type.startsWith("image/"));
+  if(it){e.preventDefault();readFile(it.getAsFile())}
+});
+
+/* ================= 自动识别边缘 ================= */
+// 思路：先估出背景，再取前景的最大连通块，追踪它的轮廓，
+// 最后把折线简化并转成圆顺的贝塞尔曲线。
+// 自动只负责给出一条八九不离十的初稿，精修交给控点。
+function sampleCanvas(maxSide){
+  const s=Math.min(1,maxSide/Math.max(IW,IH));
+  const w=Math.max(8,Math.round(IW*s)),h=Math.max(8,Math.round(IH*s));
+  const cv=document.createElement("canvas");cv.width=w;cv.height=h;
+  const g=cv.getContext("2d",{willReadFrequently:true});
+  g.drawImage(IMG,0,0,w,h);
+  return {g,w,h,scale:IW/w};
+}
+function buildMask(){
+  const {g,w,h,scale}=sampleCanvas(560);
+  const d=g.getImageData(0,0,w,h).data;
+  const N=w*h;
+  const bg=new Uint8Array(N);          // 1 = 背景
+  const tol=opt.tol*opt.tol*3;
+  const at=i=>[d[i*4],d[i*4+1],d[i*4+2],d[i*4+3]];
+  const near=(a,b)=>{
+    const dr=a[0]-b[0],dg=a[1]-b[1],db=a[2]-b[2];
+    return dr*dr+dg*dg+db*db<=tol;
+  };
+  if(opt.mode==="alpha"){
+    for(let i=0;i<N;i++)if(d[i*4+3]<16)bg[i]=1;
+  }else{
+    // 从四条边泛洪，凡是与边缘颜色接近且连通的都算背景
+    const q=[];const seen=new Uint8Array(N);
+    const push=i=>{if(!seen[i]){seen[i]=1;q.push(i)}};
+    for(let x=0;x<w;x++){push(x);push((h-1)*w+x)}
+    for(let y=0;y<h;y++){push(y*w);push(y*w+w-1)}
+    const seeds=q.slice();
+    let head=0;
+    while(head<q.length){
+      const i=q[head++];
+      const c=at(i);
+      // 与任一种子色接近才算背景，避免把前景一路吃掉
+      let ok=false;
+      for(let k=0;k<seeds.length;k+=Math.max(1,Math.floor(seeds.length/24))){
+        if(near(c,at(seeds[k]))){ok=true;break}
+      }
+      if(!ok)continue;
+      bg[i]=1;
+      const x=i%w,y=(i/w)|0;
+      if(x>0)push(i-1); if(x<w-1)push(i+1);
+      if(y>0)push(i-w); if(y<h-1)push(i+w);
+    }
+  }
+  let fg=new Uint8Array(N);
+  for(let i=0;i<N;i++)fg[i]=bg[i]?0:1;
+  if(opt.invert)for(let i=0;i<N;i++)fg[i]=fg[i]?0:1;
+  // 形态学：先闭后开，去掉毛刺和小洞
+  fg=morph(fg,w,h,1,1);   // 膨胀
+  fg=morph(fg,w,h,0,2);   // 腐蚀
+  fg=morph(fg,w,h,1,1);
+  // 取最大连通块
+  fg=largestBlob(fg,w,h);
+  return {fg,w,h,scale};
+}
+function morph(src,w,h,dilate,times){
+  let a=src;
+  for(let t=0;t<times;t++){
+    const b=new Uint8Array(w*h);
+    for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+      let v=dilate?0:1;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const nx=x+dx,ny=y+dy;
+        const s=(nx<0||ny<0||nx>=w||ny>=h)?0:a[ny*w+nx];
+        if(dilate){if(s)v=1}else{if(!s)v=0}
+      }
+      b[y*w+x]=v;
+    }
+    a=b;
+  }
+  return a;
+}
+function largestBlob(src,w,h){
+  const lab=new Int32Array(w*h).fill(0);
+  let best=0,bestN=0,cur=0;
+  const q=new Int32Array(w*h);
+  for(let i=0;i<w*h;i++){
+    if(!src[i]||lab[i])continue;
+    cur++;let head=0,tail=0,n=0;
+    q[tail++]=i;lab[i]=cur;
+    while(head<tail){
+      const j=q[head++];n++;
+      const x=j%w,y=(j/w)|0;
+      const nb=[x>0?j-1:-1,x<w-1?j+1:-1,y>0?j-w:-1,y<h-1?j+w:-1];
+      for(const k of nb)if(k>=0&&src[k]&&!lab[k]){lab[k]=cur;q[tail++]=k}
+    }
+    if(n>bestN){bestN=n;best=cur}
+  }
+  const out=new Uint8Array(w*h);
+  if(!best)return out;
+  for(let i=0;i<w*h;i++)if(lab[i]===best)out[i]=1;
+  return out;
+}
+// Moore 邻域轮廓追踪
+function traceContour(m,w,h){
+  let start=-1;
+  for(let i=0;i<w*h;i++)if(m[i]){start=i;break}
+  if(start<0)return [];
+  const dirs=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+  const get=(x,y)=>(x<0||y<0||x>=w||y>=h)?0:m[y*w+x];
+  let sx=start%w, sy=(start/w)|0;
+  let cx=sx,cy=sy,dir=6,out=[];
+  const maxSteps=w*h*4;
+  let steps=0;
+  do{
+    out.push({x:cx,y:cy});
+    let found=false;
+    for(let k=0;k<8;k++){
+      const nd=(dir+k)%8;
+      const nx=cx+dirs[nd][0], ny=cy+dirs[nd][1];
+      if(get(nx,ny)){cx=nx;cy=ny;dir=(nd+5)%8;found=true;break}
+    }
+    if(!found)break;
+    steps++;
+  }while(!(cx===sx&&cy===sy)&&steps<maxSteps);
+  return out;
+}
+// Douglas–Peucker
+function simplify(pts,eps){
+  if(pts.length<3)return pts;
+  const keep=new Uint8Array(pts.length);
+  keep[0]=keep[pts.length-1]=1;
+  const stack=[[0,pts.length-1]];
+  while(stack.length){
+    const [a,b]=stack.pop();
+    let md=-1,mi=-1;
+    const A=pts[a],B=pts[b];
+    const dx=B.x-A.x,dy=B.y-A.y;
+    const len=Math.hypot(dx,dy)||1;
+    for(let i=a+1;i<b;i++){
+      const d=Math.abs((pts[i].x-A.x)*dy-(pts[i].y-A.y)*dx)/len;
+      if(d>md){md=d;mi=i}
+    }
+    if(md>eps){keep[mi]=1;stack.push([a,mi],[mi,b])}
+  }
+  return pts.filter((p,i)=>keep[i]);
+}
+// 折线转圆顺曲线：Catmull-Rom 求切线，得到每个锚点的两条对称手柄
+function toSmooth(pts,tension){
+  const n=pts.length;
+  return pts.map((p,i)=>{
+    const a=pts[(i-1+n)%n], b=pts[(i+1)%n];
+    const tx=(b.x-a.x)*tension/6, ty=(b.y-a.y)*tension/6;
+    return {x:p.x,y:p.y,hx:tx,hy:ty,corner:false};
+  });
+}
+async function autoTrace(){
+  if(!IW)return;
+  busy(true,"正在识别边缘…");
+  await new Promise(r=>setTimeout(r,20));
+  try{
+    const {fg,w,h,scale}=buildMask();
+    let c=traceContour(fg,w,h);
+    if(c.length<12){toast("没找到明显的轮廓，试试调高容差或手动画");busy(false);return}
+    // 轮廓点抽稀 + 简化，detail 越大点越少
+    const eps=Math.max(0.6,opt.detail);
+    c=simplify(c,eps);
+    if(c.length>420)c=c.filter((p,i)=>i%Math.ceil(c.length/420)===0);
+    const scaled=c.map(p=>({x:p.x*scale,y:p.y*scale}));
+    paths=[{pts:toSmooth(scaled,opt.smooth),closed:true}];
+    sel={p:-1,i:-1,h:0};
+    draw();updatePreview();
+    toast("已识别 "+paths[0].pts.length+" 个控点，可直接拖动调整");
+  }catch(e){toast("识别失败："+e.message)}
+  busy(false);
+}
+
+/* ================= 路径绘制与控点交互 ================= */
+function pathD(p){
+  const a=p.pts,n=a.length;
+  if(n<2)return "";
+  let d=`M${a[0].x} ${a[0].y}`;
+  for(let i=0;i<n;i++){
+    const c=a[i], nx=a[(i+1)%n];
+    if(i===n-1&&!p.closed)break;
+    const c1x=c.corner?c.x:c.x+c.hx, c1y=c.corner?c.y:c.y+c.hy;
+    const c2x=nx.corner?nx.x:nx.x-nx.hx, c2y=nx.corner?nx.y:nx.y-nx.hy;
+    d+=` C${c1x} ${c1y} ${c2x} ${c2y} ${nx.x} ${nx.y}`;
+  }
+  if(p.closed)d+="Z";
+  return d;
+}
+function draw(){
+  const ov=$("ov");
+  if(!IW){ov.innerHTML="";return}
+  const ns="http://www.w3.org/2000/svg";
+  let out="";
+  paths.forEach((p,pi)=>{
+    const d=pathD(p);
+    out+=`<path class="hair" d="${d}"/><path class="cut" d="${d}"/>`;
+    out+=`<path class="seg" d="${d}" data-p="${pi}"/>`;
+  });
+  // 控点只画选中路径的，避免点太多时糊成一片
+  const showP=paths.length===1?0:(sel.p>=0?sel.p:0);
+  const p=paths[showP];
+  if(p){
+    p.pts.forEach((c,i)=>{
+      const on=sel.p===showP&&sel.i===i;
+      if(on&&!c.corner){
+        // 手柄至少画到一定长度，否则控点密集时看不见也抓不住
+        const len=Math.hypot(c.hx,c.hy);
+        const k=len<18?(18/(len||1)):1;
+        const gx=c.hx*k, gy=c.hy*k;
+        out+=`<line class="hd" x1="${c.x-gx}" y1="${c.y-gy}" x2="${c.x+gx}" y2="${c.y+gy}"/>`;
+        out+=`<circle class="hp" cx="${c.x-gx}" cy="${c.y-gy}" r="${4.5/cam.z}" data-p="${showP}" data-i="${i}" data-h="1"/>`;
+        out+=`<circle class="hp" cx="${c.x+gx}" cy="${c.y+gy}" r="${4.5/cam.z}" data-p="${showP}" data-i="${i}" data-h="2"/>`;
+      }
+      out+=`<circle class="an${c.corner?" corner":""}${on?" on":""}" cx="${c.x}" cy="${c.y}" r="${(on?6.5:5)/cam.z}" data-p="${showP}" data-i="${i}" data-h="0"/>`;
+    });
+  }
+  ov.innerHTML=out;
+}
+$("ov").addEventListener("pointerdown",e=>{
+  const t=e.target;
+  if(t.tagName==="circle"){
+    e.stopPropagation();
+    const pi=+t.dataset.p,i=+t.dataset.i,h=+t.dataset.h;
+    sel={p:pi,i,h};draw();
+    if(e.altKey&&h===0){                 // Alt 点锚点：在尖角与圆顺之间切换
+      const c=paths[pi].pts[i];
+      c.corner=!c.corner;
+      if(!c.corner){
+        const a=paths[pi].pts[(i-1+paths[pi].pts.length)%paths[pi].pts.length];
+        const b=paths[pi].pts[(i+1)%paths[pi].pts.length];
+        c.hx=(b.x-a.x)*opt.smooth/6;c.hy=(b.y-a.y)*opt.smooth/6;
+      }
+      draw();updatePreview();return;
+    }
+    const start=toImg(e.clientX,e.clientY);
+    const c=paths[pi].pts[i];
+    const o={x:c.x,y:c.y,hx:c.hx,hy:c.hy};
+    const mv=ev=>{
+      const q=toImg(ev.clientX,ev.clientY);
+      const dx=q.x-start.x, dy=q.y-start.y;
+      if(h===0){c.x=o.x+dx;c.y=o.y+dy}
+      else{
+        // 两条手柄对称：拖任意一端，另一端跟着反向
+        const s=h===2?1:-1;
+        c.hx=(q.x-c.x)*s;c.hy=(q.y-c.y)*s;
+        c.corner=false;
+      }
+      draw();
+    };
+    const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+      updatePreview()};
+    addEventListener("pointermove",mv);addEventListener("pointerup",up);
+    return;
+  }
+  if(t.classList.contains("seg")){       // 在曲线上点一下加一个锚点
+    e.stopPropagation();
+    const pi=+t.dataset.p;
+    const q=toImg(e.clientX,e.clientY);
+    const p=paths[pi];
+    let bi=0,bd=1e18;
+    p.pts.forEach((c,i)=>{
+      const nx=p.pts[(i+1)%p.pts.length];
+      const mx=(c.x+nx.x)/2,my=(c.y+nx.y)/2;
+      const d=(mx-q.x)**2+(my-q.y)**2;
+      if(d<bd){bd=d;bi=i}
+    });
+    const a=p.pts[bi], b=p.pts[(bi+1)%p.pts.length];
+    p.pts.splice(bi+1,0,{x:q.x,y:q.y,
+      hx:(b.x-a.x)*opt.smooth/12,hy:(b.y-a.y)*opt.smooth/12,corner:false});
+    sel={p:pi,i:bi+1,h:0};draw();updatePreview();
+  }
+});
+addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT")return;
+  if((e.key==="Backspace"||e.key==="Delete")&&sel.i>=0){
+    e.preventDefault();
+    const p=paths[sel.p];
+    if(p&&p.pts.length>4){p.pts.splice(sel.i,1);sel={p:-1,i:-1,h:0};draw();updatePreview()}
+    else toast("控点太少了");
+    return;
+  }
+  if(e.key==="Escape"){sel={p:-1,i:-1,h:0};draw()}
+  if(e.key==="f"||e.key==="F")fit();
+  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="s"){e.preventDefault();exportPNG()}
+});
+
+/* ================= 输出 ================= */
+function makeCutout(){
+  const cv=document.createElement("canvas");
+  cv.width=IW;cv.height=IH;
+  const g=cv.getContext("2d");
+  const pth=new Path2D();
+  paths.forEach(p=>pth.addPath(new Path2D(pathD(p))));
+  g.save();
+  if(opt.feather>0){
+    // 羽化：先把遮罩画到离屏并模糊，再用它裁切
+    const m=document.createElement("canvas");m.width=IW;m.height=IH;
+    const mg=m.getContext("2d");
+    mg.filter=`blur(${opt.feather}px)`;
+    mg.fillStyle="#fff";mg.fill(pth);
+    g.drawImage(IMG,0,0);
+    g.globalCompositeOperation="destination-in";
+    g.drawImage(m,0,0);
+  }else{
+    g.clip(pth);
+    g.drawImage(IMG,0,0);
+  }
+  g.restore();
+  return cv;
+}
+function bboxOfPaths(){
+  let x1=1e18,y1=1e18,x2=-1e18,y2=-1e18;
+  paths.forEach(p=>p.pts.forEach(c=>{
+    x1=Math.min(x1,c.x-Math.abs(c.hx));y1=Math.min(y1,c.y-Math.abs(c.hy));
+    x2=Math.max(x2,c.x+Math.abs(c.hx));y2=Math.max(y2,c.y+Math.abs(c.hy));
+  }));
+  if(x1>x2)return null;
+  const pad=Math.ceil(opt.feather*2);
+  return {x:clamp(Math.floor(x1)-pad,0,IW),y:clamp(Math.floor(y1)-pad,0,IH),
+    w:clamp(Math.ceil(x2-x1)+pad*2,1,IW),h:clamp(Math.ceil(y2-y1)+pad*2,1,IH)};
+}
+function croppedCutout(){
+  const full=makeCutout();
+  const b=bboxOfPaths();
+  if(!b)return full;
+  const cv=document.createElement("canvas");
+  cv.width=Math.min(b.w,IW-b.x);cv.height=Math.min(b.h,IH-b.y);
+  cv.getContext("2d").drawImage(full,b.x,b.y,cv.width,cv.height,0,0,cv.width,cv.height);
+  return cv;
+}
+let prevT;
+function updatePreview(){
+  clearTimeout(prevT);
+  prevT=setTimeout(()=>{
+    if(!paths.length){$("prev").classList.remove("on");return}
+    const cv=croppedCutout();
+    $("prev").classList.add("on");          // 先显示，否则量不到宽度
+    const c=$("prevc"),g=c.getContext("2d");
+    const W=c.width=Math.max(2,(c.clientWidth||260))*2, H=c.height=190*2;
+    g.clearRect(0,0,W,H);
+    const s=Math.min(W/cv.width,H/cv.height)*0.92;
+    g.drawImage(cv,(W-cv.width*s)/2,(H-cv.height*s)/2,cv.width*s,cv.height*s);
+    $("prevn").textContent=cv.width+"×"+cv.height+"  ·  "
+      +paths.reduce((n,p)=>n+p.pts.length,0)+" 控点";
+    $("prev").classList.add("on");
+  },90);
+}
+$("prevx").onclick=()=>$("prev").classList.remove("on");
+function exportPNG(){
+  if(!paths.length){toast("还没有轮廓");return}
+  croppedCutout().toBlob(b=>{
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(b);a.download="cutout.png";a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+    toast("已导出 PNG（带透明背景）");
+  },"image/png");
+}
+async function copyPNG(){
+  if(!paths.length){toast("还没有轮廓");return}
+  try{
+    const blob=await new Promise(r=>croppedCutout().toBlob(r,"image/png"));
+    await navigator.clipboard.write([new ClipboardItem({"image/png":blob})]);
+    toast("已复制，可直接粘进 board");
+  }catch(e){toast("这个浏览器不允许直接写剪贴板，请用导出")}
+}
+
+/* ================= 工具栏 ================= */
+function buildBar(){
+  const b=$("bar");b.innerHTML="";
+  const car='<span class="car">▾</span>';
+  const btn=(host,html,fn,cls)=>{
+    const x=document.createElement("button");
+    x.className="ctl"+(cls?" "+cls:"");x.innerHTML=html;
+    x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
+    x.addEventListener("click",e=>{e.stopPropagation();fn(x)});
+    host.appendChild(x);return x;
+  };
+  const div=()=>{const d=document.createElement("span");d.className="div";b.appendChild(d)};
+  const closeAll=()=>{b.querySelectorAll(".pp.on").forEach(p=>p.classList.remove("on"));
+    b.querySelectorAll(".ctl.on").forEach(x=>{if(x.querySelector(".car"))x.classList.remove("on")});
+    b.classList.remove("open")};
+  const cellWith=(html,build,cls)=>{
+    const cell=document.createElement("div");cell.className="cell";b.appendChild(cell);
+    const pop=document.createElement("div");pop.className="pp";
+    pop.addEventListener("pointerdown",e=>e.stopPropagation());
+    const trig=btn(cell,html,()=>{
+      const was=pop.classList.contains("on");closeAll();
+      if(was)return;
+      pop.innerHTML="";build(pop,closeAll);
+      pop.classList.remove("right");pop.classList.add("on");
+      b.classList.add("open");trig.classList.add("on");
+      if(pop.getBoundingClientRect().right>innerWidth-10)pop.classList.add("right");
+    },cls);
+    cell.appendChild(pop);
+    return {cell,pop,trig};
+  };
+  addEventListener("pointerdown",e=>{if(!e.target.closest("#bar"))closeAll()});
+
+  btn(b,"打开图片",()=>$("file").click());
+  div();
+  btn(b,"重新识别",()=>autoTrace());
+  cellWith("识别设置"+car,(pop,close)=>{
+    const seg=document.createElement("div");seg.className="seg2";
+    [["border","按背景色"],["alpha","按透明通道"]].forEach(([v,txt])=>{
+      const x=document.createElement("button");x.textContent=txt;
+      if(opt.mode===v)x.classList.add("on");
+      x.onclick=()=>{opt.mode=v;[...seg.children].forEach(z=>z.classList.remove("on"));
+        x.classList.add("on");autoTrace()};
+      seg.appendChild(x);
+    });
+    pop.appendChild(Object.assign(document.createElement("div"),
+      {className:"hd2",textContent:"识别方式"}));
+    pop.appendChild(seg);
+    const sld=(label,key,min,max,step,fmt)=>{
+      const r=document.createElement("div");r.className="rowp";
+      const l=document.createElement("label");l.textContent=label;r.appendChild(l);
+      const i=document.createElement("input");i.type="range";
+      i.min=min;i.max=max;i.step=step;i.value=opt[key];
+      const v=document.createElement("span");v.className="val";v.textContent=fmt(opt[key]);
+      let t;
+      i.oninput=()=>{opt[key]=+i.value;v.textContent=fmt(+i.value);
+        clearTimeout(t);t=setTimeout(()=>autoTrace(),260)};
+      r.appendChild(i);r.appendChild(v);pop.appendChild(r);
+    };
+    sld("容差","tol",4,90,1,v=>v);
+    sld("细节","detail",0.6,8,0.2,v=>v.toFixed(1));
+    sld("圆顺","smooth",0,4,0.1,v=>v.toFixed(1));
+    const lb=document.createElement("label");
+    lb.className="rowp";lb.style.cursor="pointer";
+    lb.innerHTML=`<input type="checkbox" ${opt.invert?"checked":""} style="width:13px;height:13px;margin:0 6px 0 3px">
+      <span style="font-size:11.5px;opacity:.75">反选（抠掉中间的物体）</span>`;
+    lb.querySelector("input").onchange=e=>{opt.invert=e.target.checked;autoTrace()};
+    pop.appendChild(lb);
+    const n=document.createElement("div");n.className="note2";
+    n.textContent="自动只给出初稿。背景越干净越准，之后拖控点精修即可。";
+    pop.appendChild(n);
+  });
+  div();
+  cellWith("边缘"+car,(pop)=>{
+    pop.appendChild(Object.assign(document.createElement("div"),
+      {className:"hd2",textContent:"输出"}));
+    const r=document.createElement("div");r.className="rowp";
+    const l=document.createElement("label");l.textContent="羽化";r.appendChild(l);
+    const i=document.createElement("input");i.type="range";i.min=0;i.max=6;i.step=.2;i.value=opt.feather;
+    const v=document.createElement("span");v.className="val";v.textContent=opt.feather.toFixed(1);
+    i.oninput=()=>{opt.feather=+i.value;v.textContent=opt.feather.toFixed(1);updatePreview()};
+    r.appendChild(i);r.appendChild(v);pop.appendChild(r);
+    const n=document.createElement("div");n.className="note2";
+    n.textContent="羽化让边缘不那么生硬。头发、毛边这类可以调大一点。";
+    pop.appendChild(n);
+  });
+  btn(b,"全部圆顺",()=>{
+    paths.forEach(p=>{
+      const n=p.pts.length;
+      p.pts.forEach((c,i)=>{
+        const a=p.pts[(i-1+n)%n], z=p.pts[(i+1)%n];
+        c.corner=false;c.hx=(z.x-a.x)*opt.smooth/6;c.hy=(z.y-a.y)*opt.smooth/6;
+      });
+    });
+    draw();updatePreview();toast("已把所有控点改回圆顺");
+  });
+  div();
+  btn(b,"适应画面",()=>fit());
+  cellWith("怎么用"+car,(pop)=>{
+    pop.style.minWidth="270px";
+    const rows=[
+      ["拖动控点","调整轮廓"],
+      ["点一下控点","显示两侧手柄，拖手柄改曲率"],
+      ["Alt 点控点","在圆顺与尖角之间切换"],
+      ["点曲线上","在该处插入一个控点"],
+      ["Delete","删除选中的控点"],
+      ["滚轮 / 拖空白","缩放 / 平移"],
+      ["F","适应画面"],
+      ["Ctrl / Cmd + S","导出 PNG"],
+    ];
+    pop.appendChild(Object.assign(document.createElement("div"),
+      {className:"hd2",textContent:"操作"}));
+    rows.forEach(([k,v])=>{
+      const r=document.createElement("div");
+      r.style.cssText="display:flex;gap:10px;padding:3px 4px;font-size:11.5px";
+      r.innerHTML=`<span style="width:104px;flex:none;opacity:.55;
+        font-family:'IBM Plex Mono',monospace;font-size:10.5px">${k}</span>
+        <span style="opacity:.85">${v}</span>`;
+      pop.appendChild(r);
+    });
+    const n=document.createElement("div");n.className="note2";
+    n.textContent="自动识别只给初稿，背景越干净越准。抠好后用「复制」直接粘进 board。";
+    pop.appendChild(n);
+  });
+  div();
+  btn(b,"复制",()=>copyPNG());
+  btn(b,"导出 PNG",()=>exportPNG());
+}
+buildBar();
+applyCam();
+</script>
+</body>
+</html>
