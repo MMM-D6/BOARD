@@ -1749,15 +1749,17 @@ group("docpage 稿子在画布上", async (c) => {
   await c.wait(600);
   const st = await c.run(() => {
     const el = document.querySelector("#docs .doc");
-    return { w: Math.round(el.getBoundingClientRect().width),
+    return { w: Math.round(el.querySelector(".dmain").getBoundingClientRect().width),
       blocks: el.querySelectorAll(".blk").length,
       editable: el.querySelector(".cap").getAttribute("contenteditable"),
+      hasSide: !!el.querySelector(".dside"),
       capSize: getComputedStyle(el.querySelector('.blk[data-id="p1"] .cap')).fontSize,
       headSize: getComputedStyle(el.querySelector('.blk[data-id="h1"] .cap')).fontSize };
   });
   c.ok("稿子直接在画布上展开正文", st.blocks === 3);
-  c.ok("宽度是世界坐标里的固定值", Math.abs(st.w - 760) < 4);
-  c.ok("正文可以就地编辑", st.editable === "true");
+  c.ok("正文区宽度是世界坐标里的固定值", Math.abs(st.w - 760) < 4);
+  c.ok("非专注状态下也显示大纲侧栏", st.hasSide);
+  c.ok("单击只选中，不直接进入编辑", st.editable === "false");
   c.ok("保留卡片本身的字号", st.capSize === "15px" && st.headSize === "22px");
 
   // 内部尺寸不能乘反向缩放系数，否则缩小画布时会把文字挤成一列
@@ -1765,12 +1767,22 @@ group("docpage 稿子在画布上", async (c) => {
     camTo(0, 0, 0.4, true);
     const el = document.querySelector("#docs .doc");
     return { declared: el.querySelector('.blk[data-id="p1"] .cap').style.fontSize,
-      ratio: el.getBoundingClientRect().width / 760 };
+      ratio: el.querySelector(".dmain").getBoundingClientRect().width / 760 };
   });
   c.ok("缩放时内部比例不变形",
     zoomed.declared === "15px" && Math.abs(zoomed.ratio - 0.4) < 0.03);
   await c.run(() => camTo(0, 0, 1, true));
   await c.wait(300);
+
+  // 双击才真正进入编辑，跟普通页面的卡片一致
+  const p2r = await c.run(() => {
+    const r = document.querySelector('#docs .doc .blk[data-id="p2"] .cap').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await c.page.mouse.click(p2r.x, p2r.y, { clickCount: 2 });
+  await c.wait(200);
+  c.ok("双击段落才进入编辑", await c.run(() =>
+    document.querySelector('#docs .doc .blk[data-id="p2"] .cap').getAttribute("contenteditable") === "true"));
 
   await c.run(() => {
     const cap = document.querySelector('#docs .doc .blk[data-id="p2"] .cap');
@@ -1899,6 +1911,56 @@ group("write 写作页", async (c) => {
   await c.wait(400);
   c.ok("可以返回画布", await c.run(() => !document.body.classList.contains("wr")));
   await c.run(() => { S.docs = []; });
+});
+
+group("wredit 写作页自由编辑", async (c) => {
+  await c.run(() => {
+    S.cards = [
+      { id: "h1", x: 0, y: 0, w: 400, text: "标题", level: 1, s: { ...DEF } },
+      { id: "p1", x: 0, y: 200, w: 400, text: "第一段。", s: { ...DEF } },
+      { id: "p2", x: 0, y: 400, w: 400, text: "第二段。", s: { ...DEF } },
+    ];
+    S.links = []; S.frames = []; S.sheets = []; S.docs = [];
+    invalidateIndex(); render();
+    const d = addDoc({ x: 1200, y: 0 }, "自由编辑测试");
+    wrImport(["h1", "p1", "p2"], false, d.id);
+    camTo(1200, 0, 1, true);
+  });
+  await c.wait(500);
+
+  // 任意位置插入一张新卡片：不必先回画布新建
+  const ins = await c.run(() => {
+    const before = S.docs[0].ids.length;
+    document.querySelector('#docs .doc .wrins[data-i="1"]').click();
+    return { before, after: S.docs[0].ids.length, mid: S.docs[0].ids[1] };
+  });
+  c.ok("可以在任意位置插入新卡片", ins.after === ins.before + 1);
+  c.ok("插入的位置正确（第一段之后）", ins.mid !== "h1" && ins.mid !== "p1" && ins.mid !== "p2");
+
+  // 单击选中一段（不进入编辑），backspace 把它从稿子里移出，源卡片不受影响
+  const rm = await c.run(() => {
+    const blk = document.querySelector('#docs .doc .blk[data-id="p2"]');
+    blk.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    const selectedNotEditing = blk.classList.contains("sel")
+      && blk.querySelector(".cap").getAttribute("contenteditable") === "false";
+    const before = S.docs[0].ids.length;
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Backspace", bubbles: true }));
+    return { selectedNotEditing, before, after: S.docs[0].ids.length, stillOnCanvas: !!card("p2") };
+  });
+  c.ok("单击只选中不进入编辑", rm.selectedNotEditing);
+  c.ok("选中后按删除键移出稿子", rm.after === rm.before - 1);
+  c.ok("源卡片本身没有被删除", rm.stillOnCanvas);
+
+  // 粘贴一个分身到折叠引用框里
+  const paste = await c.run(() => {
+    sel = ["p2"]; clipCards("twin");
+    document.querySelector('#docs .doc .blk[data-id="h1"] .fadd').click();
+    const kids = wrKids("h1");
+    return { made: kids.length, ref: kids[0] && kids[0].ref };
+  });
+  c.ok("可以把分身粘到段落下方的折叠引用框里", paste.made === 1 && paste.ref === "p2");
+
+  await c.run(() => { S.docs = []; render(); });
 });
 
 group("ports 连接点", async (c) => {

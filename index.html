@@ -34,11 +34,17 @@
   /* 稿子是画布上真正的一页：尺寸在世界坐标里固定，随画布一起缩放。
      内部一律用普通像素，不要乘 --iz，那是给固定大小的界面元素用的。 */
   .doc{position:absolute;pointer-events:auto;background:var(--panel);
-    border:1px solid var(--pline);border-radius:3px;
-    box-shadow:0 2px 14px rgba(0,0,0,.05);padding:52px 64px 64px}
+    border:1px solid var(--pline);border-radius:8px;
+    box-shadow:0 2px 14px rgba(0,0,0,.05);display:flex;align-items:stretch;
+    overflow:hidden;height:640px}
   .doc.on{box-shadow:0 4px 26px rgba(0,0,0,.10);border-color:var(--frame)}
-  .doc .dhead{display:flex;align-items:baseline;gap:12px;margin:0 0 34px;
-    padding-bottom:14px;border-bottom:1px solid var(--pline)}
+  /* 侧栏与画布上的一样常显：稿子不再靠内容把整张卡片撑得没边，
+     而是像 Word 文档那样在固定高度里用滚动条翻看 */
+  .doc .dside{width:200px;flex:none;overflow:auto;padding:16px 12px;
+    border-right:1px solid var(--pline);background:var(--wside,var(--panel))}
+  .doc .dmain{flex:1;min-width:0;display:flex;flex-direction:column}
+  .doc .dhead{display:flex;align-items:baseline;gap:12px;margin:0;flex:none;
+    padding:26px 40px 14px;border-bottom:1px solid var(--pline)}
   .doc .dt{font-size:23px;font-weight:600;line-height:1.3;cursor:text;flex:1;
     outline:none;word-break:break-word}
   .doc .dm{opacity:.32;font:400 11px/1.4 "IBM Plex Mono",monospace;flex:none;white-space:nowrap}
@@ -48,6 +54,7 @@
     font-size:11px;padding:2px 7px;border-radius:5px;font-family:"IBM Plex Mono",monospace}
   .doc .dtool button:hover{background:var(--phi);opacity:.95}
   .doc .dtool button.on{background:var(--pfg);color:var(--panel);opacity:1}
+  .doc .dbody{flex:1;overflow:auto;padding:22px 40px 160px 120px}
   .doc .dempty{opacity:.32;font-size:13px;line-height:2;padding:20px 0}
   body.lock .doc .dtool{display:none}
   .sheet{position:absolute;background:var(--shbg);border:1px solid var(--shln);
@@ -293,7 +300,7 @@
     font-size:12.5px;line-height:1.7;margin:14px 0 0}
   #man .cx{position:absolute;right:calc(50% - min(460px,46vw) + 14px);top:calc(50% - min(330px,44vh) + 10px);
     border:none;background:none;color:var(--pfg);font-size:20px;cursor:pointer;opacity:.45;z-index:2}
-  #bar{position:fixed;z-index:75;display:none;align-items:center;gap:1px;padding:4px 5px;
+  #bar{position:fixed;z-index:79;display:none;align-items:center;gap:1px;padding:4px 5px;
     border-radius:10px;background:var(--glass);border:1px solid var(--glassline);
     backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
     white-space:nowrap;font-size:12.5px;color:var(--pfg);
@@ -398,7 +405,7 @@
   /* ================= 线性写作 ================= */
   #write{position:fixed;inset:0;z-index:78;display:none;background:var(--wbg)}
   #write.on{display:flex}
-  body.wr #stage,body.wr #bar,body.wr #find,body.wr #map{display:none !important}
+  body.wr #stage,body.wr #find,body.wr #map{display:none !important}
   #wrleft{width:250px;flex:none;border-right:1px solid var(--wline);
     display:flex;flex-direction:column;background:var(--wside)}
   #wrtitle{padding:20px 20px 10px;font:400 9.5px/1 "IBM Plex Mono",monospace;
@@ -454,6 +461,12 @@
   .blk .fh:hover{opacity:.8}
   .blk .fh .ar{display:inline-block;transition:transform .14s;font-size:13px}
   .blk .fold.on .fh .ar{transform:rotate(90deg)}
+  .blk .fadd{display:inline-flex;align-items:center;justify-content:center;
+    vertical-align:middle;margin-left:4px;border:none;background:none;cursor:pointer;
+    color:inherit;opacity:0;font-size:13px;line-height:1;width:16px;height:16px;
+    border-radius:4px;transition:opacity .14s}
+  .blk:hover .fadd{opacity:.34}
+  .blk .fadd:hover{opacity:.9;background:var(--whi)}
   .blk .fb{display:none;margin:4px 0 10px;padding-left:14px;
     border-left:2px solid var(--wline)}
   .blk .fold.on .fb{display:block}
@@ -463,10 +476,28 @@
   .blk.ctx{margin-bottom:2px}
   .blk .h{font-weight:600;letter-spacing:-.01em}
   .blk{margin-bottom:14px;position:relative}
+  /* 选中一段（未进入编辑）：跟画布上选中一张卡片的观感一致，
+     backspace/delete 直接把它从这份稿子里移除 */
+  .blk.sel{box-shadow:0 0 0 2px var(--sel);border-radius:6px}
+  .blk.sel .wrap{border-radius:4px}
+  /* 任意位置插入新段落：平时是一条细线，划过才浮出"+"，跟普通页面新建卡片一样顺手 */
+  .wrins{display:block;width:100%;max-width:660px;margin:2px auto;height:14px;
+    border:none;background:none;cursor:pointer;position:relative;padding:0;
+    opacity:0;transition:opacity .12s}
+  .wrins::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;
+    background:var(--pline);transform:translateY(-50%)}
+  .wrins::after{content:"+";position:absolute;left:10px;top:50%;
+    transform:translate(0,-50%);width:18px;height:18px;border-radius:50%;
+    background:var(--pfg);color:var(--panel);font-size:13px;line-height:18px;
+    text-align:center}
+  .wrins:hover{opacity:1}
+  body.lock .wrins{display:none}
+  body.lock .blk .fadd{display:none}
   .doc .blk .gut{position:absolute;right:100%;top:0;width:88px;padding-right:14px;
     display:flex;align-items:center;justify-content:flex-end;gap:4px;opacity:0;
     transition:opacity .14s}
   .doc .blk:hover .gut{opacity:1}
+  .blk .cap:empty:before{content:attr(data-ph);opacity:.28}
   .blk .cap.lv1{margin:40px 0 6px}
   .blk .cap.lv2{margin:30px 0 5px}
   .blk .cap.lv3{margin:22px 0 4px}
@@ -615,6 +646,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrExpVers:"Other versions",wrExpRefs:"References",
   wrExpVersOpt:"Include the other versions",wrExpRefsOpt:"Include the folded references",
   wrGoCanvas:"Find it on the canvas",wrRemove:"Remove from the draft",
+  wrRemoved:"Removed from the draft",wrInsert:"Insert a card here",
+  wrRefPaste:"Paste a twin here",
   mapMenu:"Page map",mapFind:"Find a page",
   scaleAll:"Rescale everything…",scaleDone:"Rescaled to",scaleBad:"Enter a size between 1 and 200",
   scaleAsk:"New base text size (currently {n}). Everything scales by the same ratio: text, card widths, spacing, page frames. Manually adjusted and locked cards scale too, so their relative difference is kept.",
@@ -768,6 +801,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrExpVers:"其他版本",wrExpRefs:"引用",
   wrExpVersOpt:"附上其他版本",wrExpRefsOpt:"附上折叠的引用",
   wrGoCanvas:"在画布上找到它",wrRemove:"从稿子里移除",
+  wrRemoved:"已从稿子里移除",wrInsert:"在这里插入一张卡片",
+  wrRefPaste:"在这里粘贴分身",
   mapMenu:"页面地图",mapFind:"查找页面",
   scaleAll:"按比例缩放全部内容…",scaleDone:"已按比例缩放",scaleBad:"请输入 1 到 200 之间的字号",
   scaleAsk:"新的基准字号（当前 {n}）。文字、卡片宽度、间距、页面框都会按同一比例缩放。手动调整过的和锁定的卡片也一并缩放，因此相对差异得以保留。",
@@ -2556,6 +2591,10 @@ function paintSel(){
   setTimeout(syncBar,0);
   nodes.forEach((el,id)=>{el.classList.toggle("sel",sel.includes(id));
     el.classList.toggle("multi",many&&sel.includes(id))});
+  // 写作页里的段落：选中但未编辑时才亮，进入编辑就交给光标本身表示状态
+  document.querySelectorAll(".blk[data-id]").forEach(el=>{
+    el.classList.toggle("sel",!editing&&sel.includes(el.dataset.id));
+  });
   drawLinks();
 }
 function measure(){
@@ -2568,11 +2607,11 @@ function measure(){
     const c=card(el.dataset.id);if(c&&c.h!==h)c.h=h;
   });
 }
-function editText(c,ev){
+function editText(c,ev,elOverride){
   if(lock)return;
   if(isLocked(c.id)){toast(t("lockedNote"));return}
   c._tg=cardTags(c).join(",");
-  const el=nodes.get(c.id)?.querySelector(".cap");if(!el)return;
+  const el=elOverride||nodes.get(c.id)?.querySelector(".cap");if(!el)return;
   editing=true;el.contentEditable="true";el.focus();
   const s=getSelection();
   // 双击进入时按落点选中一个词（拉丁文字），其余情况全选
@@ -3145,6 +3184,10 @@ addEventListener("keydown",e=>{
         for(let i=R2.r1;i<=R2.r2;i++)for(let j=R2.c1;j<=R2.c2;j++)g.rows[i][j]=""});
       return;
     }
+    // 写作页里选中了一段（未进入编辑）：只把它从这份稿子里移出，
+    // 不删源卡片本身——它可能仍在画布上，或者被别的稿子引用着。
+    const selBlk=document.querySelector(".blk.sel[data-id]");
+    if(selBlk){e.preventDefault();wrRemoveSel(selBlk);return}
     if(sel.length||selLink){e.preventDefault();del()}
   }
   if(k==="f")fit();
@@ -4582,7 +4625,24 @@ const INK=["#111111","#4A4A46","#9A9A94",
   "#0E6B6B","#1B4F9C","#3B2E8C","#7A1F6B","#B01858"];
 const HLS=["#FFF2A0","#FFD9A0","#FFC2C2","#F6C6E8","#D8C8F5","#C5E3FF","#BEEFD6","#DDE3E8"];
 function barCard(){return sel.length?card(sel[0]):null}
-function capOf(c){return c?nodes.get(c.id)?.querySelector(".cap"):null}
+// 卡片在当前视图中的宿主元素：专注模式下取写作正文里的段落，
+// 其次是画布上内嵌的稿子段落，最后退回画布上的卡片本体。
+// capOf / syncBar 都经这里取节点，写作页因此不必再有第二套定位逻辑。
+function hostOfCard(id){
+  if(wrOpenState()){
+    const el=document.querySelector(`#wrmain .cap[data-id="${id}"]`);
+    if(el)return el;
+  }
+  const d=document.querySelector(`#docs .cap[data-id="${id}"]`);
+  if(d)return d;
+  return nodes.get(id)||null;
+}
+function capOf(c){
+  if(!c)return null;
+  const h=hostOfCard(c.id);
+  if(!h)return null;
+  return h.classList&&h.classList.contains("cap")?h:(h.querySelector?h.querySelector(".cap"):null);
+}
 function textSel(){
   const s=getSelection();
   if(!s||!s.rangeCount||s.isCollapsed)return null;
@@ -5337,7 +5397,7 @@ function syncBar(){
   const b=$("bar"),c=barCard();
   if(lock||!c||S.bar===false){b.classList.remove("on");closePops();return}
   if(!b.children.length)buildBar();
-  const els=sel.map(id=>nodes.get(id)).filter(Boolean);
+  const els=sel.map(id=>hostOfCard(id)).filter(Boolean);
   if(!els.length){b.classList.remove("on");return}
   const rs=els.map(e=>e.getBoundingClientRect());
   const r={left:Math.min(...rs.map(z=>z.left)),right:Math.max(...rs.map(z=>z.right)),
@@ -5745,28 +5805,56 @@ function addDoc(p,title){
     title:title||(t("wrDocNew")+" "+(docs().length+1)),ids:[],mode:"iter",open:{}};
   snap();docs().push(d);render();save();return d;
 }
-const DOCW=760;                              // 稿子在世界坐标里的宽度
-// 把稿子直接画在画布上：正文就地可编辑，放大只是看得更清楚，不切换到别的界面
+const DOCW=760;                              // 正文区在世界坐标里的宽度
+const SIDEW=200;                             // 大纲侧栏宽度，专注模式与画布内嵌视图共用同一份布局
+// 逐级编号，专注模式的侧栏与画布内嵌视图共用同一套计算，不留第二份
+function wrNums(list){
+  const nums=[],counters=[];
+  list.forEach(c=>{
+    const lv=wrLevelOf(c);
+    if(!lv){nums.push("");return}
+    counters[lv-1]=(counters[lv-1]||0)+1;counters.length=lv;
+    nums.push(counters.map(x=>x||0).join("."));
+  });
+  return nums;
+}
+// 大纲侧栏的 HTML：专注模式与非专注的画布内嵌视图都用它，不再各写一份
+function wrOutlineHTML(list,nums){
+  let sh="";
+  list.forEach((c,i)=>{
+    const lv=wrLevelOf(c);if(!lv)return;
+    sh+=`<button class="wrnav l${Math.min(lv,4)}" data-i="${i}">
+      <span class="n">${nums[i]}</span><span class="t">${esc(snippet(orig(c),40)||t("wrUntitled"))}</span></button>`;
+  });
+  return sh||`<div class="wrempty">${esc(t("wrNoHead"))}</div>`;
+}
+// 把稿子直接画在画布上：正文就地可编辑，放大只是看得更清楚，不切换到别的界面。
+// 非专注状态下同样显示大纲侧栏，正文本身固定高度、内部滚动，不再无限拉长。
 function renderDocs(){
   const box=$("docs");if(!box)return;
   box.innerHTML="";
   docs().forEach(d=>{
     const el=document.createElement("div");el.className="doc";el.dataset.id=d.id;
-    Object.assign(el.style,{left:d.x+"px",top:d.y+"px",width:DOCW+"px"});
+    Object.assign(el.style,{left:d.x+"px",top:d.y+"px",width:(DOCW+SIDEW)+"px"});
+    const list=d.ids.map(card).filter(Boolean);
+    const nums=wrNums(list);
     const n=d.ids.filter(id=>card(id)).length;
     const w=d.ids.reduce((z,id)=>z+((orig(card(id)||{}).text||"").replace(/\s/g,"").length),0);
-    el.innerHTML=`<div class="dhead">
-        <div class="dt" contenteditable="${lock?"false":"true"}" spellcheck="false"
-          >${esc(d.title)}</div>
-        <div class="dtool">
-          <button data-m="iter" class="${d.mode!=="ctx"?"on":""}">${esc(t("wrIter"))}</button>
-          <button data-m="ctx" class="${d.mode==="ctx"?"on":""}">${esc(t("wrCtx"))}</button>
-          <button data-a="focus">${esc(t("wrFocus"))}</button>
-          <button data-a="exp">${esc(t("expGo"))}</button>
+    el.innerHTML=`<div class="dside">${wrOutlineHTML(list,nums)}</div>
+      <div class="dmain">
+        <div class="dhead">
+          <div class="dt" contenteditable="${lock?"false":"true"}" spellcheck="false"
+            >${esc(d.title)}</div>
+          <div class="dtool">
+            <button data-m="iter" class="${d.mode!=="ctx"?"on":""}">${esc(t("wrIter"))}</button>
+            <button data-m="ctx" class="${d.mode==="ctx"?"on":""}">${esc(t("wrCtx"))}</button>
+            <button data-a="focus">${esc(t("wrFocus"))}</button>
+            <button data-a="exp">${esc(t("expGo"))}</button>
+          </div>
+          <div class="dm">${esc(t("wrDocMeta").replace("{n}",n).replace("{w}",w))}</div>
         </div>
-        <div class="dm">${esc(t("wrDocMeta").replace("{n}",n).replace("{w}",w))}</div>
-      </div>
-      <div class="dbody">${docBodyHTML(d)}</div>`;
+        <div class="dbody">${docBodyHTML(d,nums)}</div>
+      </div>`;
     bindDoc(el,d);
     box.appendChild(el);
   });
@@ -5881,25 +5969,22 @@ function applyDocStyles(root){
       el.classList.contains("ref")?0:wrLevelOf(c)));
   });
 }
-// 正文块的 HTML，画布上的稿子与专注模式共用同一份
-function docBodyHTML(d){
+// 正文块的 HTML，画布上的稿子与专注模式共用同一份。
+// .cap 一律从"未编辑"开始：单击只是选中这一段（跟普通页面的卡片一样），
+// 双击才真正进入编辑，行为由 bindBody 里的 pointerdown/dblclick 接管。
+function docBodyHTML(d,extNums){
   const list=d.ids.map(card).filter(Boolean);
-  if(!list.length)return `<div class="dempty">${esc(t("wrEmpty"))}</div>`;
-  const nums=[],counters=[];
-  list.forEach(c=>{
-    const lv=wrLevelOf(c);
-    if(!lv){nums.push("");return}
-    counters[lv-1]=(counters[lv-1]||0)+1;counters.length=lv;
-    nums.push(counters.map(x=>x||0).join("."));
-  });
+  const nums=extNums||wrNums(list);
+  const ins=i=>`<button class="wrins" data-i="${i}" title="${esc(t("wrInsert"))}">+</button>`;
+  if(!list.length)return `<div class="dempty">${esc(t("wrEmpty"))}</div>${ins(0)}`;
   const ctx=d.mode==="ctx";
-  let h="";
+  let h=ctx?"":ins(0);
   list.forEach((c,i)=>{
     const o=orig(c),lv=wrLevelOf(c),vs=verList(o);
     const wrapS=o.bg?`background:${esc(o.bg)};padding:12px 14px;border-radius:3px`:"";
     const locked=isLocked(c.id);
     const body=`<div class="cap${lv?" hd lv"+Math.min(lv,4):""}"
-      contenteditable="${locked||lock?"false":"true"}" data-id="${c.id}" spellcheck="false"
+      contenteditable="false" data-id="${c.id}" data-ph="${esc(t("placeholder"))}" spellcheck="false"
       >${o.rich?safeRich(o.rich):esc(o.text||"")}</div>`;
     if(ctx){
       h+=`<div class="blk ctx${locked?" lk":""}" data-i="${i}" data-id="${c.id}">
@@ -5920,13 +6005,14 @@ function docBodyHTML(d){
       <div class="fold${kids.length?" has":""}${openF?" on":""}">
         <button class="fh" data-id="${c.id}"><span class="ar">\u203A</span>
           ${esc(t("wrRefs").replace("{n}",kids.length))}</button>
+        <button class="fadd" data-id="${c.id}" title="${esc(t("wrRefPaste"))}">+</button>
         <div class="fb">${kids.length?kids.map(k=>{
           const ko=orig(k);
           return `<div class="ref" data-id="${k.id}"
             >${ko.rich?safeRich(ko.rich):esc(ko.text||"")}</div>`;
         }).join(""):`<div class="rempty">${esc(t("wrRefsNone"))}</div>`}</div>
       </div>
-    </div>`;
+    </div>${ins(i+1)}`;
   });
   return h;
 }
@@ -5951,11 +6037,11 @@ function bindDoc(el,d){
       if(b.dataset.a==="exp")openWrExport(d);
     });
   });
-  // 空白处拖动整页；正文里的操作不触发移动
+  // 空白处拖动整页；正文、侧栏、插入把手里的操作不触发移动
   el.addEventListener("pointerdown",e=>{
     if(lock){e.stopPropagation();return}
     if(e.button!==0)return;
-    if(e.target.closest(".cap,.dt,.dtool,.vv,.vadd,.fh,.ref"))return;
+    if(e.target.closest(".blk,.dt,.dtool,.dside,.wrins"))return;
     e.stopPropagation();startDocMove(e,d);
   });
   el.addEventListener("contextmenu",e=>{
@@ -5968,6 +6054,16 @@ function bindDoc(el,d){
     }
     docMenu(e.clientX,e.clientY,d);
   });
+  // 非专注状态下的侧栏：点大纲条目滚动到对应段落，不需要打开专注模式
+  const side=el.querySelector(".dside");
+  if(side){
+    side.addEventListener("pointerdown",e=>e.stopPropagation());
+    side.addEventListener("click",e=>{
+      const b=e.target.closest(".wrnav");if(!b)return;
+      const t2=el.querySelector(`.dbody .blk[data-i="${b.dataset.i}"]`);
+      if(t2)t2.scrollIntoView({behavior:"smooth",block:"start"});
+    });
+  }
   bindBody(el,d);
 }
 function startDocMove(e,d){
@@ -5991,21 +6087,9 @@ function drawWrite(){
   const d=wrDoc();if(!d)return;
   const list=wrCards();
   $("wrtitle").textContent=d.title;
-  const nums=[],counters=[];
-  list.forEach(c=>{
-    const lv=wrLevelOf(c);
-    if(!lv){nums.push("");return}
-    counters[lv-1]=(counters[lv-1]||0)+1;counters.length=lv;
-    nums.push(counters.map(x=>x||0).join("."));
-  });
-  let sh="";
-  list.forEach((c,i)=>{
-    const lv=wrLevelOf(c);if(!lv)return;
-    sh+=`<button class="wrnav l${Math.min(lv,4)}" data-i="${i}">
-      <span class="n">${nums[i]}</span><span class="t">${esc(snippet(orig(c),40)||t("wrUntitled"))}</span></button>`;
-  });
-  $("wrside").innerHTML=sh||`<div class="wrempty">${esc(t("wrNoHead"))}</div>`;
-  $("wrmain").innerHTML=docBodyHTML(d);
+  const nums=wrNums(list);
+  $("wrside").innerHTML=wrOutlineHTML(list,nums);
+  $("wrmain").innerHTML=docBodyHTML(d,nums);
   applyDocStyles($("wrmain"));
   $("wrcount").textContent=t("wrWords").replace("{n}",
     list.reduce((n,c)=>n+((orig(c).text||"").replace(/\s/g,"").length),0));
@@ -6015,7 +6099,9 @@ function drawWrite(){
 /* ---- 交互 ---- */
 let wrT,wrSideT;
 function wrSideSoon(){clearTimeout(wrSideT);wrSideT=setTimeout(drawWrite,700)}
-// 正文块的交互，画布上的稿子与专注模式共用同一套
+// 正文块的交互，画布上的稿子与专注模式共用同一套。
+// 单击只选中这一段（跟画布上单击选中一张卡片一样，不进入编辑）；
+// 双击才真正进入编辑，退出编辑（失焦）后回到"已选中但未编辑"的状态。
 function bindBody(root,getDoc){
   const doc=()=>typeof getDoc==="function"?getDoc():getDoc;
   root.addEventListener("input",e=>{
@@ -6027,10 +6113,39 @@ function bindBody(root,getDoc){
     verStash(o);
     clearTimeout(wrT);wrT=setTimeout(()=>{save();refreshDocMeta()},320);
   });
-  // 聚焦某段即设为当前选中，文字工具栏随之出现，与画布上的卡片完全一致
+  // 单击一段：选中它，不进入编辑，backspace/delete 可以直接把它移出稿子
+  root.addEventListener("pointerdown",e=>{
+    if(lock||e.button!==0)return;
+    const blk=e.target.closest(".blk");if(!blk)return;
+    if(e.target.closest(".gut,.fold,.wrins"))return;   // 交给各自的按钮处理
+    const cap=blk.querySelector(".cap");
+    if(cap&&cap.isContentEditable)return;               // 编辑中：交给浏览器放置光标/划选
+    e.stopPropagation();
+    sel=[blk.dataset.id];selLink=null;editing=false;paintSel();syncBar();
+  });
+  // 双击一段的正文才进入编辑，行为与画布上的卡片完全一致（含按落点选词）
+  root.addEventListener("dblclick",e=>{
+    if(lock)return;
+    const cap=e.target.closest(".cap");if(!cap)return;
+    if(cap.isContentEditable)return;                    // 已在编辑中：交给浏览器原生的双击选词
+    const c=card(cap.dataset.id);if(!c)return;
+    sel=[c.id];selLink=null;paintSel();
+    editText(c,e,cap);
+    syncBar();
+  });
+  // 聚焦仍会触发（比如脚本调用 .focus()），与画布上的卡片保持一致
   root.addEventListener("focusin",e=>{
     const el=e.target.closest(".cap");if(!el)return;
     sel=[el.dataset.id];editing=true;selLink=null;paintSel();syncBar();
+  });
+  // 失焦即退出编辑：回到"已选中但未编辑"，跟画布上的卡片一致
+  root.addEventListener("focusout",e=>{
+    const cap=e.target.closest(".cap");if(!cap)return;
+    if(!cap.isContentEditable)return;
+    const to=e.relatedTarget||document.activeElement;
+    if(to&&to.closest&&(to.closest("#bar")||to.closest("#pop")))return;  // 焦点进了工具条：保持编辑态
+    cap.contentEditable="false";editing=false;
+    paintSel();
   });
   root.addEventListener("keydown",e=>{
     if(!e.target.closest(".cap"))return;
@@ -6039,6 +6154,10 @@ function bindBody(root,getDoc){
   });
   root.addEventListener("click",e=>{
     const d=doc();
+    const ins=e.target.closest(".wrins");
+    if(ins){wrInsertAt(d,+ins.dataset.i);return}
+    const fa=e.target.closest(".fadd");
+    if(fa){wrPasteTwin(fa.dataset.id,d);return}
     const fh=e.target.closest(".fh");
     if(fh){
       if(!d)return;
@@ -6056,6 +6175,43 @@ function bindBody(root,getDoc){
       verNew(c,true);redrawDocs(d);toast(t("wrVerMade"));
     }
   });
+}
+// 在稿子的任意位置插入一张新卡片：不必先回画布新建再送过来，
+// 跟直接在普通页面新建卡片一样顺手；插入后立刻进入编辑。
+function wrInsertAt(d,i){
+  if(lock||!d)return;
+  snap();
+  const ctr=toW(innerWidth/2,innerHeight/2);
+  const n={id:uid(),x:Math.round(ctr.x),y:Math.round(ctr.y),w:520,text:""};
+  invalidateIndex();S.cards.push(n);
+  d.ids.splice(Math.max(0,Math.min(i,d.ids.length)),0,n.id);
+  save();redrawDocs();
+  requestAnimationFrame(()=>{
+    const cap=document.querySelector(`.cap[data-id="${n.id}"]`);
+    if(cap)editText(n,null,cap);
+  });
+}
+// 把剪贴板里的卡片粘成分身，挂到某一段下面的折叠引用框里：
+// 只新增分身、不动源卡片的位置，跟"引用和分身"原有的语义一致。
+function wrPasteTwin(hostId,d){
+  if(lock)return;
+  if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
+  const host=card(hostId);if(!host)return;
+  snap();
+  const ctr=toW(innerWidth/2,innerHeight/2);
+  let k=wrKids(hostId).length,made=0;
+  CLIP.items.forEach(it=>{
+    const src=it.src;
+    if(!src||!S.cards.some(z=>z.id===src))return;     // 分身必须指向仍然存在的源
+    k++;made++;
+    invalidateIndex();
+    S.cards.push({id:uid(),x:Math.round(ctr.x+k*24),y:Math.round(ctr.y+k*24),
+      w:it.w||280,s:{...(it.s||{})},ref:src,wrUnder:hostId,lock:"text"});
+  });
+  if(!made){toast(t("clipEmpty"));return}
+  if(d){d.open=d.open||{};d.open[hostId]=true}
+  save();redrawDocs();
+  toast(t("sentTwin"));
 }
 // 内容变了就重画：画布上的稿子和专注模式都刷一遍，两边始终一致
 function redrawDocs(){
@@ -6085,6 +6241,18 @@ function wrBind(){
     const c=card(blk.dataset.id);if(!c)return;
     wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i,wrDoc());
   });
+}
+// 按删除键移出一个被选中的段：跟右键菜单里的"从稿子里移除"是同一件事，
+// 只在按键时触发。哪份稿子由 DOM 上最近的 .doc 决定；专注模式下就是当前稿子。
+function wrRemoveSel(selBlk){
+  const id=selBlk.dataset.id;
+  const docEl=selBlk.closest(".doc");
+  const d=docEl?docs().find(z=>z.id===docEl.dataset.id):wrDoc();
+  if(!d)return;
+  const i=d.ids.indexOf(id);
+  if(i<0)return;
+  snap();d.ids.splice(i,1);sel=[];selLink=null;save();redrawDocs();
+  toast(t("wrRemoved"));
 }
 function wrBlockMenu(x,y,c,i,d){
   const o=orig(c),vs=verList(o);
@@ -6569,16 +6737,27 @@ function newStyle(){
 function curStyle(){if(styleMode==="default")return {...DEF,...S.textDef};
   const c=targets()[0];return {...DEF,...S.textDef,...(c?.s||{})}}
 function applyCardStyle(c){
-  const el=nodes.get(c.id);if(!el)return;
-  if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
-  else{el.style.background="";el.style.padding="";el.style.borderRadius=""}
-  const cap=el.querySelector(".cap");if(!cap)return;
+  const el=hostOfCard(c.id);if(!el)return;
+  const isCap=!!(el.classList&&el.classList.contains("cap"));
+  const cap=isCap?el:el.querySelector(".cap");
+  if(!cap)return;
+  if(isCap){
+    // 写作页里没有外层卡片容器，底色作用在 .cap 的外层 .wrap 上
+    const wrap=el.closest(".wrap");
+    if(wrap){
+      if(c.bg){wrap.style.background=c.bg;wrap.style.padding="12px 14px";wrap.style.borderRadius="3px"}
+      else{wrap.style.background="";wrap.style.padding="";wrap.style.borderRadius=""}
+    }
+  }else{
+    if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
+    else{el.style.background="";el.style.padding="";el.style.borderRadius=""}
+  }
   const s={...DEF,...S.textDef,...(c.s||{})};
   Object.assign(cap.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",fontWeight:s.weight,
     lineHeight:s.lh,letterSpacing:s.spacing+"em",textAlign:s.align,color:s.color,
     fontStyle:s.italic?"italic":"normal"});
-  const lb=el.querySelector(".lvl");if(lb)lb.style.color=s.color;
-  const tw=el.querySelector(".tags");
+  const lb=el.querySelector?el.querySelector(".lvl"):null;if(lb)lb.style.color=s.color;
+  const tw=el.querySelector?el.querySelector(".tags"):null;
   if(tw){tw.style.color=s.color;tw.style.fontSize=Math.max(9,s.size*.78)+"px"}
 }
 function setStyle(k,v){
