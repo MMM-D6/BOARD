@@ -5489,6 +5489,12 @@ function unifyLevel(lv,excludeManual){
 function syncBar(){
   const b=$("bar"),c=barCard();
   if(lock||!c||S.bar===false){b.classList.remove("on");closePops();return}
+  // 写作页（专注模式，或画布上内嵌的稿子）顶上已经有常驻的 fmtbar，
+  // 功能是标准工具栏的完整子集。浮动的标准工具栏要是跟着弹出来，
+  // 两条栏会叠在一起打架，所以选中/编辑的是写作页里的段落时不再弹出这一条。
+  if(wrOpenState()||sel.some(id=>docsCapNodes.has(id))){
+    b.classList.remove("on");closePops();return;
+  }
   if(!b.children.length)buildBar();
   const els=sel.map(id=>hostOfCard(id)).filter(Boolean);
   if(!els.length){b.classList.remove("on");return}
@@ -6701,6 +6707,36 @@ function wrPasteMain(d,i){
   save();redrawDocs();
   toast(t("wrAdded").replace("{n}",uniq.length).replace("{d}",d.title));
 }
+// 光标停在文字中间时的"就地粘贴"：跟 Word 里把光标放在两个字之间再粘贴一样，
+// 把这一段从光标处切开（复用 wrSplitAtCaret 同一套 cutAfterCaret / syncCap），
+// 剪贴板里的卡片插进切开的缝隙中间，光标之后的内容另起一段接在插入内容后面。
+// 这样"粘贴可编辑文本卡片"就有了一个具体的插入点，不必只能贴在整段的前面或后面。
+function wrPasteAtCaret(d,c,cap){
+  if(lock||!d||isLocked(c.id))return;
+  if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
+  const ids=[...new Set(CLIP.items.map(it=>it.src))]
+    .filter(id=>S.cards.some(z=>z.id===id)&&id!==c.id&&!d.ids.includes(id));
+  if(!ids.length){toast(t("clipEmpty"));return}
+  const o=orig(c);
+  const tail=cutAfterCaret(cap);            // 光标之后的内容先切出来
+  snap();
+  syncCap(c,cap);                           // 光标之前的部分留在原卡片
+  verStash(o);
+  let i=d.ids.indexOf(c.id);if(i<0)i=d.ids.length-1;
+  let at=i+1;
+  d.ids.splice(at,0,...ids);at+=ids.length;
+  let tailId=null;
+  if(tail.text.trim()||/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(tail.html)){
+    const n=wrNewBlock(d,c);
+    n.text=tail.text;
+    if(/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(tail.html))n.rich=tail.html;
+    invalidateIndex();S.cards.push(n);
+    d.ids.splice(at,0,n.id);tailId=n.id;
+  }
+  save();redrawDocs();
+  if(tailId)focusBlock(tailId,"start");
+  toast(t("wrAdded").replace("{n}",ids.length).replace("{d}",d.title));
+}
 // 写作页里所有右键的入口：按落点决定给哪一份菜单。
 // 折叠框那一块是"看不见但确实存在的粘贴区"——在那里右键就能把剪贴板里的卡片
 // 粘成一个分身投影，这是原来那个"+"按钮的替代。
@@ -6819,7 +6855,11 @@ function wrBlockMenu(x,y,c,i,d){
   // 划选一段自由文字，把它单独立成一张卡片——这是"边写边把想法固化成卡片"的入口
   const cap=hostCap(c.id);
   const s=getSelection();
-  if(cap&&d&&!lock&&!isLocked(c.id)&&s&&s.rangeCount&&!s.isCollapsed&&cap.contains(s.anchorNode))
+  const hasSel=cap&&d&&!lock&&!isLocked(c.id)&&s&&s.rangeCount&&!s.isCollapsed&&cap.contains(s.anchorNode);
+  // 光标停在文字中间（没有划选）时，右键点的就是这个具体位置——
+  // 剪贴板里的卡片可以直接插进光标这个缝隙，而不是只能贴在整段的最前面或最后面
+  const caretHere=cap&&d&&!lock&&!isLocked(c.id)&&s&&s.rangeCount&&s.isCollapsed&&cap.contains(s.anchorNode);
+  if(hasSel)
     items.push({label:t("wrSelToCard"),on:()=>wrSelToCard(d,c,cap)},"-");
   if(d)items.push({label:t("wrInsertAbove"),on:()=>wrInsertAt(d,i)},
     {label:t("wrInsertBelow"),on:()=>wrInsertAt(d,i+1)},"-");
@@ -6837,6 +6877,7 @@ function wrBlockMenu(x,y,c,i,d){
   }
   items.push("-",{label:t("wrVerCopy"),on:()=>verToClip(c,o.verOn)});
   if(CLIP&&d)items.push("-",
+    ...(caretHere?[{label:t("wrPasteHere"),on:()=>wrPasteAtCaret(d,c,cap)}]:[]),
     {label:t("wrPasteBefore"),on:()=>wrPasteMain(d,i)},
     {label:t("wrPasteAfter"),on:()=>wrPasteMain(d,i+1)},
     {label:CLIP.mode==="twin"?t("wrPasteRef"):t("wrPasteRefCopy"),on:()=>wrPasteTwin(c.id,d)});
