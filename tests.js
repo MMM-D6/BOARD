@@ -441,62 +441,15 @@ group("outdir 结构方向与批量转换", async (c) => {
   c.ok("整页转换不影响页外的连线", r3.inPage === 4 && r3.outside === false);
 });
 
-group("quote 原文记录", async (c) => {
-  const r = await c.run(() => {
-    const L = (a2, b2) => ({ id: uid(), a: a2, b: b2, st: true, kind: "curve", w: 1.4, color: "#888" });
-    S.cards = [
-      { id: "H", x: 0, y: 0, w: 300, text: "理论框架", level: 1, s: {} },
-      { id: "P", x: 600, y: 0, w: 300, text: "身体是可编辑的", level: 2, s: {} },
-      { id: "Q", x: 1200, y: 0, w: 340, role: "quote", text: "Codification is vital", s: {} },
-      { id: "H2", x: 0, y: 600, w: 300, text: "方法论", level: 1, s: {} },
-      { id: "Q2", ref: "Q", x: 600, y: 600, w: 340, role: "quote", lock: "text", s: {} },
-    ];
-    S.links = [L("H", "P"), L("P", "Q"), L("H2", "Q2")];
-    S.frames = []; S.autoNum = true; S.outline = true;
-    invalidateIndex(); render();
-    const tree = buildTree();
-    const O = { title: "论文", img: 0, tags: 0, refs: 0, table: 0 };
-    return {
-      flat: tree.flat.map((n) => [n.c.id, n.num, n.lv, !!n.quote, !!n.isRef]),
-      md: docMD(O, tree), html: docHTML(O, tree, false),
-    };
-  });
-  const f = (id) => r.flat.find((x) => x[0] === id) || [];
-  c.ok("原文记录不参与编号", !f("Q")[1] && f("Q")[2] === 0);
-  c.ok("原文记录被识别为引文", f("Q")[3] === true);
-  c.ok("原文挂在最近的标题之下", f("P")[1] === "1.1");
-  c.ok("原文导出为引用块", /^> Codification/m.test(r.md));
-  c.ok("HTML 导出为引用块", /<blockquote class="qt">/.test(r.html));
-
-  // 分身默认直接呈现原文，这样同一条引文在两章都完整可读
-  c.ok("分身直接呈现原文", (r.md.match(/Codification/g) || []).length === 2);
-  c.ok("默认不再写成另见", !/Same entry|同一条目/.test(r.md));
-  c.ok("导出里没有多余的指路文字", !/Same entry|同一条目|See §/.test(r.md));
-
-  await c.run(() => { sel = []; render(); fit(true); });
-  await c.wait(500);
-  c.ok("画布上显示为引文样式", await c.run(() => {
-    const el = nodes.get("Q"), cs = getComputedStyle(el.querySelector(".cap"));
-    return el.className.includes("qt") && parseFloat(cs.borderLeftWidth) > 0 && parseFloat(cs.paddingLeft) > 0;
-  }));
-
-  // 原文永远是最末端，连线画反也归位
-  c.ok("原文永远是末端", await c.run(() => {
-    S.links = [{ id: "x", a: "Q", b: "P", st: true, kind: "curve", w: 1.4, color: "#888" }];
-    const n = buildTree().flat.find((z) => z.c.id === "Q");
-    return n && n.parent && n.parent.c.id === "P";
-  }));
-});
-
 group("bib 文献条目", async (c) => {
   const r = await c.run(() => {
     S.cards = [
       { id: "H", x: 0, y: 0, w: 300, text: "文献综述", level: 1, s: {} },
       { id: "B1", x: 0, y: 200, w: 420, role: "bib", text: "Bulley & Sahin (2021).", s: {} },
-      { id: "Q1", x: 0, y: 340, w: 340, role: "quote", bib: "B1", text: "Codification is vital (p.3)", s: {} },
-      { id: "Q2", x: 0, y: 460, w: 340, role: "quote", bib: "B1", text: "新的结构与系统 (p.7)", s: {} },
+      { id: "Q1", x: 0, y: 340, w: 340, bib: "B1", text: "Codification is vital (p.3)", s: {} },
+      { id: "Q2", x: 0, y: 460, w: 340, bib: "B1", text: "新的结构与系统 (p.7)", s: {} },
       { id: "B2", x: 600, y: 200, w: 420, role: "bib", text: "Candy (2006).", s: {} },
-      { id: "Q3", x: 600, y: 340, w: 340, role: "quote", bib: "B2", text: "实践主导与实践本位 (p.1)", s: {} },
+      { id: "Q3", x: 600, y: 340, w: 340, bib: "B2", text: "实践主导与实践本位 (p.1)", s: {} },
     ];
     S.links = []; S.frames = []; S.autoNum = true; S.outline = true;
     invalidateIndex(); render();
@@ -508,7 +461,7 @@ group("bib 文献条目", async (c) => {
   // 归属是数据关系，画布上不画任何线
   c.ok("文献归属不产生连线", r.links === 0);
   c.ok("原文跟着它的文献条目走", r.order === "H,B1,Q1,Q2,B2,Q3");
-  c.ok("导出为条目加原文群", /\*\*Bulley/.test(r.md) && /^> Codification/m.test(r.md));
+  c.ok("导出为条目加其名下的材料", /\*\*Bulley/.test(r.md) && /Codification/.test(r.md));
   c.ok("HTML 用悬挂缩进的条目样式", /<p class="bib">/.test(r.html));
 
   await c.run(() => { sel = []; render(); fit(true); });
@@ -579,7 +532,7 @@ group("bib 文献条目", async (c) => {
     links: [{ id: "l", a: "b", b: "q", st: true }], frames: [],
   }));
   c.ok("旧的连线绑定迁移为归属字段",
-    mig.cards[1].bib === "b" && mig.links.length === 0 && mig.v === 6);
+    mig.cards[1].bib === "b" && mig.links.length === 0 && mig.v === 7);
 });
 
 group("adjacent 关联相邻", async (c) => {
@@ -992,7 +945,7 @@ group("lock 锁定", async (c) => {
 
   const mig = await c.run(() =>
     migrate({ v: 4, cards: [{ id: "x", x: 0, y: 0, w: 200, text: "", lock: true }], links: [], frames: [] }));
-  c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 6);
+  c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 7);
 });
 
 /* =====================================================================
@@ -1701,7 +1654,7 @@ group("scale 整体缩放", async (c) => {
 
 group("data 数据安全", async (c) => {
   await c.board([{ id: "a", x: 0, y: 0, w: 300, text: "内容", s: {} }], []);
-  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 6);
+  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 7);
 
   // 旧版的"已锁定编组"要迁移成卡片自身的锁定，锁定状态不能丢
   const mig = await c.run(() =>
@@ -1712,7 +1665,7 @@ group("data 数据安全", async (c) => {
     })
   );
   c.ok("旧编组的锁定状态迁移到卡片", mig.cards[0].lock === "all" && !mig.cards[1].lock);
-  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 6);
+  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 7);
 
   await c.run(async () => { await autoBackup(true); });
   await c.wait(500);
@@ -1778,6 +1731,142 @@ group("image 图片导入", async (c) => {
   });
   c.ok("可以直接粘贴 PNG", r2.after === r2.before + 1 && r2.ih);
   c.ok("图片按内容哈希单独存放", await c.run(() => S.cards.every((z) => !z.src || z.ih)));
+});
+
+group("write 线性写作", async (c) => {
+  await c.run(() => {
+    const L = (a2, b2) => ({ id: uid(), a: a2, b: b2, st: true, kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85" });
+    S.cards = [
+      { id: "h1", x: 0, y: 0, w: 320, text: "理论框架", level: 1, s: {} },
+      { id: "p1", x: 400, y: 0, w: 400, text: "这是第一段。它包含两句话。", s: {} },
+      { id: "h2", x: 0, y: 300, w: 320, text: "digital body", level: 2, s: {} },
+      { id: "p2", x: 400, y: 300, w: 400, text: "第二段内容在这里。", s: {} },
+      { id: "tw", ref: "p1", x: 800, y: 600, w: 400, lock: "text", s: {} },
+    ];
+    S.links = [L("h1", "h2")]; S.frames = []; S.sheets = []; S.wr = null;
+    invalidateIndex(); render();
+    wrImport(["h1", "p1", "h2", "p2", "tw"], false);
+  });
+  await c.wait(700);
+  c.ok("可以打开线性写作", await c.run(() => document.body.classList.contains("wr")));
+  const st = await c.run(() => ({
+    nav: document.querySelectorAll("#wrside .wrnav").length,
+    blocks: document.querySelectorAll("#wrmain .blk").length,
+    h1: !!document.querySelector("#wrmain .h.h1"),
+  }));
+  c.ok("侧栏目录只列标题", st.nav === 2);
+  c.ok("分身默认隐藏", st.blocks === 4);
+  c.ok("标题按层级排版", st.h1);
+
+  await c.page.click("#wrtwin");
+  await c.wait(400);
+  c.ok("可以显示分身", (await c.run(() => document.querySelectorAll("#wrmain .blk").length)) === 5);
+  await c.page.click("#wrtwin");
+  await c.wait(300);
+
+  await c.page.click("#wrmodeS");
+  await c.wait(400);
+  c.ok("逐句模式能拆句",
+    (await c.run(() => document.querySelectorAll("#wrmain .p.sent .sn").length)) >= 3);
+  c.ok("拆句能处理无标点结尾与引号",
+    await c.run(() => wrSentences("第一句。第二句").length === 2 && wrSentences("引文。").length === 1));
+  await c.page.click("#wrmodeP");
+  await c.wait(300);
+
+  // 写作页改的就是卡片本身，不产生第二份内容
+  await c.run(() => {
+    const el = [...document.querySelectorAll("#wrmain .p")].find((z) => z.innerText.includes("第二段"));
+    el.focus(); el.innerText = "第二段被改写了。";
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await c.wait(500);
+  c.ok("写作页编辑直接改到卡片", (await c.run(() => card("p2").text)) === "第二段被改写了。");
+
+  /* --- 版本迭代 --- */
+  const v = await c.run(() => {
+    const cc = card("p2");
+    verNew(cc, true);
+    const o = orig(cc);
+    o.text = "另一个版本的写法。"; verStash(o);
+    const vs = verList(cc);
+    return { n: vs.length, on: o.verOn === vs[1].id, first: vs[0].text, second: vs[1].text };
+  });
+  c.ok("可以新建版本", v.n === 2 && v.on);
+  c.ok("旧版本内容完整保留", v.first === "第二段被改写了。");
+  c.ok("新版本内容独立", v.second === "另一个版本的写法。");
+  const back = await c.run(() => {
+    const cc = card("p2"), vs = verList(cc);
+    verUse(cc, vs[0].id);
+    return { text: card("p2").text, keep: verList(cc)[1].text };
+  });
+  c.ok("可以切回旧版本", back.text === "第二段被改写了。");
+  c.ok("切换后另一版仍在", back.keep === "另一个版本的写法。");
+  await c.run(() => drawWrite());
+  await c.wait(300);
+  c.ok("版本切换器出现在正文旁",
+    (await c.run(() => document.querySelectorAll("#wrmain .vv").length)) >= 2);
+
+  c.ok("稿子顺序随文件保存", (await c.run(() => bundle(null).wr.ids.length)) === 5);
+  c.ok("版本随文件保存",
+    (await c.run(() => bundle(null).cards.find((z) => z.id === "p2").vers.length)) === 2);
+
+  await c.page.click("#wrclose");
+  await c.wait(400);
+  c.ok("可以返回画布", await c.run(() => !document.body.classList.contains("wr")));
+  await c.run(() => { S.wr = null; });
+});
+
+group("ports 连接点", async (c) => {
+  await c.board([
+    { id: "a", x: -300, y: 0, w: 360, text: "甲甲甲", s: {} },
+    { id: "b", x: 300, y: 0, w: 300, text: "乙", s: {} },
+  ], []);
+  // 上一组可能残留写作视图或缩放，这里回到干净状态再测
+  await c.run(() => {
+    if (document.body.classList.contains("wr")) closeWrite();
+    S.wr = null; sel = []; selLink = null; paintSel(); camTo(0, 0, 1, true);
+  });
+  await c.wait(500);
+  c.ok("未选中时连接点不响应",
+    (await c.run(() => getComputedStyle(nodes.get("a").querySelector(".port")).pointerEvents)) === "none");
+
+  // 沿卡片边缘拖动必须是移动，不能被连接点抢走变成误连线
+  const edge = await c.run(() => {
+    const r = nodes.get("a").getBoundingClientRect();
+    return { x: r.right - 3, y: r.top + r.height / 2, x0: card("a").x };
+  });
+  await c.page.mouse.move(edge.x, edge.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(edge.x + 120, edge.y + 40, { steps: 10 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  const after = await c.run(() => ({ x: card("a").x, links: S.links.length }));
+  c.ok("沿卡片边缘拖动是移动而非连线",
+    Math.abs(after.x - edge.x0 - 120) < 8 && after.links === 0);
+
+  await c.run(() => { sel = ["a"]; paintSel(); });
+  await c.wait(300);
+  const port = await c.run(() => {
+    const r = nodes.get("a").querySelector('.port[data-side="r"]').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  const tgt = await c.run(() => {
+    const r = nodes.get("b").getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  });
+  await c.page.mouse.move(port.x, port.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(tgt.x, tgt.y, { steps: 12 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  c.ok("从连接点仍可正常连线", (await c.run(() => S.links.length)) === 1);
+
+  await c.run(() => { S.links = []; markLinksDirty(); drawLinks(); });
+  await c.page.mouse.move(port.x, port.y);
+  await c.page.mouse.down();
+  await c.page.mouse.up();
+  await c.wait(350);
+  c.ok("连接点上原地点击不产生连线", (await c.run(() => S.links.length)) === 0);
 });
 
 group("perf 性能守卫", async (c) => {
@@ -1887,6 +1976,83 @@ group("static 静态检查", async (c) => {
 
   // 页面加载后不应有任何控制台错误
   c.ok("加载过程无脚本错误", true); // 由主流程统一收集，见下方 errs
+});
+
+/* =====================================================================
+   抠图工具（cutout.html）
+   ===================================================================== */
+
+group("cutout 抠图工具", async (c) => {
+  await c.page.goto("file://" + require("path").resolve(__dirname, "cutout.html"));
+  await c.wait(700);
+  const src = await c.run(() => {
+    const cv = document.createElement("canvas"); cv.width = 420; cv.height = 320;
+    const g = cv.getContext("2d");
+    g.fillStyle = "#EDEDEA"; g.fillRect(0, 0, 420, 320);
+    g.fillStyle = "#3A4A5A";
+    g.beginPath(); g.ellipse(210, 160, 120, 90, 0, 0, Math.PI * 2); g.fill();
+    return cv.toDataURL("image/png");
+  });
+  await c.run((s) => loadImage(s, "t.png"), src);
+  await c.wait(1800);
+
+  const st = await c.run(() => ({
+    IW, IH, n: paths.length, pts: paths[0] ? paths[0].pts.length : 0,
+    handles: paths[0] ? paths[0].pts.every((z) => typeof z.hx === "number") : false,
+  }));
+  c.ok("图片可以载入", st.IW === 420 && st.IH === 320);
+  c.ok("自动识别出轮廓", st.n === 1 && st.pts > 8);
+  c.ok("控点带贝塞尔手柄", st.handles);
+
+  // 轮廓要真的贴着主体，而不是随便围一圈
+  const fitq = await c.run(() => {
+    const pts = paths[0].pts;
+    let inside = 0;
+    pts.forEach((z) => { if (Math.hypot((z.x - 210) / 120, (z.y - 160) / 90) < 1.4) inside++; });
+    return inside / pts.length;
+  });
+  c.ok("轮廓贴合主体（" + (fitq * 100).toFixed(0) + "%）", fitq > 0.8);
+
+  c.ok("控点可移动", await c.run(() => {
+    const z = paths[0].pts[0], x0 = z.x; z.x += 25; draw();
+    return paths[0].pts[0].x === x0 + 25;
+  }));
+  c.ok("可增删控点", await c.run(() => {
+    const n0 = paths[0].pts.length;
+    const a2 = paths[0].pts[0], b2 = paths[0].pts[1];
+    paths[0].pts.splice(1, 0, { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2, hx: 0, hy: 0, corner: false });
+    const n1 = paths[0].pts.length;
+    paths[0].pts.splice(1, 1);
+    return n1 === n0 + 1 && paths[0].pts.length === n0;
+  }));
+  c.ok("尖角控点有独立样式", await c.run(() => {
+    paths[0].pts[0].corner = true; draw();
+    const has = !!document.querySelector("#ov circle.an.corner");
+    paths[0].pts[0].corner = false; draw();
+    return has;
+  }));
+  c.ok("选中控点会显示手柄", await c.run(() => {
+    sel = { p: 0, i: 2, h: 0 }; draw();
+    return document.querySelectorAll("#ov circle.hp").length === 2;
+  }));
+
+  const out = await c.run(() => {
+    const cv = croppedCutout();
+    const g = cv.getContext("2d");
+    const d = g.getImageData(0, 0, cv.width, cv.height).data;
+    let opaque = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 200) opaque++;
+    return { w: cv.width, h: cv.height, corner: g.getImageData(0, 0, 1, 1).data[3],
+      opaque, png: cv.toDataURL("image/png").slice(0, 22) };
+  });
+  c.ok("输出为带透明通道的 PNG", /^data:image\/png/.test(out.png) && out.corner < 20);
+  c.ok("自动裁到主体大小", out.w < 420 && out.w > 150);
+  c.ok("主体像素完整保留", out.opaque > 5000);
+  c.ok("预览窗有内容", await c.run(() => {
+    updatePreview();
+    const cc = $("prevc");
+    return cc.width > 100 && $("prev").classList.contains("on");
+  }));
 });
 
 /* ---------------- 主流程 ---------------- */

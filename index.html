@@ -97,15 +97,18 @@
   .card .hnd.ne,.card .hnd.sw{cursor:nesw-resize}
   .card .hnd.n,.card .hnd.s{cursor:ns-resize}
   .card .hnd.e,.card .hnd.w{cursor:ew-resize}
-  .card .port{position:absolute;width:calc(30px * var(--iz));height:calc(30px * var(--iz));
+  /* 连接点整体移到卡片轮廓之外，热区收到 18px：
+     原来 30px 的热区压在卡片边缘上，稍微靠边拖动就会被它抢走，变成误连线 */
+  .card .port{position:absolute;width:calc(18px * var(--iz));height:calc(18px * var(--iz));
     transform:translate(-50%,-50%);opacity:0;cursor:crosshair;z-index:3;pointer-events:none;
     display:flex;align-items:center;justify-content:center;transition:opacity .12s}
-  .card .port:before{content:"";width:calc(9px * var(--iz));height:calc(9px * var(--iz));
+  .card .port:before{content:"";width:calc(8px * var(--iz));height:calc(8px * var(--iz));
     border-radius:50%;background:var(--frame);border:calc(1.5px * var(--iz)) solid #fff;
     box-shadow:0 0 calc(2px * var(--iz)) rgba(0,0,0,.25);transition:transform .12s}
-  .card:hover .port{opacity:.9;pointer-events:auto}
+  /* 只有选中的卡片才亮出连接点，纯悬停不再触发，避免路过就误触 */
+  .card.sel .port{opacity:.9;pointer-events:auto}
   .card .port:hover{opacity:1}
-  .card .port:hover:before{transform:scale(1.45)}
+  .card .port:hover:before{transform:scale(1.4)}
 
   /* presentation lock */
   body.lock .port,body.lock .hnd,body.lock .ring{display:none !important}
@@ -223,9 +226,6 @@
   body.bibfocus .card.bibon{opacity:1}
   body.bibfocus #links{opacity:.12}
   body.lock .card .bibdot{display:none}
-  .card.qt .cap{border-left:calc(2px * var(--iz)) solid currentColor;
-    padding-left:calc(11px * var(--iz));opacity:.82}
-  .card.qt .lvl{opacity:.3;letter-spacing:0}
   .card .hbar{position:absolute;left:calc(-12px * var(--iz));top:0;
     border-radius:calc(2px * var(--iz));background:currentColor;pointer-events:none}
   /* 一级最粗最长，逐级递减，同时用长度区分，缩小时也分得清 */
@@ -375,6 +375,67 @@
     max-width:300px;overflow:hidden;text-overflow:ellipsis;display:none}
   #map .tip2.on{display:block}
   body.lock #map{display:none !important}
+  /* ================= 线性写作 ================= */
+  #write{position:fixed;inset:0;z-index:78;display:none;background:var(--wbg)}
+  #write.on{display:flex}
+  body.wr #stage,body.wr #bar,body.wr #find,body.wr #map{display:none !important}
+  #wrleft{width:250px;flex:none;border-right:1px solid var(--wline);
+    display:flex;flex-direction:column;background:var(--wside)}
+  #wrtitle{padding:20px 20px 10px;font:400 9.5px/1 "IBM Plex Mono",monospace;
+    letter-spacing:.16em;text-transform:uppercase;opacity:.35}
+  #wrside{flex:1;overflow:auto;padding:4px 10px 30px}
+  .wrnav{display:flex;gap:8px;width:100%;text-align:left;border:none;background:none;
+    cursor:pointer;color:inherit;padding:5px 10px;border-radius:6px;font-size:12.5px;
+    line-height:1.45;align-items:baseline}
+  .wrnav:hover{background:var(--whi)}
+  .wrnav .n{flex:none;font:400 10px/1.6 "IBM Plex Mono",monospace;opacity:.35;min-width:26px}
+  .wrnav .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .wrnav.l1{font-weight:600}
+  .wrnav.l2{padding-left:22px;opacity:.9}
+  .wrnav.l3{padding-left:38px;opacity:.75;font-size:12px}
+  .wrnav.l4{padding-left:52px;opacity:.65;font-size:11.5px}
+  #wrbody{flex:1;display:flex;flex-direction:column;min-width:0}
+  #wrbar{display:flex;align-items:center;gap:2px;padding:9px 22px;
+    border-bottom:1px solid var(--wline);font-size:12.5px}
+  .wb{height:26px;padding:0 10px;border:none;background:none;border-radius:7px;
+    cursor:pointer;color:inherit;font-size:12.5px;opacity:.6}
+  .wb:hover{background:var(--whi);opacity:1}
+  .wb.on{background:var(--pfg);color:var(--panel);opacity:1}
+  .wb.close{margin-left:auto;opacity:.75}
+  .wsep{width:1px;height:14px;background:var(--wline);margin:0 7px}
+  #wrcount{margin-left:auto;font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.32;
+    padding-right:14px}
+  #wrmain{flex:1;overflow:auto;padding:52px 0 44vh;outline:none}
+  .blk{position:relative;max-width:660px;margin:0 auto;padding:2px 0}
+  .blk .gut{position:absolute;right:100%;top:2px;width:110px;padding-right:16px;
+    display:flex;align-items:center;justify-content:flex-end;gap:4px;
+    opacity:0;transition:opacity .14s}
+  .blk:hover .gut,.blk .gut:focus-within{opacity:1}
+  .blk .gut .num{font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.4}
+  .blk .vb{display:flex;gap:2px}
+  .vv{border:none;background:none;cursor:pointer;color:inherit;border-radius:4px;
+    padding:1px 5px;font:400 10px/1.5 "IBM Plex Mono",monospace;opacity:.45}
+  .vv:hover{background:var(--whi);opacity:.9}
+  .vv.on{background:var(--pfg);color:var(--panel);opacity:1}
+  .vadd{border:none;background:none;cursor:pointer;color:inherit;opacity:.3;
+    font-size:14px;line-height:1;padding:0 3px;border-radius:4px}
+  .vadd:hover{opacity:.85;background:var(--whi)}
+  .blk .h,.blk .p{outline:none;caret-color:var(--acc)}
+  .blk .h{font-weight:600;letter-spacing:-.01em}
+  .blk .h1{font-size:25px;line-height:1.35;margin:44px 0 14px}
+  .blk .h2{font-size:19px;line-height:1.4;margin:32px 0 10px}
+  .blk .h3{font-size:16px;line-height:1.45;margin:24px 0 8px}
+  .blk .h4{font-size:14.5px;line-height:1.5;margin:20px 0 6px}
+  .blk .p{font-size:15px;line-height:1.95;margin:0 0 15px;letter-spacing:.005em}
+  .blk .p.bibp{font-weight:600;padding-left:18px;text-indent:-18px;opacity:.9}
+  .blk .p.sent .sn{padding:2px 0 2px 12px;border-left:2px solid transparent;
+    margin-bottom:2px;transition:border-color .12s,background-color .12s}
+  .blk .p.sent .sn:hover{border-left-color:var(--wmark);background:var(--whi)}
+  .blk.tw>.p,.blk.tw>.h{opacity:.68}
+  .blk.tw:before{content:"\25C8";position:absolute;right:100%;margin-right:2px;top:6px;
+    font-size:9px;opacity:.35}
+  .wrempty{max-width:660px;margin:60px auto;opacity:.4;font-size:13px;text-align:center;
+    line-height:2}
   #marq{position:fixed;z-index:30;display:none;border:1px solid var(--sel);
     background:rgba(125,125,125,.13);border-radius:2px;pointer-events:none}
   #stage.space{cursor:grab}
@@ -396,6 +457,24 @@
   <div class="maphd"><input id="mapq" spellcheck="false"><span id="mapz"></span>
   <button id="mapfit" style="display:none">⌗</button><span id="mapn"></span>
   <button id="mapx">×</button></div><div id="mapgrip"></div></div>
+<div id="write">
+  <aside id="wrleft">
+    <div id="wrtitle"></div>
+    <div id="wrside"></div>
+  </aside>
+  <main id="wrbody">
+    <div id="wrbar">
+      <button class="wb" id="wrmodeP">整段</button>
+      <button class="wb" id="wrmodeS">逐句</button>
+      <span class="wsep"></span>
+      <button class="wb" id="wrtwin">显示分身</button>
+      <span class="wsep"></span>
+      <span id="wrcount"></span>
+      <button class="wb close" id="wrclose">返回画布</button>
+    </div>
+    <div id="wrmain" spellcheck="false"></div>
+  </main>
+</div>
 <div id="marq"></div>
 <div id="hint"></div>
 <div id="status"></div>
@@ -436,7 +515,6 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   newWindow:"New window",agoNow:"just now",agoMin:"m ago",agoHour:"h ago",agoDay:"d ago",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
-  roleQuote:"Citation",quoteTag:"\u201C\u201D",
   bibShow:"Show what is filed under this entry",
   unbindBib:"Detach from the bibliography entry",bibNoBind:"Nothing here is attached to an entry",
   bibUnbound:"Detached:",
@@ -480,6 +558,16 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   tbDelRow:"Delete this row",tbDelCol:"Delete this column",
   tbHead:"Header row",tbHeadCol:"Header column",tbEven:"Even column widths",
   tbToText:"Turn into plain text",cardMenuMore:"Card options",
+  wrTitle:"Outline",wrOpen:"Linear writing",wrBack:"Back to canvas",
+  wrPara:"By paragraph",wrSent:"By sentence",wrTwin:"Show twins",
+  wrSend:"Send to linear writing",wrSendNew:"Replace the draft",wrSendAdd:"Append to the draft",
+  wrAdded:"{n} cards sent",wrPickFirst:"Select some cards first",
+  wrEmpty:"Nothing here yet. Select cards on the canvas and send them over.",
+  wrNoHead:"No headings yet",wrUntitled:"Untitled",wrWords:"{n} characters",
+  wrVerNew:"New version from this one",wrVerBlank:"New empty version",
+  wrVerPick:"Switch version",wrVerName:"Rename this version",wrVerDel:"Delete this version",
+  wrVerMade:"New version created; the previous one is kept",
+  wrGoCanvas:"Find it on the canvas",wrRemove:"Remove from the draft",
   mapMenu:"Page map",mapFind:"Find a page",
   scaleAll:"Rescale everything…",scaleDone:"Rescaled to",scaleBad:"Enter a size between 1 and 200",
   scaleAsk:"New base text size (currently {n}). Everything scales by the same ratio: text, card widths, spacing, page frames. Manually adjusted and locked cards scale too, so their relative difference is kept.",
@@ -569,7 +657,6 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   newWindow:"新建窗口",agoNow:"刚刚",agoMin:" 分钟前",agoHour:" 小时前",agoDay:" 天前",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
-  roleQuote:"引文",quoteTag:"\u201C\u201D",
   bibShow:"显示归在这条文献下的原文",
   unbindBib:"从文献条目解除绑定",bibNoBind:"选中的卡片没有绑定到文献条目",
   bibUnbound:"已解除绑定：",
@@ -613,6 +700,16 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   tbDelRow:"删除该行",tbDelCol:"删除该列",
   tbHead:"标题行",tbHeadCol:"标题列",tbEven:"列宽均分",
   tbToText:"转为纯文字",cardMenuMore:"卡片操作",
+  wrTitle:"目录",wrOpen:"线性写作",wrBack:"返回画布",
+  wrPara:"整段",wrSent:"逐句",wrTwin:"显示分身",
+  wrSend:"送入线性写作",wrSendNew:"替换现有稿子",wrSendAdd:"追加到稿子末尾",
+  wrAdded:"已送入 {n} 张卡片",wrPickFirst:"请先选中一些卡片",
+  wrEmpty:"这里还是空的。在画布上选中卡片，右键送进来。",
+  wrNoHead:"还没有分级标题",wrUntitled:"未命名",wrWords:"{n} 字",
+  wrVerNew:"基于当前内容新建一版",wrVerBlank:"新建一个空白版本",
+  wrVerPick:"切换版本",wrVerName:"给这一版起个名字",wrVerDel:"删除这一版",
+  wrVerMade:"已新建一版，原来那版仍在",
+  wrGoCanvas:"在画布上找到它",wrRemove:"从稿子里移除",
   mapMenu:"页面地图",mapFind:"查找页面",
   scaleAll:"按比例缩放全部内容…",scaleDone:"已按比例缩放",scaleBad:"请输入 1 到 200 之间的字号",
   scaleAsk:"新的基准字号（当前 {n}）。文字、卡片宽度、间距、页面框都会按同一比例缩放。手动调整过的和锁定的卡片也一并缩放，因此相对差异得以保留。",
@@ -1010,7 +1107,7 @@ function applyUndo(stack,other){
 }
 
 /* ================= storage ================= */
-const SCHEMA=6;                         // 数据结构版本，只增不减
+const SCHEMA=7;                         // 数据结构版本，只增不减
 function migrate(d){
   if(!d||typeof d!=="object")return d;
   const from=+d.v||1;
@@ -1031,6 +1128,9 @@ function migrate(d){
   }
   if(from<5){                            // 4 -> 5 锁定分两级，旧的布尔锁等同全锁
     (d.cards||[]).forEach(c=>{if(c.lock===true)c.lock="all"});
+  }
+  if(from<7){                            // 6 -> 7 引文角色取消，退回普通卡片
+    (d.cards||[]).forEach(c=>{if(c.role==="quote")delete c.role});
   }
   if(from<6){                            // 5 -> 6 文献条目的归属不再用连线表达
     const byId={};(d.cards||[]).forEach(c=>byId[c.id]=c);
@@ -1118,7 +1218,16 @@ function normCard(c){
   if(o.rich&&typeof o.rich!=="string")delete o.rich;
   o.s=(o.s&&typeof o.s==="object")?o.s:{};
   if(o.level&&![1,2,3].includes(+o.level))delete o.level;
-  if(o.role&&!["apx","aside","quote","bib"].includes(o.role))delete o.role;
+  if(o.role&&!["apx","aside","bib"].includes(o.role))delete o.role;
+  if(o.vers&&!Array.isArray(o.vers))delete o.vers;
+  if(Array.isArray(o.vers)){
+    o.vers=o.vers.filter(v=>v&&typeof v==="object"&&typeof v.id==="string")
+      .map(v=>({id:v.id,name:typeof v.name==="string"?v.name:"",
+        text:typeof v.text==="string"?v.text:"",rich:typeof v.rich==="string"?v.rich:"",
+        t:+v.t||Date.now()}));
+    if(!o.vers.length)delete o.vers;
+  }
+  if(o.verOn&&!(o.vers||[]).some(v=>v.id===o.verOn))delete o.verOn;
   if(o.bib&&typeof o.bib!=="string")delete o.bib;
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
   if(o.bg&&typeof o.bg!=="string")delete o.bg;
@@ -1155,6 +1264,11 @@ async function absorb(data,merge){
     const ids0=new Set(cards.map(c=>c.id));
     data=migrate(data);
     (data.sheets||[]).forEach(z=>{if(z&&z.kind==="a5")z.kind="a4"});   // A5 预设已取消
+    if(data.wr&&typeof data.wr==="object"){
+      data.wr.ids=Array.isArray(data.wr.ids)?data.wr.ids.filter(z=>typeof z==="string"):[];
+      data.wr.mode=data.wr.mode==="sent"?"sent":"para";
+      data.wr.twin=!!data.wr.twin;
+    }else delete data.wr;
     data.sheets=(data.sheets||[]).filter(z=>z&&PAPER[z.kind])
       .map(z=>({id:z.id||uid(),kind:z.kind,x:+z.x||0,y:+z.y||0,
         title:typeof z.title==="string"?z.title:""}));
@@ -1434,6 +1548,11 @@ function renderNow(){
   document.body.style.setProperty("--glass",dark?"rgba(28,28,28,.62)":"rgba(255,255,255,.62)");
   document.body.style.setProperty("--glassSoft",dark?"rgba(28,28,28,.3)":"rgba(255,255,255,.3)");
   document.body.style.setProperty("--glassline",dark?"rgba(255,255,255,.12)":"rgba(0,0,0,.08)");
+  document.body.style.setProperty("--wbg",dark?"#1A1A19":"#FBFBFA");
+  document.body.style.setProperty("--wside",dark?"#161615":"#F4F4F2");
+  document.body.style.setProperty("--wline",dark?"rgba(235,235,230,.12)":"rgba(0,0,0,.09)");
+  document.body.style.setProperty("--whi",dark?"rgba(255,255,255,.06)":"rgba(0,0,0,.045)");
+  document.body.style.setProperty("--wmark",dark?"rgba(150,190,255,.5)":"rgba(45,108,223,.4)");
   document.body.style.setProperty("--shbg",dark?"rgba(255,255,255,.05)":"rgba(255,255,255,.72)");
   document.body.style.setProperty("--shln",dark?"rgba(235,235,230,.38)":"rgba(60,66,72,.38)");
   document.body.style.setProperty("--fr",dark?"rgba(235,235,230,.45)":"rgba(60,66,72,.42)");
@@ -1497,7 +1616,6 @@ function refreshNums(){
 function badgeOf(c){
   if(c.role==="apx")return S.autoNum?(NUM.get(c.id)||t("apxLabel")):t("apxLabel");
   if(c.role==="aside")return t("asideTag");
-  if(c.role==="quote")return t("quoteTag");
   if(c.role==="bib")return "";
   if(!c.level)return "";
   // 层级本身由左侧竖条表示，这里只在开启自动编号时显示编号
@@ -1898,7 +2016,7 @@ function syncCap(c0,cap){
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
-  el.className="card"+(c.role==="quote"?" qt":"")+(c.role==="bib"?" bib":"")+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
+  el.className="card"+(c.role==="bib"?" bib":"")+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
   if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
@@ -2016,8 +2134,9 @@ function finishCard(el,c,s){
 
   [["t","50%","0%"],["b","50%","100%"],["l","0%","50%"],["r","100%","50%"]].forEach(([k,L,TP])=>{
     const d=document.createElement("div");d.className="port";d.dataset.side=k;
-    d.style.left=`calc(${L} + ${k==="l"?"-15px":k==="r"?"15px":"0px"} * var(--iz))`;
-    d.style.top=`calc(${TP} + ${k==="t"?"-15px":k==="b"?"15px":"0px"} * var(--iz))`;
+    // 偏移要大于热区半径（18/2=9），连接点才完全落在卡片轮廓之外
+    d.style.left=`calc(${L} + ${k==="l"?"-16px":k==="r"?"16px":"0px"} * var(--iz))`;
+    d.style.top=`calc(${TP} + ${k==="t"?"-16px":k==="b"?"16px":"0px"} * var(--iz))`;
     d.addEventListener("pointerdown",e=>{if(lock||isPinned(c.id))return;e.stopPropagation();startLink(e,c,k)});
     el.appendChild(d);
   });
@@ -2653,16 +2772,20 @@ function openLinkNote(l,x,y){
 }
 function startLink(e,c,side){
   const svg=$("links");
+  const from={x:e.clientX,y:e.clientY};
+  let far=false;                       // 拖够距离才算真的想连线
   const tmp=document.createElementNS("http://www.w3.org/2000/svg","path");
   tmp.setAttribute("stroke",S.linkDef.color);tmp.setAttribute("stroke-width",S.linkDef.w+.4);
   tmp.setAttribute("stroke-dasharray","5 4");tmp.setAttribute("fill","none");svg.appendChild(tmp);
   const p1=anchor(c,side);
-  const mv=ev=>{const p=toW(ev.clientX,ev.clientY);
+  const mv=ev=>{
+    if(!far&&Math.hypot(ev.clientX-from.x,ev.clientY-from.y)>8)far=true;
+    const p=toW(ev.clientX,ev.clientY);
     tmp.setAttribute("d",pathOf(p1,p,side,H(side)?(p.x>p1.x?"l":"r"):(p.y>p1.y?"t":"b"),S.linkDef.kind))};
   const up=ev=>{
     removeEventListener("pointermove",mv);removeEventListener("pointerup",up);tmp.remove();
     const el=document.elementFromPoint(ev.clientX,ev.clientY)?.closest(".card");
-    if(el&&el.dataset.id!==c.id){
+    if(far&&el&&el.dataset.id!==c.id){
       snap();
       const nl={id:uid(),a:c.id,b:el.dataset.id,sa:side,...S.linkDef};
       if(!S.linkDef.st)delete nl.st;
@@ -2919,6 +3042,7 @@ addEventListener("keydown",e=>{
     if(e.key==="ArrowLeft"||e.key==="ArrowUp"){e.preventDefault();step(-1)}
     if(k==="f")fit();
   if(k==="m")toggleMap();
+  if(k==="w"&&!wrOpenState())openWrite();
     return;
   }
   if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?applyUndo(redo,undo):applyUndo(undo,redo);return}
@@ -2943,6 +3067,7 @@ addEventListener("keydown",e=>{
   }
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="c"){e.preventDefault();clipCards("twin");return}
   if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="v"){e.preventDefault();pasteClip(toW(mouse.x,mouse.y));return}
+  if(e.key==="Escape"&&wrOpenState()){closeWrite();return}
   if(e.key==="Escape"&&bibFocus){bibFocus=null;paintBibFocus();return}
   if(e.key==="Escape"&&tbRect()){clearTbSel();syncBar();return}
   if(e.key==="Escape"){closeMenus();sel=[];selLink=null;linkFrom=null;stage.style.cursor="";toast("");paintSel()}
@@ -3272,6 +3397,17 @@ const MANUAL=[
   <p>导出 Word 和 PDF 文档时，链接会作为可点击的超链接附在该段之后。分身共享源的链接。演示模式下链接依然可点，方便当场打开原文。</p>
   <p class="tip">建议配合标签使用：链接解决"去哪里找原文"，标签解决"这是什么类型的材料"。</p>`],
 
+ ["线性写作","XIANXINGXIEZUO",`
+  <p>画布擅长摆结构，不擅长顺着读。<b>线性写作</b>把排好的卡片展开成一份可以从头读到尾的稿子，两边共享同一批卡片：在这里改的就是卡片本身，不会产生第二份内容。</p>
+  <p><b>进入</b>：按 <kbd>W</kbd>，或右键空白处选「线性写作」。要把画布上排好的结构送进来，就多选卡片后右键选<b>送入线性写作</b>，可以替换现有稿子或追加到末尾。送进来时按文档顺序而非点选顺序排列，所以进来就是排好的。</p>
+  <p><b>侧栏目录</b>由分级标题自动生成，与画布上的层级系统是同一套，点一下跳到对应位置。改了标题文字，目录会跟着更新。</p>
+  <p><b>整段与逐句</b>：整段是常规的阅读排版；逐句把每一句拆成独立一行，便于逐句推敲和检查前后逻辑。逐句模式下回车是另起一句而不是另起一段。两种模式只是显示方式，内容始终是同一份。</p>
+  <p><b>版本迭代</b>：这是这里最要紧的功能。把鼠标移到某一段左侧，会出现 <b>v1 v2</b> 这样的版本切换器和一个加号。点加号基于当前内容新建一版，此后你可以放开手改，原来那版完整保留。点版本号随时切回去比较。右键某一段还能给版本起名、删除某一版、或新建一个空白版本从头写。</p>
+  <p>所有版本都存在同一个文件里，但只有当前启用的那一版参与阅读、检索、导出和画布显示，其余的静静待着，不干扰你。</p>
+  <p><b>分身默认隐藏</b>，因为同一条内容在稿子里重复出现只会干扰阅读。需要核对时点顶栏的「显示分身」，分身会以淡一档的样式出现并带一个 ◈ 标记。</p>
+  <p>右键任意一段可以<b>在画布上找到它</b>，直接跳回画布并选中该卡片；也可以把它<b>从稿子里移除</b>，这只影响稿子的顺序，卡片本身仍在画布上。</p>
+  <p class="tip">思路是编织：卡片是线，画布负责理清它们的关系，线性写作负责把它们织成布。反复写、反复挑，挑过的都留着。</p>`],
+
  ["文献条目","WENXIANTIAOMU",`
   <p>右键卡片 → <b>层级</b> → <b>文献条目</b>，把一张卡片标为一条参考文献的母信息，里面写完整的著录（作者、年份、题名、出处）。</p>
   <p><b>归档卡片</b>：选中这条文献条目，再加选若干卡片（按住 Shift 或框选），右键选<b>绑定到该文献条目</b>。归档只是记录"这些材料出自这本文献"，<b>不会改变卡片本身的身份</b>：摘录、评注、待读提示都可以归在同一条文献下，各自保持原样。</p>
@@ -3280,14 +3416,6 @@ const MANUAL=[
   <p>绑定与位置无关，所以摘录随便怎么挪、放在哪一页都不会散。要解除就右键选<b>从文献条目解除绑定</b>。</p>
   <p><b>导出结构</b>：Word 里文献条目是悬挂缩进的加粗段落（与参考文献惯例一致），它的原文群紧随其后，逐条缩进为引文。Markdown 是加粗条目加 &gt; 引用行，HTML 是悬挂缩进的条目加引用块。呈现出来就是"一条文献 + 它的全部摘录"这种结构。</p>
   <p class="tip">配合分身：同一条摘录如果在正文某章要用，做一个分身放到那一章之下，原处仍归在文献条目里。导出时两处都完整呈现，你既有按文献归档的全貌，又有按论述展开的正文。</p>`],
-
- ["引文","YINWEN",`
-  <p>右键卡片 → <b>层级</b> → <b>引文</b>，把一张卡片标为引文。它是最低的一层，永远排在末端，不参与编号。</p>
-  <p>用途是保留观点的来源：某个论断出自哪篇文献的哪一句，原样抄在这里，随时可以回看。画布上显示为引文样式，左侧一条竖线加缩进，与正文一眼可分。</p>
-  <p><b>方向自动判定</b>：原文记录的层级永远最低，所以从它连出去还是连进来都无所谓，一律挂在最近的标题之下。</p>
-  <p><b>导出</b>：Word 里是缩进的斜体引文，PDF 和 HTML 是标准引用块，Markdown 是以 &gt; 开头的引用行。都能与正文明确区分。</p>
-  <p class="tip">配合分身使用最顺手：同一条引文如果在多章都要用，做几个分身放到各章之下，导出时每一处都会完整呈现，不是"另见某节"。</p>
-  <p class="tip">引文与文献条目是两套独立的东西：引文说的是"这段文字在写作中的身份"，文献条目说的是"这段材料归档在哪本文献名下"。一张卡片可以只是其中之一，也可以两者兼备。</p>`],
 
  ["分身","FENSHEN",`
   <p>分身不是复制，而是<b>同一条内容在多处出现</b>。内容只有一个源，分身是它的投影：文字和图片共享，位置、尺寸、字号各自独立。改任意一处的文字，所有位置同步更新。</p>
@@ -3620,7 +3748,6 @@ function lvRank(c){
   if(!c)return 99;
   if(c.role==="apx")return 1;
   if(c.role==="bib")return 95;         // 文献条目：原文的母信息，比正文更靠上
-  if(c.role==="quote")return 100;      // 原文记录永远是最末端
   return c.level?c.level:99;
 }
 function structPair(l){
@@ -3718,10 +3845,10 @@ function buildTree(list,depth,prefix){
   if(forest)return buildFromForest(forest,list,shift,prefix);
   const order=docOrder(list),stack=[],roots=[];
   order.forEach(c=>{
-    const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",bib=c.role==="bib";
+    const apx=c.role==="apx",aside=c.role==="aside",bib=c.role==="bib";
     const isRef=!!c.ref;
-    const lv=(aside||quote||bib||isRef)?0:(apx?1:(c.level||0));
-    const node={c,lv,apx,aside,quote,bib,isRef,children:[],num:"",sec:""};
+    const lv=(aside||bib||isRef)?0:(apx?1:(c.level||0));
+    const node={c,lv,apx,aside,bib,isRef,children:[],num:"",sec:""};
     if(lv===0){const p=stack[stack.length-1];(p?p.node.children:roots).push(node);node.parent=p?p.node:null}
     else{
       while(stack.length&&stack[stack.length-1].lv>=lv)stack.pop();
@@ -3756,12 +3883,11 @@ function buildFromForest(forest,list,shift,prefix){
   const roots=[];let flat=[];
   const mk=(t2,parent)=>{
     const c=t2.c;
-    const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",
-      bib=c.role==="bib",isRef=!!c.ref;
-    // 有下级、或自己标了层级的算标题；文献条目与原文记录始终是内容
-    const isHead=!aside&&!quote&&!bib&&!isRef&&(t2.kids.length>0||!!c.level);
+    const apx=c.role==="apx",aside=c.role==="aside",bib=c.role==="bib",isRef=!!c.ref;
+    // 有下级、或自己标了层级的算标题；文献条目始终是内容
+    const isHead=!aside&&!bib&&!isRef&&(t2.kids.length>0||!!c.level);
     const lv=isHead?t2.depth:0;
-    const node={c,lv,apx,aside,quote,bib,isRef,children:[],num:"",sec:"",parent:parent||null};
+    const node={c,lv,apx,aside,bib,isRef,children:[],num:"",sec:"",parent:parent||null};
     (parent?parent.children:roots).push(node);
     t2.kids.forEach(k=>mk(k,node));
     return node;
@@ -3772,10 +3898,9 @@ function buildFromForest(forest,list,shift,prefix){
   if(rest.length){
     const order=docOrder(rest),stack=[];
     order.forEach(c=>{
-      const apx=c.role==="apx",aside=c.role==="aside",quote=c.role==="quote",
-        bib=c.role==="bib",isRef=!!c.ref;
-      const lv=(aside||quote||bib||isRef)?0:(apx?1:(c.level||0));
-      const node={c,lv,apx,aside,quote,bib,isRef,children:[],num:"",sec:""};
+      const apx=c.role==="apx",aside=c.role==="aside",bib=c.role==="bib",isRef=!!c.ref;
+      const lv=(aside||bib||isRef)?0:(apx?1:(c.level||0));
+      const node={c,lv,apx,aside,bib,isRef,children:[],num:"",sec:""};
       if(lv===0){const p=stack[stack.length-1];(p?p.node.children:roots).push(node);
         node.parent=p?p.node:null}
       else{
@@ -4106,9 +4231,6 @@ async function exportDocx(D,o,tree){
         indent:{left:360,hanging:360},          // 文献条目用悬挂缩进，与参考文献惯例一致
         children:[new TextRun({text:txt.join(" "),bold:true})]}));
     }
-    else if(n.quote)txt.forEach(z=>kids.push(new Paragraph({
-      indent:{left:560},
-      children:[new TextRun({text:z,italics:true,color:"444444"})]})));
     else txt.forEach(z=>kids.push(new Paragraph({text:z})));
     if(o2u(c)){
       try{
@@ -4307,7 +4429,6 @@ function docMD(o,tree){
     }
     else if(n.bib){lines.push("**"+(txt[0]||snippet(oc))+"**","");
       txt.slice(1).forEach(z=>lines.push(z,""))}
-    else if(n.quote)txt.forEach(z=>lines.push("> "+z.replace(/\n/g," "),""));
     else txt.forEach(z=>lines.push(z,""));
     if(o.tags){const tg=cardTags(oc);if(tg.length)lines.push(tg.map(x=>"#"+x).join(" "),"")}
     if(o2u(oc))lines.push("<"+o2u(oc)+">","");
@@ -4330,7 +4451,6 @@ function docHTML(o,tree,forPrint){
   table.tbx{border-collapse:collapse;margin:8pt 0;width:100%}
   table.tbx td,table.tbx th{border:1px solid #999;padding:4pt 6pt;text-align:left;vertical-align:top}
   table.tbx th{background:#f0f0f0;font-weight:600}
-  blockquote.qt{margin:8pt 0 8pt 12pt;padding-left:10pt;border-left:2pt solid #bbb;color:#444}
   p.bib{margin:10pt 0 4pt 0;padding-left:18pt;text-indent:-18pt;font-weight:600}
   img{max-width:460px;height:auto}</style></head><body><h1>${esc(o.title)}</h1>`;
   const emit=(n)=>{
@@ -4356,12 +4476,9 @@ function docHTML(o,tree,forPrint){
     if(oc2.rich){
       const body=safeRich(oc2.rich);
       if(n.out)h+=`<h${Math.min(6,n.out+1)}>${body}</h${Math.min(6,n.out+1)}>`;
-      else if(n.quote)h+=`<blockquote class="qt"><p>${body}</p></blockquote>`;
       else h+=`<p>${body}</p>`;
     }
     else if(n.bib){h+=`<p class="bib">`+esc(txt.join(" "))+`</p>`}
-    else if(n.quote){h+=`<blockquote class="qt">`
-      +txt.map(z=>`<p>${esc(z)}</p>`).join("")+`</blockquote>`}
     else if(n.out){const hn=Math.min(6,n.out+1);h+=`<h${hn}>${esc(txt[0]||snippet(oc2))}</h${hn}>`;
       txt.slice(1).forEach(z=>h+=`<p>${esc(z)}</p>`)}
     else txt.forEach(z=>h+=`<p>${esc(z)}</p>`);
@@ -5531,6 +5648,266 @@ $("mapq").addEventListener("keydown",e=>{
 });
 $("mapx").onclick=()=>toggleMap();
 
+/* ================= 线性写作 =================
+   把画布上排好的结构展开成一份可以顺着读、顺着写的稿子。
+   与画布共享同一批卡片：这里改的就是卡片本身，不产生第二份内容。
+   S.wr = { ids:[卡片 id 顺序], mode:"para"|"sent", twin:false }
+   卡片的版本存在 c.vers = [{id,name,text,rich,t}]，c.verOn 指向当前启用的那条。
+   当前内容始终留在 c.text / c.rich 里，其余功能因此完全不用改。
+*/
+const wrState=()=>{
+  if(!S.wr)S.wr={ids:[],mode:"para",twin:false};
+  if(!Array.isArray(S.wr.ids))S.wr.ids=[];
+  return S.wr;
+};
+const wrCards=()=>wrState().ids.map(card).filter(Boolean);
+
+/* ---- 版本 ---- */
+function verList(c){
+  const o=orig(c);
+  if(!Array.isArray(o.vers))o.vers=[];
+  return o.vers;
+}
+function verSnapshot(c,name){
+  const o=orig(c);
+  return {id:uid(),name:name||"",text:o.text||"",rich:o.rich||"",t:Date.now()};
+}
+// 把当前内容写回它所属的版本槽，保证切走时不丢
+function verStash(c){
+  const o=orig(c),vs=verList(o);
+  if(!o.verOn)return;
+  const cur=vs.find(v=>v.id===o.verOn);
+  if(cur){cur.text=o.text||"";cur.rich=o.rich||"";cur.t=Date.now()}
+}
+function verNew(c,copy){
+  const o=orig(c),vs=verList(o);
+  snap();
+  if(!vs.length){                       // 第一次分版本：先把现有内容存成第一版
+    const first=verSnapshot(o);vs.push(first);o.verOn=first.id;
+  }
+  verStash(o);
+  const v=verSnapshot(o);
+  v.name="";
+  if(!copy){v.text="";v.rich=""}
+  vs.push(v);o.verOn=v.id;
+  o.text=v.text;o.rich=v.rich;
+  render();save();
+  return v;
+}
+function verUse(c,id){
+  const o=orig(c),vs=verList(o);
+  const v=vs.find(z=>z.id===id);if(!v)return;
+  snap();verStash(o);
+  o.verOn=v.id;o.text=v.text;o.rich=v.rich;
+  render();save();
+}
+function verDel(c,id){
+  const o=orig(c),vs=verList(o);
+  if(vs.length<2)return;
+  const i=vs.findIndex(z=>z.id===id);if(i<0)return;
+  snap();
+  vs.splice(i,1);
+  if(o.verOn===id){const v=vs[Math.max(0,i-1)];o.verOn=v.id;o.text=v.text;o.rich=v.rich}
+  render();save();
+}
+function verLabel(v,i){return v.name||("v"+(i+1))}
+
+/* ---- 从画布导入结构 ---- */
+function wrImport(ids,append){
+  const list=(ids&&ids.length?ids.map(card).filter(Boolean):[]);
+  if(!list.length){toast(t("wrPickFirst"));return}
+  // 按文档顺序而不是点选顺序：这样导进来就是排好的稿子
+  const set=new Set(list.map(c=>c.id));
+  const ordered=buildTree().flat.filter(n=>set.has(n.c.id)).map(n=>n.c.id);
+  const rest=list.map(c=>c.id).filter(id=>!ordered.includes(id));
+  const seq=[...ordered,...rest];
+  const w=wrState();
+  snap();
+  w.ids=append?[...w.ids.filter(id=>!seq.includes(id)),...seq]:seq;
+  save();
+  openWrite();
+  toast(t("wrAdded").replace("{n}",seq.length));
+}
+
+/* ---- 渲染 ---- */
+const SENT=/[^。！？!?…]*[。！？!?…]+["”』」)）]*|[^。！？!?…]+$/g;
+function wrSentences(txt){
+  const m=String(txt||"").match(SENT);
+  return m?m.map(z=>z.trim()).filter(Boolean):[];
+}
+function wrOpenState(){return document.body.classList.contains("wr")}
+function openWrite(){
+  const w=wrState();
+  if(!w.ids.length){
+    // 没有指定就用整份文档的顺序，先给一份能读的东西
+    w.ids=buildTree().flat.filter(n=>!n.isRef).map(n=>n.c.id);
+  }
+  document.body.classList.add("wr");
+  $("write").classList.add("on");
+  syncWrBar();drawWrite();
+}
+function closeWrite(){
+  document.body.classList.remove("wr");
+  $("write").classList.remove("on");
+  render();
+}
+function wrLevelOf(c){
+  const o=orig(c);
+  if(o.role==="apx")return 1;
+  return o.level||0;
+}
+function drawWrite(){
+  if(!wrOpenState())return;
+  const w=wrState();
+  const list=wrCards();
+  // 目录
+  const side=$("wrside");
+  let sh="";
+  const nums=[];
+  const counters=[];
+  list.forEach(c=>{
+    const lv=wrLevelOf(c);
+    if(!lv){nums.push("");return}
+    counters[lv-1]=(counters[lv-1]||0)+1;counters.length=lv;
+    nums.push(counters.map(x=>x||0).join("."));
+  });
+  list.forEach((c,i)=>{
+    const lv=wrLevelOf(c);
+    if(!lv)return;
+    const o=orig(c);
+    sh+=`<button class="wrnav l${Math.min(lv,4)}" data-i="${i}">
+      <span class="n">${nums[i]}</span><span class="t">${esc(snippet(o,40)||t("wrUntitled"))}</span></button>`;
+  });
+  side.innerHTML=sh||`<div class="wrempty">${esc(t("wrNoHead"))}</div>`;
+
+  // 正文
+  const main=$("wrmain");
+  let h="";
+  list.forEach((c,i)=>{
+    const o=orig(c);
+    if(c.ref&&!w.twin)return;                 // 分身默认隐藏（判断卡片自身，不是它的源）
+    const lv=wrLevelOf(c);
+    const vs=verList(o);
+    const isTwin=!!c.ref;
+    const bibN=o.role==="bib";
+    let body;
+    if(lv){
+      body=`<div class="h h${Math.min(lv,4)}" contenteditable="true" data-i="${i}"
+        >${o.rich?safeRich(o.rich):esc(o.text||"")}</div>`;
+    }else if(w.mode==="sent"&&!bibN){       // 文献著录是一个整体，不拆句
+      const ss=wrSentences(o.text);
+      body=`<div class="p sent" contenteditable="true" data-i="${i}">`
+        +(ss.length?ss.map(z=>`<div class="sn">${esc(z)}</div>`).join("")
+          :`<div class="sn"></div>`)+`</div>`;
+    }else{
+      body=`<div class="p${bibN?" bibp":""}" contenteditable="true" data-i="${i}"
+        >${o.rich?safeRich(o.rich):esc(o.text||"")}</div>`;
+    }
+    h+=`<div class="blk${lv?" hd":""}${isTwin?" tw":""}" data-i="${i}" data-id="${c.id}">
+      <div class="gut">
+        ${lv?`<span class="num">${nums[i]}</span>`:""}
+        ${vs.length>1?`<span class="vb">${vs.map((v,k)=>
+          `<button class="vv${v.id===o.verOn?" on":""}" data-i="${i}" data-v="${v.id}"
+            title="${esc(verLabel(v,k))}">${esc(verLabel(v,k))}</button>`).join("")}</span>`:""}
+        <button class="vadd" data-i="${i}" title="${esc(t("wrVerNew"))}">+</button>
+      </div>
+      ${body}
+    </div>`;
+  });
+  main.innerHTML=h||`<div class="wrempty">${esc(t("wrEmpty"))}</div>`;
+  $("wrcount").textContent=t("wrWords").replace("{n}",
+    list.reduce((n,c)=>n+((orig(c).text||"").replace(/\s/g,"").length),0));
+}
+
+/* ---- 交互 ---- */
+function wrBind(){
+  const main=$("wrmain");
+  main.addEventListener("input",e=>{
+    const el=e.target.closest("[contenteditable]");if(!el)return;
+    const c=wrCards()[+el.dataset.i];if(!c)return;
+    const o=orig(c);
+    if(isLocked(c.id))return;
+    if(el.classList.contains("sent"))o.text=[...el.querySelectorAll(".sn")]
+      .map(z=>z.innerText.trim()).filter(Boolean).join("");
+    else{o.text=el.innerText;if(o.rich)o.rich=el.innerHTML}
+    verStash(o);
+    clearTimeout(wrT);wrT=setTimeout(()=>{save();wrSideSoon()},260);
+  });
+  main.addEventListener("keydown",e=>{
+    const el=e.target.closest("[contenteditable]");if(!el)return;
+    e.stopPropagation();
+    if(e.key==="Escape"){el.blur();return}
+    if(e.key==="Enter"&&!e.shiftKey&&el.classList.contains("sent")){
+      // 逐句模式：回车另起一句，而不是另起一段
+      e.preventDefault();
+      document.execCommand("insertHTML",false,"<div class='sn'><br></div>");
+    }
+  });
+  main.addEventListener("click",e=>{
+    const v=e.target.closest(".vv");
+    if(v){const c=wrCards()[+v.dataset.i];if(c)verUse(c,v.dataset.v);drawWrite();return}
+    const a=e.target.closest(".vadd");
+    if(a){
+      const c=wrCards()[+a.dataset.i];if(!c)return;
+      if(isLocked(c.id)){toast(t("lockedNote"));return}
+      verNew(c,true);drawWrite();
+      toast(t("wrVerMade"));
+      return;
+    }
+  });
+  main.addEventListener("contextmenu",e=>{
+    const blk=e.target.closest(".blk");if(!blk)return;
+    e.preventDefault();
+    const c=card(blk.dataset.id);if(!c)return;
+    wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i);
+  });
+  $("wrside").addEventListener("click",e=>{
+    const b=e.target.closest(".wrnav");if(!b)return;
+    const el=$("wrmain").querySelector(`.blk[data-i="${b.dataset.i}"]`);
+    if(el)el.scrollIntoView({behavior:"smooth",block:"start"});
+  });
+}
+let wrT,wrSideT;
+function wrSideSoon(){clearTimeout(wrSideT);wrSideT=setTimeout(drawWrite,500)}
+function wrBlockMenu(x,y,c,i){
+  const o=orig(c),vs=verList(o),w=wrState();
+  const items=[{head:snippet(o,26)||t("wrUntitled")}];
+  items.push({label:t("wrVerNew"),on:()=>{verNew(c,true);drawWrite()}});
+  items.push({label:t("wrVerBlank"),on:()=>{verNew(c,false);drawWrite()}});
+  if(vs.length>1){
+    items.push({label:t("wrVerPick"),sub:[{head:t("wrVerPick")},
+      ...vs.map((v,k)=>({label:verLabel(v,k)+"　"+new Date(v.t).toLocaleDateString(),
+        check:v.id===o.verOn,on:()=>{verUse(c,v.id);drawWrite()}}))]});
+    items.push({label:t("wrVerName"),on:()=>{
+      const v=vs.find(z=>z.id===o.verOn);if(!v)return;
+      const n=prompt(t("wrVerName"),v.name||"");
+      if(n!==null){snap();v.name=n.trim();save();drawWrite()}
+    }});
+    items.push({label:t("wrVerDel"),danger:true,on:()=>{verDel(c,o.verOn);drawWrite()}});
+  }
+  items.push("-",
+    {label:t("wrGoCanvas"),on:()=>{closeWrite();sel=[c.id];paintSel();focusOn([c])}},
+    {label:t("wrRemove"),on:()=>{snap();w.ids.splice(i,1);save();drawWrite()}});
+  menuAt(x,y,items);
+}
+
+function syncWrBar(){
+  const w=wrState();
+  $("wrmodeP").classList.toggle("on",w.mode!=="sent");
+  $("wrmodeS").classList.toggle("on",w.mode==="sent");
+  $("wrtwin").classList.toggle("on",!!w.twin);
+  $("wrtitle").textContent=t("wrTitle");
+  $("wrmodeP").textContent=t("wrPara");
+  $("wrmodeS").textContent=t("wrSent");
+  $("wrtwin").textContent=t("wrTwin");
+  $("wrclose").textContent=t("wrBack");
+}
+wrBind();
+$("wrclose").onclick=closeWrite;
+$("wrmodeP").onclick=()=>{wrState().mode="para";save();drawWrite();syncWrBar()};
+$("wrmodeS").onclick=()=>{wrState().mode="sent";save();drawWrite();syncWrBar()};
+$("wrtwin").onclick=()=>{const w=wrState();w.twin=!w.twin;save();drawWrite();syncWrBar()};
+
 /* ================= full screen ================= */
 const isFS=()=>!!(document.fullscreenElement||document.webkitFullscreenElement);
 async function goFS(){try{const e=document.documentElement;
@@ -5740,6 +6117,7 @@ function boardMenu(x,y){
     {label:t("selectAll"),key:"⌘A",on:()=>{sel=S.cards.map(c=>c.id);paintSel()}},
     {label:t("fitView"),key:"F",on:()=>fit()},
     {label:t("zoom100"),key:"0",on:()=>camTo(tgt.x,tgt.y,1)},
+    {label:t("wrOpen"),key:"W",on:()=>openWrite()},
     {label:t("search"),key:"⌘F",on:()=>showFind(true)},
     {label:t("mapMenu"),key:"M",check:mapOn,on:toggleMap},
     "-",
@@ -5775,7 +6153,6 @@ function cardItems(x,y){
       {head:t("roleHead")},
       {label:t("roleApx"),check:card(sel[0])?.role==="apx",on:()=>setRole("apx")},
       {label:t("roleAside"),check:card(sel[0])?.role==="aside",on:()=>setRole("aside")},
-      {label:t("roleQuote"),check:card(sel[0])?.role==="quote",on:()=>setRole("quote")},
       {label:t("roleBib"),check:card(sel[0])?.role==="bib",on:()=>setRole("bib")}]},
     "-",
     {label:t("linkFromHere"),on:()=>{linkFrom=sel[0];stage.style.cursor="crosshair";toast(t("clickTarget"))}}
@@ -5786,6 +6163,9 @@ function cardItems(x,y){
       const r=await putImg(d);one.ih=r.h;if(r.ok)delete one.src;else one.src=d;
       one.ar=h/w;render();save()})};
     inp.click()}});
+  items.push({label:t("wrSend"),sub:[{head:t("wrSend")},
+    {label:t("wrSendNew"),on:()=>wrImport(sel.slice(),false)},
+    {label:t("wrSendAdd"),on:()=>wrImport(sel.slice(),true)}]});
   items.push({label:t("lockMenu"),sub:[{head:t("lockMenu")},...lockItems(()=>sel.slice())]});
   if(sel.length>1)items.push({label:t("alignDistribute"),sub:[
     {head:t("align")},
