@@ -630,10 +630,11 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrDocAdd:"New writing page",wrDocNew:"Draft",wrDocOpen:"Open",wrDocRename:"Rename this draft",
   wrFocus:"Focus",wrDocExport:"Export this draft…",wrDocDel:"Delete this draft",wrNoDoc:"No writing page yet",
   wrDocMeta:"{n} cards · {w} characters",
-  wrSend:"Send to a writing page",wrSendNew:"replace",wrSendAdd:"append",
-  wrSendMake:"Into a new writing page",
-  wrAdded:"{n} cards sent to {d}",wrPickFirst:"Select some cards first",
-  wrEmpty:"Nothing here yet. Select cards on the canvas and send them over.",
+  wrAdded:"{n} cards added to {d}",wrPickFirst:"Select some cards first",
+  wrEmpty:"Nothing here yet. Copy cards on the canvas, then right-click here to paste.",
+  wrInsertBlank:"Insert a blank paragraph",wrPasteHere:"Paste here",wrPasteEnd:"Paste at the end",
+  wrPasteBefore:"Paste before this",wrPasteAfter:"Paste after this",
+  wrPasteRef:"Paste twin into references",wrPasteRefCopy:"Paste as a twin into references",
   wrNoHead:"No headings yet",wrUntitled:"Untitled",wrWords:"{n} characters",
   wrRefs:"References ({n})",wrRefsNone:"Nothing attached yet",
   wrUnderPut:"File these twins under the first card",
@@ -785,10 +786,11 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrDocAdd:"新建写作页",wrDocNew:"稿子",wrDocOpen:"打开",wrDocRename:"重命名",
   wrFocus:"专注",wrDocExport:"导出这份稿子…",wrDocDel:"删除这份稿子",wrNoDoc:"还没有写作页",
   wrDocMeta:"{n} 张卡片 · {w} 字",
-  wrSend:"送入写作页",wrSendNew:"替换",wrSendAdd:"追加",
-  wrSendMake:"新建一份写作页",
-  wrAdded:"已送入 {d}，共 {n} 张",wrPickFirst:"请先选中一些卡片",
-  wrEmpty:"这里还是空的。在画布上选中卡片，右键送进来。",
+  wrAdded:"已加入 {d}，共 {n} 张",wrPickFirst:"请先选中一些卡片",
+  wrEmpty:"这里还是空的。在画布上复制卡片，再到这里右键粘贴。",
+  wrInsertBlank:"插入空白段落",wrPasteHere:"粘贴到这里",wrPasteEnd:"粘贴到末尾",
+  wrPasteBefore:"粘贴到上方",wrPasteAfter:"粘贴到下方",
+  wrPasteRef:"把分身粘到引用框",wrPasteRefCopy:"作为分身粘到引用框",
   wrNoHead:"还没有分级标题",wrUntitled:"未命名",wrWords:"{n} 字",
   wrRefs:"引用与分身（{n}）",wrRefsNone:"还没有挂任何内容",
   wrUnderPut:"把分身挂到第一张卡片下",
@@ -5880,6 +5882,7 @@ function docMenu(x,y,d){
     {label:t("wrDocRename"),on:()=>{const v=prompt(t("wrDocRename"),d.title);
       if(v!==null){snap();d.title=v.trim()||d.title;render();save()}}},
     "-",
+    ...(CLIP?[{label:t("wrPasteEnd"),on:()=>wrPasteMain(d,d.ids.length)}]:[]),
     {label:t("wrDocExport"),on:()=>openWrExport(d)},
     "-",
     {label:t("wrDocDel"),danger:true,on:()=>{snap();
@@ -6068,8 +6071,10 @@ function bindDoc(el,d){
   });
   el.addEventListener("contextmenu",e=>{
     if(lock)return;
+    const ins=e.target.closest(".wrins");
     const blk=e.target.closest(".blk");
     e.preventDefault();e.stopPropagation();
+    if(ins){wrInsertMenu(e.clientX,e.clientY,d,+ins.dataset.i);return}
     if(blk){
       const c=card(blk.dataset.id);
       if(c){wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i,d);return}
@@ -6207,11 +6212,14 @@ function bindBody(root,getDoc){
 }
 // 在稿子的任意位置插入一张新卡片：不必先回画布新建再送过来，
 // 跟直接在普通页面新建卡片一样顺手；插入后立刻进入编辑。
+// 在稿子的任意位置插入一张新卡片：不必先回画布新建再送过来，
+// 跟直接在普通页面新建卡片一样顺手；插入后立刻进入编辑。
 function wrInsertAt(d,i){
   if(lock||!d)return;
   snap();
-  const ctr=toW(innerWidth/2,innerHeight/2);
-  const n={id:uid(),x:Math.round(ctr.x),y:Math.round(ctr.y),w:520,text:""};
+  // 放在稿子右边的空地，不用视口中心——用户此刻十有八九正看着这份稿子，
+  // 摆在视口中心会跟稿子本身在画布上重叠，看起来像凭空多了一份内容
+  const n={id:uid(),x:Math.round(d.x+DOCW+SIDEW+60),y:Math.round(d.y+i*10),w:520,text:""};
   invalidateIndex();S.cards.push(n);
   d.ids.splice(Math.max(0,Math.min(i,d.ids.length)),0,n.id);
   save();redrawDocs();
@@ -6227,20 +6235,44 @@ function wrPasteTwin(hostId,d){
   if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
   const host=card(hostId);if(!host)return;
   snap();
-  const ctr=toW(innerWidth/2,innerHeight/2);
+  // 同样放在稿子右边，不用视口中心，理由与 wrInsertAt 一致
+  const base=d?{x:d.x+DOCW+SIDEW+60,y:d.y}:toW(innerWidth/2,innerHeight/2);
   let k=wrKids(hostId).length,made=0;
   CLIP.items.forEach(it=>{
     const src=it.src;
     if(!src||!S.cards.some(z=>z.id===src))return;     // 分身必须指向仍然存在的源
     k++;made++;
     invalidateIndex();
-    S.cards.push({id:uid(),x:Math.round(ctr.x+k*24),y:Math.round(ctr.y+k*24),
+    S.cards.push({id:uid(),x:Math.round(base.x),y:Math.round(base.y+k*40),
       w:it.w||280,s:{...(it.s||{})},ref:src,wrUnder:hostId,lock:"text"});
   });
   if(!made){toast(t("clipEmpty"));return}
   if(d){d.open=d.open||{};d.open[hostId]=true}
   save();redrawDocs();
   toast(t("sentTwin"));
+}
+// 把剪贴板里的卡片直接放进稿子的正文顺序里：跟画布上"复制/分身、再到别处粘贴"是
+// 同一套剪贴板（CLIP），插入的是卡片本身的 id，不产生第二份内容——
+// 这是把原来"送入写作页"那个专用子菜单换成通用粘贴逻辑的入口。
+function wrPasteMain(d,i){
+  if(lock||!d)return;
+  if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
+  const ids=[...new Set(CLIP.items.map(it=>it.src))].filter(id=>S.cards.some(z=>z.id===id));
+  const uniq=ids.filter(id=>!d.ids.includes(id));
+  if(!uniq.length){toast(t("clipEmpty"));return}
+  snap();
+  d.ids.splice(Math.max(0,Math.min(i,d.ids.length)),0,...uniq);
+  save();redrawDocs();
+  toast(t("wrAdded").replace("{n}",uniq.length).replace("{d}",d.title));
+}
+// 段落之间那条"+"插入线的右键菜单：插入空白段落，或者把剪贴板里的卡片粘到这个位置——
+// 跟画布上"选中卡片→剪贴板→到别处粘贴"是完全同一套逻辑，不再是另一套专门的
+// "送入写作页"操作。
+function wrInsertMenu(x,y,d,i){
+  if(!d)return;
+  const items=[{label:t("wrInsertBlank"),on:()=>wrInsertAt(d,i)}];
+  if(CLIP)items.push({label:t("wrPasteHere"),on:()=>wrPasteMain(d,i)});
+  menuAt(x,y,items);
 }
 // 内容变了就重画：画布上的稿子和专注模式都刷一遍，两边始终一致
 function redrawDocs(){
@@ -6265,8 +6297,11 @@ function wrBind(){
     if(el)el.scrollIntoView({behavior:"smooth",block:"start"});
   });
   $("wrmain").addEventListener("contextmenu",e=>{
-    const blk=e.target.closest(".blk");if(!blk)return;
+    const ins=e.target.closest(".wrins");
+    const blk=e.target.closest(".blk");
+    if(!ins&&!blk)return;
     e.preventDefault();e.stopPropagation();
+    if(ins){wrInsertMenu(e.clientX,e.clientY,wrDoc(),+ins.dataset.i);return}
     const c=card(blk.dataset.id);if(!c)return;
     wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i,wrDoc());
   });
@@ -6300,6 +6335,10 @@ function wrBlockMenu(x,y,c,i,d){
     items.push({label:t("wrVerDel"),danger:true,on:()=>{verDel(c,o.verOn);redrawDocs()}});
   }
   items.push("-",{label:t("wrVerCopy"),on:()=>verToClip(c,o.verOn)});
+  if(CLIP&&d)items.push("-",
+    {label:t("wrPasteBefore"),on:()=>wrPasteMain(d,i)},
+    {label:t("wrPasteAfter"),on:()=>wrPasteMain(d,i+1)},
+    {label:CLIP.mode==="twin"?t("wrPasteRef"):t("wrPasteRefCopy"),on:()=>wrPasteTwin(c.id,d)});
   items.push("-",{label:isLocked(c.id)?t("unlockAll"):t("lockText"),
     on:()=>{setCardLock([c.id],isLocked(c.id)?null:"text");redrawDocs()}});
   items.push("-",
@@ -6682,12 +6721,6 @@ function cardItems(x,y){
       snap();twins.forEach(z=>{z.wrUnder=host.id});save();render();
       toast(t("wrUnderDone").replace("{n}",twins.length));
     }});
-  items.push({label:t("wrSend"),sub:[{head:t("wrSend")},
-    ...(docs().length?docs().flatMap(d=>[
-      {label:d.title+"　"+t("wrSendNew"),on:()=>wrImport(sel.slice(),false,d.id)},
-      {label:d.title+"　"+t("wrSendAdd"),on:()=>wrImport(sel.slice(),true,d.id)}]):[]),
-    ...(docs().length?["-"]:[]),
-    {label:t("wrSendMake"),on:()=>{const d=addDoc(null);wrImport(sel.slice(),false,d.id)}}]});
   items.push({label:t("lockMenu"),sub:[{head:t("lockMenu")},...lockItems(()=>sel.slice())]});
   if(sel.length>1)items.push({label:t("alignDistribute"),sub:[
     {head:t("align")},

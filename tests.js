@@ -1983,7 +1983,64 @@ group("wredit 写作页自由编辑", async (c) => {
   });
   c.ok("可以把分身粘到段落下方的折叠引用框里", paste.made === 1 && paste.ref === "p2");
 
+  // 分身卡片的位置不能落在稿子本身的画面范围内，否则看起来像是内容显示了两次
+  const twinPos = await c.run(() => {
+    const kid = wrKids("h1")[0];
+    const d = S.docs[0];
+    return { x: kid.x, y: kid.y, docRight: d.x + DOCW + SIDEW, docLeft: d.x,
+      docTop: d.y, docBottom: d.y + 640 };
+  });
+  c.ok("分身卡片不落在稿子的画面范围内（不会看起来像重复显示）",
+    twinPos.x >= twinPos.docRight || twinPos.x < twinPos.docLeft
+      || twinPos.y < twinPos.docTop || twinPos.y >= twinPos.docBottom);
+
+  // 用统一的"剪贴板→右键粘贴"逻辑把一张卡片直接放进正文顺序（不是分身，是卡片本身）。
+  // p2 之前已经被"移出稿子"（不是删除），此刻仍是真实卡片，只是不在 d.ids 里，
+  // 用它来测试"粘回正文"最合适。
+  const pasteMain = await c.run(() => {
+    sel = ["p2"]; clipCards("copy");
+    const before = S.docs[0].ids.length;
+    wrPasteMain(S.docs[0], 1);
+    return { before, after: S.docs[0].ids.length, at1: S.docs[0].ids[1] };
+  });
+  c.ok("可以用剪贴板把卡片粘进正文顺序", pasteMain.after === pasteMain.before + 1);
+  c.ok("粘进去的是卡片本身，不是复制品", pasteMain.at1 === "p2");
+  const noDup = await c.run(() => {
+    const before = S.docs[0].ids.length;
+    sel = ["p2"]; clipCards("copy");
+    wrPasteMain(S.docs[0], 0);
+    return { before, after: S.docs[0].ids.length };
+  });
+  c.ok("已经在稿子里的卡片不会被重复粘入", noDup.after === noDup.before);
+
+  // 插入线的右键菜单：应该同时给出"插入空白段落"和"粘贴"两个选项
+  const insMenu = await c.run(() => {
+    sel = ["p1"]; clipCards("copy");
+    const ins = document.querySelector('#docs .doc .wrins[data-i="0"]');
+    ins.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
+    return { items: [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim()),
+      blankLbl: t("wrInsertBlank"), pasteLbl: t("wrPasteHere") };
+  });
+  c.ok("插入线右键菜单同时提供插入空白段落与粘贴",
+    insMenu.items.some((z) => z.includes(insMenu.blankLbl)) && insMenu.items.some((z) => z.includes(insMenu.pasteLbl)));
+  await c.run(() => closeMenus());
+
   await c.run(() => { S.docs = []; render(); });
+});
+
+group("wrsend 送入写作页改用统一剪贴板", async (c) => {
+  await c.board([{ id: "a", x: 0, y: 0, w: 300, text: "甲卡片", s: {} }], []);
+  const r = await c.run(() => {
+    sel = ["a"]; paintSel();
+    cardMenu(50, 50);
+    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    return { items, twinLbl: t("clipTwinDo"), copyLbl: t("clipCopyDo") };
+  });
+  c.ok("卡片右键菜单不再有单独的送入写作页",
+    !r.items.some((z) => z.includes("写作页") || z.toLowerCase().includes("writing page")));
+  c.ok("复制与分身剪贴板选项还在",
+    r.items.some((z) => z.includes(r.twinLbl)) && r.items.some((z) => z.includes(r.copyLbl)));
+  await c.run(() => closeMenus());
 });
 
 group("ports 连接点", async (c) => {
