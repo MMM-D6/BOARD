@@ -1733,87 +1733,99 @@ group("image 图片导入", async (c) => {
   c.ok("图片按内容哈希单独存放", await c.run(() => S.cards.every((z) => !z.src || z.ih)));
 });
 
-group("write 线性写作", async (c) => {
-  await c.run(() => {
-    const L = (a2, b2) => ({ id: uid(), a: a2, b: b2, st: true, kind: "curve", arrow: "none", w: 1.4, color: "#8A8A85" });
+group("write 写作页", async (c) => {
+  const r = await c.run(() => {
     S.cards = [
-      { id: "h1", x: 0, y: 0, w: 320, text: "理论框架", level: 1, s: {} },
-      { id: "p1", x: 400, y: 0, w: 400, text: "这是第一段。它包含两句话。", s: {} },
-      { id: "h2", x: 0, y: 300, w: 320, text: "digital body", level: 2, s: {} },
-      { id: "p2", x: 400, y: 300, w: 400, text: "第二段内容在这里。", s: {} },
-      { id: "tw", ref: "p1", x: 800, y: 600, w: 400, lock: "text", s: {} },
+      { id: "h1", x: 0, y: 0, w: 320, text: "理论框架", level: 1, s: { size: 22 } },
+      { id: "p1", x: 400, y: 0, w: 400, text: "第一段内容。", s: { size: 15 }, bg: "rgba(90,190,105,.14)" },
+      { id: "p2", x: 400, y: 300, w: 400, text: "第二段内容。", s: { size: 15 } },
+      { id: "tw", ref: "p1", x: 900, y: 0, w: 400, s: {} },
     ];
-    S.links = [L("h1", "h2")]; S.frames = []; S.sheets = []; S.wr = null;
+    S.links = []; S.frames = []; S.sheets = []; S.docs = [];
     invalidateIndex(); render();
-    wrImport(["h1", "p1", "h2", "p2", "tw"], false);
+    const d = addDoc({ x: 0, y: 900 }, "我的论文");
+    wrImport(["h1", "p1", "p2"], false, d.id);
+    return { docs: S.docs.length, ids: S.docs[0].ids.length, title: S.docs[0].title };
   });
-  await c.wait(700);
-  c.ok("可以打开线性写作", await c.run(() => document.body.classList.contains("wr")));
-  const st = await c.run(() => ({
-    nav: document.querySelectorAll("#wrside .wrnav").length,
-    blocks: document.querySelectorAll("#wrmain .blk").length,
-    h1: !!document.querySelector("#wrmain .h.h1"),
+  c.ok("可以新建有名字的写作页", r.docs === 1 && r.title === "我的论文");
+  c.ok("可以把卡片送进去", r.ids === 3);
+  await c.wait(400);
+  c.ok("写作页在画布上是独立对象",
+    (await c.run(() => document.querySelectorAll("#docs .doc").length)) === 1);
+
+  await c.run(() => openWrite(S.docs[0].id));
+  await c.wait(500);
+  c.ok("可以打开写作页", await c.run(() => document.body.classList.contains("wr")));
+  c.ok("侧栏显示稿子名", (await c.run(() => $("wrtitle").textContent)) === "我的论文");
+
+  // 所见即所得：保留卡片本身的字号与底色
+  const sty = await c.run(() => {
+    const cap = document.querySelector('#wrmain .blk[data-id="p1"] .cap');
+    const wrap = document.querySelector('#wrmain .blk[data-id="p1"] .wrap');
+    return { size: getComputedStyle(cap).fontSize, bg: getComputedStyle(wrap).background,
+      h1: getComputedStyle(document.querySelector('.blk[data-id="h1"] .cap')).fontSize };
+  });
+  c.ok("保留卡片字号", sty.size === "15px" && sty.h1 === "22px");
+  c.ok("保留卡片底色", /rgba?\(/.test(sty.bg));
+
+  const rn = await c.run(() => {
+    verNew(card("p2"), true); drawWrite();
+    return [...document.querySelectorAll('.blk[data-id="p2"] .vv')].map((z) => z.textContent.trim());
+  });
+  c.ok("版本用罗马数字", rn[0] === "I" && rn[1] === "II");
+
+  c.ok("每段下方有折叠框",
+    await c.run(() => !!document.querySelector('.blk[data-id="p1"] .fold .fh')));
+  const fold = await c.run(() => {
+    card("tw").wrUnder = "p1"; drawWrite();
+    const f = document.querySelector('.blk[data-id="p1"] .fold');
+    f.querySelector(".fh").click();
+    return { refs: f.querySelectorAll(".ref").length, open: f.classList.contains("on") };
+  });
+  c.ok("分身可以挂到卡片下方并展开", fold.refs === 1 && fold.open);
+
+  c.ok("顶栏是迭代与 Context", await c.run(() => !!$("wrmodeI") && !!$("wrmodeC")));
+  await c.page.click("#wrmodeC");
+  await c.wait(400);
+  c.ok("Context 模式只呈现连贯文本", await c.run(() =>
+    S.docs[0].mode === "ctx" && document.querySelectorAll("#wrmain .vv").length === 0));
+  await c.page.click("#wrmodeI");
+  await c.wait(300);
+
+  c.ok("可以把某一版复制到剪贴板", await c.run(() => {
+    const cc = card("p2"); verToClip(cc, orig(cc).verOn);
+    return CLIP && CLIP.mode === "copy" && CLIP.items.length === 1 && !CLIP.items[0].snap.vers;
   }));
-  c.ok("侧栏目录只列标题", st.nav === 2);
-  c.ok("分身默认隐藏", st.blocks === 4);
-  c.ok("标题按层级排版", st.h1);
 
-  await c.page.click("#wrtwin");
-  await c.wait(400);
-  c.ok("可以显示分身", (await c.run(() => document.querySelectorAll("#wrmain .blk").length)) === 5);
-  await c.page.click("#wrtwin");
-  await c.wait(300);
-
-  await c.page.click("#wrmodeS");
-  await c.wait(400);
-  c.ok("逐句模式能拆句",
-    (await c.run(() => document.querySelectorAll("#wrmain .p.sent .sn").length)) >= 3);
-  c.ok("拆句能处理无标点结尾与引号",
-    await c.run(() => wrSentences("第一句。第二句").length === 2 && wrSentences("引文。").length === 1));
-  await c.page.click("#wrmodeP");
-  await c.wait(300);
-
-  // 写作页改的就是卡片本身，不产生第二份内容
   await c.run(() => {
-    const el = [...document.querySelectorAll("#wrmain .p")].find((z) => z.innerText.includes("第二段"));
-    el.focus(); el.innerText = "第二段被改写了。";
+    const cap = document.querySelector('.blk[data-id="p2"] .cap');
+    cap.focus(); cap.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
+  });
+  await c.wait(400);
+  c.ok("写作页里也有文字工具栏", await c.run(() => $("bar").classList.contains("on")));
+
+  c.ok("导出只提供文档格式", await c.run(() => {
+    openWrExport(S.docs[0]);
+    const fs2 = [...document.querySelectorAll("#pop .fb2")].map((z) => z.dataset.f).join(",");
+    const has = !!$("wv") && !!$("wr2");
+    $("pop").classList.remove("on");
+    return fs2 === "docx,pdf" && has;
+  }));
+
+  // 写作页编辑就是改卡片本身
+  await c.run(() => {
+    const el = document.querySelector('.blk[data-id="p2"] .cap');
+    el.focus(); el.innerText = "改写过的第二段。";
     el.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await c.wait(500);
-  c.ok("写作页编辑直接改到卡片", (await c.run(() => card("p2").text)) === "第二段被改写了。");
+  c.ok("写作页编辑直接改到卡片", (await c.run(() => card("p2").text)) === "改写过的第二段。");
+  c.ok("写作页随文件保存", (await c.run(() => bundle(null).docs[0].ids.length)) === 3);
 
-  /* --- 版本迭代 --- */
-  const v = await c.run(() => {
-    const cc = card("p2");
-    verNew(cc, true);
-    const o = orig(cc);
-    o.text = "另一个版本的写法。"; verStash(o);
-    const vs = verList(cc);
-    return { n: vs.length, on: o.verOn === vs[1].id, first: vs[0].text, second: vs[1].text };
-  });
-  c.ok("可以新建版本", v.n === 2 && v.on);
-  c.ok("旧版本内容完整保留", v.first === "第二段被改写了。");
-  c.ok("新版本内容独立", v.second === "另一个版本的写法。");
-  const back = await c.run(() => {
-    const cc = card("p2"), vs = verList(cc);
-    verUse(cc, vs[0].id);
-    return { text: card("p2").text, keep: verList(cc)[1].text };
-  });
-  c.ok("可以切回旧版本", back.text === "第二段被改写了。");
-  c.ok("切换后另一版仍在", back.keep === "另一个版本的写法。");
-  await c.run(() => drawWrite());
-  await c.wait(300);
-  c.ok("版本切换器出现在正文旁",
-    (await c.run(() => document.querySelectorAll("#wrmain .vv").length)) >= 2);
-
-  c.ok("稿子顺序随文件保存", (await c.run(() => bundle(null).wr.ids.length)) === 5);
-  c.ok("版本随文件保存",
-    (await c.run(() => bundle(null).cards.find((z) => z.id === "p2").vers.length)) === 2);
-
-  await c.page.click("#wrclose");
+  await c.run(() => closeWrite());
   await c.wait(400);
   c.ok("可以返回画布", await c.run(() => !document.body.classList.contains("wr")));
-  await c.run(() => { S.wr = null; });
+  await c.run(() => { S.docs = []; });
 });
 
 group("ports 连接点", async (c) => {
