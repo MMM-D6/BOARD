@@ -1153,7 +1153,8 @@ const movableSel=()=>sel.filter(i=>!isPinned(i));     // 可移动的
 
 const size={};
 const cleanCard=c=>{const o={...c};delete o._tg;delete o._pg;return o};
-function packState(){return JSON.stringify({sheets:S.sheets,frames:S.frames,links:S.links,cards:S.cards.map(cleanCard)})}
+function packState(){return JSON.stringify({sheets:S.sheets,frames:S.frames,links:S.links,
+  cards:S.cards.map(cleanCard),docs:S.docs})}
 function unpackState(str){return JSON.parse(str)}
 // 快照要序列化整张画布，两万卡片时约 2.4MB、18ms。拖动每次按下都调它会明显掉帧，
 // 而且大多数按下并没有真正改动内容。所以改为"先记账、真的改了再落盘"：
@@ -1196,7 +1197,9 @@ function applyUndo(stack,other){
   if(!stack.length)return;
   other.push(packState());
   const p=unpackState(stack.pop());S.cards=p.cards;S.links=p.links;S.frames=p.frames||[];S.sheets=p.sheets||[];
+  S.docs=Array.isArray(p.docs)?p.docs:S.docs;
   sel=[];selLink=null;render();save();
+  if(wrOpenState())drawWrite();
 }
 
 /* ================= storage ================= */
@@ -2591,10 +2594,13 @@ function paintSel(){
   setTimeout(syncBar,0);
   nodes.forEach((el,id)=>{el.classList.toggle("sel",sel.includes(id));
     el.classList.toggle("multi",many&&sel.includes(id))});
-  // 写作页里的段落：选中但未编辑时才亮，进入编辑就交给光标本身表示状态
-  document.querySelectorAll(".blk[data-id]").forEach(el=>{
-    el.classList.toggle("sel",!editing&&sel.includes(el.dataset.id));
-  });
+  // 写作页里的段落：选中但未编辑时才亮，进入编辑就交给光标本身表示状态。
+  // 没有任何稿子渲染时（纯画布场景）直接跳过，避免每次选中都多扫一次 DOM。
+  if(docsCapNodes.size||wrmainCapNodes.size){
+    document.querySelectorAll(".blk[data-id]").forEach(el=>{
+      el.classList.toggle("sel",!editing&&sel.includes(el.dataset.id));
+    });
+  }
   drawLinks();
 }
 function measure(){
@@ -4625,15 +4631,20 @@ const INK=["#111111","#4A4A46","#9A9A94",
   "#0E6B6B","#1B4F9C","#3B2E8C","#7A1F6B","#B01858"];
 const HLS=["#FFF2A0","#FFD9A0","#FFC2C2","#F6C6E8","#D8C8F5","#C5E3FF","#BEEFD6","#DDE3E8"];
 function barCard(){return sel.length?card(sel[0]):null}
+// 写作页里 .cap 节点的索引：跟画布的 nodes 是同一个思路，渲染时批量建一次、
+// 之后 O(1) 查——hostOfCard 曾经直接 document.querySelector 按 id 现查，
+// 选中成百上千张卡片时（syncBar 逐个查）会整屏卡顿，这里改成跟 nodes 一样的 Map。
+const docsCapNodes=new Map();       // 画布上内嵌的稿子，renderDocs() 里重建
+const wrmainCapNodes=new Map();     // 专注模式的正文，drawWrite() 里重建
 // 卡片在当前视图中的宿主元素：专注模式下取写作正文里的段落，
 // 其次是画布上内嵌的稿子段落，最后退回画布上的卡片本体。
 // capOf / syncBar 都经这里取节点，写作页因此不必再有第二套定位逻辑。
 function hostOfCard(id){
   if(wrOpenState()){
-    const el=document.querySelector(`#wrmain .cap[data-id="${id}"]`);
+    const el=wrmainCapNodes.get(id);
     if(el)return el;
   }
-  const d=document.querySelector(`#docs .cap[data-id="${id}"]`);
+  const d=docsCapNodes.get(id);
   if(d)return d;
   return nodes.get(id)||null;
 }
@@ -5858,6 +5869,8 @@ function renderDocs(){
     bindDoc(el,d);
     box.appendChild(el);
   });
+  docsCapNodes.clear();
+  box.querySelectorAll(".cap[data-id]").forEach(el=>docsCapNodes.set(el.dataset.id,el));
   applyDocStyles();
 }
 function docMenu(x,y,d){
@@ -5958,7 +5971,7 @@ function openWrite(id){
 function closeWrite(){
   document.body.classList.remove("wr");
   $("write").classList.remove("on");
-  wrId=null;sel=[];editing=false;render();
+  wrId=null;sel=[];editing=false;wrmainCapNodes.clear();render();
 }
 
 // 字体名里含引号，拼进 style="" 会把属性截断，所以渲染完再逐个赋值
@@ -5983,17 +5996,21 @@ function docBodyHTML(d,extNums){
     const o=orig(c),lv=wrLevelOf(c),vs=verList(o);
     const wrapS=o.bg?`background:${esc(o.bg)};padding:12px 14px;border-radius:3px`:"";
     const locked=isLocked(c.id);
+    // 选中但未编辑的高亮直接烧进 className，跟画布卡片一致：
+    // 这样任何一次重绘（比如别处打字触发的防抖刷新）都不会把选中状态悄悄丢掉，
+    // 否则 backspace 会因为找不到 .blk.sel 而落到误删源卡片的那条老路上
+    const selCls=(!editing&&sel.length===1&&sel[0]===c.id)?" sel":"";
     const body=`<div class="cap${lv?" hd lv"+Math.min(lv,4):""}"
       contenteditable="false" data-id="${c.id}" data-ph="${esc(t("placeholder"))}" spellcheck="false"
       >${o.rich?safeRich(o.rich):esc(o.text||"")}</div>`;
     if(ctx){
-      h+=`<div class="blk ctx${locked?" lk":""}" data-i="${i}" data-id="${c.id}">
+      h+=`<div class="blk ctx${locked?" lk":""}${selCls}" data-i="${i}" data-id="${c.id}">
         <div class="wrap" style="${wrapS}">${body}</div></div>`;
       return;
     }
     const kids=wrKids(c.id);
     const openF=!!(d.open&&d.open[c.id]);
-    h+=`<div class="blk${lv?" hd":""}${locked?" lk":""}" data-i="${i}" data-id="${c.id}">
+    h+=`<div class="blk${lv?" hd":""}${locked?" lk":""}${selCls}" data-i="${i}" data-id="${c.id}">
       <div class="gut">
         ${lv?`<span class="num">${nums[i]}</span>`:""}
         ${vs.length>1?`<span class="vb">${vs.map((v,k)=>
@@ -6037,11 +6054,16 @@ function bindDoc(el,d){
       if(b.dataset.a==="exp")openWrExport(d);
     });
   });
-  // 空白处拖动整页；正文、侧栏、插入把手里的操作不触发移动
+  // stage 自己有一套"双击空白画布新建卡片"的逻辑，它不认识 .doc 内部的任何东西，
+  // 所以这份稿子范围内的双击一律拦住，不然稿子的空白（标题栏、版本号栏、折叠框……）
+  // 一双击就会在画布上凭空冒出一张新卡片
+  el.addEventListener("dblclick",e=>{if(!lock)e.stopPropagation()});
+  // 空白处拖动整页：只排除真正可交互的控件本身，version 号栏、折叠框的空白、
+  // 侧栏空白都仍然留给拖动，不然这份稿子会变得几乎无处可抓
   el.addEventListener("pointerdown",e=>{
     if(lock){e.stopPropagation();return}
     if(e.button!==0)return;
-    if(e.target.closest(".blk,.dt,.dtool,.dside,.wrins"))return;
+    if(e.target.closest(".wrap,.dt,.dtool,.vv,.vadd,.fh,.fadd,.ref,.wrnav,.wrins"))return;
     e.stopPropagation();startDocMove(e,d);
   });
   el.addEventListener("contextmenu",e=>{
@@ -6054,10 +6076,11 @@ function bindDoc(el,d){
     }
     docMenu(e.clientX,e.clientY,d);
   });
-  // 非专注状态下的侧栏：点大纲条目滚动到对应段落，不需要打开专注模式
+  // 非专注状态下的侧栏：点大纲条目滚动到对应段落，不需要打开专注模式；
+  // 空白处仍然可以拖动整份稿子，只拦住大纲按钮本身
   const side=el.querySelector(".dside");
   if(side){
-    side.addEventListener("pointerdown",e=>e.stopPropagation());
+    side.addEventListener("pointerdown",e=>{if(e.target.closest(".wrnav"))e.stopPropagation()});
     side.addEventListener("click",e=>{
       const b=e.target.closest(".wrnav");if(!b)return;
       const t2=el.querySelector(`.dbody .blk[data-i="${b.dataset.i}"]`);
@@ -6090,6 +6113,8 @@ function drawWrite(){
   const nums=wrNums(list);
   $("wrside").innerHTML=wrOutlineHTML(list,nums);
   $("wrmain").innerHTML=docBodyHTML(d,nums);
+  wrmainCapNodes.clear();
+  $("wrmain").querySelectorAll(".cap[data-id]").forEach(el=>wrmainCapNodes.set(el.dataset.id,el));
   applyDocStyles($("wrmain"));
   $("wrcount").textContent=t("wrWords").replace("{n}",
     list.reduce((n,c)=>n+((orig(c).text||"").replace(/\s/g,"").length),0));
@@ -6113,20 +6138,24 @@ function bindBody(root,getDoc){
     verStash(o);
     clearTimeout(wrT);wrT=setTimeout(()=>{save();refreshDocMeta()},320);
   });
-  // 单击一段：选中它，不进入编辑，backspace/delete 可以直接把它移出稿子
+  // 单击一段的正文气泡才选中它，不进入编辑；.gut/.fold 之外的空白（版本号栏、
+  // 段落间的空隙）仍然留给"拖动整份稿子"，不然这份稿子几乎无处可抓、挪不动位置
   root.addEventListener("pointerdown",e=>{
     if(lock||e.button!==0)return;
-    const blk=e.target.closest(".blk");if(!blk)return;
-    if(e.target.closest(".gut,.fold,.wrins"))return;   // 交给各自的按钮处理
-    const cap=blk.querySelector(".cap");
+    const wrap=e.target.closest(".wrap");if(!wrap)return;
+    const blk=wrap.closest(".blk");if(!blk)return;
+    const cap=wrap.querySelector(".cap");
     if(cap&&cap.isContentEditable)return;               // 编辑中：交给浏览器放置光标/划选
     e.stopPropagation();
     sel=[blk.dataset.id];selLink=null;editing=false;paintSel();syncBar();
   });
-  // 双击一段的正文才进入编辑，行为与画布上的卡片完全一致（含按落点选词）
+  // 双击一段的正文才进入编辑，行为与画布上的卡片完全一致（含按落点选词）。
+  // 必须 stopPropagation：不然事件会冒泡到 stage 自己的双击处理——那是"双击空白画布新建卡片"，
+  // 它不认识 .cap/.blk 是"已经算一张卡片"，会在这里凭空多建一张卡片出来。
   root.addEventListener("dblclick",e=>{
     if(lock)return;
     const cap=e.target.closest(".cap");if(!cap)return;
+    e.stopPropagation();
     if(cap.isContentEditable)return;                    // 已在编辑中：交给浏览器原生的双击选词
     const c=card(cap.dataset.id);if(!c)return;
     sel=[c.id];selLink=null;paintSel();

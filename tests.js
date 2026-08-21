@@ -1774,7 +1774,11 @@ group("docpage 稿子在画布上", async (c) => {
   await c.run(() => camTo(0, 0, 1, true));
   await c.wait(300);
 
-  // 双击才真正进入编辑，跟普通页面的卡片一致
+  // 双击才真正进入编辑，跟普通页面的卡片一致。
+  // 稿子摆在世界坐标 x≈1200 处（故意避开卡片本体），先把镜头摇过去，
+  // 不然它落在测试视口之外，真实的鼠标点击会打在空白上，什么都点不中。
+  await c.run(() => camTo(-1510, -274, 1, true));
+  await c.wait(300);
   const p2r = await c.run(() => {
     const r = document.querySelector('#docs .doc .blk[data-id="p2"] .cap').getBoundingClientRect();
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
@@ -1940,7 +1944,8 @@ group("wredit 写作页自由编辑", async (c) => {
   // 单击选中一段（不进入编辑），backspace 把它从稿子里移出，源卡片不受影响
   const rm = await c.run(() => {
     const blk = document.querySelector('#docs .doc .blk[data-id="p2"]');
-    blk.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    const wrap = blk.querySelector(".wrap");
+    wrap.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
     const selectedNotEditing = blk.classList.contains("sel")
       && blk.querySelector(".cap").getAttribute("contenteditable") === "false";
     const before = S.docs[0].ids.length;
@@ -1950,6 +1955,24 @@ group("wredit 写作页自由编辑", async (c) => {
   c.ok("单击只选中不进入编辑", rm.selectedNotEditing);
   c.ok("选中后按删除键移出稿子", rm.after === rm.before - 1);
   c.ok("源卡片本身没有被删除", rm.stillOnCanvas);
+
+  // 写作页的操作要能撤销：undo 应该把刚才移出的段落还原回来
+  const undone = await c.run(() => {
+    applyUndo(undo, redo);
+    return { ids: S.docs[0].ids.length, back: S.docs[0].ids.includes("p2") };
+  });
+  c.ok("写作页的删除可以撤销", undone.ids === rm.before && undone.back);
+  await c.run(() => { applyUndo(redo, undo); });   // redo 回到移出之后，方便后续断言
+
+  // 选中状态要扛得住重绘：别处的操作触发重画后，选中高亮不能悄悄消失，
+  // 否则再按删除键会因为找不到 .blk.sel 落到误删源卡片的老路上
+  const survive = await c.run(() => {
+    const wrap = document.querySelector('#docs .doc .blk[data-id="p1"] .wrap');
+    wrap.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+    redrawDocs();  // 模拟别处操作触发的重绘
+    return !!document.querySelector('#docs .doc .blk[data-id="p1"].sel');
+  });
+  c.ok("重绘之后选中高亮仍然保留", survive);
 
   // 粘贴一个分身到折叠引用框里
   const paste = await c.run(() => {
