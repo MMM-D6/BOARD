@@ -33,30 +33,39 @@
   #docs{position:absolute;left:0;top:0;pointer-events:none}
   /* 稿子是画布上真正的一页：尺寸在世界坐标里固定，随画布一起缩放。
      内部一律用普通像素，不要乘 --iz，那是给固定大小的界面元素用的。 */
-  .doc{position:absolute;pointer-events:auto;background:var(--panel);
-    border:1px solid var(--pline);border-radius:8px;
-    box-shadow:0 2px 14px rgba(0,0,0,.05);display:flex;align-items:stretch;
-    overflow:hidden;height:640px}
-  .doc.on{box-shadow:0 4px 26px rgba(0,0,0,.10);border-color:var(--frame)}
+  /* 稿子的外框只负责定位；圆角与裁剪交给内部的 .dwrap，
+     这样标题可以像页面框那样挂在左上角外侧而不被裁掉 */
+  .doc{position:absolute;pointer-events:auto}
+  .doc .dwrap{display:flex;align-items:stretch;overflow:hidden;height:640px;
+    background:var(--panel);border:1px solid var(--pline);border-radius:8px;
+    box-shadow:0 2px 14px rgba(0,0,0,.05)}
+  .doc.on .dwrap{box-shadow:0 4px 26px rgba(0,0,0,.10);border-color:var(--frame)}
+  /* 标题与页面框的标题同一个位置、同一种观感：左上角外侧的一行小字，
+     跟着画布缩放保持可读大小（它在稿子的画面之外，不参与正文排版） */
+  .doc .dttl{position:absolute;left:calc(2px * var(--iz));bottom:100%;
+    margin-bottom:calc(5px * var(--iz));display:flex;align-items:center;
+    gap:calc(10px * var(--iz));white-space:nowrap}
+  .doc .dt{font:500 calc(12px * var(--iz))/1.2 "IBM Plex Sans","PingFang SC",sans-serif;
+    color:var(--fr);cursor:text;outline:none;padding:calc(2px * var(--iz)) 0;min-width:calc(30px * var(--iz))}
+  .doc.on .dt{color:var(--frame)}
+  .doc .dtool{display:flex;gap:calc(2px * var(--iz));opacity:0;transition:opacity .14s;flex:none}
+  .doc:hover .dtool{opacity:1}
+  .doc .dtool button{border:none;background:none;cursor:pointer;color:inherit;opacity:.45;
+    font-size:calc(10.5px * var(--iz));padding:calc(1px * var(--iz)) calc(6px * var(--iz));
+    border-radius:calc(5px * var(--iz));font-family:"IBM Plex Mono",monospace}
+  .doc .dtool button:hover{background:var(--phi);opacity:.95}
+  .doc .dtool button.on{background:var(--pfg);color:var(--panel);opacity:1}
   /* 侧栏与画布上的一样常显：稿子不再靠内容把整张卡片撑得没边，
      而是像 Word 文档那样在固定高度里用滚动条翻看 */
   .doc .dside{width:200px;flex:none;overflow:auto;padding:16px 12px;
     border-right:1px solid var(--pline);background:var(--wside,var(--panel))}
   .doc .dmain{flex:1;min-width:0;display:flex;flex-direction:column}
-  .doc .dhead{display:flex;align-items:baseline;gap:12px;margin:0;flex:none;
-    padding:26px 40px 14px;border-bottom:1px solid var(--pline)}
-  .doc .dt{font-size:23px;font-weight:600;line-height:1.3;cursor:text;flex:1;
-    outline:none;word-break:break-word}
-  .doc .dm{opacity:.32;font:400 11px/1.4 "IBM Plex Mono",monospace;flex:none;white-space:nowrap}
-  .doc .dtool{display:flex;gap:2px;opacity:0;transition:opacity .14s;flex:none}
-  .doc:hover .dtool{opacity:1}
-  .doc .dtool button{border:none;background:none;cursor:pointer;color:inherit;opacity:.45;
-    font-size:11px;padding:2px 7px;border-radius:5px;font-family:"IBM Plex Mono",monospace}
-  .doc .dtool button:hover{background:var(--phi);opacity:.95}
-  .doc .dtool button.on{background:var(--pfg);color:var(--panel);opacity:1}
-  .doc .dbody{flex:1;overflow:auto;padding:22px 40px 160px 120px}
+  /* 稿子最上方的一条文字工具栏，位置固定，不必为了改格式一路往上拉 */
+  .doc .dbar{flex:none;border-bottom:1px solid var(--pline)}
+  .doc .dbody{flex:1;overflow:auto;padding:22px 40px 160px 78px}
   .doc .dempty{opacity:.32;font-size:13px;line-height:2;padding:20px 0}
   body.lock .doc .dtool{display:none}
+  body.lock .doc .dbar{display:none}
   .sheet{position:absolute;background:var(--shbg);border:1px solid var(--shln);
     border-radius:1px;pointer-events:none;box-shadow:0 1px 6px rgba(0,0,0,.06)}
   .sheet .split{position:absolute;left:50%;top:0;bottom:0;width:0;
@@ -408,8 +417,10 @@
   body.wr #stage,body.wr #find,body.wr #map{display:none !important}
   #wrleft{width:250px;flex:none;border-right:1px solid var(--wline);
     display:flex;flex-direction:column;background:var(--wside)}
-  #wrtitle{padding:20px 20px 10px;font:400 9.5px/1 "IBM Plex Mono",monospace;
-    letter-spacing:.16em;text-transform:uppercase;opacity:.35}
+  /* 稿子名放在整页的左上角，跟画布上的页面标题同一个位置、同一种观感 */
+  #wrtitle{padding:16px 18px 10px;font:500 13px/1.35 "IBM Plex Sans","PingFang SC",sans-serif;
+    opacity:.72;outline:none;cursor:text;word-break:break-word}
+  #wrtitle:focus{opacity:1}
   #wrside{flex:1;overflow:auto;padding:4px 10px 30px}
   .wrnav{display:flex;gap:8px;width:100%;text-align:left;border:none;background:none;
     cursor:pointer;color:inherit;padding:5px 10px;border-radius:6px;font-size:12.5px;
@@ -422,86 +433,94 @@
   .wrnav.l3{padding-left:38px;opacity:.75;font-size:12px}
   .wrnav.l4{padding-left:52px;opacity:.65;font-size:11.5px}
   #wrbody{flex:1;display:flex;flex-direction:column;min-width:0}
-  #wrbar{display:flex;align-items:center;gap:2px;padding:9px 22px;
-    border-bottom:1px solid var(--wline);font-size:12.5px}
-  .wb{height:26px;padding:0 10px;border:none;background:none;border-radius:7px;
-    cursor:pointer;color:inherit;font-size:12.5px;opacity:.6}
+  #wrbar{display:flex;align-items:center;gap:1px;padding:3px 14px;
+    border-bottom:1px solid var(--wline);font-size:12px}
+  .wb{height:23px;padding:0 8px;border:none;background:none;border-radius:6px;
+    cursor:pointer;color:inherit;font-size:12px;opacity:.6}
   .wb:hover{background:var(--whi);opacity:1}
   .wb.on{background:var(--pfg);color:var(--panel);opacity:1}
-  .wb.close{margin-left:auto;opacity:.75}
-  .wsep{width:1px;height:14px;background:var(--wline);margin:0 7px}
-  #wrcount{margin-left:auto;font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.32;
-    padding-right:14px}
-  #wrmain{flex:1;overflow:auto;padding:52px 0 44vh;outline:none}
-  .blk{position:relative;max-width:660px;margin:0 auto;padding:2px 0}
-  .blk .gut{position:absolute;right:100%;top:2px;width:110px;padding-right:16px;
-    display:flex;align-items:center;justify-content:flex-end;gap:4px;
+  .wb.close{opacity:.75}
+  .wsep{width:1px;height:13px;background:var(--wline);margin:0 6px}
+  .wrgap{margin-left:auto}
+  #wrmain{flex:1;overflow:auto;padding:44px 0 44vh;outline:none}
+
+  /* ---- 稿子最上方那条真正管用的文字工具栏 ----
+     它直接调用画布用的同一批函数（cmd / setInkColor / setHighlight / setAlign / setSize），
+     不是另写一套，所以加粗、标色在写作页与画布上的行为完全一致。
+     整条工具栏在捕获阶段 preventDefault，任何一次点击都不会夺走正文里的文字选区。 */
+  .fmtbar{display:flex;align-items:center;gap:1px;padding:3px 6px;flex-wrap:wrap}
+  .fmtbar .fx{height:23px;min-width:24px;padding:0 6px;border:none;background:none;
+    border-radius:6px;cursor:pointer;color:inherit;font-size:12px;line-height:1;opacity:.65;
+    display:inline-flex;align-items:center;justify-content:center;gap:4px}
+  .fmtbar .fx:hover{background:var(--whi);opacity:1}
+  .fmtbar .fx.on{background:var(--pfg);color:var(--panel);opacity:1}
+  .fmtbar .fsep{width:1px;height:13px;background:var(--wline);margin:0 5px;flex:none}
+  .fmtbar .fcell{position:relative;display:flex;align-items:center}
+  .fmtbar .fsz{font:400 11px/1 "IBM Plex Mono",monospace;opacity:.6;min-width:20px;text-align:center}
+  .fmtbar .chip{width:12px;height:12px;border-radius:3px;border:1px solid var(--pline);display:inline-block}
+  .fmtbar .fpop{position:absolute;left:0;top:100%;margin-top:4px;z-index:12;display:none;
+    padding:7px;border-radius:9px;background:var(--panel);border:1px solid var(--pline);
+    box-shadow:0 10px 30px rgba(0,0,0,.16);width:150px}
+  .fmtbar .fpop.on{display:block}
+  .fmtbar .fpop .sws{display:flex;flex-wrap:wrap;gap:5px}
+  .fmtbar .fpop .sws button{width:18px;height:18px;border-radius:50%;padding:0;
+    border:1px solid var(--pline);cursor:pointer}
+  .fmtbar .fpop .none{margin-top:7px;width:100%;height:24px;border:1px solid var(--pline);
+    background:none;border-radius:6px;cursor:pointer;color:inherit;font-size:11.5px}
+  .blk{position:relative;max-width:660px;margin:0 auto 6px;padding:1px 0}
+  /* 版本栏竖排：横排时每加一版就往左长一截，早先的版本最终会溢出到抓不到的地方。
+     竖排之后宽度恒定（34px），无论多少版都停在原地。 */
+  .blk .gut{position:absolute;right:100%;top:1px;width:34px;padding-right:10px;
+    display:flex;flex-direction:column;align-items:flex-end;gap:1px;
     opacity:0;transition:opacity .14s}
-  .blk:hover .gut,.blk .gut:focus-within{opacity:1}
-  .blk .gut .num{font:400 10.5px/1 "IBM Plex Mono",monospace;opacity:.4}
-  .blk .vb{display:flex;gap:2px}
-  .vv{border:none;background:none;cursor:pointer;color:inherit;border-radius:4px;
-    padding:1px 5px;font:400 10px/1.5 "IBM Plex Mono",monospace;opacity:.45}
+  .blk:hover .gut,.blk .gut:focus-within,.blk.sel .gut{opacity:1}
+  .blk .gut .num{font:400 10px/1.4 "IBM Plex Mono",monospace;opacity:.4}
+  .blk .vb{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
+  .vv{border:none;background:none;cursor:pointer;color:inherit;border-radius:3px;
+    padding:0 3px;min-width:18px;text-align:center;
+    font:400 9.5px/1.5 "IBM Plex Mono",monospace;opacity:.45}
   .vv:hover{background:var(--whi);opacity:.9}
   .vv.on{background:var(--pfg);color:var(--panel);opacity:1}
-  .vadd{border:none;background:none;cursor:pointer;color:inherit;opacity:.3;
-    font-size:14px;line-height:1;padding:0 3px;border-radius:4px}
-  .vadd:hover{opacity:.85;background:var(--whi)}
-  .blk .cap{outline:none;caret-color:var(--acc);white-space:pre-wrap;word-break:break-word}
+  /* 正文就是一份可以直接打字的稿子：点哪里光标就落在哪里，
+     回车切成下一张卡片，删除键在段首并回上一段，跟 Word 的手感一致 */
+  .blk .cap{outline:none;caret-color:var(--acc);white-space:pre-wrap;word-break:break-word;
+    cursor:text;user-select:text;-webkit-user-select:text}
   .blk .cap.hd{letter-spacing:-.01em}
-  .blk.lk .cap{user-select:text;cursor:text}
+  .blk.lk .cap{cursor:default;opacity:.85}
   .blk .wrap{border-radius:3px}
-  .blk .fold{margin:6px 0 0}
-  .blk .fh{display:inline-flex;align-items:center;gap:5px;border:none;background:none;
-    cursor:pointer;color:inherit;opacity:0;font-size:11px;padding:2px 0;
-    font-family:"IBM Plex Mono",monospace;letter-spacing:.06em;transition:opacity .14s}
-  /* 空的折叠框平时完全隐藏，鼠标移到这一段才浮现；挂了内容的常显 */
-  .blk:hover .fh{opacity:.34}
-  .blk .fold.has .fh,.blk .fold.on .fh{opacity:.42}
-  .blk .fh:hover{opacity:.8}
-  .blk .fh .ar{display:inline-block;transition:transform .14s;font-size:13px}
+  /* 折叠的引用与分身：正文里只留一个小折叠符号，不写出条数与说明文字。
+     .fold 本身是一块看不见但确实存在的区域，在这里右键就能粘贴分身。 */
+  .blk .fold{margin:2px 0 0;min-height:12px}
+  .blk .fh{display:inline-flex;align-items:center;justify-content:center;border:none;
+    background:none;cursor:pointer;color:inherit;opacity:0;font-size:12px;
+    width:16px;height:12px;padding:0;transition:opacity .14s}
+  .blk:hover .fh{opacity:.3}
+  .blk .fold.has .fh,.blk .fold.on .fh{opacity:.45}
+  .blk .fh:hover{opacity:.85}
+  .blk .fh .ar{display:inline-block;transition:transform .14s;line-height:1}
   .blk .fold.on .fh .ar{transform:rotate(90deg)}
-  .blk .fadd{display:inline-flex;align-items:center;justify-content:center;
-    vertical-align:middle;margin-left:4px;border:none;background:none;cursor:pointer;
-    color:inherit;opacity:0;font-size:13px;line-height:1;width:16px;height:16px;
-    border-radius:4px;transition:opacity .14s}
-  .blk:hover .fadd{opacity:.34}
-  .blk .fadd:hover{opacity:.9;background:var(--whi)}
-  .blk .fb{display:none;margin:4px 0 10px;padding-left:14px;
+  .blk .fold.has .fh .ar{font-weight:600}
+  .blk .fb{display:none;margin:2px 0 8px;padding-left:14px;
     border-left:2px solid var(--wline)}
   .blk .fold.on .fb{display:block}
-  .blk .ref{padding:6px 0;opacity:.8;font-size:13.5px;line-height:1.8}
-  .blk .rempty{padding:6px 0;opacity:.35;font-size:11.5px}
+  /* 引用条目是投影，不是内容：不可编辑，右键可以跳回原文所在的位置 */
+  .blk .ref{padding:5px 0;opacity:.75;font-size:13px;line-height:1.75;cursor:default;
+    user-select:none;-webkit-user-select:none}
+  .blk .ref:hover{opacity:.95}
+  .blk .rempty{padding:5px 0;opacity:.3;font-size:11.5px}
   .blk.ctx .gut{display:none}
   .blk.ctx{margin-bottom:2px}
   .blk .h{font-weight:600;letter-spacing:-.01em}
-  .blk{margin-bottom:14px;position:relative}
   /* 选中一段（未进入编辑）：跟画布上选中一张卡片的观感一致，
      backspace/delete 直接把它从这份稿子里移除 */
   .blk.sel{box-shadow:0 0 0 2px var(--sel);border-radius:6px}
   .blk.sel .wrap{border-radius:4px}
-  /* 任意位置插入新段落：平时是一条细线，划过才浮出"+"，跟普通页面新建卡片一样顺手 */
-  .wrins{display:block;width:100%;max-width:660px;margin:2px auto;height:14px;
-    border:none;background:none;cursor:pointer;position:relative;padding:0;
-    opacity:0;transition:opacity .12s}
-  .wrins::before{content:"";position:absolute;left:0;right:0;top:50%;height:1px;
-    background:var(--pline);transform:translateY(-50%)}
-  .wrins::after{content:"+";position:absolute;left:10px;top:50%;
-    transform:translate(0,-50%);width:18px;height:18px;border-radius:50%;
-    background:var(--pfg);color:var(--panel);font-size:13px;line-height:18px;
-    text-align:center}
-  .wrins:hover{opacity:1}
-  body.lock .wrins{display:none}
-  body.lock .blk .fadd{display:none}
-  .doc .blk .gut{position:absolute;right:100%;top:0;width:88px;padding-right:14px;
-    display:flex;align-items:center;justify-content:flex-end;gap:4px;opacity:0;
-    transition:opacity .14s}
-  .doc .blk:hover .gut{opacity:1}
+  .doc .blk .gut{top:0}
   .blk .cap:empty:before{content:attr(data-ph);opacity:.28}
-  .blk .cap.lv1{margin:40px 0 6px}
-  .blk .cap.lv2{margin:30px 0 5px}
-  .blk .cap.lv3{margin:22px 0 4px}
-  .blk .cap.lv4{margin:18px 0 3px}
+  .blk .cap.lv1{margin:34px 0 6px}
+  .blk .cap.lv2{margin:26px 0 5px}
+  .blk .cap.lv3{margin:20px 0 4px}
+  .blk .cap.lv4{margin:16px 0 3px}
   .wrempty{max-width:660px;margin:60px auto;opacity:.4;font-size:13px;text-align:center;
     line-height:2}
   #marq{position:fixed;z-index:30;display:none;border:1px solid var(--sel);
@@ -527,16 +546,17 @@
   <button id="mapx">×</button></div><div id="mapgrip"></div></div>
 <div id="write">
   <aside id="wrleft">
-    <div id="wrtitle"></div>
+    <div id="wrtitle" spellcheck="false"></div>
     <div id="wrside"></div>
   </aside>
   <main id="wrbody">
     <div id="wrbar">
+      <div class="fmtbar" id="wrfmt"></div>
+      <span class="wsep wrgap"></span>
       <button class="wb" id="wrmodeI">迭代</button>
       <button class="wb" id="wrmodeC">Context</button>
       <span class="wsep"></span>
       <button class="wb" id="wrexp">导出</button>
-      <span id="wrcount"></span>
       <button class="wb close" id="wrclose">返回画布</button>
     </div>
     <div id="wrmain" spellcheck="false"></div>
@@ -649,6 +669,19 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrGoCanvas:"Find it on the canvas",wrRemove:"Remove from the draft",
   wrRemoved:"Removed from the draft",wrInsert:"Insert a card here",
   wrRefPaste:"Paste a twin here",
+  wrRefGoto:"Go to the original",wrRefDrop:"Drop this projection",
+  wrRefDropped:"Dropped. The original is untouched.",
+  wrRefsClear:"Drop every projection here",wrRefsCleared:"{n} projections dropped",
+  wrSelToCard:"Turn the selection into a card",
+  wrAlreadyCard:"This paragraph is already one card",
+  wrMadeCards:"{n} new cards",
+  wrInsertAbove:"Blank paragraph above",wrInsertBelow:"Blank paragraph below",
+  fmtB:"Bold",fmtI:"Italic",fmtU:"Underline",fmtS:"Strikethrough",
+  fmtNoHL:"No highlight",fmtSmaller:"Smaller",fmtBigger:"Larger",
+  fmtAlign:"Alignment",fmtClear:"Clear formatting",fmtHtml:"HTML",
+  wrExpDocxNote:"Word export loads a library from the network the first time.",
+  wrExpPdfNote:"Opens the print dialogue; choose Save as PDF there.",
+  wrExpFileNote:"Written straight to a file, no network needed.",
   mapMenu:"Page map",mapFind:"Find a page",
   scaleAll:"Rescale everything…",scaleDone:"Rescaled to",scaleBad:"Enter a size between 1 and 200",
   scaleAsk:"New base text size (currently {n}). Everything scales by the same ratio: text, card widths, spacing, page frames. Manually adjusted and locked cards scale too, so their relative difference is kept.",
@@ -805,6 +838,19 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrGoCanvas:"在画布上找到它",wrRemove:"从稿子里移除",
   wrRemoved:"已从稿子里移除",wrInsert:"在这里插入一张卡片",
   wrRefPaste:"在这里粘贴分身",
+  wrRefGoto:"跳转到原文位置",wrRefDrop:"撤掉这条投影",
+  wrRefDropped:"已撤掉，原文不受影响",
+  wrRefsClear:"撤掉这里的全部投影",wrRefsCleared:"已撤掉 {n} 条投影",
+  wrSelToCard:"把选中的文字变成卡片",
+  wrAlreadyCard:"这一段本来就是一张卡片",
+  wrMadeCards:"新立了 {n} 张卡片",
+  wrInsertAbove:"在上方插入空白段落",wrInsertBelow:"在下方插入空白段落",
+  fmtB:"加粗",fmtI:"斜体",fmtU:"下划线",fmtS:"删除线",
+  fmtNoHL:"取消标记",fmtSmaller:"小一号",fmtBigger:"大一号",
+  fmtAlign:"对齐",fmtClear:"清除格式",fmtHtml:"HTML 网页",
+  wrExpDocxNote:"Word 导出首次需要从网络加载一个库",
+  wrExpPdfNote:"会打开打印对话框，在那里选「另存为 PDF」",
+  wrExpFileNote:"直接写成文件，不需要联网",
   mapMenu:"页面地图",mapFind:"查找页面",
   scaleAll:"按比例缩放全部内容…",scaleDone:"已按比例缩放",scaleBad:"请输入 1 到 200 之间的字号",
   scaleAsk:"新的基准字号（当前 {n}）。文字、卡片宽度、间距、页面框都会按同一比例缩放。手动调整过的和锁定的卡片也一并缩放，因此相对差异得以保留。",
@@ -1000,6 +1046,10 @@ function sendItems(mode){
 }
 // 卡片剪贴板：先放进去，再跳到任意位置粘贴，不必拖着跨屏
 let CLIP=null;
+// 只活在某一份稿子里的卡片：写作页里新插入的段落，以及挂在折叠框里的引用分身。
+// 它们是稿子内部的东西，不该在画布上再露一次面（那正是"看起来添加了两次"的来源），
+// 也不参与文档顺序与编号。c.wrIn 记的是它属于哪份稿子。
+const docOnly=c=>!!(c&&c.wrIn);
 function clipCards(mode){
   const cs=sel.map(card).filter(Boolean);   // 锁定的卡片同样可以做分身
   if(!cs.length){toast(t("clipNeed"));return}
@@ -1205,7 +1255,7 @@ function applyUndo(stack,other){
 }
 
 /* ================= storage ================= */
-const SCHEMA=7;                         // 数据结构版本，只增不减
+const SCHEMA=8;                         // 数据结构版本，只增不减
 function migrate(d){
   if(!d||typeof d!=="object")return d;
   const from=+d.v||1;
@@ -1229,6 +1279,13 @@ function migrate(d){
   }
   if(from<7){                            // 6 -> 7 引文角色取消，退回普通卡片
     (d.cards||[]).forEach(c=>{if(c.role==="quote")delete c.role});
+  }
+  if(from<8){                            // 7 -> 8 折叠框里的分身只活在稿子内部
+    // 旧版本把它们当普通卡片摆在画布上，于是同一段内容在画布与稿子里各显示一次。
+    // 归属的稿子按宿主卡片反查；查不到也照样标记，只是没有具体归属。
+    const host={};
+    (d.docs||[]).forEach(x=>{(x&&Array.isArray(x.ids)?x.ids:[]).forEach(i=>host[i]=x.id)});
+    (d.cards||[]).forEach(c=>{if(c.wrUnder&&!c.wrIn)c.wrIn=host[c.wrUnder]||"?"});
   }
   if(from<6){                            // 5 -> 6 文献条目的归属不再用连线表达
     const byId={};(d.cards||[]).forEach(c=>byId[c.id]=c);
@@ -1327,6 +1384,7 @@ function normCard(c){
   }
   if(o.verOn&&!(o.vers||[]).some(v=>v.id===o.verOn))delete o.verOn;
   if(o.wrUnder&&typeof o.wrUnder!=="string")delete o.wrUnder;
+  if(o.wrIn&&typeof o.wrIn!=="string")o.wrIn=String(o.wrIn);
   if(o.bib&&typeof o.bib!=="string")delete o.bib;
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
   if(o.bg&&typeof o.bg!=="string")delete o.bg;
@@ -2566,7 +2624,7 @@ const NODE_CAP=900;                        // 页面里同时存在的卡片节�
 function syncCards(){
   const box=$("cards"),r=viewRect(),want=new Set();
   const hit=[];
-  S.cards.forEach(c=>{if(inRect(c,r))hit.push(c)});
+  S.cards.forEach(c=>{if(!docOnly(c)&&inRect(c,r))hit.push(c)});
   if(hit.length>NODE_CAP){
     // 超出上限时优先保留靠近视野中心的，远处的暂不渲染，滚过去自然会补上
     const cx=(r.x+r.x2)/2,cy=(r.y+r.y2)/2;
@@ -3852,7 +3910,7 @@ function flow(cs){
   return (n>=2&&cs.length/n>=2)?columns(cs):band(cs);
 }
 function docOrder(list){
-  const all=list||S.cards;
+  const all=(list||S.cards).filter(c=>!docOnly(c));
   const main=all.filter(c=>c.role!=="apx"),apx=all.filter(c=>c.role==="apx");
   const {map,loose}=bucketByFrame(main);
   const frames=(S.frames||[]).slice().sort((a,b)=>
@@ -5851,29 +5909,32 @@ function renderDocs(){
     Object.assign(el.style,{left:d.x+"px",top:d.y+"px",width:(DOCW+SIDEW)+"px"});
     const list=d.ids.map(card).filter(Boolean);
     const nums=wrNums(list);
-    const n=d.ids.filter(id=>card(id)).length;
-    const w=d.ids.reduce((z,id)=>z+((orig(card(id)||{}).text||"").replace(/\s/g,"").length),0);
-    el.innerHTML=`<div class="dside">${wrOutlineHTML(list,nums)}</div>
-      <div class="dmain">
-        <div class="dhead">
-          <div class="dt" contenteditable="${lock?"false":"true"}" spellcheck="false"
-            >${esc(d.title)}</div>
-          <div class="dtool">
-            <button data-m="iter" class="${d.mode!=="ctx"?"on":""}">${esc(t("wrIter"))}</button>
-            <button data-m="ctx" class="${d.mode==="ctx"?"on":""}">${esc(t("wrCtx"))}</button>
-            <button data-a="focus">${esc(t("wrFocus"))}</button>
-            <button data-a="exp">${esc(t("expGo"))}</button>
-          </div>
-          <div class="dm">${esc(t("wrDocMeta").replace("{n}",n).replace("{w}",w))}</div>
+    // 标题挂在左上角外侧，跟画布上页面框的标题同一个位置、同一种改法。
+    // 卡片数与字数不再占用顶上的空间：需要时侧栏的大纲已经说明了结构。
+    el.innerHTML=`<div class="dttl">
+        <span class="dt" contenteditable="${lock?"false":"true"}" spellcheck="false"
+          >${esc(d.title)}</span>
+        <span class="dtool">
+          <button data-m="iter" class="${d.mode!=="ctx"?"on":""}">${esc(t("wrIter"))}</button>
+          <button data-m="ctx" class="${d.mode==="ctx"?"on":""}">${esc(t("wrCtx"))}</button>
+          <button data-a="focus">${esc(t("wrFocus"))}</button>
+          <button data-a="exp">${esc(t("expGo"))}</button>
+        </span>
+      </div>
+      <div class="dwrap">
+        <div class="dside">${wrOutlineHTML(list,nums)}</div>
+        <div class="dmain">
+          <div class="dbar"><div class="fmtbar"></div></div>
+          <div class="dbody">${docBodyHTML(d,nums)}</div>
         </div>
-        <div class="dbody">${docBodyHTML(d,nums)}</div>
       </div>`;
     bindDoc(el,d);
     box.appendChild(el);
   });
   docsCapNodes.clear();
   box.querySelectorAll(".cap[data-id]").forEach(el=>docsCapNodes.set(el.dataset.id,el));
-  applyDocStyles();
+  box.querySelectorAll(".fmtbar").forEach(h=>buildFmtBar(h));
+  applyDocStyles();syncFmtBars();
 }
 function docMenu(x,y,d){
   menuAt(x,y,[
@@ -5883,7 +5944,7 @@ function docMenu(x,y,d){
       if(v!==null){snap();d.title=v.trim()||d.title;render();save()}}},
     "-",
     ...(CLIP?[{label:t("wrPasteEnd"),on:()=>wrPasteMain(d,d.ids.length)}]:[]),
-    {label:t("wrDocExport"),on:()=>openWrExport(d)},
+    {label:t("wrDocExport"),on:()=>openWrExport(d,x,y)},
     "-",
     {label:t("wrDocDel"),danger:true,on:()=>{snap();
       S.docs=docs().filter(z=>z!==d);if(wrId===d.id)closeWrite();render();save()}}
@@ -5946,6 +6007,95 @@ function wrStyleObj(o,lv){
     fontStyle:st.italic?"italic":"normal"};
 }
 
+/* ---- 稿子顶上的文字工具栏 ----
+   写作页的长度是固定的，工具栏钉在最上方就不必为了改个颜色一路往上拉。
+   它调用的是画布那一套完全相同的函数（cmd / setInkColor / setHighlight / setAlign /
+   setSize / clearFmt），不另写第二份实现，所以两边的行为一定一致。
+   两条铁律照旧：整条栏在捕获阶段 preventDefault，任何一次点击都不夺走文字选区；
+   字号不是输入框，只用加减两个按钮改，避免输入框抢焦点把选区弄丢。 */
+function buildFmtBar(host){
+  if(!host||host._built)return;
+  host._built=true;
+  host.addEventListener("pointerdown",e=>{
+    stashRange();
+    e.preventDefault();                       // 不夺焦点，正文里的选区原样保留
+    e.stopPropagation();                      // 也不要冒泡去触发画布的拖动或框选
+  },true);
+  host.addEventListener("dblclick",e=>e.stopPropagation());
+  const btn=(html,fn,title,cls)=>{
+    const x=document.createElement("button");
+    x.className="fx"+(cls?" "+cls:"");x.innerHTML=html;
+    if(title)x.title=title;
+    x.addEventListener("click",e=>{e.stopPropagation();fn(x)});
+    host.appendChild(x);return x;
+  };
+  const sep=()=>{const s=document.createElement("span");s.className="fsep";host.appendChild(s)};
+  const swatchCell=(chipId,colors,apply,noneLabel,onNone)=>{
+    const cell=document.createElement("div");cell.className="fcell";host.appendChild(cell);
+    const pop=document.createElement("div");pop.className="fpop";
+    const trig=document.createElement("button");
+    trig.className="fx";
+    trig.innerHTML=`<span class="chip" id="${chipId}"></span>`;
+    trig.addEventListener("click",e=>{
+      e.stopPropagation();
+      const was=pop.classList.contains("on");
+      closeFmtPops();
+      if(!was){pop.classList.add("on");trig.classList.add("on")}
+    });
+    cell.appendChild(trig);
+    const sws=document.createElement("div");sws.className="sws";
+    colors.forEach(v=>{
+      const s=document.createElement("button");s.style.background=v;
+      s.addEventListener("click",e=>{e.stopPropagation();closeFmtPops();apply(v)});
+      sws.appendChild(s);
+    });
+    pop.appendChild(sws);
+    if(noneLabel){
+      const n=document.createElement("button");n.className="none";n.textContent=noneLabel;
+      n.addEventListener("click",e=>{e.stopPropagation();closeFmtPops();onNone()});
+      pop.appendChild(n);
+    }
+    cell.appendChild(pop);
+    return trig;
+  };
+
+  btn("<b>B</b>",()=>cmd("bold"),t("fmtB"));
+  btn("<i>I</i>",()=>cmd("italic"),t("fmtI"));
+  btn("<u>U</u>",()=>cmd("underline"),t("fmtU"));
+  btn("<s>S</s>",()=>cmd("strikeThrough"),t("fmtS"));
+  sep();
+  swatchCell("fmtink",INK,v=>{S.lastInk=v;setInkColor(v);syncFmtBars()},null,null);
+  swatchCell("fmthl",HLS,v=>{S.lastHL=v;setHighlight(v);syncFmtBars()},
+    t("fmtNoHL"),()=>setHighlight("none"));
+  sep();
+  btn("\u2212",()=>setSize(curSize()-1),t("fmtSmaller"));
+  const szl=document.createElement("span");szl.className="fsz";host.appendChild(szl);
+  host._sz=szl;
+  btn("+",()=>setSize(curSize()+1),t("fmtBigger"));
+  sep();
+  ["left","center","right"].forEach(v=>btn(alSvg(v),()=>setAlign(v),t("fmtAlign")));
+  sep();
+  btn("\u2718",()=>clearFmt(),t("fmtClear"));
+}
+function closeFmtPops(){
+  document.querySelectorAll(".fmtbar .fpop.on").forEach(p=>p.classList.remove("on"));
+  document.querySelectorAll(".fmtbar .fx.on").forEach(x=>x.classList.remove("on"));
+}
+// 色块与字号跟着当前选中的段落走，跟浮动工具栏的 syncBar 是一个道理
+function syncFmtBars(){
+  document.querySelectorAll(".fmtbar").forEach(host=>{
+    const ink=host.querySelector("#fmtink")||host.querySelector(".chip");
+    if(ink)ink.style.background=lastInk();
+    const chips=host.querySelectorAll(".chip");
+    if(chips[0])chips[0].style.background=lastInk();
+    if(chips[1])chips[1].style.background=lastHL();
+    if(host._sz)host._sz.textContent=barCard()?curSize():"";
+  });
+}
+addEventListener("pointerdown",e=>{
+  if(!e.target.closest||!e.target.closest(".fmtbar"))closeFmtPops();
+},true);
+
 /* ---- 从画布导入 ---- */
 function wrImport(ids,append,docId){
   const list=(ids&&ids.length?ids.map(card).filter(Boolean):[]);
@@ -5991,10 +6141,9 @@ function applyDocStyles(root){
 function docBodyHTML(d,extNums){
   const list=d.ids.map(card).filter(Boolean);
   const nums=extNums||wrNums(list);
-  const ins=i=>`<button class="wrins" data-i="${i}" title="${esc(t("wrInsert"))}">+</button>`;
-  if(!list.length)return `<div class="dempty">${esc(t("wrEmpty"))}</div>${ins(0)}`;
+  if(!list.length)return `<div class="dempty">${esc(t("wrEmpty"))}</div>`;
   const ctx=d.mode==="ctx";
-  let h=ctx?"":ins(0);
+  let h="";
   list.forEach((c,i)=>{
     const o=orig(c),lv=wrLevelOf(c),vs=verList(o);
     const wrapS=o.bg?`background:${esc(o.bg)};padding:12px 14px;border-radius:3px`:"";
@@ -6003,8 +6152,11 @@ function docBodyHTML(d,extNums){
     // 这样任何一次重绘（比如别处打字触发的防抖刷新）都不会把选中状态悄悄丢掉，
     // 否则 backspace 会因为找不到 .blk.sel 而落到误删源卡片的那条老路上
     const selCls=(!editing&&sel.length===1&&sel[0]===c.id)?" sel":"";
+    // 正文默认就是可以直接打字的：点哪里光标落哪里，跟 Word 一样，
+    // 不必先双击"进入编辑"。锁定的段落仍然只读。
+    const edit=(!lock&&!locked)?"true":"false";
     const body=`<div class="cap${lv?" hd lv"+Math.min(lv,4):""}"
-      contenteditable="false" data-id="${c.id}" data-ph="${esc(t("placeholder"))}" spellcheck="false"
+      contenteditable="${edit}" data-id="${c.id}" data-ph="${esc(t("placeholder"))}" spellcheck="false"
       >${o.rich?safeRich(o.rich):esc(o.text||"")}</div>`;
     if(ctx){
       h+=`<div class="blk ctx${locked?" lk":""}${selCls}" data-i="${i}" data-id="${c.id}">
@@ -6018,21 +6170,19 @@ function docBodyHTML(d,extNums){
         ${lv?`<span class="num">${nums[i]}</span>`:""}
         ${vs.length>1?`<span class="vb">${vs.map((v,k)=>
           `<button class="vv${v.id===o.verOn?" on":""}" data-i="${i}" data-v="${v.id}"
-            >${esc(verLabel(v,k))}</button>`).join("")}</span>`:""}
-        <button class="vadd" data-i="${i}" title="${esc(t("wrVerNew"))}">+</button>
+            title="${esc(verLabel(v,k))}">${esc(verLabel(v,k))}</button>`).join("")}</span>`:""}
       </div>
       <div class="wrap" style="${wrapS}">${body}</div>
-      <div class="fold${kids.length?" has":""}${openF?" on":""}">
-        <button class="fh" data-id="${c.id}"><span class="ar">\u203A</span>
-          ${esc(t("wrRefs").replace("{n}",kids.length))}</button>
-        <button class="fadd" data-id="${c.id}" title="${esc(t("wrRefPaste"))}">+</button>
+      <div class="fold${kids.length?" has":""}${openF?" on":""}" data-id="${c.id}"
+        title="${esc(t("wrRefPaste"))}">
+        <button class="fh" data-id="${c.id}"><span class="ar">\u203A</span></button>
         <div class="fb">${kids.length?kids.map(k=>{
           const ko=orig(k);
-          return `<div class="ref" data-id="${k.id}"
+          return `<div class="ref" data-id="${k.id}" contenteditable="false"
             >${ko.rich?safeRich(ko.rich):esc(ko.text||"")}</div>`;
         }).join(""):`<div class="rempty">${esc(t("wrRefsNone"))}</div>`}</div>
       </div>
-    </div>${ins(i+1)}`;
+    </div>`;
   });
   return h;
 }
@@ -6054,7 +6204,7 @@ function bindDoc(el,d){
       e.stopPropagation();
       if(b.dataset.m){snap();d.mode=b.dataset.m;save();renderDocs();return}
       if(b.dataset.a==="focus"){openWrite(d.id);return}
-      if(b.dataset.a==="exp")openWrExport(d);
+      if(b.dataset.a==="exp")openWrExport(d,e.clientX,e.clientY);
     });
   });
   // stage 自己有一套"双击空白画布新建卡片"的逻辑，它不认识 .doc 内部的任何东西，
@@ -6066,20 +6216,13 @@ function bindDoc(el,d){
   el.addEventListener("pointerdown",e=>{
     if(lock){e.stopPropagation();return}
     if(e.button!==0)return;
-    if(e.target.closest(".wrap,.dt,.dtool,.vv,.vadd,.fh,.fadd,.ref,.wrnav,.wrins"))return;
+    if(e.target.closest(".wrap,.dt,.dtool,.vv,.fh,.fold,.ref,.wrnav,.fmtbar"))return;
     e.stopPropagation();startDocMove(e,d);
   });
   el.addEventListener("contextmenu",e=>{
     if(lock)return;
-    const ins=e.target.closest(".wrins");
-    const blk=e.target.closest(".blk");
     e.preventDefault();e.stopPropagation();
-    if(ins){wrInsertMenu(e.clientX,e.clientY,d,+ins.dataset.i);return}
-    if(blk){
-      const c=card(blk.dataset.id);
-      if(c){wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i,d);return}
-    }
-    docMenu(e.clientX,e.clientY,d);
+    wrContextMenu(e,d);
   });
   // 非专注状态下的侧栏：点大纲条目滚动到对应段落，不需要打开专注模式；
   // 空白处仍然可以拖动整份稿子，只拦住大纲按钮本身
@@ -6114,21 +6257,30 @@ function drawWrite(){
   if(!wrOpenState())return;
   const d=wrDoc();if(!d)return;
   const list=wrCards();
-  $("wrtitle").textContent=d.title;
+  const ti=$("wrtitle");
+  if(document.activeElement!==ti)ti.textContent=d.title;   // 正在改名时不要把光标顶掉
+  ti.contentEditable=lock?"false":"true";
   const nums=wrNums(list);
   $("wrside").innerHTML=wrOutlineHTML(list,nums);
   $("wrmain").innerHTML=docBodyHTML(d,nums);
   wrmainCapNodes.clear();
   $("wrmain").querySelectorAll(".cap[data-id]").forEach(el=>wrmainCapNodes.set(el.dataset.id,el));
   applyDocStyles($("wrmain"));
-  $("wrcount").textContent=t("wrWords").replace("{n}",
-    list.reduce((n,c)=>n+((orig(c).text||"").replace(/\s/g,"").length),0));
+  buildFmtBar($("wrfmt"));syncFmtBars();
 }
 
 
 /* ---- 交互 ---- */
 let wrT,wrSideT;
-function wrSideSoon(){clearTimeout(wrSideT);wrSideT=setTimeout(drawWrite,700)}
+// 打字停下之后把大纲跟上。**只重画侧栏**，绝不碰正文：
+// 正文一旦被重建，正在打字的那个节点就没了，光标随之消失。
+function wrSideSoon(){clearTimeout(wrSideT);wrSideT=setTimeout(drawSide,700)}
+function drawSide(){
+  if(!wrOpenState())return;
+  const d=wrDoc();if(!d)return;
+  const list=wrCards();
+  $("wrside").innerHTML=wrOutlineHTML(list,wrNums(list));
+}
 // 正文块的交互，画布上的稿子与专注模式共用同一套。
 // 单击只选中这一段（跟画布上单击选中一张卡片一样，不进入编辑）；
 // 双击才真正进入编辑，退出编辑（失焦）后回到"已选中但未编辑"的状态。
@@ -6143,55 +6295,52 @@ function bindBody(root,getDoc){
     verStash(o);
     clearTimeout(wrT);wrT=setTimeout(()=>{save();refreshDocMeta()},320);
   });
-  // 单击一段的正文气泡才选中它，不进入编辑；.gut/.fold 之外的空白（版本号栏、
-  // 段落间的空隙）仍然留给"拖动整份稿子"，不然这份稿子几乎无处可抓、挪不动位置
+  // 正文就是一份可以直接打字的稿子：点哪里光标就落在哪里，不必先"进入编辑"。
+  // 这里只负责别让点击冒泡去触发画布的框选与拖动，光标定位交给浏览器自己做。
   root.addEventListener("pointerdown",e=>{
     if(lock||e.button!==0)return;
     const wrap=e.target.closest(".wrap");if(!wrap)return;
     const blk=wrap.closest(".blk");if(!blk)return;
-    const cap=wrap.querySelector(".cap");
-    if(cap&&cap.isContentEditable)return;               // 编辑中：交给浏览器放置光标/划选
     e.stopPropagation();
+    const cap=wrap.querySelector(".cap");
+    if(cap&&cap.isContentEditable)return;               // 可编辑：交给浏览器放置光标/划选
     sel=[blk.dataset.id];selLink=null;editing=false;paintSel();syncBar();
   });
-  // 双击一段的正文才进入编辑，行为与画布上的卡片完全一致（含按落点选词）。
-  // 必须 stopPropagation：不然事件会冒泡到 stage 自己的双击处理——那是"双击空白画布新建卡片"，
-  // 它不认识 .cap/.blk 是"已经算一张卡片"，会在这里凭空多建一张卡片出来。
-  root.addEventListener("dblclick",e=>{
-    if(lock)return;
-    const cap=e.target.closest(".cap");if(!cap)return;
-    e.stopPropagation();
-    if(cap.isContentEditable)return;                    // 已在编辑中：交给浏览器原生的双击选词
-    const c=card(cap.dataset.id);if(!c)return;
-    sel=[c.id];selLink=null;paintSel();
-    editText(c,e,cap);
-    syncBar();
-  });
-  // 聚焦仍会触发（比如脚本调用 .focus()），与画布上的卡片保持一致
+  // 稿子范围内的双击一律拦住冒泡：stage 那边是"双击空白画布新建卡片"，
+  // 它不认识 .cap/.blk 已经算一张卡片，不拦就会凭空多建一张出来。
+  root.addEventListener("dblclick",e=>{if(!lock)e.stopPropagation()});
   root.addEventListener("focusin",e=>{
     const el=e.target.closest(".cap");if(!el)return;
-    sel=[el.dataset.id];editing=true;selLink=null;paintSel();syncBar();
+    sel=[el.dataset.id];editing=true;selLink=null;paintSel();syncBar();syncFmtBars();
   });
-  // 失焦即退出编辑：回到"已选中但未编辑"，跟画布上的卡片一致
+  // 失焦只是退出"正在打字"的状态，段落本身仍然保持可编辑
   root.addEventListener("focusout",e=>{
     const cap=e.target.closest(".cap");if(!cap)return;
-    if(!cap.isContentEditable)return;
     const to=e.relatedTarget||document.activeElement;
-    if(to&&to.closest&&(to.closest("#bar")||to.closest("#pop")))return;  // 焦点进了工具条：保持编辑态
-    cap.contentEditable="false";editing=false;
-    paintSel();
+    if(to&&to.closest&&(to.closest("#bar")||to.closest("#pop")||to.closest(".fmtbar")))return;
+    editing=false;paintSel();
   });
+  root.addEventListener("keyup",e=>{if(e.target.closest(".cap"))syncFmtBars()});
+  root.addEventListener("mouseup",e=>{if(e.target.closest(".cap"))setTimeout(syncFmtBars,0)});
   root.addEventListener("keydown",e=>{
-    if(!e.target.closest(".cap"))return;
+    const cap=e.target.closest(".cap");if(!cap)return;
     e.stopPropagation();
-    if(e.key==="Escape"){e.target.blur();editing=false;syncBar()}
+    if(e.key==="Escape"){cap.blur();editing=false;syncBar();return}
+    const d=doc(),c=card(cap.dataset.id);
+    if(!d||!c||lock||isLocked(c.id))return;
+    // 回车 = 从光标处切成下一张卡片，跟 Word 里换段一样自然。
+    // Shift+回车仍然是段内换行，留给需要软换行的场合。
+    if(e.key==="Enter"&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey){
+      e.preventDefault();wrSplitAtCaret(d,c,cap);return;
+    }
+    // 段首按退格 = 并回上一段，空段落则直接从稿子里移出（不删源卡片）
+    if(e.key==="Backspace"&&caretAtStart(cap)){
+      const i=d.ids.indexOf(c.id);
+      if(i>0){e.preventDefault();wrMergeBack(d,c,cap,i)}
+    }
   });
   root.addEventListener("click",e=>{
     const d=doc();
-    const ins=e.target.closest(".wrins");
-    if(ins){wrInsertAt(d,+ins.dataset.i);return}
-    const fa=e.target.closest(".fadd");
-    if(fa){wrPasteTwin(fa.dataset.id,d);return}
     const fh=e.target.closest(".fh");
     if(fh){
       if(!d)return;
@@ -6202,31 +6351,155 @@ function bindBody(root,getDoc){
     const blk=e.target.closest(".blk");
     const v=e.target.closest(".vv");
     if(v&&blk){const c=card(blk.dataset.id);if(c){verUse(c,v.dataset.v);redrawDocs(d)}return}
-    const a=e.target.closest(".vadd");
-    if(a&&blk){
-      const c=card(blk.dataset.id);if(!c)return;
-      if(isLocked(c.id)){toast(t("lockedNote"));return}
-      verNew(c,true);redrawDocs(d);toast(t("wrVerMade"));
-    }
   });
 }
-// 在稿子的任意位置插入一张新卡片：不必先回画布新建再送过来，
-// 跟直接在普通页面新建卡片一样顺手；插入后立刻进入编辑。
-// 在稿子的任意位置插入一张新卡片：不必先回画布新建再送过来，
-// 跟直接在普通页面新建卡片一样顺手；插入后立刻进入编辑。
+/* ---- 类 Word 的自由编辑 ---- */
+// 光标是否正停在这一段的最开头（判断"退格要不要并回上一段"）
+function caretAtStart(cap){
+  const s=getSelection();
+  if(!s||!s.rangeCount||!s.isCollapsed)return false;
+  const r=s.getRangeAt(0);
+  if(!cap.contains(r.startContainer))return false;
+  const probe=document.createRange();
+  probe.selectNodeContents(cap);
+  probe.setEnd(r.startContainer,r.startOffset);
+  return probe.toString().length===0;
+}
+// 把光标之后的内容切出来，返回 {text,html}；原节点只留下光标之前的部分
+function cutAfterCaret(cap){
+  const s=getSelection();
+  if(!s||!s.rangeCount)return {text:"",html:""};
+  const r=s.getRangeAt(0);
+  if(!r.collapsed)r.deleteContents();
+  const tail=document.createRange();
+  tail.selectNodeContents(cap);
+  tail.setStart(r.endContainer,r.endOffset);
+  const box=document.createElement("div");
+  box.appendChild(tail.extractContents());
+  return {text:box.innerText,html:box.innerHTML};
+}
+// 在稿子里造一张只属于这份稿子的新卡片。
+// 它带着 wrIn 标记，所以不会在画布上再冒出一份"看起来像重复添加"的文字框。
+function wrNewBlock(d,proto){
+  const p=orig(proto||{})||{};
+  return {id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:p.w||520,
+    text:"",s:{...(p.s||{})},wrIn:d.id};
+}
+// 回车：从光标处切成下一张卡片
+function wrSplitAtCaret(d,c,cap){
+  const o=orig(c);
+  const tail=cutAfterCaret(cap);
+  snap();
+  syncCap(c,cap);                                  // 光标之前的部分留在原卡片
+  verStash(o);
+  const n=wrNewBlock(d,c);
+  n.text=tail.text;
+  if(/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(tail.html))n.rich=tail.html;
+  invalidateIndex();S.cards.push(n);
+  const i=d.ids.indexOf(c.id);
+  d.ids.splice(i<0?d.ids.length:i+1,0,n.id);
+  save();redrawDocs();
+  focusBlock(n.id,"start");
+}
+// 段首退格：把这一段并回上一段。空段落直接移出稿子。
+function wrMergeBack(d,c,cap,i){
+  const prevId=d.ids[i-1],prev=card(prevId);
+  if(!prev||isLocked(prevId)){toast(t("lockedNote"));return}
+  const o=orig(c),po=orig(prev);
+  const mine=(o.text||"").length?(o.rich||esc(o.text||"")):"";
+  snap();
+  const at=(po.text||"").length;
+  if(mine){
+    const pcap=hostCap(prevId);
+    const html=(po.rich||esc(po.text||""))+mine;
+    po.rich=html;
+    const box=document.createElement("div");box.innerHTML=html;
+    po.text=box.innerText;
+    if(!/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(html))delete po.rich;
+    verStash(po);
+    if(pcap)pcap.innerHTML=html;
+  }
+  d.ids.splice(i,1);
+  // 只活在这份稿子里的空段落顺手清掉；来自画布的卡片只是移出，绝不删源
+  if(docOnly(c)&&!(o.text||"").trim()&&!wrKids(c.id).length){
+    invalidateIndex();S.cards=S.cards.filter(z=>z.id!==c.id);
+  }
+  save();redrawDocs();
+  focusBlock(prevId,at);
+}
+// 把光标放到某一段的指定位置："start" / "end" / 字符偏移量
+function focusBlock(id,where){
+  requestAnimationFrame(()=>{
+    const cap=hostCap(id);if(!cap||!cap.isContentEditable)return;
+    cap.focus();
+    const s=getSelection(),r=document.createRange();
+    r.selectNodeContents(cap);
+    if(where==="start")r.collapse(true);
+    else if(where==="end"||typeof where!=="number")r.collapse(false);
+    else{
+      let left=where,done=false;
+      const walk=document.createTreeWalker(cap,NodeFilter.SHOW_TEXT);
+      let n;
+      while((n=walk.nextNode())){
+        const len=n.nodeValue.length;
+        if(left<=len){r.setStart(n,left);r.collapse(true);done=true;break}
+        left-=len;
+      }
+      if(!done)r.collapse(false);
+    }
+    s.removeAllRanges();s.addRange(r);
+  });
+}
+// 稿子里某张卡片的正文节点。走 hostOfCard 的两个 Map，不现查 DOM。
+function hostCap(id){
+  const h=hostOfCard(id);
+  if(!h)return null;
+  return h.classList&&h.classList.contains("cap")?h:(h.querySelector?h.querySelector(".cap"):null);
+}
+// 划选一段自由文字，把它单独变成一张卡片。
+// 前后剩下的部分各自也成为独立的一段，顺序不变。
+function wrSelToCard(d,c,cap){
+  const s=getSelection();
+  if(!s||!s.rangeCount||s.isCollapsed){toast(t("needTextSel"));return}
+  const r=s.getRangeAt(0);
+  if(!cap.contains(r.startContainer)||!cap.contains(r.endContainer)){toast(t("needTextSel"));return}
+  const grab=range=>{const b=document.createElement("div");
+    b.appendChild(range.cloneContents());return {text:b.innerText,html:b.innerHTML}};
+  const before=document.createRange();
+  before.selectNodeContents(cap);before.setEnd(r.startContainer,r.startOffset);
+  const after=document.createRange();
+  after.selectNodeContents(cap);after.setStart(r.endContainer,r.endOffset);
+  const parts=[grab(before),grab(r),grab(after)].filter(p=>p.text.trim().length);
+  if(parts.length<2){toast(t("wrAlreadyCard"));return}
+  snap();
+  const o=orig(c);
+  const put=(target,p)=>{
+    target.text=p.text;
+    if(/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(p.html))target.rich=p.html;
+    else delete target.rich;
+  };
+  put(o,parts[0]);verStash(o);
+  let i=d.ids.indexOf(c.id);if(i<0)i=d.ids.length-1;
+  const made=[];
+  parts.slice(1).forEach((p,k)=>{
+    const n=wrNewBlock(d,c);put(n,p);
+    invalidateIndex();S.cards.push(n);
+    d.ids.splice(i+1+k,0,n.id);made.push(n.id);
+  });
+  save();redrawDocs();
+  toast(t("wrMadeCards").replace("{n}",made.length));
+}
+// 在稿子的任意位置插入一张空白段落，插入后光标立刻落进去。
+// 新卡片带 wrIn 标记，只活在这份稿子里——早先它会同时摆到画布上，
+// 于是同一段内容在写作框内外各出现一次，看起来就像"重复添加"。
 function wrInsertAt(d,i){
   if(lock||!d)return;
   snap();
-  // 放在稿子右边的空地，不用视口中心——用户此刻十有八九正看着这份稿子，
-  // 摆在视口中心会跟稿子本身在画布上重叠，看起来像凭空多了一份内容
-  const n={id:uid(),x:Math.round(d.x+DOCW+SIDEW+60),y:Math.round(d.y+i*10),w:520,text:""};
+  const n=wrNewBlock(d);
   invalidateIndex();S.cards.push(n);
   d.ids.splice(Math.max(0,Math.min(i,d.ids.length)),0,n.id);
   save();redrawDocs();
-  requestAnimationFrame(()=>{
-    const cap=document.querySelector(`.cap[data-id="${n.id}"]`);
-    if(cap)editText(n,null,cap);
-  });
+  focusBlock(n.id,"start");
 }
 // 把剪贴板里的卡片粘成分身，挂到某一段下面的折叠引用框里：
 // 只新增分身、不动源卡片的位置，跟"引用和分身"原有的语义一致。
@@ -6235,16 +6508,17 @@ function wrPasteTwin(hostId,d){
   if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
   const host=card(hostId);if(!host)return;
   snap();
-  // 同样放在稿子右边，不用视口中心，理由与 wrInsertAt 一致
-  const base=d?{x:d.x+DOCW+SIDEW+60,y:d.y}:toW(innerWidth/2,innerHeight/2);
-  let k=wrKids(hostId).length,made=0;
+  // 折叠框里的分身是投影，不是画布上的一张卡片：带 wrIn 标记，只活在这份稿子里。
+  // 它不在画布上占位置，删掉它也不会动到任何外部卡片。
+  let made=0;
   CLIP.items.forEach(it=>{
     const src=it.src;
     if(!src||!S.cards.some(z=>z.id===src))return;     // 分身必须指向仍然存在的源
-    k++;made++;
+    made++;
     invalidateIndex();
-    S.cards.push({id:uid(),x:Math.round(base.x),y:Math.round(base.y+k*40),
-      w:it.w||280,s:{...(it.s||{})},ref:src,wrUnder:hostId,lock:"text"});
+    S.cards.push({id:uid(),x:Math.round(d?d.x:0),y:Math.round(d?d.y:0),
+      w:it.w||280,s:{...(it.s||{})},ref:src,wrUnder:hostId,
+      wrIn:d?d.id:"?",lock:"text"});
   });
   if(!made){toast(t("clipEmpty"));return}
   if(d){d.open=d.open||{};d.open[hostId]=true}
@@ -6265,28 +6539,62 @@ function wrPasteMain(d,i){
   save();redrawDocs();
   toast(t("wrAdded").replace("{n}",uniq.length).replace("{d}",d.title));
 }
-// 段落之间那条"+"插入线的右键菜单：插入空白段落，或者把剪贴板里的卡片粘到这个位置——
-// 跟画布上"选中卡片→剪贴板→到别处粘贴"是完全同一套逻辑，不再是另一套专门的
-// "送入写作页"操作。
-function wrInsertMenu(x,y,d,i){
-  if(!d)return;
-  const items=[{label:t("wrInsertBlank"),on:()=>wrInsertAt(d,i)}];
-  if(CLIP)items.push({label:t("wrPasteHere"),on:()=>wrPasteMain(d,i)});
+// 写作页里所有右键的入口：按落点决定给哪一份菜单。
+// 折叠框那一块是"看不见但确实存在的粘贴区"——在那里右键就能把剪贴板里的卡片
+// 粘成一个分身投影，这是原来那个"+"按钮的替代。
+function wrContextMenu(e,d){
+  const ref=e.target.closest(".ref");
+  if(ref){wrRefMenu(e.clientX,e.clientY,ref.dataset.id,d);return}
+  const fold=e.target.closest(".fold");
+  if(fold){wrFoldMenu(e.clientX,e.clientY,fold.dataset.id,d);return}
+  const blk=e.target.closest(".blk");
+  if(blk){
+    const c=card(blk.dataset.id);
+    if(c){wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i,d);return}
+  }
+  docMenu(e.clientX,e.clientY,d);
+}
+// 折叠的引用区：这里只放分身投影，所以粘贴一律按分身处理
+function wrFoldMenu(x,y,hostId,d){
+  const items=[];
+  if(CLIP)items.push({label:t("wrRefPaste"),on:()=>wrPasteTwin(hostId,d)});
+  else items.push({head:t("clipEmpty")});
+  const kids=wrKids(hostId);
+  if(kids.length)items.push("-",{label:t("wrRefsClear"),danger:true,on:()=>{
+    snap();const ids=new Set(kids.map(k=>k.id));
+    invalidateIndex();S.cards=S.cards.filter(z=>!ids.has(z.id));
+    save();redrawDocs();toast(t("wrRefsCleared").replace("{n}",kids.length));
+  }});
   menuAt(x,y,items);
+}
+// 引用条目本身：它是投影，不是内容。所以这里不给任何编辑项，
+// 只给"跳到原文所在的位置"和"把这条投影撤掉"——后者不动外面的任何卡片。
+function wrRefMenu(x,y,twinId,d){
+  const twin=card(twinId);if(!twin)return;
+  const src=orig(twin);
+  menuAt(x,y,[
+    {head:snippet(src,26)||t("wrUntitled")},
+    {label:t("wrRefGoto"),on:()=>{
+      const id=src.id;
+      if(wrOpenState())closeWrite();
+      sel=[id];selLink=null;paintSel();focusOn([card(id)]);
+    }},
+    "-",
+    ...(CLIP?[{label:t("wrRefPaste"),on:()=>wrPasteTwin(twin.wrUnder,d)}]:[]),
+    {label:t("wrRefDrop"),danger:true,on:()=>{
+      snap();invalidateIndex();S.cards=S.cards.filter(z=>z.id!==twinId);
+      save();redrawDocs();toast(t("wrRefDropped"));
+    }}
+  ]);
 }
 // 内容变了就重画：画布上的稿子和专注模式都刷一遍，两边始终一致
 function redrawDocs(){
   renderDocs();
   if(wrOpenState())drawWrite();
 }
+// 卡片数与字数不再占用顶栏，所以打字之后只需要把大纲侧栏跟上。
+// 注意别在这里重绘正文：正在打字的节点一旦被重建，光标就没了。
 function refreshDocMeta(){
-  document.querySelectorAll("#docs .doc").forEach(el=>{
-    const d=docs().find(z=>z.id===el.dataset.id);if(!d)return;
-    const n=d.ids.filter(id=>card(id)).length;
-    const w=d.ids.reduce((z,id)=>z+((orig(card(id)||{}).text||"").replace(/\s/g,"").length),0);
-    const m=el.querySelector(".dm");
-    if(m)m.textContent=t("wrDocMeta").replace("{n}",n).replace("{w}",w);
-  });
   if(wrOpenState())wrSideSoon();
 }
 function wrBind(){
@@ -6296,14 +6604,24 @@ function wrBind(){
     const el=$("wrmain").querySelector(`.blk[data-i="${b.dataset.i}"]`);
     if(el)el.scrollIntoView({behavior:"smooth",block:"start"});
   });
+  // 正文区里的右键：段落、折叠框、引用条目、空白处各有各的菜单，
+  // 由 wrContextMenu 统一分派，跟画布上内嵌的稿子走的是同一个函数
   $("wrmain").addEventListener("contextmenu",e=>{
-    const ins=e.target.closest(".wrins");
-    const blk=e.target.closest(".blk");
-    if(!ins&&!blk)return;
+    const d=wrDoc();if(!d)return;
     e.preventDefault();e.stopPropagation();
-    if(ins){wrInsertMenu(e.clientX,e.clientY,wrDoc(),+ins.dataset.i);return}
-    const c=card(blk.dataset.id);if(!c)return;
-    wrBlockMenu(e.clientX,e.clientY,c,+blk.dataset.i,wrDoc());
+    wrContextMenu(e,d);
+  });
+  // 稿子名就地改，跟画布上改页面标题一样
+  const ti=$("wrtitle");
+  ti.addEventListener("keydown",e=>{
+    e.stopPropagation();
+    if(e.key==="Enter"){e.preventDefault();ti.blur()}
+    if(e.key==="Escape"){const d=wrDoc();if(d)ti.textContent=d.title;ti.blur()}
+  });
+  ti.addEventListener("blur",()=>{
+    const d=wrDoc();if(!d)return;
+    const v=ti.textContent.trim();
+    if(v&&v!==d.title){snap();d.title=v;save();renderDocs()}else ti.textContent=d.title;
   });
 }
 // 按删除键移出一个被选中的段：跟右键菜单里的"从稿子里移除"是同一件事，
@@ -6315,13 +6633,34 @@ function wrRemoveSel(selBlk){
   if(!d)return;
   const i=d.ids.indexOf(id);
   if(i<0)return;
-  snap();d.ids.splice(i,1);sel=[];selLink=null;save();redrawDocs();
+  wrDropAt(d,i);
+}
+// 把第 i 段从这份稿子里移出。**永远不动画布上的源卡片**——写作页里的任何删改
+// 都只影响这份稿子本身，这是整个写作页的基本原则。
+// 唯一会真正消失的是"只活在这份稿子里"的段落（wrIn 标记的那些），
+// 因为它们本来就没有稿子之外的身份，留着只会变成永远找不到的孤儿。
+function wrDropAt(d,i){
+  const id=d.ids[i];if(!id)return;
+  const c=card(id);
+  snap();d.ids.splice(i,1);
+  if(c&&docOnly(c)){
+    const drop=new Set([id,...wrKids(id).map(k=>k.id)]);
+    invalidateIndex();S.cards=S.cards.filter(z=>!drop.has(z.id));
+  }
+  sel=[];selLink=null;save();redrawDocs();
   toast(t("wrRemoved"));
 }
 function wrBlockMenu(x,y,c,i,d){
   const o=orig(c),vs=verList(o);
   d=d||wrDoc();
   const items=[{head:snippet(o,26)||t("wrUntitled")}];
+  // 划选一段自由文字，把它单独立成一张卡片——这是"边写边把想法固化成卡片"的入口
+  const cap=hostCap(c.id);
+  const s=getSelection();
+  if(cap&&d&&!lock&&!isLocked(c.id)&&s&&s.rangeCount&&!s.isCollapsed&&cap.contains(s.anchorNode))
+    items.push({label:t("wrSelToCard"),on:()=>wrSelToCard(d,c,cap)},"-");
+  if(d)items.push({label:t("wrInsertAbove"),on:()=>wrInsertAt(d,i)},
+    {label:t("wrInsertBelow"),on:()=>wrInsertAt(d,i+1)},"-");
   items.push({label:t("wrVerNew"),on:()=>{verNew(c,true);redrawDocs()}});
   items.push({label:t("wrVerBlank"),on:()=>{verNew(c,false);redrawDocs()}});
   if(vs.length>1){
@@ -6343,7 +6682,7 @@ function wrBlockMenu(x,y,c,i,d){
     on:()=>{setCardLock([c.id],isLocked(c.id)?null:"text");redrawDocs()}});
   items.push("-",
     {label:t("wrGoCanvas"),on:()=>{const id=c.id;closeWrite();sel=[id];paintSel();focusOn([card(id)])}},
-    {label:t("wrRemove"),on:()=>{if(!d)return;snap();d.ids.splice(i,1);save();redrawDocs()}});
+    {label:t("wrRemove"),on:()=>{if(!d)return;wrDropAt(d,i)}});
   menuAt(x,y,items);
 }
 
@@ -6413,33 +6752,71 @@ async function wrExportDocx(d,opt){
   const blob=await Packer.toBlob(new Document({sections:[{children:kids}]}));
   dl(blob,safeName(d.title)+".docx");
 }
-function openWrExport(d){
+// 稿子的导出面板。原先用的 .ph/.pb/.hd2/.fmt/.fb2 这些类名在 .pop 里根本不存在，
+// 而且从头到尾没调 place()，浮层没有定位，所以看起来一团糟、也点不动。
+// 现在改用面板本来就有的那套（.hd/.sec/.pair/.opt/.go），并按坐标定位。
+// 格式上补了 HTML 与 Markdown：Word 依赖 CDN 上的 docx 库，断网时至少还有出路。
+function openWrExport(d,x,y){
+  if(!d)return;
   const p=$("pop");
-  p.innerHTML=`<div class="ph"><b>${esc(t("wrDocExport"))}</b><button class="x" id="wex">\u00D7</button></div>
-    <div class="pb">
-      <div class="hd2">${esc(t("fmt"))}</div>
-      <div class="fmt">
-        <button class="fb2 on" data-f="docx">${esc(t("fmtWord"))}</button>
-        <button class="fb2" data-f="pdf">${esc(t("fmtPdfDoc"))}</button>
-      </div>
-      <div class="hd2">${esc(t("expOpts"))}</div>
-      <label class="opt"><input type="checkbox" id="wv"> ${esc(t("wrExpVersOpt"))}</label>
-      <label class="opt"><input type="checkbox" id="wr2"> ${esc(t("wrExpRefsOpt"))}</label>
-      <button class="go" id="wgo">${esc(t("expGo"))}</button>
-    </div>`;
+  p.classList.remove("wide");
+  const FMTS=[["docx","fmtWord"],["pdf","fmtPdfDoc"],["html","fmtHtml"],["md","fmtMd"]];
+  p.innerHTML=`
+    <div class="hd"><b>${esc(t("wrDocExport"))}</b><button id="wex">\u00D7</button></div>
+    <div class="sec">${esc(t("fmt"))}</div>
+    <div class="grid" id="wfmt">${FMTS.map(([k,lb],i)=>
+      `<button data-f="${k}" class="${i?"":"on"}">${esc(t(lb))}</button>`).join("")}</div>
+    <div class="sec">${esc(t("expOpts"))}</div>
+    <label class="opt"><input type="checkbox" id="wv"> ${esc(t("wrExpVersOpt"))}</label>
+    <label class="opt"><input type="checkbox" id="wr2"> ${esc(t("wrExpRefsOpt"))}</label>
+    <p class="note" id="wnote"></p>
+    <button class="go" id="wgo">${esc(t("expGo"))}</button>`;
+  const mx=(x==null?innerWidth/2-126:x),my=(y==null?90:y);
+  place(p,Math.min(mx,innerWidth-268),Math.min(my,Math.max(10,innerHeight-330)));
   p.classList.add("on");
   let fmt="docx";
-  p.querySelectorAll(".fb2").forEach(b=>b.onclick=()=>{fmt=b.dataset.f;
-    p.querySelectorAll(".fb2").forEach(z=>z.classList.remove("on"));b.classList.add("on")});
-  $("wex").onclick=()=>p.classList.remove("on");
-  $("wgo").onclick=async()=>{
-    const opt={vers:$("wv").checked,refs:$("wr2").checked};
+  const note=p.querySelector("#wnote");
+  const syncNote=()=>{note.textContent=fmt==="docx"?t("wrExpDocxNote")
+    :fmt==="pdf"?t("wrExpPdfNote"):t("wrExpFileNote")};
+  syncNote();
+  p.querySelector("#wfmt").onclick=e=>{
+    const b=e.target.closest("button[data-f]");if(!b)return;
+    fmt=b.dataset.f;
+    p.querySelectorAll("#wfmt button").forEach(z=>z.classList.toggle("on",z===b));
+    syncNote();
+  };
+  p.querySelector("#wex").onclick=()=>p.classList.remove("on");
+  p.querySelector("#wgo").onclick=async()=>{
+    const opt={vers:p.querySelector("#wv").checked,refs:p.querySelector("#wr2").checked};
     p.classList.remove("on");
     try{
       if(fmt==="docx")await wrExportDocx(d,opt);
-      else printHTML(wrHTML(d,opt),d.title);
+      else if(fmt==="pdf")printHTML(wrHTML(d,opt),d.title);
+      else if(fmt==="html")dl(new Blob([wrHTML(d,opt)],{type:"text/html;charset=utf-8"}),
+        safeName(d.title)+".html");
+      else dl(new Blob([wrMD(d,opt)],{type:"text/markdown;charset=utf-8"}),
+        safeName(d.title)+".md");
     }catch(e){toast(((e&&e.message)||"")+" "+t("errShot"))}
   };
+}
+// Markdown 版正文：不依赖任何外部库，断网也导得出来，
+// 也方便直接倒进别的笔记软件——跟存档包里的分页 Markdown 是同一个思路。
+function wrMD(d,opt){
+  let out="# "+(d.title||"")+"\n\n";
+  d.ids.map(card).filter(Boolean).forEach(c=>{
+    const o=orig(c),lv=wrLevelOf(c);
+    const txt=(o.text||"").trim();
+    if(lv)out+="#".repeat(Math.min(lv+1,6))+" "+txt+"\n\n";
+    else if(txt)out+=txt+"\n\n";
+    if(opt.vers)verList(o).forEach((v,k)=>{
+      if(v.id===o.verOn||!String(v.text||"").trim())return;
+      out+="> **"+verLabel(v,k)+"** "+String(v.text).replace(/\n+/g," ")+"\n\n";
+    });
+    if(opt.refs)wrKids(c.id).forEach(k=>{
+      out+="> \u25C8 "+snippet(orig(k),500).replace(/\n+/g," ")+"\n\n";
+    });
+  });
+  return out;
 }
 function syncWrBar(){
   const d=wrDoc();if(!d)return;
@@ -6556,6 +6933,17 @@ function build(el,items,level){
   });
 }
 function menuAt(x,y,items){closeFrom(0);build($("menu"),items,0);place($("menu"),x,y)}
+// 点到菜单以外的任何地方就关掉它。原先只有 #stage 的 pointerdown 负责关闭，
+// 而专注模式下 #stage 是隐藏的，于是在写作页内部点空白关不掉菜单，
+// 非得点到页面外才行。这里在捕获阶段统一处理，所有视图一视同仁。
+addEventListener("pointerdown",e=>{
+  if(!levelOpen(0))return;
+  for(let k=0;k<=MAXLV;k++){
+    const el=levelOpen(k);
+    if(el&&el.contains(e.target))return;          // 点在某一层菜单上：交给它自己处理
+  }
+  closeMenus();
+},true);
 function langItems(){
   return [{label:"English",check:LANG==="en",on:()=>setLang("en")},
           {label:"中文",check:LANG==="zh",on:()=>setLang("zh")}];
