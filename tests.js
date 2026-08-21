@@ -1808,8 +1808,8 @@ group("docpage 稿子在画布上", async (c) => {
     cap.focus(); cap.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
   });
   await c.wait(400);
-  c.ok("在画布上编辑稿子时不再弹出浮动工具栏（已有常驻的 fmtbar，两条栏会叠在一起打架）",
-    await c.run(() => !$("bar").classList.contains("on") && sel[0] === "p2"));
+  c.ok("在画布上编辑时出现文字工具栏",
+    await c.run(() => $("bar").classList.contains("on") && sel[0] === "p2"));
 
   await c.run(() => {
     const cap = document.querySelector('#docs .doc .blk[data-id="p2"] .cap');
@@ -1930,8 +1930,7 @@ group("write 写作页", async (c) => {
     cap.focus(); cap.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
   });
   await c.wait(400);
-  c.ok("专注模式里编辑正文不弹出浮动工具栏，只有顶上常驻的 fmtbar",
-    await c.run(() => !$("bar").classList.contains("on")));
+  c.ok("写作页里也有文字工具栏", await c.run(() => $("bar").classList.contains("on")));
 
   // 顶上那条工具栏必须真的管用：以前它只是摆着好看，点了什么都不会发生
   c.ok("稿子顶上有常驻的文字工具栏",
