@@ -695,7 +695,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrVerCopy:"Copy this version to the clipboard",wrVerCopied:"Copied. Paste it onto any page.",
   wrExpVers:"Other versions",wrExpRefs:"References",
   wrExpVersOpt:"Include the other versions",wrExpRefsOpt:"Include the folded references",
-  wrGoCanvas:"Find it on the canvas",wrRemove:"Remove from the draft",
+  wrRemove:"Remove from the draft",
   wrRemoved:"Removed from the draft",wrInsert:"Insert a card here",
   wrRefPaste:"Paste a twin here",
   wrRefGoto:"Go to the original",wrRefDrop:"Drop this projection",
@@ -866,7 +866,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrVerCopy:"把这一版复制到剪贴板",wrVerCopied:"已复制，可粘贴到任何页面",
   wrExpVers:"其他版本",wrExpRefs:"引用",
   wrExpVersOpt:"附上其他版本",wrExpRefsOpt:"附上折叠的引用",
-  wrGoCanvas:"在画布上找到它",wrRemove:"从稿子里移除",
+  wrRemove:"从稿子里移除",
   wrRemoved:"已从稿子里移除",wrInsert:"在这里插入一张卡片",
   wrRefPaste:"在这里粘贴分身",
   wrRefGoto:"跳转到原文位置",wrRefDrop:"撤掉这条投影",
@@ -7136,8 +7136,17 @@ function wrBlockMenu(x,y,c,i,d){
     {label:CLIP.mode==="twin"?t("wrPasteRef"):t("wrPasteRefCopy"),on:()=>wrPasteTwin(c.id,d)});
   items.push("-",{label:isLocked(c.id)?t("unlockAll"):t("lockText"),
     on:()=>{setCardLock([c.id],isLocked(c.id)?null:"text");redrawDocs()}});
+  // 正文段落**没有**"在画布上找到它"这一项，这是刻意的，不要再加回来。
+  // 稿子里的段落是内容的独立拷贝（见 wrCloneCard 那一大段），画布上根本没有
+  // 对应的实体：它自己的 x/y 是拷贝时随手写的稿子左上角，高度也从没量过
+  // （hOf 在没有实测高度时退回拿宽度当高度），拿它去取景，镜头只会落在
+  // 稿子旁边一块空地上——就是"定位有点偏"的由来。曾经试过给拷贝记一个
+  // c.wrFrom 指回源卡片再据此取景，但那等于给"两边是独立的"这条设计开一个后门：
+  // 源卡片改名、移动、删除之后这条线索或对或错，用户却分不清，
+  // 而这一段内容本来就跟那张卡片再无关系了。所以直接不提供。
+  // **折叠框里的引文分身是另一回事**：它是活的投影（c.ref 指回源），
+  // 定位到原文正是它存在的意义，那一项在 wrRefMenu 里，不要连坐删掉。
   items.push("-",
-    {label:t("wrGoCanvas"),on:()=>{const id=c.id;closeWrite();sel=[id];paintSel();focusOn([card(id)])}},
     {label:t("wrRemove"),on:()=>{if(!d)return;wrDropAt(d,i)}});
   menuAt(x,y,items);
 }

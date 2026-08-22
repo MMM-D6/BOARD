@@ -2405,6 +2405,67 @@ group("wrorder 写作页里的顺序", async (c) => {
   c.ok("源卡片已删除的条目照样落地，排在最后", r6 === "第一章|一点一|正文1.1甲");
 });
 
+group("wrback 定位只留给引文分身", async (c) => {
+  // 正文段落是内容的独立拷贝，画布上没有对应的实体，所以**不给**"在画布上找到它"：
+  // 拿它自己去取景，镜头只会落在稿子旁边的空地上（它的 x/y 是拷贝时随手写的
+  // 稿子左上角，高度也从没量过）。而折叠框里的引文分身是活的投影，
+  // 定位到原文正是它存在的意义，那一项必须留着——两件事不要连坐。
+  await c.board([
+    { id: "far", x: 9000, y: 6000, w: 300, text: "远处的原卡片", s: {} },
+    { id: "near", x: 0, y: 0, w: 300, text: "近处的原卡片", s: {} },
+  ], []);
+  const r = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -4000, y: -3000 }, "稿子");
+    sel = ["far"]; clipCards("copy"); wrPasteMain(d, 0);
+    const blk = card(d.ids[0]);
+    // 正文段落的右键菜单
+    wrBlockMenu(60, 60, blk, 0, d);
+    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    closeMenus();
+    return { items, blk: blk.id, doc: d.id, bx: blk.x, by: blk.y,
+      hasRemove: items.some((z) => z.includes(t("wrRemove"))) };   // t() 在页面里，别搬到外面
+  });
+  c.ok("正文段落的菜单里没有定位到画布这一项",
+    !r.items.some((z) => z.includes("画布") || /on the canvas/i.test(z)));
+  c.ok("从稿子里移除这一项还在", r.hasRemove);
+  c.ok("段落的坐标本来就在稿子那一带，拿它取景必然偏",
+    Math.hypot(r.bx - 9000, r.by - 6000) > 5000);
+  c.ok("文案里不再有这一条", await c.run(() =>
+    T.en.wrGoCanvas === undefined && T.zh.wrGoCanvas === undefined));
+
+  // 引文分身：这一项必须还在，而且要真的把镜头对准原文
+  const ref = await c.run(() => {
+    const d = docs()[0];
+    sel = ["far"]; clipCards("twin");
+    wrPasteTwin(d.ids[0], d);
+    const tw = S.cards.find((z) => z.ref === "far" && z.wrUnder === d.ids[0]);
+    wrRefMenu(60, 60, tw.id, d);
+    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    closeMenus();
+    return { twin: tw.id, src: orig(tw).id, items, goto: t("wrRefGoto") };
+  });
+  c.ok("引文分身仍然指着源卡片", ref.src === "far");
+  c.ok("引文分身的菜单里留着跳转到原文", ref.items.some((z) => z.includes(ref.goto)));
+
+  await c.run((tw) => {
+    const src = orig(card(tw));
+    if (wrOpenState()) closeWrite();
+    sel = [src.id]; selLink = null; paintSel(); focusOn([card(src.id)]);
+  }, ref.twin);
+  await c.wait(900);
+  const pos = await c.run(() => {
+    const el = nodes.get("far");
+    if (!el) return null;
+    const rc = el.getBoundingClientRect();
+    return { dx: Math.round(rc.x + rc.width / 2 - innerWidth / 2),
+      dy: Math.round(rc.y + rc.height / 2 - innerHeight / 2) };
+  });
+  c.ok("跳过去之后原卡片真的在视野里", !!pos);
+  c.ok("镜头正对着原文（偏差 " + (pos ? pos.dx + "," + pos.dy : "?") + "）",
+    !!pos && Math.abs(pos.dx) < 40 && Math.abs(pos.dy) < 40);
+});
+
 group("ports 连接点", async (c) => {
   await c.board([
     { id: "a", x: -300, y: 0, w: 360, text: "甲甲甲", s: {} },
