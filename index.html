@@ -3275,6 +3275,13 @@ function startMarquee(e){
   };
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
+// #stage 写了 overflow:hidden，但那只挡住用户滚动，脚本（scrollIntoView、
+// 元素 focus()、浏览器查找）照样能把它滚起来。一旦滚了，整张画布连同上面的
+// 稿子一起错位，而相机参数完全没变，排查起来很像"布局莫名其妙跳了一下"。
+// 这里兜底：谁把它滚起来就立刻归零。画布的位移只能由相机负责。
+stage.addEventListener("scroll",()=>{
+  if(stage.scrollTop||stage.scrollLeft){stage.scrollTop=0;stage.scrollLeft=0}
+},{passive:true});
 stage.addEventListener("wheel",e=>{
   e.preventDefault();
   const pad=e.deltaX!==0||(e.deltaMode===0&&Math.abs(e.deltaY)<16);
@@ -6542,11 +6549,26 @@ function bindDoc(el,d){
     side.addEventListener("pointerdown",e=>{if(e.target.closest(".wrnav"))e.stopPropagation()});
     side.addEventListener("click",e=>{
       const b=e.target.closest(".wrnav");if(!b)return;
-      const t2=el.querySelector(`.dbody .blk[data-i="${b.dataset.i}"]`);
-      if(t2)t2.scrollIntoView({behavior:"smooth",block:"start"});
+      scrollBlockInto(el.querySelector(".dbody"),
+        el.querySelector(`.dbody .blk[data-i="${b.dataset.i}"]`));
     });
   }
   bindBody(el,d);
+}
+// 把某一段滚进它自己的滚动容器。
+// **不要用 scrollIntoView**：它会连带滚动所有祖先滚动容器，
+// 而 #stage 即使写了 overflow:hidden 依然可以被脚本滚动。
+// 实测点一次大纲条目就把 #stage 滚了 236px，整张画布连同稿子一起错位，
+// 表现就是"点左侧条目之后写作页跳成另一种布局"。
+// 这里只改目标容器的 scrollTop，别的一概不碰。
+function scrollBlockInto(box,el){
+  if(!box||!el)return;
+  const br=box.getBoundingClientRect(),er=el.getBoundingClientRect();
+  // 画布上的稿子整体带着缩放，屏幕像素要换算回内容像素才能和 scrollTop 对齐
+  const sc=(box.offsetHeight&&br.height/box.offsetHeight)||1;
+  const top=box.scrollTop+(er.top-br.top)/sc-12;
+  const max=Math.max(0,box.scrollHeight-box.clientHeight);
+  box.scrollTo({top:Math.max(0,Math.min(top,max)),behavior:"smooth"});
 }
 // 选中一份稿子（并清掉卡片/连线的选中，三者互斥）
 function selectDoc(id){
@@ -6967,8 +6989,7 @@ function wrBind(){
   bindBody($("wrmain"),()=>wrDoc());
   $("wrside").addEventListener("click",e=>{
     const b=e.target.closest(".wrnav");if(!b)return;
-    const el=$("wrmain").querySelector(`.blk[data-i="${b.dataset.i}"]`);
-    if(el)el.scrollIntoView({behavior:"smooth",block:"start"});
+    scrollBlockInto($("wrmain"),$("wrmain").querySelector(`.blk[data-i="${b.dataset.i}"]`));
   });
   // 正文区里的右键：段落、折叠框、引用条目、空白处各有各的菜单，
   // 由 wrContextMenu 统一分派，跟画布上内嵌的稿子走的是同一个函数

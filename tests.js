@@ -2444,6 +2444,59 @@ group("zoomfocus 聚焦与渲染", async (c) => {
   c.ok(`连续缩放不卡顿（40 次共 ${cull.cost}ms）`, cull.cost < 150);
   c.ok("缩放过程中就完成剔除，不是等手势结束", cull.during < cull.total * 0.5);
   c.ok("缩放之后内容仍然渲染得出来", cull.after > 0 && cull.after < cull.total);
+
+  // 点大纲条目只该滚动稿子自己的正文区。早先用的是 scrollIntoView，
+  // 它会连带滚动所有祖先滚动容器——#stage 虽然写了 overflow:hidden，
+  // 脚本照样滚得动（实测被滚了 236px），整张画布连同稿子一起错位，
+  // 而相机参数完全没变，看起来就是"点一下左侧条目，页面跳成另一种布局"。
+  const nav = await c.run(async () => {
+    S.cards = []; const ids = [];
+    for (let i = 0; i < 20; i++) {
+      const id = "k" + i; ids.push(id);
+      S.cards.push({ id, x: 0, y: i * 200, w: 400,
+        text: (i % 4 ? "正文内容 " : "标题 ") + i, level: i % 4 ? 0 : 1, s: {} });
+    }
+    S.links = []; S.frames = [];
+    S.docs = [{ id: "D", x: 600, y: 0, title: "稿", ids, mode: "iter", open: {} }];
+    invalidateIndex(); render(); camTo(-900, -400, 0.8, true);
+    await new Promise((r) => setTimeout(r, 300));
+    const el = document.querySelector("#docs .doc");
+    const before = { doc: el.getBoundingClientRect().top, cam: { ...cam } };
+    const navs = document.querySelectorAll("#docs .doc .dside .wrnav");
+    navs[navs.length - 1].click();
+    await new Promise((r) => setTimeout(r, 500));
+    return { before,
+      docTop: el.getBoundingClientRect().top,
+      camSame: cam.x === before.cam.x && cam.y === before.cam.y && cam.z === before.cam.z,
+      stage: $("stage").scrollTop,
+      dbody: el.querySelector(".dbody").scrollTop };
+  });
+  c.ok("点大纲条目会滚动稿子正文", nav.dbody > 100);
+  c.ok("画布不会跟着错位", nav.docTop === nav.before.doc && nav.camSame && nav.stage === 0);
+
+  // 兜底：就算别处误用 scrollIntoView（或元素 focus）把 #stage 滚起来，也要立刻归零
+  c.ok("画布容器被滚动后会自动归零", await c.run(async () => {
+    const el = document.querySelector("#docs .doc");
+    const t0 = el.getBoundingClientRect().top;
+    el.querySelectorAll(".dbody .blk")[19].scrollIntoView({ block: "start" });
+    await new Promise((r) => setTimeout(r, 300));
+    return $("stage").scrollTop === 0 && el.getBoundingClientRect().top === t0;
+  }));
+
+  // 专注模式的大纲同理，只滚 #wrmain
+  c.ok("专注模式点大纲只滚正文区", await c.run(async () => {
+    openWrite("D");
+    await new Promise((r) => setTimeout(r, 300));
+    const navs = document.querySelectorAll("#wrside .wrnav");
+    navs[navs.length - 1].click();
+    await new Promise((r) => setTimeout(r, 500));
+    const ok = $("wrmain").scrollTop > 100 && $("stage").scrollTop === 0
+      && $("write").getBoundingClientRect().top === 0;
+    closeWrite();
+    return ok;
+  }));
+
+  await c.run(() => { S.docs = []; S.cards = []; invalidateIndex(); render(); });
 });
 
 group("perf 性能守卫", async (c) => {
