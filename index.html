@@ -501,6 +501,10 @@
      样式单独写一份是因为 #bar 的 .pp/.cell 是那条浮动工具栏专用的类，
      写作页的工具栏是常驻的 .fmtbar，不套用那一套 */
   .fmtbar .fpop.wide{width:190px}
+  /* 字重四档 + 两条滑块比默认的 150px 宽：滑块有自己的固有宽度（约 129px），
+     加上标签与数值就有 195px，装不下就直接从圆角框里呲出来。
+     给这一类弹层单独一个宽度，并且让滑块允许被压缩（min-width:0）。 */
+  .fmtbar .fpop.para{width:212px}
   .fmtbar .fpop .hd2{font:400 9px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;
     text-transform:uppercase;opacity:.35;margin:4px 2px 3px}
   .fmtbar .fpop .scroll{max-height:230px;overflow:auto}
@@ -511,12 +515,12 @@
   .fmtbar .fpop .item.on{background:var(--pfg);color:var(--panel)}
   .fmtbar .fpop .fnote{font-size:10.5px;opacity:.4;padding:5px 4px 2px;line-height:1.5}
   .fmtbar .fpop .seg{display:flex;gap:3px;margin:2px 0 6px}
-  .fmtbar .fpop .seg button{flex:1;height:24px;border:1px solid var(--pline);background:none;
+  .fmtbar .fpop .seg button{flex:1;min-width:0;height:24px;border:1px solid var(--pline);background:none;
     cursor:pointer;color:inherit;border-radius:6px;font-size:11.5px}
   .fmtbar .fpop .seg button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
   .fmtbar .fpop .rowp{display:flex;align-items:center;gap:6px;margin:5px 1px}
   .fmtbar .fpop .rowp label{width:28px;flex:none;opacity:.5;font-size:10.5px}
-  .fmtbar .fpop .rowp input[type=range]{flex:1;accent-color:var(--pfg);height:14px}
+  .fmtbar .fpop .rowp input[type=range]{flex:1;min-width:0;accent-color:var(--pfg);height:14px}
   .fmtbar .fpop .rowp .val{width:26px;text-align:right;opacity:.5;
     font:400 10px/1 "IBM Plex Mono",monospace}
   .fmtbar .lockic svg{display:block}
@@ -6191,9 +6195,15 @@ function verToClip(c,vid){
     ||{text:o.text,rich:o.rich,s:o.s,bg:o.bg};
   const sn={...o,id:uid(),text:v.text||"",rich:v.rich||"",
     s:{...(v.s||o.s||{})},bg:v.bg||o.bg||""};
-  ["ref","vers","verOn","lock","bib","wrUnder"].forEach(k=>delete sn[k]);
+  // wrIn 一定要去掉：它是"只活在这份稿子里"的标记，留着的话粘到画布上的那张卡片
+  // 会被 syncCards / docOrder 一并跳过——看起来就是"复制了却什么也没发生"。
+  // wrUnder 同理（那是挂在某一段折叠框下的位置），h 是别处量出来的高度也不能带走。
+  ["ref","vers","verOn","lock","bib","wrUnder","wrIn","h"].forEach(k=>delete sn[k]);
   if(!sn.rich)delete sn.rich;
-  CLIP={mode:"copy",items:[{src:o.id,snap:sn,dx:0,dy:0}]};
+  // 剪贴板条目要跟 clipCards 生成的形状一致：少了 w/s/bg，pasteClip 会拿 undefined
+  // 去建卡片，粘出来的宽度和样式都是坏的。
+  CLIP={mode:"copy",items:[{src:o.id,snap:sn,dx:0,dy:0,
+    w:o.w||520,s:{...(sn.s||{})},bg:sn.bg||""}]};
   toast(t("wrVerCopied"));
 }
 function wrStyleObj(o,lv){
@@ -6398,7 +6408,7 @@ function buildFmtBar(host){
       x=>setStyle("spacing",x/100));
     mkSld(t("leadShort"),90,260,5,Math.round(st.lh*100),x=>(x/100).toFixed(2),
       x=>setStyle("lh",x/100));
-  },null,t("fmtSpacing"));
+  },"para",t("fmtSpacing"));
   para.trig.dataset.need="card";
   sep();
 
@@ -6425,49 +6435,17 @@ function buildFmtBar(host){
       pop.appendChild(n);
     }
   },"wide",t("tplShort"));
-  // 锁定做成跟色块一样的两半：点图标切换"仅锁内容"，小三角才展开四种操作。
-  // 原来是"一个锁图标 + 一个不知所云的光秃秃小三角"两个分开的按钮。
-  const lockCell=document.createElement("div");lockCell.className="fcell split";cur.appendChild(lockCell);
-  const lockMain=document.createElement("button");lockMain.className="fx half";
-  lockMain.title=t("lockText");
-  lockMain.innerHTML=`<span id="fmtlock" class="lockic"></span>`;
-  lockMain.addEventListener("click",e=>{
-    e.stopPropagation();
+  // 锁定在写作页只有一档：稿子里的段落是顺着读下来的，没有"位置"可锁
+  // （它们的 x/y 只是拷贝时随手写的稿子左上角，画布上根本不出现）。
+  // 所以这里就是一个开关图标，点一下锁内容、再点一下解开，不挂弹层——
+  // "锁定内容与位置"那一档留给画布上的标准工具栏。
+  const lockBtn=btn(`<span id="fmtlock" class="lockic"></span>`,()=>{
     const cs=sel.map(card).filter(Boolean);
     if(!cs.length)return;
     setCardLock(null,cs.every(z=>z.lock)?null:"text");
     syncFmtBars();
-  });
-  lockCell.appendChild(lockMain);
-  const lockPop=document.createElement("div");lockPop.className="fpop";
-  const lockTrig=document.createElement("button");lockTrig.className="fx caret";
-  lockTrig.title=t("lockMenu");
-  lockTrig.innerHTML='<span class="car">\u25BE</span>';
-  lockTrig.dataset.need="sel";
-  lockTrig.addEventListener("click",e=>{
-    e.stopPropagation();
-    const was=lockPop.classList.contains("on");
-    closeFmtPops();
-    if(was)return;
-    lockPop.innerHTML="";
-    const items=sel.length?lockItems(()=>sel.slice()):[];
-    if(items.length){
-      const h=document.createElement("div");h.className="hd2";h.textContent=t("lockMenu");
-      lockPop.appendChild(h);
-      items.forEach(it=>{
-        const x=document.createElement("button");
-        x.className="item"+(it.check?" on":"");
-        x.textContent=it.label;
-        x.addEventListener("click",ev=>{ev.stopPropagation();it.on();closeFmtPops();syncFmtBars()});
-        lockPop.appendChild(x);
-      });
-    }else{
-      const n=document.createElement("div");n.className="fnote";n.textContent=t("fmtNeedSel");
-      lockPop.appendChild(n);
-    }
-    lockPop.classList.add("on");lockTrig.classList.add("on");placePop(lockCell,lockPop);
-  });
-  lockCell.appendChild(lockTrig);lockCell.appendChild(lockPop);
+  },t("lockText"));
+  lockBtn.dataset.need="sel";
   sep();
 
   /* ---------- 六、清除格式 ----------

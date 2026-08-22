@@ -2456,20 +2456,36 @@ group("fmtbar 写作页工具栏", async (c) => {
       .find((z) => z.title === t("fmtSpacing"));
     trig.click();
     const pop = trig.parentElement.querySelector(".fpop");
-    const r = { spacing: pop.textContent.trim(), dim: trig.classList.contains("off") };
-    closeFmtPops();
-    const lock = [...document.querySelectorAll("#wrfmt .fx.caret")]
-      .find((z) => z.title === t("lockMenu"));
-    lock.click();
-    const lp = lock.parentElement.querySelector(".fpop");
-    r.lock = lp.textContent.trim();
-    r.need = t("fmtNeedSel");
+    const r = { spacing: pop.textContent.trim(), dim: trig.classList.contains("off"),
+      need: t("fmtNeedSel"),
+      lockDim: document.querySelector("#wrfmt #fmtlock").closest(".fx").classList.contains("off") };
     closeFmtPops();
     return r;
   });
   c.ok("没选中时间距弹层给的是提示，不是空框", empty.spacing === empty.need);
-  c.ok("没选中时锁定弹层给的是提示，不是空框", empty.lock === empty.need);
-  c.ok("这两个控件在没选中时是淡的", empty.dim);
+  c.ok("需要选中才有意义的控件在没选中时是淡的", empty.dim && empty.lockDim);
+
+  // 写作页的段落没有"位置"可锁（它们的 x/y 只是稿子的左上角，画布上根本不出现），
+  // 所以锁定就是一个开关图标，不挂弹层——"锁定内容与位置"那一档留给画布的标准工具栏
+  const lk = await c.run(() => {
+    const el = document.querySelector("#wrfmt #fmtlock").closest(".fx");
+    const d = wrDoc();
+    sel = [d.ids[0]]; paintSel(); syncFmtBars();
+    const before = !!card(d.ids[0]).lock;
+    el.click();
+    const on = card(d.ids[0]).lock;
+    el.click();
+    const off = card(d.ids[0]).lock;
+    // 它就是组里的一个普通按钮：不在 .fcell 里（那是带弹层的形状），
+    // 后面也没有跟着一个 .fx.caret
+    const nx = el.nextElementSibling;
+    return { pop: !!el.closest(".fcell") || !!(nx && nx.classList.contains("caret")),
+      caret: el.innerHTML.includes("\u25BE"),
+      before, on, off, icon: !!el.querySelector("svg") };
+  });
+  c.ok("锁定只有一个图标，没有折叠框", !lk.pop && !lk.caret);
+  c.ok("点一下只锁内容，再点一下解开", !lk.before && lk.on === "text" && !lk.off);
+  c.ok("锁的状态用图标表示", lk.icon);
 
   // 选中之后照常给出真正的内容
   const full = await c.run(() => {
@@ -2478,13 +2494,20 @@ group("fmtbar 写作页工具栏", async (c) => {
     const trig = [...document.querySelectorAll("#wrfmt .fx")].find((z) => z.title === t("fmtSpacing"));
     trig.click();
     const pop = trig.parentElement.querySelector(".fpop");
+    const box = pop.getBoundingClientRect();
     const r = { segs: pop.querySelectorAll(".seg button").length,
       sliders: pop.querySelectorAll('input[type=range]').length,
+      // 滑块有自己的固有宽度，弹层不够宽时会从圆角框里呲出来
+      fits: [...pop.querySelectorAll("*")].every((z) => {
+        const q = z.getBoundingClientRect();
+        return q.left >= box.left - 1 && q.right <= box.right + 1;
+      }),
       dim: trig.classList.contains("off"), sz: document.querySelector("#wrfmt .fsz").textContent };
     closeFmtPops();
     return r;
   });
   c.ok("选中之后间距弹层有字重四档", full.segs === 4);
+  c.ok("弹层里的东西没有呲出框外", full.fits);
   c.ok("字距与行距两个滑块都在", full.sliders === 2);
   c.ok("选中之后不再是淡的", !full.dim);
   c.ok("字号显示的是当前段落的字号", /^\d+$/.test(full.sz));
@@ -2580,6 +2603,45 @@ group("fmtbar 写作页工具栏", async (c) => {
   });
   c.ok("画布上的稿子里，模式与导出在上面一行", !!rows && rows.toolTop < rows.fmtTop);
   c.ok("文字工具栏独占一整行", !!rows && rows.fmtW > rows.barW * 0.9);
+});
+
+group("wrver 版本复制到剪贴板", async (c) => {
+  // 「把这一版复制到剪贴板」的用途就是把稿子里的某一版**送回画布**当一张普通卡片。
+  // 早先它把整张段落原样拷进剪贴板，连 wrIn（只活在这份稿子里）一起带走，
+  // 于是粘到画布上的那张卡片被 syncCards / docOrder 一并跳过——
+  // 卡片其实建出来了，可就是看不见、也不参与导出，用起来就是"这个菜单没反应"。
+  await c.board([{ id: "p1", x: 0, y: 0, w: 420, text: "原来的一段内容", s: {} }], []);
+  const r = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["p1"]; clipCards("copy"); wrPasteMain(d, 0);
+    const id = d.ids[0], blk = card(id);
+    verNew(blk, true); blk.text = "第二版的内容"; verStash(blk);
+    sel = [id]; paintSel();
+    const before = S.cards.filter((z) => !z.wrIn).length;
+    verToClip(blk, blk.verOn);
+    const it = CLIP.items[0];
+    pasteClip({ x: 2000, y: 0 });
+    const made = S.cards.find((z) => !z.wrIn && z.x >= 1900);
+    return { before, after: S.cards.filter((z) => !z.wrIn).length,
+      clipW: it.w, clipHasS: !!it.s, snapWrIn: it.snap.wrIn,
+      text: made && made.text, w: made && made.w, docOnly: made ? docOnly(made) : null,
+      inDoc: !!(made && docOrder(S.cards).some((z) => z.id === made.id)),
+      onCanvas: !!(made && nodes.get(made.id) !== undefined || made) };
+  });
+  c.ok("画布上真的多出一张卡片", r.after === r.before + 1);
+  c.ok("粘出来的是这一版的内容", r.text === "第二版的内容");
+  c.ok("它是画布上的普通卡片，不带只活在稿子里的标记", r.docOnly === false && !r.snapWrIn);
+  c.ok("它进得了文档顺序，导出不会漏掉", r.inDoc);
+  c.ok("宽度跟着原段落走，不是 undefined", r.w === 420 && r.clipW === 420);
+  c.ok("剪贴板条目的形状跟正常复制一致", r.clipHasS);
+
+  // 稿子本身不受影响：源段落还在，画布上的原卡片也没动
+  c.ok("稿子里的那一段没有被搬走", await c.run(() => docs()[0].ids.length === 1));
+  c.ok("画布上的原卡片纹丝不动", await c.run(() => {
+    const o = card("p1");
+    return o && o.x === 0 && o.text === "原来的一段内容";
+  }));
 });
 
 group("wrback 定位只留给引文分身", async (c) => {
