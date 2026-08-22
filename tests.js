@@ -2359,6 +2359,47 @@ group("zoomfocus 聚焦与渲染", async (c) => {
   c.ok("选中卡片按 Z 会放大", zc.z > 1.2);
   c.ok("聚焦把卡片放到屏幕中心", Math.abs(zc.x - (-150 * zc.z)) < 2);
 
+  // 视野外的卡片从来没被量过高度，hOf() 会退回拿 c.w 当高度（一个纯粹的猜测）。
+  // 一张 340 宽、实际只有 23 高的卡片会被当成 340 高，取景框往下多出一大截，
+  // 表现就是"聚焦到了卡片下方的空间"。取景前必须先把目标量准。
+  const off = await c.run(() => {
+    S.cards = [{ id: "near", x: 0, y: 0, w: 340, text: "近处", s: {} },
+      { id: "far", x: 6000, y: 4000, w: 340, text: "远处", s: {} }];
+    S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render();
+    camTo(0, 0, 1, true);
+    const rendered = !!nodes.get("far");          // 确认它此刻确实不在画面里
+    sel = ["far"]; paintSel(); focusSel();
+    return { rendered, h: card("far").h, y: tgt.y, z: tgt.z };
+  });
+  c.ok("远处的卡片本来不在画面里", off.rendered === false);
+  c.ok("取景前先量准了它的高度", off.h > 0 && off.h < 60);
+  c.ok("聚焦对准卡片本身而不是它下方的空间",
+    Math.abs(off.y - (-(4000 + off.h / 2) * off.z)) < 2);
+
+  // 走一遍真实手势：点一张卡片再按 Z，它应该正落在屏幕正中
+  await c.run(() => {
+    S.cards = [];
+    for (let i = 0; i < 40; i++) S.cards.push(
+      { id: "g" + i, x: (i % 8) * 420, y: Math.floor(i / 8) * 300, w: 340, text: "卡片" + i, s: {} });
+    S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render(); fit(true);
+  });
+  await c.wait(600);
+  const pt = await c.run(() => {
+    const rc = nodes.get("g10").getBoundingClientRect();
+    return { x: Math.round(rc.x + rc.width / 2), y: Math.round(rc.y + rc.height / 2) };
+  });
+  await c.page.mouse.click(pt.x, pt.y);
+  await c.wait(200);
+  await c.page.keyboard.press("z");
+  await c.wait(900);
+  const centred = await c.run(() => {
+    const rc = nodes.get("g10").getBoundingClientRect();
+    return { dx: Math.round(rc.x + rc.width / 2 - innerWidth / 2),
+      dy: Math.round(rc.y + rc.height / 2 - innerHeight / 2) };
+  });
+  c.ok(`点卡片再按 Z 正落在屏幕中心（偏差 ${centred.dx},${centred.dy}）`,
+    Math.abs(centred.dx) <= 2 && Math.abs(centred.dy) <= 2);
+
   // 稿子不是卡片，进不了 sel。早先它压根没有"被选中"这个状态，
   // 所以"选中写作页再按 Z"必然没有反应。
   const zd = await c.run(() => {

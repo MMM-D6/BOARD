@@ -1696,13 +1696,31 @@ function worldBox(){
   return {x,y,w:xe-x,h:ye-y};
 }
 function fit(now){focusIdx=-1;boxTo(worldBox(),170,1.6,now)}
+// 取景之前先把目标卡片量准。
+// hOf() 在没有实测高度时会退回用 c.w 当高度（一个纯粹的猜测），
+// 而 syncCards() 只渲染视野内的卡片，所以聚焦一张视野外的卡片时它从来没被量过：
+// 一张 300 宽、实际只有 23 高的卡片会被当成 300 高，
+// 取景框因此往下多出一大截，看起来就是"聚焦到了卡片下方的空间"。
+// 这里把还没量过的目标临时放进 DOM 量一次，量完交给下一轮剔除自然收走。
+const MEASURE_CAP=400;                     // 目标太多时逐个补量不划算，误差也已被整体尺寸摊薄
+function ensureMeasured(cs){
+  if(!cs.length||cs.length>MEASURE_CAP)return;
+  let frag=null;
+  cs.forEach(c=>{
+    if(c.h||size[c.id]||nodes.has(c.id))return;
+    const el=makeCard(c);
+    nodes.set(c.id,el);
+    (frag||(frag=document.createDocumentFragment())).appendChild(el);
+  });
+  if(frag)$("cards").appendChild(frag);
+}
 let camBack=null,focusKey=null;
 // 稿子在画布上占的方框。稿子不是卡片，不进 S.cards，所以要单独算。
 function docBox(d){return d?{x:d.x,y:d.y,w:DOCW+SIDEW,h:640}:null}
 function focusOn(list,noToggle){
   const cs=(list||[]).filter(Boolean);
   if(!cs.length){fit();return}
-  cullCancel();syncCards();measure();
+  cullCancel();syncCards();ensureMeasured(cs);measure();
   const key=cs.map(c=>c.id).sort().join(",");
   if(!noToggle&&focusKey===key&&camBack){          // 再触发一次 = 退回
     camTo(camBack.x,camBack.y,camBack.z);
