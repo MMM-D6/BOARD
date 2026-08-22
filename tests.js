@@ -2605,6 +2605,85 @@ group("fmtbar 写作页工具栏", async (c) => {
   c.ok("文字工具栏独占一整行", !!rows && rows.fmtW > rows.barW * 0.9);
 });
 
+group("wrlevel 写作页里设定层级", async (c) => {
+  // 稿子里的标题层级就是画布上的 c.level（侧栏目录、正文编号、导出的标题级别
+  // 全都读它，没有第二份数据）。写作页原来只能显示层级、没法设定——
+  // 想把一段改成二级标题，得先回画布上找到那张卡片点右键菜单。
+  await c.board([
+    { id: "a", x: 0, y: 0, w: 400, text: "Introduction", s: {} },
+    { id: "b", x: 0, y: 200, w: 400, text: "引入", s: {} },
+    { id: "d", x: 0, y: 400, w: 400, text: "正文一段", s: {} },
+  ], []);
+  await c.run(() => {
+    S.docs = [];
+    const doc = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["a", "b", "d"]; clipCards("copy"); wrPasteMain(doc, 0);
+    openWrite(doc.id);
+  });
+  await c.wait(700);
+
+  const r = await c.run(() => {
+    const doc = wrDoc();
+    sel = [doc.ids[0]]; paintSel(); syncFmtBars();
+    const lab0 = document.querySelector("#wflv").textContent;
+    const trig = [...document.querySelectorAll("#wrfmt .fx")].find((z) => z.title === t("level"));
+    trig.click();
+    const opts = [...trig.parentElement.querySelectorAll(".fpop .item")].map((z) => z.textContent);
+    trig.parentElement.querySelectorAll(".fpop .item")[1].click();     // 一级标题
+    const c1 = card(doc.ids[0]);
+    sel = [doc.ids[1]]; paintSel(); syncFmtBars();
+    trig.click();
+    trig.parentElement.querySelectorAll(".fpop .item")[2].click();     // 二级标题
+    const c2 = card(doc.ids[1]);
+    return { lab0, opts, lv1: c1.level, size1: (c1.s || {}).size,
+      lv2: c2.level, lab: document.querySelector("#wflv").textContent,
+      body: card(doc.ids[2]).level };
+  });
+  c.ok("工具栏上有层级这一项，四档都在", r.opts.length === 4);
+  c.ok("没设过层级时显示正文", r.lab0 === "正文" || /body/i.test(r.lab0));
+  c.ok("能把一段设成一级标题", r.lv1 === 1);
+  c.ok("层级带来的字号也一并套上了", r.size1 > 20);
+  c.ok("能把另一段设成二级标题", r.lv2 === 2);
+  c.ok("标签跟着当前段落走", /2/.test(r.lab));
+  c.ok("没动过的段落还是正文", !r.body);
+
+  // 侧栏目录与正文编号都跟着变——它们读的就是同一个 level
+  await c.wait(400);
+  const side = await c.run(() => {
+    const box = document.querySelector("#wrside");
+    return { txt: box ? box.textContent.replace(/\s+/g, " ") : "",
+      hd: !!document.querySelector("#wrmain .blk .hd, #wrmain .blk.hd") };
+  });
+  c.ok("侧栏目录里出现了这两级标题", /Introduction/.test(side.txt) && /引入/.test(side.txt));
+  c.ok("正文里也按标题渲染了", side.hd);
+
+  // 改回正文：层级要能取消，不是只能往上加
+  c.ok("能改回正文", await c.run(() => {
+    const doc = wrDoc();
+    sel = [doc.ids[1]]; paintSel(); syncFmtBars();
+    const trig = [...document.querySelectorAll("#wrfmt .fx")].find((z) => z.title === t("level"));
+    trig.click();
+    trig.parentElement.querySelectorAll(".fpop .item")[0].click();
+    return !card(doc.ids[1]).level;
+  }));
+
+  // 画布上的原卡片不受影响：稿子里的段落是独立拷贝
+  c.ok("画布上的原卡片没有被改动", await c.run(() =>
+    !card("a").level && !card("b").level));
+
+  // 没选中段落时不给空框
+  c.ok("没选中时给的是提示", await c.run(() => {
+    sel = []; paintSel(); syncFmtBars();
+    const trig = [...document.querySelectorAll("#wrfmt .fx")].find((z) => z.title === t("level"));
+    trig.click();
+    const txt = trig.parentElement.querySelector(".fpop").textContent.trim();
+    const dim = trig.classList.contains("off");
+    closeFmtPops();
+    return txt === t("fmtNeedSel") && dim;
+  }));
+  await c.run(() => closeWrite());
+});
+
 group("wrver 版本复制到剪贴板", async (c) => {
   // 「把这一版复制到剪贴板」的用途就是把稿子里的某一版**送回画布**当一张普通卡片。
   // 早先它把整张段落原样拷进剪贴板，连 wrIn（只活在这份稿子里）一起带走，

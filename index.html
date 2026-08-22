@@ -481,6 +481,10 @@
   /* 画布上的稿子正文区固定 560px，工具栏必然要折行。与其让它在临界宽度上飘忽不定，
      不如**指定断点**：文字/字体/颜色一行，段落/整段/清除一行，两行长度接近，
      也正好是"改字"与"改段"的分界。专注模式够宽，一行就够，断点在那里关掉。 */
+  /* 层级标签比字体/模板短得多，单独给一个窄一点的固定宽度（同样是固定的，
+     切换层级时后面的按钮不会跟着挪） */
+  .fmtbar .lbl.lvl{width:54px}
+  .fmtbar .lbl.lvl.ishd{font-weight:600}
   .fmtbar .fbrk{flex-basis:100%;height:0;margin:0}
   #wrfmt .fbrk{display:none}
   /* 需要先选中一段才有意义的控件（间距、锁定）：没选中时淡下去，
@@ -740,6 +744,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fmtAlign:"Alignment",fmtClear:"Clear formatting",fmtHtml:"HTML",
   fmtSpacing:"Spacing",fmtNeedSel:"Select a paragraph first",
   fmtInk:"Text colour",fmtHL:"Highlight",
+  lvShortNone:"Body",lvShort1:"H1",lvShort2:"H2",lvShort3:"H3",
   wrExpDocxNote:"Word export loads a library from the network the first time.",
   wrExpPdfNote:"Opens the print dialogue; choose Save as PDF there.",
   wrExpFileNote:"Written straight to a file, no network needed.",
@@ -913,6 +918,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fmtAlign:"对齐",fmtClear:"清除格式",fmtHtml:"HTML 网页",
   fmtSpacing:"间距",fmtNeedSel:"先选中一段文字",
   fmtInk:"文字颜色",fmtHL:"标记颜色",
+  lvShortNone:"正文",lvShort1:"标题 1",lvShort2:"标题 2",lvShort3:"标题 3",
   wrExpDocxNote:"Word 导出首次需要从网络加载一个库",
   wrExpPdfNote:"会打开打印对话框，在那里选「另存为 PDF」",
   wrExpFileNote:"直接写成文件，不需要联网",
@@ -3547,7 +3553,10 @@ function setLevel(v){
     if(v)c.level=v;else delete c.level;
     c.s={...DEF,...S.textDef,...(c.s||{}),...ls};
   });
-  render();save();
+  // 层级现在也能在写作页里改，所以专注模式那一份也要跟着重画：
+  // render() 只管画布（renderDocs），#wrmain 是另一棵树
+  render();if(typeof wrOpenState==="function"&&wrOpenState())drawWrite();
+  save();
 }
 function toast(x){const e=$("toast");if(!x){e.classList.remove("on");return}
   e.textContent=x;e.classList.add("on");clearTimeout(e._t);e._t=setTimeout(()=>e.classList.remove("on"),2600)}
@@ -6379,8 +6388,27 @@ function buildFmtBar(host){
      对齐是三个常用动作，留成三个按钮；其余细项收进一个**有名字**的弹层。
      早先这里是一个光秃秃的小三角，既看不出是干什么的，没选中段落时点开还是个空框。 */
   grp();
-  ["left","center","right"].forEach(v=>btn(alSvg(v),()=>{setAlign(v);syncFmtBars()},t("fmtAlign")));
   // 「间距」是固定的字，不用 .lbl 那个固定宽度（那是给会变长短的字体名/模板名用的）
+  // 层级：稿子里的标题层级就是画布上的 c.level，同一套数据（侧栏目录、编号、
+  // 导出的标题级别全都读它）。写作页原来只能显示层级、没法设定，
+  // 想把一段改成二级标题得先回画布上去点右键菜单——这里补上。
+  // 用的就是画布那套 setLevel()，不另起炉灶。
+  const lvl=popCell(`<span class="lbl lvl" id="wflv">${esc(t("lvShortNone"))}</span>${car}`,pop=>{
+    const c=barCard();if(!c)return;
+    const o=orig(c),now=o.role?-1:(o.level||0);
+    [[0,"lvShortNone"],[1,"lvShort1"],[2,"lvShort2"],[3,"lvShort3"]].forEach(([v,k])=>{
+      const it=document.createElement("button");
+      it.className="item"+(now===v?" on":"");
+      it.textContent=t(k);
+      it.addEventListener("click",e=>{e.stopPropagation();
+        setLevel(v);closeFmtPops();syncFmtBars()});
+      pop.appendChild(it);
+    });
+  },null,t("level"));
+  lvl.trig.dataset.need="card";
+
+  // 顺序：先定这一段是什么（层级），再定它怎么摆（对齐），最后才是间距细调
+  ["left","center","right"].forEach(v=>btn(alSvg(v),()=>{setAlign(v);syncFmtBars()},t("fmtAlign")));
   const para=popCell(`<span>${esc(t("fmtSpacing"))}</span>${car}`,pop=>{
     const c=barCard();if(!c)return;
     const st={...DEF,...S.textDef,...(c.s||{})};
@@ -6477,6 +6505,14 @@ function syncFmtBars(){
     const has=!!barCard(),hasSel=sel.length>0;
     host.querySelectorAll('.fx[data-need]').forEach(x=>
       x.classList.toggle("off",x.dataset.need==="sel"?!hasSel:!has));
+    const lvEl=host.querySelector("#wflv");
+    if(lvEl){
+      const c0=barCard(),o0=c0?orig(c0):null;
+      const v=o0&&!o0.role?(o0.level||0):0;
+      lvEl.textContent=o0&&o0.role?t("roleHead"):
+        t(["lvShortNone","lvShort1","lvShort2","lvShort3"][v]||"lvShortNone");
+      lvEl.classList.toggle("ishd",!!(o0&&!o0.role&&o0.level));
+    }
     const lockEl=host.querySelector("#fmtlock");
     if(lockEl){
       const cur=sel.map(card).filter(Boolean);
