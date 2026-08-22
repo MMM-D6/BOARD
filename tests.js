@@ -370,6 +370,53 @@ group("outline 结构连线", async (c) => {
   // 结构连线体现为层级，关联连线体现为相邻排列，两者都不再写成"另见"
   c.ok("两类连线都不重复写成交叉引用", (r.md.match(/See §/g) || []).length === 0);
 
+  // 标题没标 level、而且线是从正文画向标题时，早先会按连线方向定父子，
+  // 于是正文反倒成了上级、整份大纲翻过来。现在先看层级，再看结构线的度数
+  // （谁被更多结构线连着谁就是这一处的主心骨），最后才看位置与连线方向。
+  const back = await c.run(() => {
+    S.cards = [
+      { id: "H", x: 2000, y: 2000, w: 300, text: "第一章", s: {} },
+      { id: "P1", x: 0, y: 0, w: 300, text: "正文一", s: {} },
+      { id: "P2", x: 0, y: 400, w: 300, text: "正文二", s: {} },
+    ];
+    // 两条线都是从正文画向标题的
+    S.links = [{ id: "l1", a: "P1", b: "H", st: true }, { id: "l2", a: "P2", b: "H", st: true }];
+    S.frames = []; S.docs = []; S.outline = true; invalidateIndex(); render();
+    return buildTree().flat.map((n) => n.c.id + ":" + n.lv).join(",");
+  });
+  c.ok("结构线接在标题后面时按结构排列，不看画线方向", back === "H:1,P1:0,P2:0");
+
+  // 标题标了 level 时，层级判据优先于度数
+  const lv = await c.run(() => {
+    S.cards[0].level = 1;
+    S.links = [{ id: "l1", a: "P1", b: "H", st: true }];
+    invalidateIndex(); render();
+    return buildTree().flat.map((n) => n.c.id + ":" + n.lv).join(",");
+  });
+  c.ok("标了层级的一端永远是上级", /^H:1,P1:0/.test(lv));
+
+  // 上面两段换掉了整块画布，这里把原来的卡片与连线摆回去，
+  // 后面检查连线样式的断言依赖它们
+  await c.run(() => {
+    S.cards = [
+      { id: "A", x: 0, y: 0, w: 300, text: "Background", level: 1, s: {} },
+      { id: "A1", x: 900, y: 600, w: 300, text: "讨论中", level: 2, s: {} },
+      { id: "A2", x: 900, y: 200, w: 300, text: "根本差异", level: 2, s: {} },
+      { id: "B", x: 0, y: 1200, w: 300, text: "理论框架", level: 1, s: {} },
+      { id: "B1", x: 900, y: 1500, w: 300, text: "digital body", level: 2, s: {} },
+      { id: "B1a", x: 1700, y: 1500, w: 300, text: "可编辑的流动的", s: {} },
+      { id: "X", x: 0, y: 2400, w: 300, text: "散落的卡片", s: {} },
+    ];
+    S.links = [
+      { id: "l1", a: "A", b: "A1", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l2", a: "A", b: "A2", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l3", a: "B", b: "B1", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l4", a: "B1", b: "B1a", st: true, kind: "curve", w: 1.4, color: "#888" },
+      { id: "l5", a: "A2", b: "B1", kind: "curve", w: 1.4, color: "#888" },
+    ];
+    invalidateIndex(); render();
+  });
+
   await c.run(() => { sel = []; render(); fit(true); });
   await c.wait(500);
   const vis = await c.run(() => {
@@ -957,7 +1004,7 @@ group("lock 锁定", async (c) => {
 
   const mig = await c.run(() =>
     migrate({ v: 4, cards: [{ id: "x", x: 0, y: 0, w: 200, text: "", lock: true }], links: [], frames: [] }));
-  c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 7);
+  c.ok("旧的布尔锁迁移为全锁", mig.cards[0].lock === "all" && mig.v === 8);
 });
 
 /* =====================================================================
@@ -1226,7 +1273,12 @@ group("map 页面地图", async (c) => {
   c.ok("拖动不会误跳转画布",
     await c.run(([x, y]) => tgt.x === x && tgt.y === y, [camBefore.x, camBefore.y]));
 
-  await c.page.mouse.click(ctr.x, ctr.y, { clickCount: 2 });
+  // puppeteer 的 clickCount:2 只发一次按下，Chrome 不会据此合成 dblclick
+  // （实测两次 click 的 detail 都是 1）。这里补上第二次按下时的 clickCount，
+  // 让它成为浏览器认账的双击手势。
+  await c.page.mouse.move(ctr.x, ctr.y);
+  await c.page.mouse.down({ clickCount: 1 }); await c.page.mouse.up({ clickCount: 1 });
+  await c.page.mouse.down({ clickCount: 2 }); await c.page.mouse.up({ clickCount: 2 });
   await c.wait(400);
   c.ok("双击回到全览", (await c.run(() => mapCam)) === null);
 
@@ -1666,7 +1718,7 @@ group("scale 整体缩放", async (c) => {
 
 group("data 数据安全", async (c) => {
   await c.board([{ id: "a", x: 0, y: 0, w: 300, text: "内容", s: {} }], []);
-  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 7);
+  c.ok("导出数据带版本号", (await c.run(() => bundle(null).v)) === 8);
 
   // 旧版的"已锁定编组"要迁移成卡片自身的锁定，锁定状态不能丢
   const mig = await c.run(() =>
@@ -1677,7 +1729,7 @@ group("data 数据安全", async (c) => {
     })
   );
   c.ok("旧编组的锁定状态迁移到卡片", mig.cards[0].lock === "all" && !mig.cards[1].lock);
-  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 7);
+  c.ok("迁移后编组字段被移除", !mig.groups && mig.v === 8);
 
   await c.run(async () => { await autoBackup(true); });
   await c.wait(500);
@@ -1912,14 +1964,17 @@ group("write 写作页", async (c) => {
     const g = document.querySelector(`#wrmain .blk[data-id="${ids.p2}"] .gut`);
     const vs = [...document.querySelectorAll(`#wrmain .blk[data-id="${ids.p2}"] .vv`)];
     const rs = vs.map((z) => z.getBoundingClientRect());
-    return { w: g.getBoundingClientRect().width,
+    const gr = g.getBoundingClientRect();
+    return { w: gr.width,
       col: getComputedStyle(g.querySelector(".vb")).flexDirection,
       n: vs.length,
-      sameLeft: rs.every((r) => Math.abs(r.left - rs[0].left) < 2),
-      allInside: rs.every((r) => r.left >= 0) };
+      // 竖排是右对齐的，字宽不同左边自然参差；真正要守的是右边缘齐平、
+      // 而且每一个都还落在这条固定宽度的栏里（不往左溢出到抓不到的地方）
+      sameRight: rs.every((r) => Math.abs(r.right - rs[0].right) < 2),
+      inside: rs.every((r) => r.left >= gr.left - 1 && r.right <= gr.right + 1) };
   }, ids);
   c.ok("版本栏是竖排", gut.col === "column" && gut.n >= 7);
-  c.ok("版本再多也不往左溢出", gut.w <= 40 && gut.sameLeft && gut.allInside);
+  c.ok("版本再多也不往左溢出", gut.w <= 44 && gut.sameRight && gut.inside);
 
   // 折叠框只留一个小符号，条数与说明文字都不写在正文里
   const foldHead = await c.run((ids) => {
@@ -2065,11 +2120,14 @@ group("wredit 写作页自由编辑", async (c) => {
     const p2clone = S.docs[0].ids.find((id) => card(id).text === "第二段。");
     const blk = document.querySelector(`#docs .doc .blk[data-id="${p2clone}"]`);
     blk.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
-    return [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    // 文案只有页面里才有，标签一并在页面内取出来比对
+    return { items, above: t("wrInsertAbove"), below: t("wrInsertBelow"), after: t("wrPasteAfter") };
   });
   c.ok("段落右键菜单提供插入空白段落",
-    blkMenu.some((z) => z.includes(t("wrInsertAbove"))) && blkMenu.some((z) => z.includes(t("wrInsertBelow"))));
-  c.ok("段落右键菜单提供粘贴", blkMenu.some((z) => z.includes(t("wrPasteAfter"))));
+    blkMenu.items.some((z) => z.includes(blkMenu.above))
+    && blkMenu.items.some((z) => z.includes(blkMenu.below)));
+  c.ok("段落右键菜单提供粘贴", blkMenu.items.some((z) => z.includes(blkMenu.after)));
 
   // 菜单必须能靠点击稿子内部的空白关掉，不该非得点到页面外
   const closed = await c.run(() => {
@@ -2104,7 +2162,7 @@ group("wredit 写作页自由编辑", async (c) => {
     const cap = document.querySelector('#docs .doc .blk[data-id="p1"] .cap');
     cap.focus();
     const r = document.createRange();
-    r.setStart(cap.firstChild, 5); r.setEnd(cap.firstChild, 10);
+    r.setStart(cap.firstChild, 4); r.setEnd(cap.firstChild, 8);
     const s = getSelection(); s.removeAllRanges(); s.addRange(r);
     wrSelToCard(d, card("p1"), cap);
     return { ids: d.ids.length, a: card("p1").text,
@@ -2197,6 +2255,24 @@ group("wredit 写作页自由编辑", async (c) => {
   c.ok("再次粘贴同一张源卡片会另建一份独立拷贝，不做去重（不再是同一份内容）",
     again.after === again.before + 1);
 
+  // 空稿子没有"末尾"可言，菜单上就该只说"粘贴"
+  const pasteLbl = await c.run(() => {
+    S.docs = [{ id: "E", x: 0, y: 0, title: "空稿", ids: [], mode: "iter", open: {} }];
+    render();
+    sel = ["p2"]; clipCards("copy");
+    docMenu(5, 5, S.docs[0]);
+    const empty = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    closeMenus();
+    S.docs[0].ids = ["p2"]; render();
+    docMenu(5, 5, S.docs[0]);
+    const filled = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    closeMenus();
+    return { empty, filled, here: t("wrPasteHere"), end: t("wrPasteEnd") };
+  });
+  c.ok("空稿子的菜单只说粘贴",
+    pasteLbl.empty.includes(pasteLbl.here) && !pasteLbl.empty.includes(pasteLbl.end));
+  c.ok("有内容的稿子仍说粘贴到末尾", pasteLbl.filled.includes(pasteLbl.end));
+
   await c.run(() => closeMenus());
   await c.run(() => { S.docs = []; render(); });
 });
@@ -2267,6 +2343,66 @@ group("ports 连接点", async (c) => {
   await c.page.mouse.up();
   await c.wait(350);
   c.ok("连接点上原地点击不产生连线", (await c.run(() => S.links.length)) === 0);
+});
+
+group("zoomfocus 聚焦与渲染", async (c) => {
+  // Z 键要真的"放大"聚焦到屏幕中心。早先 focusOn 的 maxZ 写死成 1，
+  // 选中一张小卡片按 Z 只会把它挪到中心却完全不放大，看起来像没反应。
+  const zc = await c.run(() => {
+    S.cards = [{ id: "a", x: 0, y: 0, w: 300, text: "甲", s: {} },
+      { id: "b", x: 3000, y: 2000, w: 300, text: "乙", s: {} }];
+    S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render();
+    camTo(0, 0, 1, true);
+    sel = ["a"]; paintSel(); focusSel();
+    return { z: tgt.z, x: tgt.x, y: tgt.y };
+  });
+  c.ok("选中卡片按 Z 会放大", zc.z > 1.2);
+  c.ok("聚焦把卡片放到屏幕中心", Math.abs(zc.x - (-150 * zc.z)) < 2);
+
+  // 稿子不是卡片，进不了 sel。早先它压根没有"被选中"这个状态，
+  // 所以"选中写作页再按 Z"必然没有反应。
+  const zd = await c.run(() => {
+    S.docs = [{ id: "D", x: 1200, y: 0, title: "稿", ids: ["a"], mode: "iter", open: {} }];
+    render(); camTo(0, 0, 0.5, true);
+    selectDoc("D");
+    const marked = document.querySelector('#docs .doc[data-id="D"]').classList.contains("on");
+    focusSel();
+    return { marked, z: tgt.z, selDoc };
+  });
+  c.ok("稿子可以被选中", zd.marked && zd.selDoc === "D");
+  c.ok("选中稿子按 Z 会放大到它", zd.z > 1);
+
+  // 再按一次退回原来的视角，跟聚焦卡片是同一套来回切换的手感
+  c.ok("再按一次 Z 退回原视角", await c.run(() => {
+    focusSel();
+    return Math.abs(tgt.z - 0.5) < 0.01;
+  }));
+
+  // 选中卡片就等于放弃对稿子的选中，三者互斥
+  c.ok("选中卡片会取消稿子的选中", await c.run(() => {
+    sel = ["a"]; paintSel();
+    return selDoc === null;
+  }));
+
+  // 剔除必须是节流而不是防抖：连续缩放期间也要真的跑，
+  // 否则画面上一直挂着全部节点，既卡又渲染不出内容。
+  const cull = await c.run(async () => {
+    S.cards = []; S.docs = [];
+    for (let i = 0; i < 600; i++) S.cards.push(
+      { id: "c" + i, x: (i % 25) * 420, y: Math.floor(i / 25) * 260, w: 340, text: "卡片" + i, s: {} });
+    S.links = []; S.frames = []; invalidateIndex(); render(); fit(true);
+    await new Promise((r) => setTimeout(r, 400));
+    const t0 = performance.now();
+    for (let i = 0; i < 40; i++) zoomAt(1.06, 700, 450);   // 模拟一次连续的缩放手势
+    const cost = performance.now() - t0;
+    await new Promise((r) => setTimeout(r, 150));
+    const during = nodes.size;                              // 手势刚结束时就该已经剔除过
+    await new Promise((r) => setTimeout(r, 400));
+    return { cost: Math.round(cost), during, after: nodes.size, total: S.cards.length };
+  });
+  c.ok(`连续缩放不卡顿（40 次共 ${cull.cost}ms）`, cull.cost < 150);
+  c.ok("缩放过程中就完成剔除，不是等手势结束", cull.during < cull.total * 0.5);
+  c.ok("缩放之后内容仍然渲染得出来", cull.after > 0 && cull.after < cull.total);
 });
 
 group("perf 性能守卫", async (c) => {

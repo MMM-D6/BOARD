@@ -497,14 +497,14 @@
   .blk{position:relative;max-width:660px;margin:0 auto 6px;padding:1px 0}
   /* 版本栏竖排：横排时每加一版就往左长一截，早先的版本最终会溢出到抓不到的地方。
      竖排之后宽度恒定（34px），无论多少版都停在原地。 */
-  .blk .gut{position:absolute;right:100%;top:1px;width:34px;padding-right:10px;
+  .blk .gut{position:absolute;right:100%;top:1px;width:40px;padding-right:10px;
     display:flex;flex-direction:column;align-items:flex-end;gap:1px;
     opacity:0;transition:opacity .14s}
   .blk:hover .gut,.blk .gut:focus-within,.blk.sel .gut{opacity:1}
   .blk .gut .num{font:400 10px/1.4 "IBM Plex Mono",monospace;opacity:.4}
   .blk .vb{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
   .vv{border:none;background:none;cursor:pointer;color:inherit;border-radius:3px;
-    padding:0 3px;min-width:18px;text-align:center;
+    padding:0 2px;min-width:16px;max-width:100%;text-align:center;letter-spacing:-.02em;
     font:400 9.5px/1.5 "IBM Plex Mono",monospace;opacity:.45}
   .vv:hover{background:var(--whi);opacity:.9}
   .vv.on{background:var(--pfg);color:var(--panel);opacity:1}
@@ -988,6 +988,9 @@ const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",it
 const DEFLINK={kind:"curve",arrow:"none",w:1.4,color:"#8A8A85"};
 let S={bg:"#F4F4F2",cards:[],links:[],sheets:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"all",linkLabel:"dot"};
 let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
+// 当前选中的稿子（画布上的一份稿子被当作一个整体选中时）。
+// 稿子不是卡片，进不了 sel，所以单独记一个 id；Z 键、Esc 都要认它。
+let selDoc=null;
 let cam={x:0,y:0,z:1}, tgt={x:0,y:0,z:1};
 let undo=[], redo=[], mouse={x:innerWidth/2,y:innerHeight/2}, focusIdx=-1;
 const card=id=>cardIndex().get(id);
@@ -1655,14 +1658,14 @@ function loop(){
 }
 requestAnimationFrame(loop);
 function applyCam(){
-  cullSoon();syncBar();if(mapOn)mapSoon();
+  cullSoon();barSoon();if(mapOn)mapSoon();
   const w=$("world");
   w.style.transform=`translate(${cam.x}px,${cam.y}px) scale(${cam.z})`;
   w.style.setProperty("--iz",1/cam.z);
   statusBar();
 }
 const toW=(x,y)=>({x:(x-innerWidth/2-cam.x)/cam.z,y:(y-innerHeight/2-cam.y)/cam.z});
-function camTo(x,y,z,snapNow){tgt={x,y,z};if(snapNow){cam={x,y,z};applyCam();drawLinks()}}
+function camTo(x,y,z,snapNow){tgt={x,y,z};if(snapNow){cam={x,y,z};applyCam();drawLinksSoon()}}
 function bbox(list){
   const cs=list||S.cards;
   if(!cs.length)return null;
@@ -1694,10 +1697,12 @@ function worldBox(){
 }
 function fit(now){focusIdx=-1;boxTo(worldBox(),170,1.6,now)}
 let camBack=null,focusKey=null;
+// 稿子在画布上占的方框。稿子不是卡片，不进 S.cards，所以要单独算。
+function docBox(d){return d?{x:d.x,y:d.y,w:DOCW+SIDEW,h:640}:null}
 function focusOn(list,noToggle){
   const cs=(list||[]).filter(Boolean);
   if(!cs.length){fit();return}
-  clearTimeout(cullT);syncCards();measure();
+  cullCancel();syncCards();measure();
   const key=cs.map(c=>c.id).sort().join(",");
   if(!noToggle&&focusKey===key&&camBack){          // 再触发一次 = 退回
     camTo(camBack.x,camBack.y,camBack.z);
@@ -1705,10 +1710,35 @@ function focusOn(list,noToggle){
   }
   if(focusKey!==key)camBack={...tgt};              // 记住来时的视角
   focusKey=key;
-  boxTo(bbox(cs),lock?110:150,1);
+  // maxZ 早先写死成 1，于是选中一张小卡片按 Z 只会把它挪到屏幕中心、
+  // 却完全不放大，看起来就像"没反应"。跟"适应画面"用同一个上限即可。
+  boxTo(bbox(cs),lock?110:150,1.6);
   focusIdx=cs.length===1?S.cards.indexOf(cs[0]):-1;
 }
-function focusSel(){focusOn(sel.map(card).filter(Boolean))}
+// 把一份稿子放大到屏幕中心，跟聚焦卡片是同一套来回切换的手感
+function focusDoc(d,noToggle){
+  const b=docBox(d);if(!b)return;
+  const key="doc:"+d.id;
+  if(!noToggle&&focusKey===key&&camBack){
+    camTo(camBack.x,camBack.y,camBack.z);
+    camBack=null;focusKey=null;return;
+  }
+  if(focusKey!==key)camBack={...tgt};
+  focusKey=key;focusIdx=-1;
+  boxTo(b,80,1.6);
+}
+function focusSel(){
+  if(wrOpenState())return;                         // 专注模式下没有画布可聚焦
+  if(selDoc){const d=docs().find(z=>z.id===selDoc);if(d){focusDoc(d);return}}
+  const cs=sel.map(card).filter(Boolean);
+  // 选中的是只活在某份稿子里的段落：它在画布上没有独立位置，
+  // 聚焦到承载它的那份稿子才是用户想要的结果
+  if(cs.length&&cs.every(c=>docOnly(c))){
+    const d=docs().find(z=>z.id===cs[0].wrIn);
+    if(d){focusDoc(d);return}
+  }
+  focusOn(cs.filter(c=>!docOnly(c)));
+}
 function focusCard(c){focusOn([c],true)}
 function zoomAt(f,cx,cy){
   const nz=clamp(tgt.z*f,.06,6),ox=cx-innerWidth/2,oy=cy-innerHeight/2;
@@ -2421,7 +2451,7 @@ function renderFrames(){
     ttl.textContent=f.title||t("pageDefault");
     ttl.addEventListener("pointerdown",e=>{
       if(lock||e.button!==0)return;
-      e.stopPropagation();selFrame=f.id;sel=[];selLink=null;paintSel();renderFrames();
+      e.stopPropagation();selFrame=f.id;sel=[];selLink=null;selDoc=null;paintDocSel();paintSel();renderFrames();
       startFrameMove(e,f);
     });
     ttl.addEventListener("dblclick",e=>{
@@ -2670,14 +2700,29 @@ function syncCards(){
 }
 let mapT;
 function mapSoon(){clearTimeout(mapT);mapT=setTimeout(drawMap,90)}
-let cullT;
-function cullSoon(){clearTimeout(cullT);cullT=setTimeout(()=>{
+let cullT=null,cullLast=0;
+// 剔除必须是"节流"而不是"防抖"。早先每收到一次相机变化就把定时器往后推，
+// 结果是一整个连续的缩放/平移手势期间它一次都不跑：
+// 画面上挂着全部节点（最贵的时候做最多的事），手势停下来才突然补齐，
+// 表现就是"卡卡的，而且缩放之后内容渲染不出来"。
+// 改成"最多每 90ms 跑一次，但连续输入期间保证会跑"之后，
+// 节点数在手势中就被压到视野范围，每帧的样式重算跟着降一个数量级。
+function cullSoon(){
+  if(cullT)return;                                  // 已排好一次，不要把它往后推
+  const wait=Math.max(0,90-(performance.now()-cullLast));
+  cullT=setTimeout(runCull,wait);
+}
+function runCull(){
+  cullT=null;cullLast=performance.now();
   const before=nodes.size;syncCards();
   if(nodes.size!==before){measure();paintFind()}
   drawLinks();
-},110)}
+}
+function cullCancel(){if(cullT){clearTimeout(cullT);cullT=null}}
 function paintSel(){
   const many=sel.length>1;
+  // 选中卡片或连线就等于放弃了对稿子的选中，三者互斥
+  if((sel.length||selLink)&&selDoc){selDoc=null;paintDocSel()}
   setTimeout(syncBar,0);
   nodes.forEach((el,id)=>{el.classList.toggle("sel",sel.includes(id));
     el.classList.toggle("multi",many&&sel.includes(id))});
@@ -2759,6 +2804,12 @@ function pathOf(p1,p2,s1,s2,kind){
 let dlPend=false;
 function drawLinksSoon(){if(dlPend)return;dlPend=true;
   requestAnimationFrame(()=>{dlPend=false;drawLinks()})}
+// 工具栏跟随卡片时要读 getBoundingClientRect，那是一次强制重排。
+// 相机每帧都在写 transform 与 --iz，读写交替会让浏览器一帧内反复重算布局，
+// 所以这里合并到下一帧统一做一次，而不是每帧同步调用 syncBar。
+let barPend=false;
+function barSoon(){if(barPend)return;barPend=true;
+  requestAnimationFrame(()=>{barPend=false;syncBar()})}
 let CIDX=null,CIDXsrc=null,CIDXn=-1;
 // 卡片 id 到对象的索引，避免每次线性查找。
 // 数组被整体替换（导入、撤销、测试直接赋值）时也要重建，所以同时比对引用。
@@ -3180,7 +3231,7 @@ function startPan(e){
 }
 function startMarquee(e){
   const add=e.shiftKey,base=add?[...sel]:[];
-  if(!add&&(sel.length||selLink)){sel=[];selLink=null;paintSel()}
+  if(!add&&(sel.length||selLink||selDoc)){sel=[];selLink=null;selDoc=null;paintDocSel();paintSel()}
   const sx=e.clientX,sy=e.clientY,box=$("marq");let moved=false;
   const mv=ev=>{
     const x=Math.min(sx,ev.clientX),y=Math.min(sy,ev.clientY);
@@ -3267,7 +3318,7 @@ addEventListener("keydown",e=>{
   if(e.key==="Escape"&&wrOpenState()){closeWrite();return}
   if(e.key==="Escape"&&bibFocus){bibFocus=null;paintBibFocus();return}
   if(e.key==="Escape"&&tbRect()){clearTbSel();syncBar();return}
-  if(e.key==="Escape"){closeMenus();sel=[];selLink=null;linkFrom=null;stage.style.cursor="";toast("");paintSel()}
+  if(e.key==="Escape"){closeMenus();sel=[];selLink=null;selDoc=null;linkFrom=null;stage.style.cursor="";toast("");paintDocSel();paintSel()}
   if(e.key==="Backspace"||e.key==="Delete"){
     const R2=tbRect();
     if(R2){                                       // 表格选区：清空内容而不是删卡片
@@ -3429,7 +3480,7 @@ function toast(x){const e=$("toast");if(!x){e.classList.remove("on");return}
 
 /* ================= lock mode ================= */
 function setLock(v){
-  lock=v;sel=[];selLink=null;editing=false;linkFrom=null;closeMenus();
+  lock=v;sel=[];selLink=null;selDoc=null;editing=false;linkFrom=null;closeMenus();
   $("pop").classList.remove("on");
   render();
   if(v){toast(t("lockOn"));fit();goFS();idle();$("findq").value="";runFind()}
@@ -3962,21 +4013,35 @@ function lvRank(c){
   if(c.role==="bib")return 95;         // 文献条目：原文的母信息，比正文更靠上
   return c.level?c.level:99;
 }
-function structPair(l){
+function structPair(l,deg){
   const A=card(l.a),B=card(l.b);
   if(!A||!B)return null;
   const ra=lvRank(A),rb=lvRank(B);
   if(ra<rb)return {p:A.id,k:B.id};
   if(rb<ra)return {p:B.id,k:A.id};
-  return {p:l.a,k:l.b};            // 同级时才回退到连线本身的方向
+  // 两端层级相同（常见情形：标题没标 level，一堆正文用结构线接在它后面）。
+  // 早先这里直接退回连线方向，于是"线是从正文画向标题的"就会把正文当成上级，
+  // 整份大纲跟着翻过来。改为先看结构线的度数：谁被更多结构线连着，谁就是这一处的
+  // 主心骨（思维导图里中心节点连线最多），这跟人摆卡片的直觉一致。
+  if(deg){
+    const da=deg.get(A.id)||0,db=deg.get(B.id)||0;
+    if(da!==db)return da>db?{p:A.id,k:B.id}:{p:B.id,k:A.id};
+  }
+  // 度数也相同：按位置，上面/左边的作上级
+  const pa=A.y*100000+A.x,pb=B.y*100000+B.x;
+  if(pa!==pb)return pa<pb?{p:A.id,k:B.id}:{p:B.id,k:A.id};
+  return {p:l.a,k:l.b};            // 实在分不出才回退到连线本身的方向
 }
 function outlineForest(list){
   const set=new Set((list||S.cards).map(c=>c.id));
   const ls=structLinks().filter(l=>set.has(l.a)&&set.has(l.b));
   if(!ls.length)return null;
   const kids=new Map(),hasParent=new Set();
+  // 每张卡片被多少条结构线连着，用来判断"谁是这一处的主心骨"
+  const deg=new Map();
+  ls.forEach(l=>{deg.set(l.a,(deg.get(l.a)||0)+1);deg.set(l.b,(deg.get(l.b)||0)+1)});
   ls.forEach(l=>{
-    const pr=structPair(l);if(!pr)return;
+    const pr=structPair(l,deg);if(!pr)return;
     if(!kids.has(pr.p))kids.set(pr.p,[]);
     if(!kids.get(pr.p).includes(pr.k)){kids.get(pr.p).push(pr.k);hasParent.add(pr.k)}
   });
@@ -5988,6 +6053,8 @@ function renderDocs(){
   docsCapNodes.clear();
   box.querySelectorAll(".cap[data-id]").forEach(el=>docsCapNodes.set(el.dataset.id,el));
   box.querySelectorAll(".fmtbar").forEach(h=>buildFmtBar(h));
+  if(selDoc&&!docs().some(z=>z.id===selDoc))selDoc=null;   // 稿子已被删掉
+  paintDocSel();
   applyDocStyles();syncFmtBars();
   if(scrolls.size)scrolls.forEach((top,id)=>{
     const dbody=box.querySelector(`.doc[data-id="${id}"] .dbody`);
@@ -6001,7 +6068,9 @@ function docMenu(x,y,d){
     {label:t("wrDocRename"),on:()=>{const v=prompt(t("wrDocRename"),d.title);
       if(v!==null){snap();d.title=v.trim()||d.title;render();save()}}},
     "-",
-    ...(CLIP?[{label:t("wrPasteEnd"),on:()=>wrPasteMain(d,d.ids.length)}]:[]),
+    // 空稿子没有"末尾"可言，菜单上就该只说"粘贴"
+    ...(CLIP?[{label:d.ids.length?t("wrPasteEnd"):t("wrPasteHere"),
+      on:()=>wrPasteMain(d,d.ids.length)}]:[]),
     {label:t("wrDocExport"),on:()=>openWrExport(d,x,y)},
     "-",
     {label:t("wrDocDel"),danger:true,on:()=>{snap();
@@ -6461,7 +6530,21 @@ function bindDoc(el,d){
   }
   bindBody(el,d);
 }
+// 选中一份稿子（并清掉卡片/连线的选中，三者互斥）
+function selectDoc(id){
+  selDoc=id||null;
+  if(selDoc){sel=[];selLink=null}
+  paintDocSel();paintSel();
+}
+function paintDocSel(){
+  const box=$("docs");if(!box)return;
+  box.querySelectorAll(".doc").forEach(el=>
+    el.classList.toggle("on",el.dataset.id===selDoc));
+}
 function startDocMove(e,d){
+  // 抓住稿子的空白处就等于选中了这份稿子：跟画布上点一张卡片是同一个意思。
+  // 没有这一步，稿子永远进不了任何选中状态，按 Z 自然什么都不会发生。
+  selectDoc(d.id);
   const sx=e.clientX,sy=e.clientY,ox=d.x,oy=d.y;
   let moved=false;
   const mv=ev=>{
