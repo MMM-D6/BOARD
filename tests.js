@@ -1746,7 +1746,7 @@ group("image 图片导入", async (c) => {
 });
 
 group("docpage 稿子在画布上", async (c) => {
-  await c.run(() => {
+  const ids = await c.run(() => {
     S.cards = [
       { id: "h1", x: 0, y: 0, w: 400, text: "理论框架", level: 1, s: { ...DEF, size: 22 } },
       { id: "p1", x: 0, y: 400, w: 400, text: "第一段内容在这里。", s: { ...DEF, size: 15 } },
@@ -1757,9 +1757,14 @@ group("docpage 稿子在画布上", async (c) => {
     const d = addDoc({ x: 1200, y: 0 }, "我的稿子");
     wrImport(["h1", "p1", "p2"], false, d.id);
     camTo(0, 0, 1, true);
+    // 送进稿子的是内容的独立拷贝，新 id 跟原卡片的 id 对不上——按内容找出各自克隆出来的 id
+    const byText = (txt) => d.ids.find((id) => card(id).text === txt);
+    return { h1: byText("理论框架"), p1: byText("第一段内容在这里。"), p2: byText("第二段内容。") };
   });
+  c.ok("送进稿子的是独立拷贝，不是原卡片本身",
+    ids.h1 && ids.p1 && ids.p2 && ids.h1 !== "h1" && ids.p1 !== "p1" && ids.p2 !== "p2");
   await c.wait(600);
-  const st = await c.run(() => {
+  const st = await c.run((ids) => {
     const el = document.querySelector("#docs .doc");
     return { w: Math.round(el.querySelector(".dmain").getBoundingClientRect().width),
       blocks: el.querySelectorAll(".blk").length,
@@ -1768,9 +1773,9 @@ group("docpage 稿子在画布上", async (c) => {
       titleOutside: !!el.querySelector(".dttl .dt"),
       noMeta: !el.querySelector(".dm"),
       hasFmt: !!el.querySelector(".dbar .fmtbar .fx"),
-      capSize: getComputedStyle(el.querySelector('.blk[data-id="p1"] .cap')).fontSize,
-      headSize: getComputedStyle(el.querySelector('.blk[data-id="h1"] .cap')).fontSize };
-  });
+      capSize: getComputedStyle(el.querySelector(`.blk[data-id="${ids.p1}"] .cap`)).fontSize,
+      headSize: getComputedStyle(el.querySelector(`.blk[data-id="${ids.h1}"] .cap`)).fontSize };
+  }, ids);
   c.ok("稿子直接在画布上展开正文", st.blocks === 3);
   c.ok("正文区宽度是世界坐标里的固定值", Math.abs(st.w - 760) < 4);
   c.ok("非专注状态下也显示大纲侧栏", st.hasSide);
@@ -1779,13 +1784,24 @@ group("docpage 稿子在画布上", async (c) => {
   c.ok("稿子最上方有真的文字工具栏", st.hasFmt);
   c.ok("保留卡片本身的字号", st.capSize === "15px" && st.headSize === "22px");
 
+  // 送进稿子的是拷贝：画布上原卡片 p1 的位置、内容完全不受影响，点一下照样能选中并弹出工具栏
+  const extPt = await c.run(() => {
+    const r = nodes.get("p1").getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + 10 };
+  });
+  await c.page.mouse.click(extPt.x, extPt.y);
+  await c.wait(300);
+  c.ok("送进稿子之后，画布上原卡片自己的位置照样能选中并弹出工具栏",
+    await c.run(() => sel[0] === "p1" && $("bar").classList.contains("on")));
+  await c.run(() => { sel = []; paintSel(); });
+
   // 内部尺寸不能乘反向缩放系数，否则缩小画布时会把文字挤成一列
-  const zoomed = await c.run(() => {
+  const zoomed = await c.run((ids) => {
     camTo(0, 0, 0.4, true);
     const el = document.querySelector("#docs .doc");
-    return { declared: el.querySelector('.blk[data-id="p1"] .cap').style.fontSize,
+    return { declared: el.querySelector(`.blk[data-id="${ids.p1}"] .cap`).style.fontSize,
       ratio: el.querySelector(".dmain").getBoundingClientRect().width / 760 };
-  });
+  }, ids);
   c.ok("缩放时内部比例不变形",
     zoomed.declared === "15px" && Math.abs(zoomed.ratio - 0.4) < 0.03);
   await c.run(() => camTo(0, 0, 1, true));
@@ -1794,30 +1810,33 @@ group("docpage 稿子在画布上", async (c) => {
   // 点一下就能打字，跟 Word 一样，不必先双击"进入编辑"
   await c.run(() => camTo(-1510, -274, 1, true));
   await c.wait(300);
-  const p2r = await c.run(() => {
-    const r = document.querySelector('#docs .doc .blk[data-id="p2"] .cap').getBoundingClientRect();
+  const p2r = await c.run((ids) => {
+    const r = document.querySelector(`#docs .doc .blk[data-id="${ids.p2}"] .cap`).getBoundingClientRect();
     return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
-  });
+  }, ids);
   await c.page.mouse.click(p2r.x, p2r.y);
   await c.wait(200);
-  c.ok("单击就能把光标落进正文", await c.run(() =>
-    document.activeElement === document.querySelector('#docs .doc .blk[data-id="p2"] .cap')));
+  c.ok("单击就能把光标落进正文", await c.run((ids) =>
+    document.activeElement === document.querySelector(`#docs .doc .blk[data-id="${ids.p2}"] .cap`), ids));
 
-  await c.run(() => {
-    const cap = document.querySelector('#docs .doc .blk[data-id="p2"] .cap');
+  await c.run((ids) => {
+    const cap = document.querySelector(`#docs .doc .blk[data-id="${ids.p2}"] .cap`);
     cap.focus(); cap.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-  });
+  }, ids);
   await c.wait(400);
-  c.ok("在画布上编辑时出现文字工具栏",
-    await c.run(() => $("bar").classList.contains("on") && sel[0] === "p2"));
+  c.ok("在画布上编辑稿子时不再弹出浮动工具栏（已有常驻的 fmtbar，两条栏会叠在一起打架）",
+    await c.run((ids) => !$("bar").classList.contains("on") && sel[0] === ids.p2, ids));
 
-  await c.run(() => {
-    const cap = document.querySelector('#docs .doc .blk[data-id="p2"] .cap');
+  await c.run((ids) => {
+    const cap = document.querySelector(`#docs .doc .blk[data-id="${ids.p2}"] .cap`);
     cap.innerText = "就地改写过了。";
     cap.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  }, ids);
   await c.wait(600);
-  c.ok("就地编辑直接改到卡片", (await c.run(() => card("p2").text)) === "就地改写过了。");
+  c.ok("就地编辑改到的是稿子里的独立拷贝",
+    (await c.run((ids) => card(ids.p2).text, ids)) === "就地改写过了。");
+  c.ok("编辑稿子里的段落完全不牵动画布上的原卡片",
+    (await c.run(() => card("p2").text)) === "第二段内容。");
 
   await c.run(() => {
     const dt = document.querySelector("#docs .doc .dttl .dt");
@@ -1849,10 +1868,16 @@ group("write 写作页", async (c) => {
     invalidateIndex(); render();
     const d = addDoc({ x: 0, y: 900 }, "我的论文");
     wrImport(["h1", "p1", "p2"], false, d.id);
-    return { docs: S.docs.length, ids: S.docs[0].ids.length, title: S.docs[0].title };
+    // 送进稿子的是内容的独立拷贝，新 id 跟原卡片的 id 对不上——按内容找出各自克隆出来的 id
+    const byText = (txt) => d.ids.find((id) => card(id).text === txt);
+    const ids = { h1: byText("理论框架"), p1: byText("第一段内容。"), p2: byText("第二段内容。") };
+    return { docs: S.docs.length, ids, idsLen: d.ids.length, title: d.title };
   });
   c.ok("可以新建有名字的写作页", r.docs === 1 && r.title === "我的论文");
-  c.ok("可以把卡片送进去", r.ids === 3);
+  c.ok("可以把卡片送进去", r.idsLen === 3);
+  c.ok("送进稿子的是独立拷贝，不是原卡片本身",
+    r.ids.h1 !== "h1" && r.ids.p1 !== "p1" && r.ids.p2 !== "p2");
+  const ids = r.ids;
   await c.wait(400);
   c.ok("写作页在画布上是独立对象",
     (await c.run(() => document.querySelectorAll("#docs .doc").length)) === 1);
@@ -1862,53 +1887,55 @@ group("write 写作页", async (c) => {
   c.ok("可以打开写作页", await c.run(() => document.body.classList.contains("wr")));
   c.ok("侧栏显示稿子名", (await c.run(() => $("wrtitle").textContent)) === "我的论文");
 
-  // 所见即所得：保留卡片本身的字号与底色
-  const sty = await c.run(() => {
-    const cap = document.querySelector('#wrmain .blk[data-id="p1"] .cap');
-    const wrap = document.querySelector('#wrmain .blk[data-id="p1"] .wrap');
+  // 所见即所得：保留卡片本身的字号与底色（这里是稿子里的拷贝，跟画布上的原卡片各自独立）
+  const sty = await c.run((ids) => {
+    const cap = document.querySelector(`#wrmain .blk[data-id="${ids.p1}"] .cap`);
+    const wrap = document.querySelector(`#wrmain .blk[data-id="${ids.p1}"] .wrap`);
     return { size: getComputedStyle(cap).fontSize, bg: getComputedStyle(wrap).background,
-      h1: getComputedStyle(document.querySelector('#wrmain .blk[data-id="h1"] .cap')).fontSize };
-  });
+      h1: getComputedStyle(document.querySelector(`#wrmain .blk[data-id="${ids.h1}"] .cap`)).fontSize };
+  }, ids);
   c.ok("保留卡片字号", sty.size === "15px" && sty.h1 === "22px");
   c.ok("保留卡片底色", /rgba?\(/.test(sty.bg));
 
-  const rn = await c.run(() => {
-    verNew(card("p2"), true); redrawDocs();
-    return [...document.querySelectorAll('#wrmain .blk[data-id="p2"] .vv')].map((z) => z.textContent.trim());
-  });
+  const rn = await c.run((ids) => {
+    verNew(card(ids.p2), true); redrawDocs();
+    return [...document.querySelectorAll(`#wrmain .blk[data-id="${ids.p2}"] .vv`)].map((z) => z.textContent.trim());
+  }, ids);
   c.ok("版本用罗马数字", rn[0] === "I" && rn[1] === "II");
 
   // 版本栏必须竖排且宽度恒定：横排时每加一版就往左长一截，
   // 早先的版本最终会溢出到抓不到的地方，这正是它以前点不中的原因
-  const gut = await c.run(() => {
-    const c2 = card("p2");
+  const gut = await c.run((ids) => {
+    const c2 = card(ids.p2);
     for (let i = 0; i < 6; i++) verNew(c2, true);
     redrawDocs();
-    const g = document.querySelector('#wrmain .blk[data-id="p2"] .gut');
-    const vs = [...document.querySelectorAll('#wrmain .blk[data-id="p2"] .vv')];
+    const g = document.querySelector(`#wrmain .blk[data-id="${ids.p2}"] .gut`);
+    const vs = [...document.querySelectorAll(`#wrmain .blk[data-id="${ids.p2}"] .vv`)];
     const rs = vs.map((z) => z.getBoundingClientRect());
     return { w: g.getBoundingClientRect().width,
       col: getComputedStyle(g.querySelector(".vb")).flexDirection,
       n: vs.length,
       sameLeft: rs.every((r) => Math.abs(r.left - rs[0].left) < 2),
       allInside: rs.every((r) => r.left >= 0) };
-  });
+  }, ids);
   c.ok("版本栏是竖排", gut.col === "column" && gut.n >= 7);
   c.ok("版本再多也不往左溢出", gut.w <= 40 && gut.sameLeft && gut.allInside);
 
   // 折叠框只留一个小符号，条数与说明文字都不写在正文里
-  const foldHead = await c.run(() => {
-    const fh = document.querySelector('#wrmain .blk[data-id="p1"] .fold .fh');
+  const foldHead = await c.run((ids) => {
+    const fh = document.querySelector(`#wrmain .blk[data-id="${ids.p1}"] .fold .fh`);
     return { there: !!fh, txt: fh ? fh.textContent.trim() : "x" };
-  });
+  }, ids);
   c.ok("每段下方只有一个小折叠符号", foldHead.there && foldHead.txt.length <= 1);
-  const fold = await c.run(() => {
-    card("tw").wrUnder = "p1"; card("tw").wrIn = S.docs[0].id; redrawDocs();
-    const f = document.querySelector('#wrmain .blk[data-id="p1"] .fold');
+  const fold = await c.run((ids) => {
+    // wrUnder 要指向这一段在稿子里实际的 id（拷贝出来的那个），不是原卡片的 id，
+    // 折叠框才能在正确的段落下方显示出来
+    card("tw").wrUnder = ids.p1; card("tw").wrIn = S.docs[0].id; redrawDocs();
+    const f = document.querySelector(`#wrmain .blk[data-id="${ids.p1}"] .fold`);
     f.querySelector(".fh").click();
     return { refs: f.querySelectorAll(".ref").length, open: f.classList.contains("on"),
       editable: f.querySelector(".ref").getAttribute("contenteditable") };
-  });
+  }, ids);
   c.ok("分身可以挂到卡片下方并展开", fold.refs === 1 && fold.open);
   c.ok("引用条目是投影，不可编辑", fold.editable === "false");
 
@@ -1920,33 +1947,34 @@ group("write 写作页", async (c) => {
   await c.page.click("#wrmodeI");
   await c.wait(300);
 
-  c.ok("可以把某一版复制到剪贴板", await c.run(() => {
-    const cc = card("p2"); verToClip(cc, orig(cc).verOn);
+  c.ok("可以把某一版复制到剪贴板", await c.run((ids) => {
+    const cc = card(ids.p2); verToClip(cc, orig(cc).verOn);
     return CLIP && CLIP.mode === "copy" && CLIP.items.length === 1 && !CLIP.items[0].snap.vers;
-  }));
+  }, ids));
 
-  await c.run(() => {
-    const cap = document.querySelector('#wrmain .blk[data-id="p2"] .cap');
+  await c.run((ids) => {
+    const cap = document.querySelector(`#wrmain .blk[data-id="${ids.p2}"] .cap`);
     cap.focus(); cap.dispatchEvent(new FocusEvent("focusin", { bubbles: true }));
-  });
+  }, ids);
   await c.wait(400);
-  c.ok("写作页里也有文字工具栏", await c.run(() => $("bar").classList.contains("on")));
+  c.ok("专注模式里编辑正文不弹出浮动工具栏，只有顶上常驻的 fmtbar",
+    await c.run(() => !$("bar").classList.contains("on")));
 
   // 顶上那条工具栏必须真的管用：以前它只是摆着好看，点了什么都不会发生
   c.ok("稿子顶上有常驻的文字工具栏",
     await c.run(() => $("wrfmt").querySelectorAll(".fx").length >= 8));
-  c.ok("工具栏加粗真的写进了卡片", await c.run(() => {
-    const cap = document.querySelector('#wrmain .blk[data-id="p2"] .cap');
+  c.ok("工具栏加粗真的写进了卡片", await c.run((ids) => {
+    const cap = document.querySelector(`#wrmain .blk[data-id="${ids.p2}"] .cap`);
     cap.focus();
     const r = document.createRange(); r.selectNodeContents(cap);
     const s = getSelection(); s.removeAllRanges(); s.addRange(r);
-    sel = ["p2"]; editing = true;
+    sel = [ids.p2]; editing = true;
     cmd("bold");
-    const o = orig(card("p2"));
+    const o = orig(card(ids.p2));
     return !!o.rich && /font-weight|<b\b|<strong\b/i.test(o.rich);
-  }));
-  c.ok("工具栏点击不夺走文字选区", await c.run(() => {
-    const cap = document.querySelector('#wrmain .blk[data-id="p2"] .cap');
+  }, ids));
+  c.ok("工具栏点击不夺走文字选区", await c.run((ids) => {
+    const cap = document.querySelector(`#wrmain .blk[data-id="${ids.p2}"] .cap`);
     cap.focus();
     const r = document.createRange(); r.selectNodeContents(cap);
     const s = getSelection(); s.removeAllRanges(); s.addRange(r);
@@ -1954,7 +1982,7 @@ group("write 写作页", async (c) => {
     const ev = new PointerEvent("pointerdown", { bubbles: true, cancelable: true });
     btn.dispatchEvent(ev);
     return ev.defaultPrevented && !getSelection().isCollapsed;
-  }));
+  }, ids));
 
   // 导出面板必须真的定位、真的能选：早先用的类名在 .pop 里根本不存在，
   // 而且从未调用 place()，浮层没有坐标，看起来一团糟也点不动
@@ -1979,14 +2007,16 @@ group("write 写作页", async (c) => {
     return md.startsWith("# ") && md.includes("理论框架");
   }));
 
-  // 写作页编辑就是改卡片本身
-  await c.run(() => {
-    const el = document.querySelector('#wrmain .blk[data-id="p2"] .cap');
+  // 写作页编辑改的是稿子里的拷贝，不会牵动画布上的原卡片
+  await c.run((ids) => {
+    const el = document.querySelector(`#wrmain .blk[data-id="${ids.p2}"] .cap`);
     el.focus(); el.innerText = "改写过的第二段。";
     el.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  }, ids);
   await c.wait(500);
-  c.ok("写作页编辑直接改到卡片", (await c.run(() => card("p2").text)) === "改写过的第二段。");
+  c.ok("写作页编辑改到的是稿子里的拷贝",
+    (await c.run((ids) => card(ids.p2).text, ids)) === "改写过的第二段。");
+  c.ok("画布上的原卡片完全不受牵动", (await c.run(() => card("p2").text)) === "第二段内容。");
   c.ok("写作页随文件保存", (await c.run(() => bundle(null).docs[0].ids.length)) === 3);
 
   await c.run(() => closeWrite());
@@ -2031,7 +2061,9 @@ group("wredit 写作页自由编辑", async (c) => {
   // 右键菜单同时给出插入空白段落与粘贴，跟画布上的剪贴板是同一套
   const blkMenu = await c.run(() => {
     sel = ["p1"]; clipCards("copy");
-    const blk = document.querySelector('#docs .doc .blk[data-id="p2"]');
+    // p2 送进稿子的是独立拷贝，按内容找出它在稿子里对应的 id
+    const p2clone = S.docs[0].ids.find((id) => card(id).text === "第二段。");
+    const blk = document.querySelector(`#docs .doc .blk[data-id="${p2clone}"]`);
     blk.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: 5, clientY: 5 }));
     return [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
   });
@@ -2143,23 +2175,27 @@ group("wredit 写作页自由编辑", async (c) => {
   });
   c.ok("撤掉投影不影响源卡片", drop.kids === 0 && drop.srcAlive);
 
-  // 用统一的"剪贴板→右键粘贴"逻辑把一张卡片直接放进正文顺序（不是分身，是卡片本身）
+  // 用统一的"剪贴板→右键粘贴"逻辑把内容拷贝进正文顺序（不是分身，是内容的独立拷贝）
   const pasteMain = await c.run(() => {
     S.docs[0].ids = ["h1", "p1"]; redrawDocs();
     sel = ["p2"]; clipCards("copy");
     const before = S.docs[0].ids.length;
     wrPasteMain(S.docs[0], 1);
-    return { before, after: S.docs[0].ids.length, at1: S.docs[0].ids[1] };
+    const at1 = S.docs[0].ids[1];
+    return { before, after: S.docs[0].ids.length, at1, at1Text: card(at1) && card(at1).text };
   });
-  c.ok("可以用剪贴板把卡片粘进正文顺序", pasteMain.after === pasteMain.before + 1);
-  c.ok("粘进去的是卡片本身，不是复制品", pasteMain.at1 === "p2");
-  const noDup = await c.run(() => {
+  c.ok("可以用剪贴板把内容粘进正文顺序", pasteMain.after === pasteMain.before + 1);
+  c.ok("粘进去的是内容的独立拷贝，不是卡片本身",
+    pasteMain.at1 !== "p2" && pasteMain.at1Text === "第二段。");
+  c.ok("画布上的原卡片完全不受影响", (await c.run(() => card("p2").text)) === "第二段。");
+  const again = await c.run(() => {
     const before = S.docs[0].ids.length;
     sel = ["p2"]; clipCards("copy");
     wrPasteMain(S.docs[0], 0);
     return { before, after: S.docs[0].ids.length };
   });
-  c.ok("已经在稿子里的卡片不会被重复粘入", noDup.after === noDup.before);
+  c.ok("再次粘贴同一张源卡片会另建一份独立拷贝，不做去重（不再是同一份内容）",
+    again.after === again.before + 1);
 
   await c.run(() => closeMenus());
   await c.run(() => { S.docs = []; render(); });

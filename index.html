@@ -40,31 +40,27 @@
     background:var(--panel);border:1px solid var(--pline);border-radius:8px;
     box-shadow:0 2px 14px rgba(0,0,0,.05)}
   .doc.on .dwrap{box-shadow:0 4px 26px rgba(0,0,0,.10);border-color:var(--frame)}
-  /* 标题与页面框的标题同一个位置、同一种观感：左上角外侧的一行小字，
-     跟着画布缩放保持可读大小（它在稿子的画面之外，不参与正文排版） */
+  /* 左上角外侧只挂标题，跟页面框的标题同一个位置、同一种观感：
+     一行小字，跟着画布缩放保持可读大小，不参与正文排版。
+     模式切换、专注、导出这些功能控件不再放在这里——它们是"页面"的一部分，
+     应该待在页面内部，现在跟文字工具栏并排放进 .dbar，见下面 */
   .doc .dttl{position:absolute;left:calc(2px * var(--iz));bottom:100%;
-    margin-bottom:calc(5px * var(--iz));display:flex;align-items:center;
-    gap:calc(10px * var(--iz));white-space:nowrap}
+    margin-bottom:calc(5px * var(--iz));white-space:nowrap}
   .doc .dt{font:500 calc(12px * var(--iz))/1.2 "IBM Plex Sans","PingFang SC",sans-serif;
     color:var(--fr);cursor:text;outline:none;padding:calc(2px * var(--iz)) 0;min-width:calc(30px * var(--iz))}
   .doc.on .dt{color:var(--frame)}
-  .doc .dtool{display:flex;gap:calc(2px * var(--iz));opacity:0;transition:opacity .14s;flex:none}
-  .doc:hover .dtool{opacity:1}
-  .doc .dtool button{border:none;background:none;cursor:pointer;color:inherit;opacity:.45;
-    font-size:calc(10.5px * var(--iz));padding:calc(1px * var(--iz)) calc(6px * var(--iz));
-    border-radius:calc(5px * var(--iz));font-family:"IBM Plex Mono",monospace}
-  .doc .dtool button:hover{background:var(--phi);opacity:.95}
-  .doc .dtool button.on{background:var(--pfg);color:var(--panel);opacity:1}
   /* 侧栏与画布上的一样常显：稿子不再靠内容把整张卡片撑得没边，
      而是像 Word 文档那样在固定高度里用滚动条翻看 */
   .doc .dside{width:200px;flex:none;overflow:auto;padding:16px 12px;
     border-right:1px solid var(--pline);background:var(--wside,var(--panel))}
   .doc .dmain{flex:1;min-width:0;display:flex;flex-direction:column}
-  /* 稿子最上方的一条文字工具栏，位置固定，不必为了改格式一路往上拉 */
-  .doc .dbar{flex:none;border-bottom:1px solid var(--pline)}
+  /* 稿子最上方一条工具栏：文字工具栏 + 模式/专注/导出，固定在页面内部，
+     不必为了改格式或切模式一路往上拉到页面外面去；跟专注模式的 #wrbar 是同一种布局 */
+  .doc .dbar{flex:none;border-bottom:1px solid var(--pline);display:flex;align-items:center}
+  .doc .dbar .dtool{display:flex;align-items:center;gap:2px;flex:none;
+    margin-left:auto;padding-right:8px}
   .doc .dbody{flex:1;overflow:auto;padding:22px 40px 160px 78px}
   .doc .dempty{opacity:.32;font-size:13px;line-height:2;padding:20px 0}
-  body.lock .doc .dtool{display:none}
   body.lock .doc .dbar{display:none}
   .sheet{position:absolute;background:var(--shbg);border:1px solid var(--shln);
     border-radius:1px;pointer-events:none;box-shadow:0 1px 6px rgba(0,0,0,.06)}
@@ -456,8 +452,16 @@
   .fmtbar .fx.on{background:var(--pfg);color:var(--panel);opacity:1}
   .fmtbar .fsep{width:1px;height:13px;background:var(--wline);margin:0 5px;flex:none}
   .fmtbar .fcell{position:relative;display:flex;align-items:center}
+  /* 色块分成两半：点色块直接套用当前色，小三角才展开换色的弹层，
+     跟标准工具栏 #bar 的 .cell.split 是同一个思路 */
+  .fmtbar .fcell.split{gap:0}
+  .fmtbar .fx.half{padding:0 4px 0 6px}
+  .fmtbar .fx.caret{padding:0 4px 0 1px;min-width:14px}
+  .fmtbar .fcell.split:hover .fx{background:var(--whi)}
   .fmtbar .fsz{font:400 11px/1 "IBM Plex Mono",monospace;opacity:.6;min-width:20px;text-align:center}
   .fmtbar .chip{width:12px;height:12px;border-radius:3px;border:1px solid var(--pline);display:inline-block}
+  .fmtbar .fx.lnkbtn{filter:grayscale(1)}
+  .fmtbar .car{font-size:7px;opacity:.4;margin-left:1px}
   .fmtbar .fpop{position:absolute;left:0;top:100%;margin-top:4px;z-index:12;display:none;
     padding:7px;border-radius:9px;background:var(--panel);border:1px solid var(--pline);
     box-shadow:0 10px 30px rgba(0,0,0,.16);width:150px}
@@ -467,6 +471,29 @@
     border:1px solid var(--pline);cursor:pointer}
   .fmtbar .fpop .none{margin-top:7px;width:100%;height:24px;border:1px solid var(--pline);
     background:none;border-radius:6px;cursor:pointer;color:inherit;font-size:11.5px}
+  /* 字体、段落、模板、锁定这几个较复杂的弹层，跟标准工具栏的浮层共用同一套函数，
+     样式单独写一份是因为 #bar 的 .pp/.cell 是那条浮动工具栏专用的类，
+     写作页的工具栏是常驻的 .fmtbar，不套用那一套 */
+  .fmtbar .fpop.wide{width:190px}
+  .fmtbar .fpop .hd2{font:400 9px/1 "IBM Plex Mono",monospace;letter-spacing:.12em;
+    text-transform:uppercase;opacity:.35;margin:4px 2px 3px}
+  .fmtbar .fpop .scroll{max-height:230px;overflow:auto}
+  .fmtbar .fpop .item{display:block;width:100%;height:26px;line-height:26px;text-align:left;
+    border:none;background:none;cursor:pointer;color:inherit;border-radius:6px;padding:0 6px;
+    font-size:12.5px}
+  .fmtbar .fpop .item:hover{background:var(--whi)}
+  .fmtbar .fpop .item.on{background:var(--pfg);color:var(--panel)}
+  .fmtbar .fpop .fnote{font-size:10.5px;opacity:.4;padding:5px 4px 2px;line-height:1.5}
+  .fmtbar .fpop .seg{display:flex;gap:3px;margin:2px 0 6px}
+  .fmtbar .fpop .seg button{flex:1;height:24px;border:1px solid var(--pline);background:none;
+    cursor:pointer;color:inherit;border-radius:6px;font-size:11.5px}
+  .fmtbar .fpop .seg button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+  .fmtbar .fpop .rowp{display:flex;align-items:center;gap:6px;margin:5px 1px}
+  .fmtbar .fpop .rowp label{width:28px;flex:none;opacity:.5;font-size:10.5px}
+  .fmtbar .fpop .rowp input[type=range]{flex:1;accent-color:var(--pfg);height:14px}
+  .fmtbar .fpop .rowp .val{width:26px;text-align:right;opacity:.5;
+    font:400 10px/1 "IBM Plex Mono",monospace}
+  .fmtbar .lockic svg{display:block}
   .blk{position:relative;max-width:660px;margin:0 auto 6px;padding:1px 0}
   /* 版本栏竖排：横排时每加一版就往左长一截，早先的版本最终会溢出到抓不到的地方。
      竖排之后宽度恒定（34px），无论多少版都停在原地。 */
@@ -4699,6 +4726,13 @@ const wrmainCapNodes=new Map();     // 专注模式的正文，drawWrite() 里�
 // 卡片在当前视图中的宿主元素：专注模式下取写作正文里的段落，
 // 其次是画布上内嵌的稿子段落，最后退回画布上的卡片本体。
 // capOf / syncBar 都经这里取节点，写作页因此不必再有第二套定位逻辑。
+// 这里能这么简单，是因为 wrImport / wrPasteMain / wrPasteAtCaret 送进稿子的
+// 都是内容的独立拷贝（wrIn 标记的新卡片），不是原卡片本身——一张卡片要么只活在
+// 画布上（在 nodes 里），要么只活在某份稿子里（在 docsCapNodes / wrmainCapNodes 里），
+// 两边不会同时命中同一个 id，因此完全不需要判断"现在到底该认哪一份"。
+// 早先送进稿子的是原 id 本身，同一张卡片会同时出现在两边，这里曾经因此加过一段
+// "看 document.activeElement 在不在 #docs 里"的判断来猜当前上下文——
+// 数据模型改成拷贝之后，那份判断已经不需要了，不要再加回来。
 function hostOfCard(id){
   if(wrOpenState()){
     const el=wrmainCapNodes.get(id);
@@ -5467,6 +5501,14 @@ function unifyLevel(lv,excludeManual){
 function syncBar(){
   const b=$("bar"),c=barCard();
   if(lock||!c||S.bar===false){b.classList.remove("on");closePops();return}
+  // 写作页（专注模式，或画布上内嵌的稿子）顶上已经有常驻的 fmtbar，功能是标准工具栏
+  // 的完整子集，编辑那边的段落时浮动工具栏跟着弹出来会跟它叠在一起打架，所以这里隐藏。
+  // 直接用"选中的 id 在不在 docsCapNodes 里"来判断就够了：送进稿子的都是内容的独立
+  // 拷贝（见 wrImport / hostOfCard 的说明），一个 id 要么只活在画布上、要么只活在
+  // 某份稿子里，不会两边都命中，所以不需要再去看 document.activeElement 猜当前上下文。
+  if(wrOpenState()||sel.some(id=>docsCapNodes.has(id))){
+    b.classList.remove("on");closePops();return;
+  }
   if(!b.children.length)buildBar();
   const els=sel.map(id=>hostOfCard(id)).filter(Boolean);
   if(!els.length){b.classList.remove("on");return}
@@ -5903,6 +5945,14 @@ function wrOutlineHTML(list,nums){
 // 非专注状态下同样显示大纲侧栏，正文本身固定高度、内部滚动，不再无限拉长。
 function renderDocs(){
   const box=$("docs");if(!box)return;
+  // 重建整页会把 .dbody 的滚动条冲回顶部——新建版本、粘贴、插入这些操作都带着重绘，
+  // 稿子一长，用户就会被弹回最前面，体验很差。重建前先按 id 记下每份稿子当前的
+  // 滚动位置，重建完再照原样补回去。
+  const scrolls=new Map();
+  box.querySelectorAll(".doc").forEach(el=>{
+    const dbody=el.querySelector(".dbody");
+    if(dbody&&dbody.scrollTop)scrolls.set(el.dataset.id,dbody.scrollTop);
+  });
   box.innerHTML="";
   docs().forEach(d=>{
     const el=document.createElement("div");el.className="doc";el.dataset.id=d.id;
@@ -5911,20 +5961,24 @@ function renderDocs(){
     const nums=wrNums(list);
     // 标题挂在左上角外侧，跟画布上页面框的标题同一个位置、同一种改法。
     // 卡片数与字数不再占用顶上的空间：需要时侧栏的大纲已经说明了结构。
+    // 模式切换、专注、导出这些功能控件放进页面内部的工具栏，跟文字工具栏并排，
+    // 不再摆在标题旁边的外侧——外侧只留标题这一样东西。
     el.innerHTML=`<div class="dttl">
         <span class="dt" contenteditable="${lock?"false":"true"}" spellcheck="false"
           >${esc(d.title)}</span>
-        <span class="dtool">
-          <button data-m="iter" class="${d.mode!=="ctx"?"on":""}">${esc(t("wrIter"))}</button>
-          <button data-m="ctx" class="${d.mode==="ctx"?"on":""}">${esc(t("wrCtx"))}</button>
-          <button data-a="focus">${esc(t("wrFocus"))}</button>
-          <button data-a="exp">${esc(t("expGo"))}</button>
-        </span>
       </div>
       <div class="dwrap">
         <div class="dside">${wrOutlineHTML(list,nums)}</div>
         <div class="dmain">
-          <div class="dbar"><div class="fmtbar"></div></div>
+          <div class="dbar">
+            <div class="fmtbar"></div>
+            <span class="dtool">
+              <button data-m="iter" class="wb${d.mode!=="ctx"?" on":""}">${esc(t("wrIter"))}</button>
+              <button data-m="ctx" class="wb${d.mode==="ctx"?" on":""}">${esc(t("wrCtx"))}</button>
+              <button data-a="focus" class="wb">${esc(t("wrFocus"))}</button>
+              <button data-a="exp" class="wb">${esc(t("expGo"))}</button>
+            </span>
+          </div>
           <div class="dbody">${docBodyHTML(d,nums)}</div>
         </div>
       </div>`;
@@ -5935,6 +5989,10 @@ function renderDocs(){
   box.querySelectorAll(".cap[data-id]").forEach(el=>docsCapNodes.set(el.dataset.id,el));
   box.querySelectorAll(".fmtbar").forEach(h=>buildFmtBar(h));
   applyDocStyles();syncFmtBars();
+  if(scrolls.size)scrolls.forEach((top,id)=>{
+    const dbody=box.querySelector(`.doc[data-id="${id}"] .dbody`);
+    if(dbody)dbody.scrollTop=top;
+  });
 }
 function docMenu(x,y,d){
   menuAt(x,y,[
@@ -6016,11 +6074,14 @@ function wrStyleObj(o,lv){
 function buildFmtBar(host){
   if(!host||host._built)return;
   host._built=true;
+  // preventDefault 与 stopPropagation 分两条监听器挂，不能合成一条：
+  // 捕获阶段 stopPropagation 会让事件根本到不了控件自己，第七节的两条铁律在这里同样适用。
+  // 滑块（字距、行距）例外，否则拖不动。
   host.addEventListener("pointerdown",e=>{
     stashRange();
-    e.preventDefault();                       // 不夺焦点，正文里的选区原样保留
-    e.stopPropagation();                      // 也不要冒泡去触发画布的拖动或框选
+    if(!e.target.closest('input[type=range]'))e.preventDefault();
   },true);
+  host.addEventListener("pointerdown",e=>e.stopPropagation());
   host.addEventListener("dblclick",e=>e.stopPropagation());
   const btn=(html,fn,title,cls)=>{
     const x=document.createElement("button");
@@ -6030,12 +6091,19 @@ function buildFmtBar(host){
     host.appendChild(x);return x;
   };
   const sep=()=>{const s=document.createElement("span");s.className="fsep";host.appendChild(s)};
-  const swatchCell=(chipId,colors,apply,noneLabel,onNone)=>{
-    const cell=document.createElement("div");cell.className="fcell";host.appendChild(cell);
+  // 色块分成两半：点色块本身直接套用当前色（跟标准工具栏一样，划完选区一点就生效），
+  // 小三角才展开弹层换色——原来整块都只会开弹层，划完选区还得再点一次色块才真的套上，
+  // 等于多切换一步
+  const swatchCell=(chipId,colors,apply,onMain,noneLabel,onNone)=>{
+    const cell=document.createElement("div");cell.className="fcell split";host.appendChild(cell);
+    const main=document.createElement("button");main.className="fx half";
+    main.innerHTML=`<span class="chip" id="${chipId}"></span>`;
+    main.addEventListener("click",e=>{e.stopPropagation();onMain()});
+    cell.appendChild(main);
     const pop=document.createElement("div");pop.className="fpop";
     const trig=document.createElement("button");
-    trig.className="fx";
-    trig.innerHTML=`<span class="chip" id="${chipId}"></span>`;
+    trig.className="fx caret";
+    trig.innerHTML='<span class="car">\u25BE</span>';
     trig.addEventListener("click",e=>{
       e.stopPropagation();
       const was=pop.classList.contains("on");
@@ -6045,7 +6113,8 @@ function buildFmtBar(host){
     cell.appendChild(trig);
     const sws=document.createElement("div");sws.className="sws";
     colors.forEach(v=>{
-      const s=document.createElement("button");s.style.background=v;
+      const s=document.createElement("button");s.style.background=v||"transparent";
+      if(!v)s.textContent="\u2298";
       s.addEventListener("click",e=>{e.stopPropagation();closeFmtPops();apply(v)});
       sws.appendChild(s);
     });
@@ -6058,38 +6127,173 @@ function buildFmtBar(host){
     cell.appendChild(pop);
     return trig;
   };
+  // 带弹层但内容不是色块的控件：字体、段落细项、模板、锁定都走这里，
+  // build(pop) 里自己拼内容，跟标准工具栏 buildBar 里的 cellWith 是同一个思路
+  const popCell=(html,build,cls)=>{
+    const cell=document.createElement("div");cell.className="fcell";host.appendChild(cell);
+    const pop=document.createElement("div");pop.className="fpop"+(cls?" "+cls:"");
+    const trig=document.createElement("button");
+    trig.className="fx";trig.innerHTML=html;
+    trig.addEventListener("click",e=>{
+      e.stopPropagation();
+      const was=pop.classList.contains("on");
+      closeFmtPops();
+      if(!was){pop.innerHTML="";build(pop);pop.classList.add("on");trig.classList.add("on")}
+    });
+    cell.appendChild(trig);cell.appendChild(pop);
+    return {cell,pop,trig};
+  };
+  const car='<span class="car">\u25BE</span>';
 
+  /* 字重与字形，外加链接——跟标准工具栏一样直接调用 cmd / setTextLink */
   btn("<b>B</b>",()=>cmd("bold"),t("fmtB"));
   btn("<i>I</i>",()=>cmd("italic"),t("fmtI"));
   btn("<u>U</u>",()=>cmd("underline"),t("fmtU"));
   btn("<s>S</s>",()=>cmd("strikeThrough"),t("fmtS"));
+  btn("\u{1F517}",setTextLink,null,"lnkbtn");
   sep();
-  swatchCell("fmtink",INK,v=>{S.lastInk=v;setInkColor(v);syncFmtBars()},null,null);
-  swatchCell("fmthl",HLS,v=>{S.lastHL=v;setHighlight(v);syncFmtBars()},
+
+  /* 字体：跟标准工具栏共用同一份 FONTS 表与 setFamily，不是另写一套 */
+  popCell(`<span id="wffam">Font</span>${car}`,pop=>{
+    const sc=document.createElement("div");sc.className="scroll";
+    const cur=curFamily();
+    ["en","zh"].forEach(g=>{
+      const h=document.createElement("div");h.className="hd2";
+      h.textContent=g==="en"?t("grpEn"):t("grpZh");sc.appendChild(h);
+      FONTS.filter(f=>f[2]===g).forEach(f=>{
+        const it=document.createElement("button");
+        it.className="item"+(cur===f[0]?" on":"");
+        it.textContent=famName(f[0]);
+        it.style.fontFamily=f[1];it.style.fontSize="13px";it.style.fontWeight="400";
+        it.addEventListener("click",e=>{e.stopPropagation();setFamily(f[0]);closeFmtPops();syncFmtBars()});
+        sc.appendChild(it);
+      });
+    });
+    pop.appendChild(sc);
+  },"wide");
+  sep();
+
+  /* 文字色与荧光笔：直接点即套用当前色，小三角换色 */
+  swatchCell("fmtink",INK,v=>{S.lastInk=v;save();setInkColor(v);syncFmtBars()},
+    ()=>{setInkColor(lastInk());syncFmtBars()});
+  swatchCell("fmthl",HLS,v=>{S.lastHL=v;save();setHighlight(v);syncFmtBars()},
+    ()=>{setHighlight(lastHL());syncFmtBars()},
     t("fmtNoHL"),()=>setHighlight("none"));
   sep();
+
+  /* 字号只用加减按钮改，不做成输入框：输入框一拿到焦点，选区必丢 */
   btn("\u2212",()=>setSize(curSize()-1),t("fmtSmaller"));
   const szl=document.createElement("span");szl.className="fsz";host.appendChild(szl);
   host._sz=szl;
   btn("+",()=>setSize(curSize()+1),t("fmtBigger"));
   sep();
-  ["left","center","right"].forEach(v=>btn(alSvg(v),()=>setAlign(v),t("fmtAlign")));
+
+  /* 对齐 + 字重/字距/行距：对齐是三个常用快捷键，其余细项收进弹层，
+     跟标准工具栏的段落弹层调用同一批函数（setAlign / setStyle） */
+  ["left","center","right"].forEach(v=>btn(alSvg(v),()=>{setAlign(v);syncFmtBars()},t("fmtAlign")));
+  popCell(car,pop=>{
+    const c=barCard();if(!c)return;
+    const st={...DEF,...S.textDef,...(c.s||{})};
+    const h2=document.createElement("div");h2.className="hd2";h2.textContent=t("weight");
+    pop.appendChild(h2);
+    const seg2=document.createElement("div");seg2.className="seg";
+    [300,400,500,700].forEach(w=>{
+      const x=document.createElement("button");x.textContent=w;
+      if(+st.weight===w)x.classList.add("on");
+      x.addEventListener("click",e=>{e.stopPropagation();cardSnapStyle(()=>setStyle("weight",w));
+        [...seg2.children].forEach(z=>z.classList.remove("on"));x.classList.add("on");syncFmtBars()});
+      seg2.appendChild(x);
+    });
+    pop.appendChild(seg2);
+    const mkSld=(labText,min,max,step,val,fmt,fn)=>{
+      const r=document.createElement("div");r.className="rowp";
+      const l=document.createElement("label");l.textContent=labText;r.appendChild(l);
+      const i=document.createElement("input");i.type="range";i.min=min;i.max=max;i.step=step;i.value=val;
+      const v=document.createElement("span");v.className="val";v.textContent=fmt(val);
+      i.addEventListener("input",()=>{v.textContent=fmt(i.value);fn(+i.value)});
+      i.addEventListener("keydown",e=>e.stopPropagation());
+      r.appendChild(i);r.appendChild(v);pop.appendChild(r);
+    };
+    mkSld(t("trackShort"),-5,40,1,Math.round(st.spacing*100),x=>(x/100).toFixed(2),
+      x=>setStyle("spacing",x/100));
+    mkSld(t("leadShort"),90,260,5,Math.round(st.lh*100),x=>(x/100).toFixed(2),
+      x=>setStyle("lh",x/100));
+  });
   sep();
+
+  /* 卡片底色：点方块直接套用当前色，小三角换色，跟标准工具栏共用 CARDBG */
+  swatchCell("fmtbg",CARDBG,v=>{if(v)S.lastBg=v;save();setCardBg(v);syncFmtBars()},
+    ()=>{setCardBg(lastBg());syncFmtBars()});
+  sep();
+
+  /* 模板：点按钮直接套用当前模板，小三角换一个，跟标准工具栏共用同一份模板列表 */
+  popCell(`<span id="wftpl">${t("tplShort")}</span>${car}`,pop=>{
+    const add=(arr,head)=>{
+      if(!arr.length)return;
+      const h=document.createElement("div");h.className="hd2";h.textContent=head;pop.appendChild(h);
+      arr.forEach(tp=>{
+        const it=document.createElement("button");
+        it.className="item"+((S.lastTpl===tp.id)?" on":"");
+        it.textContent=tp.name;
+        it.addEventListener("click",e=>{e.stopPropagation();
+          S.lastTpl=tp.id;save();applyTemplate(tp);closeFmtPops();syncFmtBars()});
+        pop.appendChild(it);
+      });
+    };
+    add(S.templates||[],t("tplInFile"));
+    add(GTPL,t("tplGlobal"));
+    if(!(S.templates||[]).length&&!GTPL.length){
+      const n=document.createElement("div");n.className="fnote";n.textContent=t("tplHowto");
+      pop.appendChild(n);
+    }
+  },"wide");
+  sep();
+
+  /* 清除格式 */
   btn("\u2718",()=>clearFmt(),t("fmtClear"));
+  sep();
+
+  /* 锁定：点图标切换仅锁内容，小三角展开四种操作，跟标准工具栏共用 setCardLock / lockItems */
+  btn(`<span id="fmtlock" class="lockic"></span>`,()=>{
+    const cur=sel.map(card).filter(Boolean);
+    if(!cur.length)return;
+    setCardLock(null,cur.every(z=>z.lock)?null:"text");
+    syncFmtBars();
+  });
+  popCell(car,pop=>{
+    const h=document.createElement("div");h.className="hd2";h.textContent=t("lockMenu");
+    pop.appendChild(h);
+    lockItems(()=>sel.slice()).forEach(it=>{
+      const x=document.createElement("button");
+      x.className="item"+(it.check?" on":"");
+      x.textContent=it.label;
+      x.addEventListener("click",e=>{e.stopPropagation();it.on();closeFmtPops();syncFmtBars()});
+      pop.appendChild(x);
+    });
+  });
 }
 function closeFmtPops(){
   document.querySelectorAll(".fmtbar .fpop.on").forEach(p=>p.classList.remove("on"));
   document.querySelectorAll(".fmtbar .fx.on").forEach(x=>x.classList.remove("on"));
 }
-// 色块与字号跟着当前选中的段落走，跟浮动工具栏的 syncBar 是一个道理
+// 色块、字号、字体名、模板名、锁定图标都跟着当前选中的段落走，跟浮动工具栏的 syncBar 是一个道理
 function syncFmtBars(){
   document.querySelectorAll(".fmtbar").forEach(host=>{
-    const ink=host.querySelector("#fmtink")||host.querySelector(".chip");
-    if(ink)ink.style.background=lastInk();
     const chips=host.querySelectorAll(".chip");
     if(chips[0])chips[0].style.background=lastInk();
     if(chips[1])chips[1].style.background=lastHL();
+    if(chips[2])chips[2].style.background=lastBg()||"transparent";
     if(host._sz)host._sz.textContent=barCard()?curSize():"";
+    const fam=host.querySelector("#wffam");
+    if(fam)fam.textContent=famName(curFamily());
+    const tpl=host.querySelector("#wftpl");
+    if(tpl){const tp=curTpl();tpl.textContent=tp?tp.name:t("tplShort")}
+    const lockEl=host.querySelector("#fmtlock");
+    if(lockEl){
+      const cur=sel.map(card).filter(Boolean);
+      const allLocked=cur.length&&cur.every(z=>z.lock);
+      lockEl.innerHTML=lockSvg(allLocked?(cur.every(z=>z.lock==="all")?"all":"text"):null);
+    }
   });
 }
 addEventListener("pointerdown",e=>{
@@ -6097,6 +6301,22 @@ addEventListener("pointerdown",e=>{
 },true);
 
 /* ---- 从画布导入 ---- */
+// 送进稿子的是内容的拷贝，不是原卡片的另一份投影。早先这里直接把原 id 塞进 d.ids，
+// 卡片因此同时活在两个地方（画布上自己的位置 + 稿子里），这正是后来一连串
+// "工具栏在外部卡片上打架/消失"回归的根源：hostOfCard、syncBar 都得靠猜
+// "现在到底是在编辑哪一份"，而这两份其实是同一个对象。
+// 现在 wrImport 只读原卡片的内容，落地成一张全新、只属于这份稿子的卡片（wrIn 标记），
+// 原卡片在画布上的位置和内容完全不受影响，稿子里的这一份也可以随便改、随便删，
+// 两边彻底独立，不再需要任何"猜当前上下文"的逻辑。
+// 分身/引用要的是相反的效果——跟着源卡片一起变——那条路走 wrPasteTwin，不受此影响。
+function wrCloneCard(c,d){
+  const snap0=JSON.parse(JSON.stringify(cleanCard(orig(c))));
+  const n={...snap0,id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:c.w,
+    s:{...(c.s||{})},wrIn:d.id};
+  delete n.ref;delete n.lock;
+  if(c.bg)n.bg=c.bg;else delete n.bg;
+  return n;
+}
 function wrImport(ids,append,docId){
   const list=(ids&&ids.length?ids.map(card).filter(Boolean):[]);
   if(!list.length){toast(t("wrPickFirst"));return}
@@ -6107,9 +6327,14 @@ function wrImport(ids,append,docId){
   const rest=list.map(c=>c.id).filter(id=>!ordered.includes(id));
   const seq=[...ordered,...rest];
   snap();
-  d.ids=append?[...d.ids.filter(id=>!seq.includes(id)),...seq]:seq;
+  const made=seq.map(id=>{
+    const n=wrCloneCard(card(id),d);
+    invalidateIndex();S.cards.push(n);
+    return n.id;
+  });
+  d.ids=append?[...d.ids,...made]:made;
   save();render();
-  toast(t("wrAdded").replace("{n}",seq.length).replace("{d}",d.title));
+  toast(t("wrAdded").replace("{n}",made.length).replace("{d}",d.title));
 }
 
 /* ---- 专注模式的开关 ---- */
@@ -6173,8 +6398,7 @@ function docBodyHTML(d,extNums){
             title="${esc(verLabel(v,k))}">${esc(verLabel(v,k))}</button>`).join("")}</span>`:""}
       </div>
       <div class="wrap" style="${wrapS}">${body}</div>
-      <div class="fold${kids.length?" has":""}${openF?" on":""}" data-id="${c.id}"
-        title="${esc(t("wrRefPaste"))}">
+      <div class="fold${kids.length?" has":""}${openF?" on":""}" data-id="${c.id}">
         <button class="fh" data-id="${c.id}"><span class="ar">\u203A</span></button>
         <div class="fb">${kids.length?kids.map(k=>{
           const ko=orig(k);
@@ -6262,10 +6486,13 @@ function drawWrite(){
   ti.contentEditable=lock?"false":"true";
   const nums=wrNums(list);
   $("wrside").innerHTML=wrOutlineHTML(list,nums);
-  $("wrmain").innerHTML=docBodyHTML(d,nums);
+  const main=$("wrmain");
+  const scrollTop=main.scrollTop;      // 重建会把滚动条冲回顶部，记下来重建后补回去
+  main.innerHTML=docBodyHTML(d,nums);
+  main.scrollTop=scrollTop;
   wrmainCapNodes.clear();
-  $("wrmain").querySelectorAll(".cap[data-id]").forEach(el=>wrmainCapNodes.set(el.dataset.id,el));
-  applyDocStyles($("wrmain"));
+  main.querySelectorAll(".cap[data-id]").forEach(el=>wrmainCapNodes.set(el.dataset.id,el));
+  applyDocStyles(main);
   buildFmtBar($("wrfmt"));syncFmtBars();
 }
 
@@ -6525,19 +6752,57 @@ function wrPasteTwin(hostId,d){
   save();redrawDocs();
   toast(t("sentTwin"));
 }
-// 把剪贴板里的卡片直接放进稿子的正文顺序里：跟画布上"复制/分身、再到别处粘贴"是
-// 同一套剪贴板（CLIP），插入的是卡片本身的 id，不产生第二份内容——
-// 这是把原来"送入写作页"那个专用子菜单换成通用粘贴逻辑的入口。
+// 把剪贴板里的内容拷贝进稿子的正文顺序里：跟画布上"复制、再到别处粘贴"是
+// 同一份剪贴板（CLIP），但落地的是内容的独立拷贝（wrIn 标记），不是原卡片的
+// 另一份投影——直接复用 CLIP.items 里已经算好的 snap（跟 pasteClip() 粘到画布上
+// 是同一份数据、同一个道理），源卡片的位置、内容都不受影响。想要那种"跟着源卡片
+// 一起变"的活引用，走 wrPasteTwin（分身，挂在折叠框里）。
+function wrClonesFromClip(d){
+  return CLIP.items.map(it=>{
+    const n={...it.snap,id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:it.w,
+      s:{...it.s},wrIn:d.id};
+    delete n.ref;delete n.lock;
+    if(it.bg)n.bg=it.bg;else delete n.bg;
+    invalidateIndex();S.cards.push(n);
+    return n.id;
+  });
+}
 function wrPasteMain(d,i){
   if(lock||!d)return;
   if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
-  const ids=[...new Set(CLIP.items.map(it=>it.src))].filter(id=>S.cards.some(z=>z.id===id));
-  const uniq=ids.filter(id=>!d.ids.includes(id));
-  if(!uniq.length){toast(t("clipEmpty"));return}
   snap();
-  d.ids.splice(Math.max(0,Math.min(i,d.ids.length)),0,...uniq);
+  const made=wrClonesFromClip(d);
+  d.ids.splice(Math.max(0,Math.min(i,d.ids.length)),0,...made);
   save();redrawDocs();
-  toast(t("wrAdded").replace("{n}",uniq.length).replace("{d}",d.title));
+  toast(t("wrAdded").replace("{n}",made.length).replace("{d}",d.title));
+}
+// 光标停在文字中间时的"就地粘贴"：跟 Word 里把光标放在两个字之间再粘贴一样，
+// 把这一段从光标处切开（复用 wrSplitAtCaret 同一套 cutAfterCaret / syncCap），
+// 剪贴板里的内容拷贝插进切开的缝隙中间，光标之后的内容另起一段接在插入内容后面。
+// 这样"粘贴可编辑文本卡片"就有了一个具体的插入点，不必只能贴在整段的前面或后面。
+function wrPasteAtCaret(d,c,cap){
+  if(lock||!d||isLocked(c.id))return;
+  if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
+  const o=orig(c);
+  const tail=cutAfterCaret(cap);            // 光标之后的内容先切出来
+  snap();
+  syncCap(c,cap);                           // 光标之前的部分留在原卡片
+  verStash(o);
+  let i=d.ids.indexOf(c.id);if(i<0)i=d.ids.length-1;
+  let at=i+1;
+  const made=wrClonesFromClip(d);
+  d.ids.splice(at,0,...made);at+=made.length;
+  let tailId=null;
+  if(tail.text.trim()||/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(tail.html)){
+    const n=wrNewBlock(d,c);
+    n.text=tail.text;
+    if(/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(tail.html))n.rich=tail.html;
+    invalidateIndex();S.cards.push(n);
+    d.ids.splice(at,0,n.id);tailId=n.id;
+  }
+  save();redrawDocs();
+  if(tailId)focusBlock(tailId,"start");
+  toast(t("wrAdded").replace("{n}",made.length).replace("{d}",d.title));
 }
 // 写作页里所有右键的入口：按落点决定给哪一份菜单。
 // 折叠框那一块是"看不见但确实存在的粘贴区"——在那里右键就能把剪贴板里的卡片
@@ -6637,8 +6902,10 @@ function wrRemoveSel(selBlk){
 }
 // 把第 i 段从这份稿子里移出。**永远不动画布上的源卡片**——写作页里的任何删改
 // 都只影响这份稿子本身，这是整个写作页的基本原则。
-// 唯一会真正消失的是"只活在这份稿子里"的段落（wrIn 标记的那些），
-// 因为它们本来就没有稿子之外的身份，留着只会变成永远找不到的孤儿。
+// 现在 d.ids 里的段落全部带 wrIn 标记（不管是稿子内部新建的，还是从画布导入/粘贴时
+// 拷贝进来的），本来就没有稿子之外的身份，所以移出的同时直接从 S.cards 里删掉，
+// 留着只会变成永远找不到的孤儿；画布上真正的源卡片（如果这段内容是从哪张卡片
+// 拷贝来的）是完全独立的另一个对象，不会被这里牵连。
 function wrDropAt(d,i){
   const id=d.ids[i];if(!id)return;
   const c=card(id);
@@ -6657,7 +6924,11 @@ function wrBlockMenu(x,y,c,i,d){
   // 划选一段自由文字，把它单独立成一张卡片——这是"边写边把想法固化成卡片"的入口
   const cap=hostCap(c.id);
   const s=getSelection();
-  if(cap&&d&&!lock&&!isLocked(c.id)&&s&&s.rangeCount&&!s.isCollapsed&&cap.contains(s.anchorNode))
+  const hasSel=cap&&d&&!lock&&!isLocked(c.id)&&s&&s.rangeCount&&!s.isCollapsed&&cap.contains(s.anchorNode);
+  // 光标停在文字中间（没有划选）时，右键点的就是这个具体位置——
+  // 剪贴板里的卡片可以直接插进光标这个缝隙，而不是只能贴在整段的最前面或最后面
+  const caretHere=cap&&d&&!lock&&!isLocked(c.id)&&s&&s.rangeCount&&s.isCollapsed&&cap.contains(s.anchorNode);
+  if(hasSel)
     items.push({label:t("wrSelToCard"),on:()=>wrSelToCard(d,c,cap)},"-");
   if(d)items.push({label:t("wrInsertAbove"),on:()=>wrInsertAt(d,i)},
     {label:t("wrInsertBelow"),on:()=>wrInsertAt(d,i+1)},"-");
@@ -6675,6 +6946,7 @@ function wrBlockMenu(x,y,c,i,d){
   }
   items.push("-",{label:t("wrVerCopy"),on:()=>verToClip(c,o.verOn)});
   if(CLIP&&d)items.push("-",
+    ...(caretHere?[{label:t("wrPasteHere"),on:()=>wrPasteAtCaret(d,c,cap)}]:[]),
     {label:t("wrPasteBefore"),on:()=>wrPasteMain(d,i)},
     {label:t("wrPasteAfter"),on:()=>wrPasteMain(d,i+1)},
     {label:CLIP.mode==="twin"?t("wrPasteRef"):t("wrPasteRefCopy"),on:()=>wrPasteTwin(c.id,d)});
