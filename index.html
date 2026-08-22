@@ -56,9 +56,14 @@
   .doc .dmain{flex:1;min-width:0;display:flex;flex-direction:column}
   /* 稿子最上方一条工具栏：文字工具栏 + 模式/专注/导出，固定在页面内部，
      不必为了改格式或切模式一路往上拉到页面外面去；跟专注模式的 #wrbar 是同一种布局 */
-  .doc .dbar{flex:none;border-bottom:1px solid var(--pline);display:flex;align-items:center}
-  .doc .dbar .dtool{display:flex;align-items:center;gap:2px;flex:none;
-    margin-left:auto;padding-right:8px}
+  /* 两层分明：上面一行是"这份稿子"的事（迭代/Context、专注、导出），
+     下面一整行让给文字工具栏。画布上的稿子只有 560px 宽，两者挤在同一行时
+     文字工具栏被压成三行还跟按钮打架；分成两行之后，功能层级也跟着清楚了。 */
+  .doc .dbar{flex:none;border-bottom:1px solid var(--pline);display:flex;
+    align-items:center;flex-wrap:wrap}
+  .doc .dbar .dtool{order:-1;display:flex;align-items:center;gap:2px;
+    width:100%;justify-content:flex-end;padding:3px 8px 0}
+  .doc .dbar .fmtbar{width:100%}
   .doc .dbody{flex:1;overflow:auto;padding:22px 40px 160px 78px}
   .doc .dempty{opacity:.32;font-size:13px;line-height:2;padding:20px 0}
   body.lock .doc .dbar{display:none}
@@ -444,7 +449,12 @@
      它直接调用画布用的同一批函数（cmd / setInkColor / setHighlight / setAlign / setSize），
      不是另写一套，所以加粗、标色在写作页与画布上的行为完全一致。
      整条工具栏在捕获阶段 preventDefault，任何一次点击都不会夺走正文里的文字选区。 */
-  .fmtbar{display:flex;align-items:center;gap:1px;padding:3px 6px;flex-wrap:wrap}
+  /* 按功能分组：文字 / 颜色 / 段落 / 整段 / 清除。每一组是一个不可拆的 .fgrp，
+     所以换行只会发生在组与组之间，绝不会把"− 12 +"或者三个对齐按钮拦腰折断。
+     分隔线只出现在组之间，不再每两个按钮就来一条。 */
+  .fmtbar{display:flex;align-items:center;gap:2px;padding:4px 6px;flex-wrap:wrap;row-gap:3px;
+    flex:1;min-width:0}
+  .fmtbar .fgrp{display:flex;align-items:center;gap:1px;flex:none}
   .fmtbar .fx{height:23px;min-width:24px;padding:0 6px;border:none;background:none;
     border-radius:6px;cursor:pointer;color:inherit;font-size:12px;line-height:1;opacity:.65;
     display:inline-flex;align-items:center;justify-content:center;gap:4px}
@@ -462,6 +472,13 @@
   .fmtbar .chip{width:12px;height:12px;border-radius:3px;border:1px solid var(--pline);display:inline-block}
   .fmtbar .fx.lnkbtn{filter:grayscale(1)}
   .fmtbar .car{font-size:7px;opacity:.4;margin-left:1px}
+  /* 字体名与模板名可能很长（"苹方 / 微软雅黑"），不截住就会把整条栏顶到第二行 */
+  .fmtbar .lbl{max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+  /* 需要先选中一段才有意义的控件（间距、锁定）：没选中时淡下去，
+     但仍然可以点开——点开看到的是一句"先选中一段文字"，而不是一个空白的框 */
+  .fmtbar .fx.off{opacity:.25}
+  .fmtbar .fx.off:hover{opacity:.45}
+  .fmtbar .fico svg{display:block}
   .fmtbar .fpop{position:absolute;left:0;top:100%;margin-top:4px;z-index:12;display:none;
     padding:7px;border-radius:9px;background:var(--panel);border:1px solid var(--pline);
     box-shadow:0 10px 30px rgba(0,0,0,.16);width:150px}
@@ -708,6 +725,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fmtB:"Bold",fmtI:"Italic",fmtU:"Underline",fmtS:"Strikethrough",
   fmtNoHL:"No highlight",fmtSmaller:"Smaller",fmtBigger:"Larger",
   fmtAlign:"Alignment",fmtClear:"Clear formatting",fmtHtml:"HTML",
+  fmtSpacing:"Spacing",fmtNeedSel:"Select a paragraph first",
+  fmtInk:"Text colour",fmtHL:"Highlight",
   wrExpDocxNote:"Word export loads a library from the network the first time.",
   wrExpPdfNote:"Opens the print dialogue; choose Save as PDF there.",
   wrExpFileNote:"Written straight to a file, no network needed.",
@@ -879,6 +898,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fmtB:"加粗",fmtI:"斜体",fmtU:"下划线",fmtS:"删除线",
   fmtNoHL:"取消标记",fmtSmaller:"小一号",fmtBigger:"大一号",
   fmtAlign:"对齐",fmtClear:"清除格式",fmtHtml:"HTML 网页",
+  fmtSpacing:"间距",fmtNeedSel:"先选中一段文字",
+  fmtInk:"文字颜色",fmtHL:"标记颜色",
   wrExpDocxNote:"Word 导出首次需要从网络加载一个库",
   wrExpPdfNote:"会打开打印对话框，在那里选「另存为 PDF」",
   wrExpFileNote:"直接写成文件，不需要联网",
@@ -6192,21 +6213,25 @@ function buildFmtBar(host){
   },true);
   host.addEventListener("pointerdown",e=>e.stopPropagation());
   host.addEventListener("dblclick",e=>e.stopPropagation());
+  // 一组功能装进一个 .fgrp：换行只发生在组与组之间，不会把一组按钮拦腰折断
+  let cur=null;
+  const grp=()=>{cur=document.createElement("div");cur.className="fgrp";host.appendChild(cur);return cur};
   const btn=(html,fn,title,cls)=>{
     const x=document.createElement("button");
     x.className="fx"+(cls?" "+cls:"");x.innerHTML=html;
     if(title)x.title=title;
     x.addEventListener("click",e=>{e.stopPropagation();fn(x)});
-    host.appendChild(x);return x;
+    (cur||host).appendChild(x);return x;
   };
   const sep=()=>{const s=document.createElement("span");s.className="fsep";host.appendChild(s)};
   // 色块分成两半：点色块本身直接套用当前色（跟标准工具栏一样，划完选区一点就生效），
   // 小三角才展开弹层换色——原来整块都只会开弹层，划完选区还得再点一次色块才真的套上，
   // 等于多切换一步
-  const swatchCell=(chipId,colors,apply,onMain,noneLabel,onNone)=>{
-    const cell=document.createElement("div");cell.className="fcell split";host.appendChild(cell);
+  const swatchCell=(chipId,colors,apply,onMain,noneLabel,onNone,title)=>{
+    const cell=document.createElement("div");cell.className="fcell split";(cur||host).appendChild(cell);
     const main=document.createElement("button");main.className="fx half";
     main.innerHTML=`<span class="chip" id="${chipId}"></span>`;
+    if(title)main.title=title;
     main.addEventListener("click",e=>{e.stopPropagation();onMain()});
     cell.appendChild(main);
     const pop=document.createElement("div");pop.className="fpop";
@@ -6236,42 +6261,59 @@ function buildFmtBar(host){
     cell.appendChild(pop);
     return trig;
   };
-  // 带弹层但内容不是色块的控件：字体、段落细项、模板、锁定都走这里，
-  // build(pop) 里自己拼内容，跟标准工具栏 buildBar 里的 cellWith 是同一个思路
-  const popCell=(html,build,cls)=>{
-    const cell=document.createElement("div");cell.className="fcell";host.appendChild(cell);
+  // 带弹层但内容不是色块的控件：字体、间距、模板、锁定都走这里，
+  // build(pop) 里自己拼内容，跟标准工具栏 buildBar 里的 cellWith 是同一个思路。
+  // **弹层永远不许是空的**：build 完一个孩子都没有（没选中段落时的间距、锁定就是这种情况），
+  // 就补一句"先选中一段文字"。早先这里直接把空框弹出来，界面上凭空多两个什么都没有的
+  // 白盒子，看起来像坏了——这条不要省。
+  const popCell=(html,build,cls,title)=>{
+    const cell=document.createElement("div");cell.className="fcell";(cur||host).appendChild(cell);
     const pop=document.createElement("div");pop.className="fpop"+(cls?" "+cls:"");
     const trig=document.createElement("button");
     trig.className="fx";trig.innerHTML=html;
+    if(title)trig.title=title;
     trig.addEventListener("click",e=>{
       e.stopPropagation();
       const was=pop.classList.contains("on");
       closeFmtPops();
-      if(!was){pop.innerHTML="";build(pop);pop.classList.add("on");trig.classList.add("on")}
+      if(was)return;
+      pop.innerHTML="";build(pop);
+      if(!pop.children.length){
+        const n=document.createElement("div");n.className="fnote";n.textContent=t("fmtNeedSel");
+        pop.appendChild(n);
+      }
+      pop.classList.add("on");trig.classList.add("on");
     });
     cell.appendChild(trig);cell.appendChild(pop);
     return {cell,pop,trig};
   };
   const car='<span class="car">\u25BE</span>';
+  const ico=d=>`<span class="fico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg></span>`;
 
-  /* 字重与字形，外加链接——跟标准工具栏一样直接调用 cmd / setTextLink */
+  /* ---------- 一、文字：字重字形与链接 ---------- */
+  grp();
   btn("<b>B</b>",()=>cmd("bold"),t("fmtB"));
   btn("<i>I</i>",()=>cmd("italic"),t("fmtI"));
   btn("<u>U</u>",()=>cmd("underline"),t("fmtU"));
   btn("<s>S</s>",()=>cmd("strikeThrough"),t("fmtS"));
-  btn("\u{1F517}",setTextLink,null,"lnkbtn");
+  // 链接原来是个彩色的 emoji 锁链，在一排线条图标里格外扎眼，改成同一套描边图标
+  btn(ico('<path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1"/>'),
+    setTextLink,t("link"));
   sep();
 
-  /* 字体：跟标准工具栏共用同一份 FONTS 表与 setFamily，不是另写一套 */
-  popCell(`<span id="wffam">Font</span>${car}`,pop=>{
+  /* ---------- 二、字体与字号 ---------- */
+  grp();
+  // 字体：跟标准工具栏共用同一份 FONTS 表与 setFamily，不是另写一套
+  popCell(`<span class="lbl" id="wffam">Font</span>${car}`,pop=>{
     const sc=document.createElement("div");sc.className="scroll";
-    const cur=curFamily();
+    const cur2=curFamily();
     ["en","zh"].forEach(g=>{
       const h=document.createElement("div");h.className="hd2";
       h.textContent=g==="en"?t("grpEn"):t("grpZh");sc.appendChild(h);
       FONTS.filter(f=>f[2]===g).forEach(f=>{
         const it=document.createElement("button");
-        it.className="item"+(cur===f[0]?" on":"");
+        it.className="item"+(cur2===f[0]?" on":"");
         it.textContent=famName(f[0]);
         it.style.fontFamily=f[1];it.style.fontSize="13px";it.style.fontWeight="400";
         it.addEventListener("click",e=>{e.stopPropagation();setFamily(f[0]);closeFmtPops();syncFmtBars()});
@@ -6279,28 +6321,34 @@ function buildFmtBar(host){
       });
     });
     pop.appendChild(sc);
-  },"wide");
-  sep();
-
-  /* 文字色与荧光笔：直接点即套用当前色，小三角换色 */
-  swatchCell("fmtink",INK,v=>{S.lastInk=v;save();setInkColor(v);syncFmtBars()},
-    ()=>{setInkColor(lastInk());syncFmtBars()});
-  swatchCell("fmthl",HLS,v=>{S.lastHL=v;save();setHighlight(v);syncFmtBars()},
-    ()=>{setHighlight(lastHL());syncFmtBars()},
-    t("fmtNoHL"),()=>setHighlight("none"));
-  sep();
-
-  /* 字号只用加减按钮改，不做成输入框：输入框一拿到焦点，选区必丢 */
+  },"wide",t("font"));
+  // 字号只用加减按钮改，不做成输入框：输入框一拿到焦点，选区必丢
   btn("\u2212",()=>setSize(curSize()-1),t("fmtSmaller"));
-  const szl=document.createElement("span");szl.className="fsz";host.appendChild(szl);
+  const szl=document.createElement("span");szl.className="fsz";cur.appendChild(szl);
   host._sz=szl;
   btn("+",()=>setSize(curSize()+1),t("fmtBigger"));
   sep();
 
-  /* 对齐 + 字重/字距/行距：对齐是三个常用快捷键，其余细项收进弹层，
-     跟标准工具栏的段落弹层调用同一批函数（setAlign / setStyle） */
+  /* ---------- 三、颜色：文字色、荧光笔、整段底色 ----------
+     三样都是"上色"，摆在一起才好找。底色原来夹在段落与模板中间，
+     跟前两个隔着半条栏，改个颜色要在两处来回找。
+     chip 的顺序（墨色、荧光、底色）就是 syncFmtBars 里 chips[0..2] 的顺序，改动要一起改。 */
+  grp();
+  swatchCell("fmtink",INK,v=>{S.lastInk=v;save();setInkColor(v);syncFmtBars()},
+    ()=>{setInkColor(lastInk());syncFmtBars()},null,null,t("fmtInk"));
+  swatchCell("fmthl",HLS,v=>{S.lastHL=v;save();setHighlight(v);syncFmtBars()},
+    ()=>{setHighlight(lastHL());syncFmtBars()},
+    t("fmtNoHL"),()=>setHighlight("none"),t("fmtHL"));
+  swatchCell("fmtbg",CARDBG,v=>{if(v)S.lastBg=v;save();setCardBg(v);syncFmtBars()},
+    ()=>{setCardBg(lastBg());syncFmtBars()},null,null,t("cardBg"));
+  sep();
+
+  /* ---------- 四、段落：对齐，以及字重/字距/行距 ----------
+     对齐是三个常用动作，留成三个按钮；其余细项收进一个**有名字**的弹层。
+     早先这里是一个光秃秃的小三角，既看不出是干什么的，没选中段落时点开还是个空框。 */
+  grp();
   ["left","center","right"].forEach(v=>btn(alSvg(v),()=>{setAlign(v);syncFmtBars()},t("fmtAlign")));
-  popCell(car,pop=>{
+  const para=popCell(`<span class="lbl">${esc(t("fmtSpacing"))}</span>${car}`,pop=>{
     const c=barCard();if(!c)return;
     const st={...DEF,...S.textDef,...(c.s||{})};
     const h2=document.createElement("div");h2.className="hd2";h2.textContent=t("weight");
@@ -6327,16 +6375,14 @@ function buildFmtBar(host){
       x=>setStyle("spacing",x/100));
     mkSld(t("leadShort"),90,260,5,Math.round(st.lh*100),x=>(x/100).toFixed(2),
       x=>setStyle("lh",x/100));
-  });
+  },null,t("fmtSpacing"));
+  para.trig.dataset.need="card";
   sep();
 
-  /* 卡片底色：点方块直接套用当前色，小三角换色，跟标准工具栏共用 CARDBG */
-  swatchCell("fmtbg",CARDBG,v=>{if(v)S.lastBg=v;save();setCardBg(v);syncFmtBars()},
-    ()=>{setCardBg(lastBg());syncFmtBars()});
-  sep();
-
-  /* 模板：点按钮直接套用当前模板，小三角换一个，跟标准工具栏共用同一份模板列表 */
-  popCell(`<span id="wftpl">${t("tplShort")}</span>${car}`,pop=>{
+  /* ---------- 五、整段：模板与锁定 ---------- */
+  grp();
+  // 模板：跟标准工具栏共用同一份模板列表
+  popCell(`<span class="lbl" id="wftpl">${esc(t("tplShort"))}</span>${car}`,pop=>{
     const add=(arr,head)=>{
       if(!arr.length)return;
       const h=document.createElement("div");h.className="hd2";h.textContent=head;pop.appendChild(h);
@@ -6355,31 +6401,58 @@ function buildFmtBar(host){
       const n=document.createElement("div");n.className="fnote";n.textContent=t("tplHowto");
       pop.appendChild(n);
     }
-  },"wide");
-  sep();
-
-  /* 清除格式 */
-  btn("\u2718",()=>clearFmt(),t("fmtClear"));
-  sep();
-
-  /* 锁定：点图标切换仅锁内容，小三角展开四种操作，跟标准工具栏共用 setCardLock / lockItems */
-  btn(`<span id="fmtlock" class="lockic"></span>`,()=>{
-    const cur=sel.map(card).filter(Boolean);
-    if(!cur.length)return;
-    setCardLock(null,cur.every(z=>z.lock)?null:"text");
+  },"wide",t("tplShort"));
+  // 锁定做成跟色块一样的两半：点图标切换"仅锁内容"，小三角才展开四种操作。
+  // 原来是"一个锁图标 + 一个不知所云的光秃秃小三角"两个分开的按钮。
+  const lockCell=document.createElement("div");lockCell.className="fcell split";cur.appendChild(lockCell);
+  const lockMain=document.createElement("button");lockMain.className="fx half";
+  lockMain.title=t("lockText");
+  lockMain.innerHTML=`<span id="fmtlock" class="lockic"></span>`;
+  lockMain.addEventListener("click",e=>{
+    e.stopPropagation();
+    const cs=sel.map(card).filter(Boolean);
+    if(!cs.length)return;
+    setCardLock(null,cs.every(z=>z.lock)?null:"text");
     syncFmtBars();
   });
-  popCell(car,pop=>{
-    const h=document.createElement("div");h.className="hd2";h.textContent=t("lockMenu");
-    pop.appendChild(h);
-    lockItems(()=>sel.slice()).forEach(it=>{
-      const x=document.createElement("button");
-      x.className="item"+(it.check?" on":"");
-      x.textContent=it.label;
-      x.addEventListener("click",e=>{e.stopPropagation();it.on();closeFmtPops();syncFmtBars()});
-      pop.appendChild(x);
-    });
+  lockCell.appendChild(lockMain);
+  const lockPop=document.createElement("div");lockPop.className="fpop";
+  const lockTrig=document.createElement("button");lockTrig.className="fx caret";
+  lockTrig.title=t("lockMenu");
+  lockTrig.innerHTML='<span class="car">\u25BE</span>';
+  lockTrig.dataset.need="sel";
+  lockTrig.addEventListener("click",e=>{
+    e.stopPropagation();
+    const was=lockPop.classList.contains("on");
+    closeFmtPops();
+    if(was)return;
+    lockPop.innerHTML="";
+    const items=sel.length?lockItems(()=>sel.slice()):[];
+    if(items.length){
+      const h=document.createElement("div");h.className="hd2";h.textContent=t("lockMenu");
+      lockPop.appendChild(h);
+      items.forEach(it=>{
+        const x=document.createElement("button");
+        x.className="item"+(it.check?" on":"");
+        x.textContent=it.label;
+        x.addEventListener("click",ev=>{ev.stopPropagation();it.on();closeFmtPops();syncFmtBars()});
+        lockPop.appendChild(x);
+      });
+    }else{
+      const n=document.createElement("div");n.className="fnote";n.textContent=t("fmtNeedSel");
+      lockPop.appendChild(n);
+    }
+    lockPop.classList.add("on");lockTrig.classList.add("on");
   });
+  lockCell.appendChild(lockTrig);lockCell.appendChild(lockPop);
+  sep();
+
+  /* ---------- 六、清除格式 ----------
+     图标原来是个 ✘，跟"删除"太像了，在一条全是排版功能的栏里看着心慌。
+     换成橡皮擦：擦掉的是格式，不是内容。 */
+  grp();
+  btn(ico('<path d="M8.5 20.5 3.9 15.9a2 2 0 0 1 0-2.8l8.6-8.6a2 2 0 0 1 2.8 0l4.6 4.6a2 2 0 0 1 0 2.8l-8.6 8.6z"/><path d="M9.5 8.5 15.5 14.5"/><path d="M11 20.5h9.5"/>'),
+    ()=>clearFmt(),t("fmtClear"));
 }
 function closeFmtPops(){
   document.querySelectorAll(".fmtbar .fpop.on").forEach(p=>p.classList.remove("on"));
@@ -6392,11 +6465,17 @@ function syncFmtBars(){
     if(chips[0])chips[0].style.background=lastInk();
     if(chips[1])chips[1].style.background=lastHL();
     if(chips[2])chips[2].style.background=lastBg()||"transparent";
-    if(host._sz)host._sz.textContent=barCard()?curSize():"";
+    // 没选中段落时给一个短横，不然"−  +"中间空着，看起来像坏了
+    if(host._sz)host._sz.textContent=barCard()?curSize():"\u2013";
     const fam=host.querySelector("#wffam");
     if(fam)fam.textContent=famName(curFamily());
     const tpl=host.querySelector("#wftpl");
     if(tpl){const tp=curTpl();tpl.textContent=tp?tp.name:t("tplShort")}
+    // 需要先选中一段才有意义的控件（间距、锁定）：没选中时淡下去。
+    // 点开仍然给得出一句"先选中一段文字"，不会再出现空白的弹层。
+    const has=!!barCard(),hasSel=sel.length>0;
+    host.querySelectorAll('.fx[data-need]').forEach(x=>
+      x.classList.toggle("off",x.dataset.need==="sel"?!hasSel:!has));
     const lockEl=host.querySelector("#fmtlock");
     if(lockEl){
       const cur=sel.map(card).filter(Boolean);

@@ -2405,6 +2405,131 @@ group("wrorder 写作页里的顺序", async (c) => {
   c.ok("源卡片已删除的条目照样落地，排在最后", r6 === "第一章|一点一|正文1.1甲");
 });
 
+group("fmtbar 写作页工具栏", async (c) => {
+  // 按功能分成五组（文字 / 字体字号 / 颜色 / 段落 / 整段）加一个清除格式，
+  // 组内不许被换行拆开，组与组之间才有分隔线。
+  // 两个"光秃秃的小三角"已经没有了：间距与锁定都带名字或图标，
+  // 而且不管有没有选中段落，弹层里永远有内容——早先没选中时弹出来的是两个空白框。
+  await c.board([{ id: "p1", x: 0, y: 0, w: 400, text: "第一段内容。", s: {} }], []);
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: 1200, y: 0 }, "稿子");
+    sel = ["p1"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = []; selDoc = null; paintSel(); syncFmtBars();
+    openWrite(d.id);
+  });
+  await c.wait(700);
+
+  const st = await c.run(() => {
+    const h = document.querySelector("#wrfmt");
+    const kids = [...h.children];
+    return { groups: h.querySelectorAll(".fgrp").length,
+      seps: h.querySelectorAll(".fsep").length,
+      // 每个直接子元素要么是一组、要么是分隔线，不许有裸露的按钮
+      loose: kids.filter((z) => !z.classList.contains("fgrp") && !z.classList.contains("fsep")).length,
+      // 一组之内的按钮必须在同一行（组不会被换行拆开）
+      // 按行高分桶比 top 可靠：一组里字号那个小 span 比按钮矮，top 天生不一样
+      split: [...h.querySelectorAll(".fgrp")].filter((g) => {
+        const rows2 = new Set([...g.children].map((z) => {
+          const r3 = z.getBoundingClientRect();
+          return Math.round((r3.top + r3.height / 2) / 14);
+        }));
+        return rows2.size > 1;
+      }).length,
+      naked: [...h.querySelectorAll(".fx")].filter((z) =>
+        z.textContent.trim() === "\u25BE" && !z.classList.contains("caret")).length };
+  });
+  c.ok("按功能分成了五组加清除（共 " + st.groups + " 组）", st.groups === 6);
+  c.ok("分隔线只出现在组之间", st.seps === st.groups - 1);
+  c.ok("没有游离在组之外的按钮", st.loose === 0);
+  c.ok("换行不会把一组拆开", st.split === 0);
+  c.ok("没有光秃秃的小三角按钮", st.naked === 0);
+
+  // 弹层永远不空：没选中段落时给一句提示
+  const empty = await c.run(() => {
+    sel = []; paintSel(); syncFmtBars();
+    const out = {};
+    ["间距", "Spacing"].concat(["锁定", "Lock"]).forEach(() => {});
+    const trig = [...document.querySelectorAll("#wrfmt .fx")]
+      .find((z) => z.title === t("fmtSpacing"));
+    trig.click();
+    const pop = trig.parentElement.querySelector(".fpop");
+    const r = { spacing: pop.textContent.trim(), dim: trig.classList.contains("off") };
+    closeFmtPops();
+    const lock = [...document.querySelectorAll("#wrfmt .fx.caret")]
+      .find((z) => z.title === t("lockMenu"));
+    lock.click();
+    const lp = lock.parentElement.querySelector(".fpop");
+    r.lock = lp.textContent.trim();
+    r.need = t("fmtNeedSel");
+    closeFmtPops();
+    return r;
+  });
+  c.ok("没选中时间距弹层给的是提示，不是空框", empty.spacing === empty.need);
+  c.ok("没选中时锁定弹层给的是提示，不是空框", empty.lock === empty.need);
+  c.ok("这两个控件在没选中时是淡的", empty.dim);
+
+  // 选中之后照常给出真正的内容
+  const full = await c.run(() => {
+    const d = wrDoc();
+    sel = [d.ids[0]]; paintSel(); syncFmtBars();
+    const trig = [...document.querySelectorAll("#wrfmt .fx")].find((z) => z.title === t("fmtSpacing"));
+    trig.click();
+    const pop = trig.parentElement.querySelector(".fpop");
+    const r = { segs: pop.querySelectorAll(".seg button").length,
+      sliders: pop.querySelectorAll('input[type=range]').length,
+      dim: trig.classList.contains("off"), sz: document.querySelector("#wrfmt .fsz").textContent };
+    closeFmtPops();
+    return r;
+  });
+  c.ok("选中之后间距弹层有字重四档", full.segs === 4);
+  c.ok("字距与行距两个滑块都在", full.sliders === 2);
+  c.ok("选中之后不再是淡的", !full.dim);
+  c.ok("字号显示的是当前段落的字号", /^\d+$/.test(full.sz));
+
+  // 三个颜色摆在同一组里：文字色、荧光笔、整段底色
+  c.ok("三个颜色在同一组", await c.run(() => {
+    const chips = [...document.querySelectorAll("#wrfmt .chip")];
+    return chips.length === 3 && chips.every((z) => z.closest(".fgrp") === chips[0].closest(".fgrp"));
+  }));
+
+  // 清除格式不再是那个像"删除"的 ✘
+  c.ok("清除格式换成了橡皮擦图标，不是 ✘", await c.run(() => {
+    const b = [...document.querySelectorAll("#wrfmt .fx")].find((z) => z.title === t("fmtClear"));
+    return !!b && !/\u2718|\u00D7|x/i.test(b.textContent) && !!b.querySelector("svg");
+  }));
+
+  // 功能没丢：加粗、颜色、对齐、清除仍然真的作用在段落上
+  const act = await c.run(() => {
+    const d = wrDoc(), id = d.ids[0];
+    const cap = document.querySelector(`#wrmain .blk[data-id="${id}"] .cap`);
+    const r2 = document.createRange();
+    r2.selectNodeContents(cap);
+    const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(r2);
+    sel = [id]; editing = true;
+    cmd("bold");
+    setAlign("center");
+    const c2 = card(id);
+    return { rich: (c2.rich || "").length > 0, align: (c2.s || {}).align };
+  });
+  c.ok("加粗仍然真的写进了这一段", act.rich);
+  c.ok("对齐仍然真的作用在这一段", act.align === "center");
+
+  // 画布上的稿子：文档级操作在上面一行，文字工具栏独占下面一整行
+  await c.run(() => closeWrite());
+  await c.wait(500);
+  const rows = await c.run(() => {
+    const bar = document.querySelector(".doc .dbar");
+    if (!bar) return null;
+    const tool = bar.querySelector(".dtool").getBoundingClientRect();
+    const fmt = bar.querySelector(".fmtbar").getBoundingClientRect();
+    return { toolTop: Math.round(tool.top), fmtTop: Math.round(fmt.top),
+      fmtW: Math.round(fmt.width), barW: Math.round(bar.getBoundingClientRect().width) };
+  });
+  c.ok("画布上的稿子里，模式与导出在上面一行", !!rows && rows.toolTop < rows.fmtTop);
+  c.ok("文字工具栏独占一整行", !!rows && rows.fmtW > rows.barW * 0.9);
+});
+
 group("wrback 定位只留给引文分身", async (c) => {
   // 正文段落是内容的独立拷贝，画布上没有对应的实体，所以**不给**"在画布上找到它"：
   // 拿它自己去取景，镜头只会落在稿子旁边的空地上（它的 x/y 是拷贝时随手写的
