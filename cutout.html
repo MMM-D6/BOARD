@@ -13,35 +13,44 @@
   body{background:#F4F4F2;color:#111;
     --panel:#fff;--pfg:#111;--pline:rgba(0,0,0,.12);--phi:rgba(0,0,0,.05);
     --glass:rgba(255,255,255,.62);--glassSoft:rgba(255,255,255,.3);
-    --glassline:rgba(0,0,0,.08);--frame:#2F3437;--acc:#2D6CDF}
+    --glassline:rgba(0,0,0,.08);--frame:#2F3437;--acc:#2D6CDF;--warn:#D2691E}
   button,input,select{font:inherit;color:inherit}
 
   /* ---------- 画布 ---------- */
-  #stage{position:fixed;inset:0;overflow:hidden;touch-action:none}
+  #stage{position:fixed;left:112px;right:0;top:0;bottom:0;overflow:hidden;touch-action:none}
   #stage.pan{cursor:grabbing}
+  #stage.canpan{cursor:grab}
+  #stage.pen{cursor:crosshair}
+  #stage.pick{cursor:cell}
   #wrap{position:absolute;left:50%;top:50%;transform-origin:0 0}
   #img{position:absolute;left:0;top:0;display:block;image-rendering:auto;user-select:none;
-    -webkit-user-drag:none}
+    -webkit-user-drag:none;pointer-events:none}
   #ov{position:absolute;left:0;top:0;overflow:visible}
   #ov path.cut{fill:rgba(45,108,223,.10);stroke:var(--acc);stroke-width:calc(1.6px * var(--iz));
-    stroke-linejoin:round;vector-effect:non-scaling-stroke}
+    stroke-linejoin:round;vector-effect:non-scaling-stroke;pointer-events:none}
+  #ov path.cut.dim{stroke-opacity:.4;fill-opacity:.05}
   #ov path.hair{fill:none;stroke:#fff;stroke-width:calc(3px * var(--iz));opacity:.55;
-    vector-effect:non-scaling-stroke}
-  #ov line.hd{stroke:var(--acc);stroke-width:calc(1px * var(--iz));opacity:.5;
-    vector-effect:non-scaling-stroke}
-  #ov circle.an{fill:#fff;stroke:var(--acc);stroke-width:calc(1.6px * var(--iz));
-    cursor:move;vector-effect:non-scaling-stroke}
+    vector-effect:non-scaling-stroke;pointer-events:none}
+  #ov circle.an{fill:#fff;stroke:var(--acc);stroke-width:calc(1.8px * var(--iz));
+    vector-effect:non-scaling-stroke;pointer-events:none}
   #ov circle.an.corner{fill:var(--acc)}
   #ov circle.an.on{fill:var(--acc);stroke:#fff;stroke-width:calc(2.4px * var(--iz))}
-  #ov circle.hp{fill:#fff;stroke:var(--acc);stroke-width:calc(1.4px * var(--iz));
-    cursor:move;vector-effect:non-scaling-stroke}
-  #ov line.hd{stroke:var(--acc);stroke-width:calc(1.2px * var(--iz));opacity:.75;
-    vector-effect:non-scaling-stroke}
-  #ov path.seg{fill:none;stroke:transparent;stroke-width:calc(14px * var(--iz));
+  #ov circle.an.dim{opacity:.4}
+  #ov circle.hit{fill:transparent;stroke:none;cursor:move;pointer-events:all}
+  #ov path.seg{fill:none;stroke:transparent;stroke-width:calc(9px * var(--iz));
     cursor:copy;pointer-events:stroke}
+  #ov path.draft{fill:rgba(210,105,30,.08);stroke:var(--warn);
+    stroke-width:calc(1.6px * var(--iz));stroke-dasharray:calc(5px * var(--iz)) calc(4px * var(--iz));
+    vector-effect:non-scaling-stroke;pointer-events:none}
+  #ov .dp{fill:#fff;stroke:var(--warn);stroke-width:calc(1.8px * var(--iz));
+    vector-effect:non-scaling-stroke;cursor:move}
+  #ov .dp.first{fill:var(--warn)}
+  #ov .dp.idle{opacity:.45;pointer-events:none}
+  #marq{position:fixed;z-index:40;border:1px solid var(--acc);
+    background:rgba(45,108,223,.10);display:none;pointer-events:none}
 
-  /* ---------- 顶部工具栏，与 board 同一套语言 ---------- */
-  #bar{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:60;
+  /* ---------- 顶部工具栏 ---------- */
+  #bar{position:fixed;left:calc(50% + 56px);top:14px;transform:translateX(-50%);z-index:60;
     display:flex;align-items:center;gap:1px;padding:4px 5px;border-radius:10px;
     background:var(--glass);border:1px solid var(--glassline);
     backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
@@ -59,24 +68,76 @@
   .div{width:1px;height:15px;background:var(--pline);margin:0 5px;flex:none;opacity:.7}
   .pp{position:absolute;top:100%;left:0;margin-top:7px;z-index:6;display:none;padding:8px;
     border-radius:10px;background:var(--panel);border:1px solid var(--pline);
-    box-shadow:0 16px 40px rgba(0,0,0,.2);min-width:210px;white-space:normal}
+    box-shadow:0 16px 40px rgba(0,0,0,.2);min-width:225px;white-space:normal}
   .pp.on{display:block}
   .pp.right{left:auto;right:0}
   .hd2{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
     opacity:.4;padding:6px 4px}
   .rowp{display:flex;align-items:center;gap:8px;margin:7px 3px}
-  .rowp label{width:52px;flex:none;opacity:.5;font-size:11px}
+  .rowp label{width:56px;flex:none;opacity:.5;font-size:11px}
   .rowp input[type=range]{flex:1;accent-color:var(--pfg);height:15px}
-  .rowp .val{width:34px;text-align:right;opacity:.5;font:400 10.5px/1 "IBM Plex Mono",monospace}
+  .rowp .val{width:36px;text-align:right;opacity:.5;font:400 10.5px/1 "IBM Plex Mono",monospace}
   .note2{font-size:10.5px;opacity:.45;padding:6px 4px 2px;line-height:1.6}
-  .go{width:100%;height:30px;border:none;border-radius:7px;background:var(--pfg);
-    color:var(--panel);cursor:pointer;font-size:12.5px;margin-top:4px}
+  .go{width:100%;height:29px;border:none;border-radius:7px;background:var(--pfg);
+    color:var(--panel);cursor:pointer;font-size:12px;margin-top:6px}
+  .go.ghost{background:none;border:1px solid var(--pline);color:inherit}
   .seg2{display:flex;margin:3px 3px 6px}
   .seg2 button{flex:1;height:26px;border:1px solid var(--pline);background:none;cursor:pointer;
     color:inherit;font-size:11.5px;margin-left:-1px;white-space:nowrap}
   .seg2 button:first-child{border-radius:6px 0 0 6px;margin-left:0}
   .seg2 button:last-child{border-radius:0 6px 6px 0}
   .seg2 button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+
+  /* ---------- 素材库 ---------- */
+  #lib{position:fixed;left:0;top:0;bottom:0;width:112px;z-index:58;display:flex;
+    flex-direction:column;background:var(--glass);border-right:1px solid var(--glassline);
+    backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3)}
+  #lib .lh{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
+    opacity:.4;padding:14px 10px 8px}
+  #libs{flex:1;overflow-y:auto;overflow-x:hidden;padding:0 10px 10px}
+  #libs::-webkit-scrollbar{width:5px}
+  #libs::-webkit-scrollbar-thumb{background:rgba(0,0,0,.16);border-radius:3px}
+  .thumb{position:relative;width:92px;height:92px;margin-bottom:8px;border-radius:9px;
+    border:1px solid var(--glassline);cursor:grab;overflow:hidden;touch-action:none;
+    background-image:linear-gradient(45deg,#e6e6e3 25%,transparent 25%),
+      linear-gradient(-45deg,#e6e6e3 25%,transparent 25%),
+      linear-gradient(45deg,transparent 75%,#e6e6e3 75%),
+      linear-gradient(-45deg,transparent 75%,#e6e6e3 75%);
+    background-size:12px 12px;background-position:0 0,0 6px,6px -6px,-6px 0;
+    transition:border-color .14s,transform .1s}
+  .thumb:hover{border-color:var(--acc)}
+  .thumb:active{transform:scale(.97)}
+  .thumb img{width:100%;height:100%;object-fit:contain;display:block;pointer-events:none}
+  .thumb.editing{border-color:var(--warn);border-width:2px}
+  .thumb .e{position:absolute;top:3px;left:3px;width:17px;height:17px;border:none;
+    border-radius:5px;background:rgba(20,20,20,.62);color:#fff;font-size:10px;line-height:1;
+    cursor:pointer;display:none;padding:0}
+  .thumb:hover .e{display:block}
+  .thumb .x{position:absolute;top:3px;right:3px;width:17px;height:17px;border:none;
+    border-radius:5px;background:rgba(20,20,20,.62);color:#fff;font-size:11px;line-height:1;
+    cursor:pointer;display:none;padding:0}
+  .thumb:hover .x{display:block}
+  #libe{font-size:10.5px;opacity:.4;padding:2px 10px;line-height:1.7}
+
+  /* ---------- 拼贴板 ---------- */
+  #board{position:fixed;left:112px;right:0;top:0;bottom:0;z-index:20;display:none;
+    background:#fff;overflow:hidden;touch-action:none}
+  body.collage #board{display:block}
+  body.collage #stage,body.collage #empty,body.collage #zoom,body.collage #prev{display:none}
+  .citem{position:absolute;transform-origin:0 0;cursor:move;touch-action:none}
+  .citem img{display:block;width:100%;height:100%;pointer-events:none;-webkit-user-drag:none}
+  .citem.on{outline:1px solid var(--acc);outline-offset:2px}
+  .citem .rz{position:absolute;right:-7px;bottom:-7px;width:13px;height:13px;background:#fff;
+    border:1px solid var(--acc);border-radius:4px;cursor:nwse-resize;display:none}
+  .citem.on .rz{display:block}
+  #cempty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:#B5B5B0;font-size:13px;pointer-events:none;text-align:center;line-height:1.9}
+  #menu{position:fixed;z-index:90;display:none;padding:4px;border-radius:9px;
+    background:var(--panel);border:1px solid var(--pline);box-shadow:0 16px 40px rgba(0,0,0,.2)}
+  #menu button{display:block;width:100%;text-align:left;padding:6px 12px;border:none;
+    background:none;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap;color:inherit}
+  #menu button:hover{background:var(--phi)}
+  #menu .sepm{height:1px;background:var(--pline);margin:4px 6px;opacity:.7}
 
   /* ---------- 结果预览 ---------- */
   #prev{position:fixed;right:16px;bottom:16px;z-index:55;width:260px;border-radius:12px;
@@ -95,13 +156,18 @@
   #prev .ft button{margin-left:auto}
 
   /* ---------- 空态与提示 ---------- */
-  #empty{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+  #empty{position:fixed;left:112px;right:0;top:0;bottom:0;display:flex;flex-direction:column;align-items:center;
     justify-content:center;gap:8px;color:#8A8A85;font-size:13px;pointer-events:none;text-align:center}
   #empty b{font-size:15px;color:#5A5A55;font-weight:500}
   #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:80;
     background:rgba(20,20,20,.86);color:#fff;padding:7px 14px;border-radius:8px;font-size:12.5px;
     opacity:0;transition:opacity .18s;pointer-events:none}
   #toast.on{opacity:1}
+  #hint{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:52;
+    background:rgba(255,255,255,.78);border:1px solid var(--glassline);color:#333;
+    padding:6px 12px;border-radius:8px;font-size:12px;display:none;
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  #hint.on{display:block}
   #zoom{position:fixed;right:14px;top:14px;z-index:50;font:400 10.5px/1 "IBM Plex Mono",monospace;
     opacity:.35}
   #busy{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;
@@ -123,7 +189,20 @@
   <div>也可以点上方的「打开图片」</div>
 </div>
 
+<div id="lib">
+  <div class="lh">素材库</div>
+  <div id="libs"></div>
+  <div id="libe">抠好的图存进来，<br>拖到拼贴板上用，<br>双击可以回去改</div>
+</div>
+
+<div id="board">
+  <div id="cempty">拼贴板<br>把左边素材库里的东西拖进来</div>
+</div>
+
+<div id="menu"></div>
+
 <div id="bar"></div>
+<div id="marq"></div>
 
 <div id="prev">
   <canvas id="prevc"></canvas>
@@ -131,9 +210,11 @@
 </div>
 
 <div id="zoom">100%</div>
+<div id="hint"></div>
 <div id="busy">正在识别边缘…</div>
 <div id="toast"></div>
 <input type="file" id="file" accept="image/*" hidden>
+<input type="file" id="pfile" accept=".cutout,application/json" hidden>
 
 <script>
 const $=id=>document.getElementById(id);
@@ -142,14 +223,31 @@ let toastT;
 function toast(m){const el=$("toast");el.textContent=m;el.classList.add("on");
   clearTimeout(toastT);toastT=setTimeout(()=>el.classList.remove("on"),1900)}
 function busy(on,txt){const el=$("busy");if(txt)el.textContent=txt;el.classList.toggle("on",!!on)}
+function hint(txt){const el=$("hint");if(txt){el.textContent=txt;el.classList.add("on")}
+  else el.classList.remove("on")}
 
 /* ================= 状态 ================= */
-let IMG=null;                       // 原图 Image
-let IW=0,IH=0;                      // 原图尺寸
+let IMG=null;
+let IW=0,IH=0;
 let cam={x:0,y:0,z:1};
-let paths=[];                       // 轮廓：[{pts:[{x,y,hx,hy,corner}], closed:true}]
-let sel={p:-1,i:-1,h:0};            // 选中的锚点，h: 0 锚点 1 前手柄 2 后手柄
-const opt={tol:32,smooth:2.2,detail:2.4,feather:0.6,mode:"border",invert:false};
+let paths=[];                 // [{pts:[{x,y,h1x,h1y,h2x,h2y,corner}],closed}]
+let sel={p:-1,i:-1};          // 主选中锚点
+let multi=new Set();          // 多选："p:i"
+let mode="edit";              // edit | pen | pick
+let draft=[];                 // 卡点模式放下的点，无序
+let draftPath=-1;             // 这些点上一次生成的路径
+let dsel=-1;                  // 选中的卡点
+let lastPath=-1;              // 上一次生成出来的那条曲线
+let spaceDown=false;
+
+const opt={
+  tol:34, detail:2.0, smooth:1.0, corner:62,
+  feather:0.6, edge:0, mode:"auto", invert:false,
+  fillHoles:true, biggest:true,
+  outMode:"native", outScale:1, outLong:1600,
+  follow:true, autoOrder:true, wander:0.55, edgePull:2.6, count:0
+};
+let seeds=[];                 // 手动取样的背景点（图片坐标）
 
 /* ================= 视图 ================= */
 function applyCam(){
@@ -161,42 +259,125 @@ function fit(){
   if(!IW)return;
   const m=90;
   const z=Math.min((innerWidth-m*2)/IW,(innerHeight-m*2)/IH,1);
-  cam.z=z;cam.x=-IW*z/2;cam.y=-IH*z/2;applyCam();
+  cam.z=z;cam.x=-IW*z/2;cam.y=-IH*z/2;applyCam();draw();
 }
+const toImg=(cx,cy)=>{
+  const r=$("stage").getBoundingClientRect();
+  return {x:(cx-r.left-r.width/2-cam.x)/cam.z, y:(cy-r.top-r.height/2-cam.y)/cam.z};
+};
+const toScreen=(x,y)=>{
+  const r=$("stage").getBoundingClientRect();
+  return {x:x*cam.z+cam.x+r.left+r.width/2, y:y*cam.z+cam.y+r.top+r.height/2};
+};
+
 $("stage").addEventListener("wheel",e=>{
   if(!IW)return;
   e.preventDefault();
   const r=$("stage").getBoundingClientRect();
   const cx=e.clientX-r.left-r.width/2, cy=e.clientY-r.top-r.height/2;
-  const k=Math.exp(-e.deltaY*0.0016);
-  const nz=clamp(cam.z*k,0.05,20);
-  cam.x=cx-(cx-cam.x)*(nz/cam.z);
-  cam.y=cy-(cy-cam.y)*(nz/cam.z);
-  cam.z=nz;applyCam();
+  if(e.ctrlKey||e.metaKey||!e.deltaX&&Math.abs(e.deltaY)>28||!("deltaX" in e)){
+    const k=Math.exp(-e.deltaY*(e.ctrlKey?0.012:0.0016));
+    const nz=clamp(cam.z*k,0.03,32);
+    cam.x=cx-(cx-cam.x)*(nz/cam.z);
+    cam.y=cy-(cy-cam.y)*(nz/cam.z);
+    cam.z=nz;
+  }else{                       // 触控板双指：平移
+    cam.x-=e.deltaX;cam.y-=e.deltaY;
+  }
+  applyCam();drawSoon();
 },{passive:false});
-let panning=null;
+
+/* ---- 平移：中键 / 右键 / 空格 + 左键 / 单指触摸 ---- */
+let panning=null, pointers=new Map(), pinch=null;
+function wantsPan(e){
+  return e.button===1 || e.button===2 || spaceDown ||
+    (e.pointerType!=="mouse" && mode==="edit");
+}
 $("stage").addEventListener("pointerdown",e=>{
+  if(!IW)return;
   if(e.target.closest("#bar")||e.target.closest("#prev"))return;
-  const onNode=e.target.closest("circle,path.seg");
-  if(onNode)return;
-  if(e.button===1||e.button===0||e.altKey||e.button===2){
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){                       // 双指缩放
+    const [a,b]=[...pointers.values()];
+    pinch={d:Math.hypot(a.x-b.x,a.y-b.y),z:cam.z,
+      mx:(a.x+b.x)/2,my:(a.y+b.y)/2,cx:cam.x,cy:cam.y};
+    panning=null;return;
+  }
+  if(wantsPan(e)){
+    if(e.pointerType!=="mouse"&&mode==="edit"){      // 手指也要能直接抓点
+      const nb=nearestAnchor(e.clientX,e.clientY,26);
+      if(nb){beginAnchorDrag(nb.p,nb.i,e);return}
+    }
     panning={x:e.clientX,y:e.clientY,cx:cam.x,cy:cam.y};
     $("stage").classList.add("pan");
-    if(e.button===0&&!e.altKey)sel={p:-1,i:-1,h:0},draw();
+    e.preventDefault();
+    return;
   }
+  if(e.button!==0)return;
+  if(mode==="pick"){ pickBackground(e); return; }
+  if(mode==="pen"){ penClick(e); return; }
+  // edit 模式：控点和曲线由 #ov 接管；差一点点没点中的，就近抓最近的控点
+  const t=e.target;
+  if(t.classList&&(t.classList.contains("hit")||t.classList.contains("seg")))return;
+  const near=nearestAnchor(e.clientX,e.clientY,18);
+  if(near){beginAnchorDrag(near.p,near.i,e);return}
+  if(e.shiftKey){startMarquee(e);return}          // 框选要按住 Shift，免得和选点打架
+  if(sel.i>=0||multi.size){multi.clear();sel={p:sel.p,i:-1};paintSel()}
 });
 addEventListener("pointermove",e=>{
-  if(!panning)return;
-  cam.x=panning.cx+(e.clientX-panning.x);
-  cam.y=panning.cy+(e.clientY-panning.y);applyCam();
+  if(pointers.has(e.pointerId))pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&pointers.size>=2){
+    const [a,b]=[...pointers.values()];
+    const d=Math.hypot(a.x-b.x,a.y-b.y)||1;
+    const r=$("stage").getBoundingClientRect();
+    const nz=clamp(pinch.z*(d/pinch.d),0.03,32);
+    const cx=pinch.mx-r.left-r.width/2, cy=pinch.my-r.top-r.height/2;
+    cam.x=cx-(cx-pinch.cx)*(nz/pinch.z);
+    cam.y=cy-(cy-pinch.cy)*(nz/pinch.z);
+    cam.z=nz;applyCam();drawSoon();return;
+  }
+  if(panning){
+    cam.x=panning.cx+(e.clientX-panning.x);
+    cam.y=panning.cy+(e.clientY-panning.y);applyCam();return;
+  }
 });
-addEventListener("pointerup",()=>{panning=null;$("stage").classList.remove("pan")});
+addEventListener("pointerup",e=>{
+  pointers.delete(e.pointerId);
+  if(pointers.size<2)pinch=null;
+  panning=null;$("stage").classList.remove("pan");
+});
+addEventListener("pointercancel",e=>{pointers.delete(e.pointerId);panning=null;pinch=null});
 addEventListener("contextmenu",e=>{if(!e.target.closest("#bar"))e.preventDefault()});
 addEventListener("resize",()=>{if(IW&&!paths.length)fit()});
-const toImg=(cx,cy)=>{
-  const r=$("stage").getBoundingClientRect();
-  return {x:(cx-r.left-r.width/2-cam.x)/cam.z, y:(cy-r.top-r.height/2-cam.y)/cam.z};
-};
+addEventListener("blur",()=>{spaceDown=false;$("stage").classList.remove("canpan")});
+
+/* ---- 框选 ---- */
+function startMarquee(e){
+  const m=$("marq");
+  const x0=e.clientX,y0=e.clientY;
+  let moved=false;
+  const mv=ev=>{
+    moved=true;
+    m.style.display="block";
+    m.style.left=Math.min(x0,ev.clientX)+"px";m.style.top=Math.min(y0,ev.clientY)+"px";
+    m.style.width=Math.abs(ev.clientX-x0)+"px";m.style.height=Math.abs(ev.clientY-y0)+"px";
+  };
+  const up=ev=>{
+    removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    m.style.display="none";
+    if(!moved){ multi.clear();sel={p:-1,i:-1};draw();return }
+    const a=toImg(Math.min(x0,ev.clientX),Math.min(y0,ev.clientY));
+    const b=toImg(Math.max(x0,ev.clientX),Math.max(y0,ev.clientY));
+    if(!ev.shiftKey)multi.clear();
+    paths.forEach((p,pi)=>p.pts.forEach((c,i)=>{
+      if(c.x>=a.x&&c.x<=b.x&&c.y>=a.y&&c.y<=b.y)multi.add(pi+":"+i);
+    }));
+    if(multi.size){const k=[...multi][0].split(":");sel={p:+k[0],i:+k[1]}}
+    draw();
+    if(multi.size)toast("选中 "+multi.size+" 个控点");
+  };
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+}
 
 /* ================= 载入图片 ================= */
 function loadImage(src,name){
@@ -208,31 +389,52 @@ function loadImage(src,name){
     $("ov").setAttribute("viewBox",`0 0 ${IW} ${IH}`);
     $("ov").setAttribute("width",IW);$("ov").setAttribute("height",IH);
     $("empty").style.display="none";
-    paths=[];sel={p:-1,i:-1,h:0};
-    fit();buildBar();draw();
-    setTimeout(()=>autoTrace(),60);
+    paths=[];draft=[];draftPath=-1;dsel=-1;lastDraft=[];lastPath=-1;seeds=[];multi.clear();sel={p:-1,i:-1};hist=[];hi=-1;
+    GRAD=null;
+    fit();buildBar();draw();buildGrad();
+    if(pendingWork){
+      paths=pendingWork.paths||[];draft=pendingWork.draft||[];
+      lastDraft=pendingWork.lastDraft||[];
+      const o=pendingWork.out;
+      if(o){opt.outMode=o.mode;opt.outScale=o.scale;opt.outLong=o.long;
+        opt.feather=o.feather;opt.edge=o.edge}
+      pendingWork=null;
+      setMode("edit");draw();updatePreview();buildBar();renderLib();
+      toast(editingLibId?"回到这件素材的抠图，改完再存一次就会覆盖它":"接着上次的进度");
+    }else{
+      setMode("pen");
+      toast("已载入。卡点模式：沿边缘随便点，点够了按 Enter 生成曲线");
+    }
   };
   im.onerror=()=>toast("这张图片打不开");
   im.src=src;
 }
 function readFile(f){
-  if(!f||!/^image\//.test(f.type)){toast("请选择图片文件");return}
+  if(!f)return;
+  if(/\.cutout$/i.test(f.name)||f.type==="application/json"){
+    const r=new FileReader();r.onload=()=>loadProject(r.result,f.name);r.readAsText(f);return;
+  }
+  if(!/^image\//.test(f.type)){toast("请选择图片或 cutout 存档");return}
   const rd=new FileReader();
   rd.onload=()=>loadImage(rd.result,f.name);
   rd.readAsDataURL(f);
 }
 $("file").onchange=e=>{readFile(e.target.files[0]);e.target.value=""};
-addEventListener("dragover",e=>e.preventDefault());
-addEventListener("drop",e=>{e.preventDefault();readFile(e.dataTransfer.files[0])});
+addEventListener("dragover",e=>{
+  if(e.dataTransfer&&[...(e.dataTransfer.types||[])].includes("Files"))e.preventDefault();
+});
+addEventListener("dragstart",e=>e.preventDefault());
+addEventListener("drop",e=>{
+  const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
+  if(!f)return;                       // 画布上随手拖一下不算，别弹提示
+  e.preventDefault();readFile(f);
+});
 addEventListener("paste",e=>{
   const it=[...(e.clipboardData?.items||[])].find(x=>x.type.startsWith("image/"));
   if(it){e.preventDefault();readFile(it.getAsFile())}
 });
 
-/* ================= 自动识别边缘 ================= */
-// 思路：先估出背景，再取前景的最大连通块，追踪它的轮廓，
-// 最后把折线简化并转成圆顺的贝塞尔曲线。
-// 自动只负责给出一条八九不离十的初稿，精修交给控点。
+/* ================= 采样与梯度（磁性吸附用） ================= */
 function sampleCanvas(maxSide){
   const s=Math.min(1,maxSide/Math.max(IW,IH));
   const w=Math.max(8,Math.round(IW*s)),h=Math.max(8,Math.round(IH*s));
@@ -241,51 +443,123 @@ function sampleCanvas(maxSide){
   g.drawImage(IMG,0,0,w,h);
   return {g,w,h,scale:IW/w};
 }
-function buildMask(){
-  const {g,w,h,scale}=sampleCanvas(560);
+let GRAD=null;   // {a:Float32Array,w,h,scale}
+function buildGrad(){
+  const {g,w,h,scale}=sampleCanvas(1000);
   const d=g.getImageData(0,0,w,h).data;
-  const N=w*h;
-  const bg=new Uint8Array(N);          // 1 = 背景
-  const tol=opt.tol*opt.tol*3;
-  const at=i=>[d[i*4],d[i*4+1],d[i*4+2],d[i*4+3]];
-  const near=(a,b)=>{
-    const dr=a[0]-b[0],dg=a[1]-b[1],db=a[2]-b[2];
-    return dr*dr+dg*dg+db*db<=tol;
+  const lum=new Float32Array(w*h);
+  for(let i=0;i<w*h;i++)lum[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];
+  const a=new Float32Array(w*h);
+  let mx=1;
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+    const i=y*w+x;
+    const gx=-lum[i-w-1]-2*lum[i-1]-lum[i+w-1]+lum[i-w+1]+2*lum[i+1]+lum[i+w+1];
+    const gy=-lum[i-w-1]-2*lum[i-w]-lum[i-w+1]+lum[i+w-1]+2*lum[i+w]+lum[i+w+1];
+    const v=Math.hypot(gx,gy);a[i]=v;if(v>mx)mx=v;
+  }
+  for(let i=0;i<a.length;i++)a[i]/=mx;
+  GRAD={a,w,h,scale};
+}
+/* ================= 自动识别 ================= */
+// 做法：先从边框（或你点的取样点）统计背景色，聚成几类；
+// 再做「颜色相近 + 不跨强边」的泛洪，得到背景；
+// 然后补洞、去毛刺、取最大块，最后追轮廓、简化、按转角分尖角与圆顺。
+function bgClusters(d,w,h,pts){
+  const bins=new Map();
+  const add=(i)=>{
+    const k=((d[i*4]>>4)<<8)|((d[i*4+1]>>4)<<4)|(d[i*4+2]>>4);
+    const o=bins.get(k)||{n:0,r:0,g:0,b:0};
+    o.n++;o.r+=d[i*4];o.g+=d[i*4+1];o.b+=d[i*4+2];bins.set(k,o);
   };
+  let total=0;
+  if(pts&&pts.length){
+    pts.forEach(p=>{
+      const x=clamp(Math.round(p.x),0,w-1),y=clamp(Math.round(p.y),0,h-1);
+      for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+        const nx=clamp(x+dx,0,w-1),ny=clamp(y+dy,0,h-1);
+        add(ny*w+nx);total++;
+      }
+    });
+  }else{
+    for(let x=0;x<w;x++){add(x);add((h-1)*w+x);total+=2}
+    for(let y=0;y<h;y++){add(y*w);add(y*w+w-1);total+=2}
+  }
+  const list=[...bins.values()].filter(o=>o.n/total>0.02)
+    .sort((a,b)=>b.n-a.n).slice(0,6)
+    .map(o=>[o.r/o.n,o.g/o.n,o.b/o.n]);
+  if(!list.length){
+    const o=[...bins.values()].sort((a,b)=>b.n-a.n)[0];
+    if(o)list.push([o.r/o.n,o.g/o.n,o.b/o.n]);
+  }
+  return list;
+}
+function buildMask(){
+  const {g,w,h,scale}=sampleCanvas(680);
+  const img=g.getImageData(0,0,w,h);
+  const d=img.data;
+  const N=w*h;
+
+  // 局部梯度，防止泛洪穿过明显边界
+  const lum=new Float32Array(N);
+  for(let i=0;i<N;i++)lum[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];
+  const grad=new Float32Array(N);
+  for(let y=1;y<h-1;y++)for(let x=1;x<w-1;x++){
+    const i=y*w+x;
+    const gx=-lum[i-w-1]-2*lum[i-1]-lum[i+w-1]+lum[i-w+1]+2*lum[i+1]+lum[i+w+1];
+    const gy=-lum[i-w-1]-2*lum[i-w]-lum[i-w+1]+lum[i+w-1]+2*lum[i+w]+lum[i+w+1];
+    grad[i]=Math.hypot(gx,gy)/4;
+  }
+
+  const bg=new Uint8Array(N);
   if(opt.mode==="alpha"){
     for(let i=0;i<N;i++)if(d[i*4+3]<16)bg[i]=1;
   }else{
-    // 从四条边泛洪，凡是与边缘颜色接近且连通的都算背景
-    const q=[];const seen=new Uint8Array(N);
-    const push=i=>{if(!seen[i]){seen[i]=1;q.push(i)}};
-    for(let x=0;x<w;x++){push(x);push((h-1)*w+x)}
-    for(let y=0;y<h;y++){push(y*w);push(y*w+w-1)}
-    const seeds=q.slice();
-    let head=0;
-    while(head<q.length){
-      const i=q[head++];
-      const c=at(i);
-      // 与任一种子色接近才算背景，避免把前景一路吃掉
-      let ok=false;
-      for(let k=0;k<seeds.length;k+=Math.max(1,Math.floor(seeds.length/24))){
-        if(near(c,at(seeds[k]))){ok=true;break}
+    const sp=seeds.map(p=>({x:p.x/scale,y:p.y/scale}));
+    const cl=bgClusters(d,w,h,sp);
+    const tol=opt.tol;
+    const near=i=>{
+      let best=1e9;
+      for(const c of cl){
+        const dr=d[i*4]-c[0],dg=d[i*4+1]-c[1],db=d[i*4+2]-c[2];
+        const v=Math.sqrt((dr*dr+dg*dg+db*db)/3);
+        if(v<best)best=v;
       }
-      if(!ok)continue;
+      return best;
+    };
+    const q=new Int32Array(N);let head=0,tail=0;
+    const seen=new Uint8Array(N);
+    const push=i=>{if(!seen[i]){seen[i]=1;q[tail++]=i}};
+    if(sp.length){
+      sp.forEach(p=>{
+        const x=clamp(Math.round(p.x),0,w-1),y=clamp(Math.round(p.y),0,h-1);
+        push(y*w+x);
+      });
+    }else{
+      for(let x=0;x<w;x++){push(x);push((h-1)*w+x)}
+      for(let y=0;y<h;y++){push(y*w);push(y*w+w-1)}
+    }
+    const gLimit=18+tol*0.5;
+    while(head<tail){
+      const i=q[head++];
+      const dist=near(i);
+      if(dist>tol)continue;
+      if(grad[i]>gLimit&&dist>tol*0.45)continue;   // 撞到强边就停
       bg[i]=1;
       const x=i%w,y=(i/w)|0;
       if(x>0)push(i-1); if(x<w-1)push(i+1);
       if(y>0)push(i-w); if(y<h-1)push(i+w);
     }
   }
+
   let fg=new Uint8Array(N);
   for(let i=0;i<N;i++)fg[i]=bg[i]?0:1;
   if(opt.invert)for(let i=0;i<N;i++)fg[i]=fg[i]?0:1;
-  // 形态学：先闭后开，去掉毛刺和小洞
-  fg=morph(fg,w,h,1,1);   // 膨胀
-  fg=morph(fg,w,h,0,2);   // 腐蚀
-  fg=morph(fg,w,h,1,1);
-  // 取最大连通块
-  fg=largestBlob(fg,w,h);
+
+  fg=morph(fg,w,h,0,1);      // 腐蚀，先咬掉细毛刺
+  fg=morph(fg,w,h,1,2);      // 膨胀，接回断口
+  fg=morph(fg,w,h,0,1);
+  if(opt.fillHoles)fg=fillHoles(fg,w,h);
+  if(opt.biggest)fg=largestBlob(fg,w,h);
   return {fg,w,h,scale};
 }
 function morph(src,w,h,dilate,times){
@@ -305,8 +579,23 @@ function morph(src,w,h,dilate,times){
   }
   return a;
 }
+function fillHoles(src,w,h){
+  const N=w*h,out=Uint8Array.from(src);
+  const seen=new Uint8Array(N);
+  const q=new Int32Array(N);let head=0,tail=0;
+  const push=i=>{if(!seen[i]&&!src[i]){seen[i]=1;q[tail++]=i}};
+  for(let x=0;x<w;x++){push(x);push((h-1)*w+x)}
+  for(let y=0;y<h;y++){push(y*w);push(y*w+w-1)}
+  while(head<tail){
+    const i=q[head++],x=i%w,y=(i/w)|0;
+    if(x>0)push(i-1); if(x<w-1)push(i+1);
+    if(y>0)push(i-w); if(y<h-1)push(i+w);
+  }
+  for(let i=0;i<N;i++)if(!src[i]&&!seen[i])out[i]=1;
+  return out;
+}
 function largestBlob(src,w,h){
-  const lab=new Int32Array(w*h).fill(0);
+  const lab=new Int32Array(w*h);
   let best=0,bestN=0,cur=0;
   const q=new Int32Array(w*h);
   for(let i=0;i<w*h;i++){
@@ -326,17 +615,15 @@ function largestBlob(src,w,h){
   for(let i=0;i<w*h;i++)if(lab[i]===best)out[i]=1;
   return out;
 }
-// Moore 邻域轮廓追踪
 function traceContour(m,w,h){
   let start=-1;
   for(let i=0;i<w*h;i++)if(m[i]){start=i;break}
   if(start<0)return [];
   const dirs=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
   const get=(x,y)=>(x<0||y<0||x>=w||y>=h)?0:m[y*w+x];
-  let sx=start%w, sy=(start/w)|0;
+  const sx=start%w, sy=(start/w)|0;
   let cx=sx,cy=sy,dir=6,out=[];
-  const maxSteps=w*h*4;
-  let steps=0;
+  const maxSteps=w*h*4;let steps=0;
   do{
     out.push({x:cx,y:cy});
     let found=false;
@@ -350,7 +637,56 @@ function traceContour(m,w,h){
   }while(!(cx===sx&&cy===sy)&&steps<maxSteps);
   return out;
 }
-// Douglas–Peucker
+function chaikin(pts,times){
+  let a=pts;
+  for(let t=0;t<times;t++){
+    const b=[];
+    for(let i=0;i<a.length;i++){
+      const p=a[i],n=a[(i+1)%a.length];
+      b.push({x:p.x*0.75+n.x*0.25,y:p.y*0.75+n.y*0.25});
+      b.push({x:p.x*0.25+n.x*0.75,y:p.y*0.25+n.y*0.75});
+    }
+    a=b;
+  }
+  return a;
+}
+// 按弧长等距取 n 个点，再把每个点挪到附近曲率最大的位置，转角就不会被削平
+function resample(pts,n){
+  const m=pts.length;
+  if(m<3||n<3||n>=m)return pts;
+  const seg=[],cum=[0];
+  for(let i=0;i<m;i++){
+    const a=pts[i],b=pts[(i+1)%m];
+    const d=Math.hypot(b.x-a.x,b.y-a.y);
+    seg.push(d);cum.push(cum[i]+d);
+  }
+  const total=cum[m];
+  const curv=new Float32Array(m);
+  const win=Math.max(1,Math.round(m/n/3));
+  for(let i=0;i<m;i++){
+    const a=pts[(i-win+m)%m],c=pts[i],b=pts[(i+win)%m];
+    const v1x=c.x-a.x,v1y=c.y-a.y,v2x=b.x-c.x,v2y=b.y-c.y;
+    const l1=Math.hypot(v1x,v1y)||1,l2=Math.hypot(v2x,v2y)||1;
+    curv[i]=Math.acos(clamp((v1x*v2x+v1y*v2y)/(l1*l2),-1,1));
+  }
+  const out=[],used=new Set();
+  const step=total/n;
+  let j=0;
+  for(let k=0;k<n;k++){
+    const target=k*step;
+    while(j<m-1&&cum[j+1]<target)j++;
+    let bi=j,bs=-1;
+    const r=Math.max(1,Math.round(m/n/2));
+    for(let d=-r;d<=r;d++){
+      const idx=(j+d+m)%m;
+      const dist=Math.abs(cum[idx]-target);
+      const sc=curv[idx]*1.6-dist/(step||1);
+      if(sc>bs&&!used.has(idx)){bs=sc;bi=idx}
+    }
+    used.add(bi);out.push(pts[bi]);
+  }
+  return out;
+}
 function simplify(pts,eps){
   if(pts.length<3)return pts;
   const keep=new Uint8Array(pts.length);
@@ -370,191 +706,653 @@ function simplify(pts,eps){
   }
   return pts.filter((p,i)=>keep[i]);
 }
-// 折线转圆顺曲线：Catmull-Rom 求切线，得到每个锚点的两条对称手柄
-function toSmooth(pts,tension){
-  const n=pts.length;
-  return pts.map((p,i)=>{
-    const a=pts[(i-1+n)%n], b=pts[(i+1)%n];
-    const tx=(b.x-a.x)*tension/6, ty=(b.y-a.y)*tension/6;
-    return {x:p.x,y:p.y,hx:tx,hy:ty,corner:false};
-  });
-}
 async function autoTrace(){
   if(!IW)return;
+  if(draft.length){draft=[];dsel=-1;draftPath=-1}   // 换了方法，之前的卡点作废
+  if(mode==="pen")setMode("edit");
   busy(true,"正在识别边缘…");
   await new Promise(r=>setTimeout(r,20));
   try{
     const {fg,w,h,scale}=buildMask();
     let c=traceContour(fg,w,h);
-    if(c.length<12){toast("没找到明显的轮廓，试试调高容差或手动画");busy(false);return}
-    // 轮廓点抽稀 + 简化，detail 越大点越少
-    const eps=Math.max(0.6,opt.detail);
-    c=simplify(c,eps);
-    if(c.length>420)c=c.filter((p,i)=>i%Math.ceil(c.length/420)===0);
+    if(c.length<16){toast("没找到明显轮廓，换「点背景取样」或直接卡点");busy(false);return}
+    c=chaikin(c,1);
+    if(opt.count>=3){
+      c=resample(c,opt.count);
+    }else{
+      c=simplify(c,Math.max(0.5,opt.detail));
+      if(c.length>500)c=c.filter((p,i)=>i%Math.ceil(c.length/500)===0);
+    }
     const scaled=c.map(p=>({x:p.x*scale,y:p.y*scale}));
-    paths=[{pts:toSmooth(scaled,opt.smooth),closed:true}];
-    sel={p:-1,i:-1,h:0};
+    push();
+    paths=[{pts:makeSmooth(scaled,opt.smooth,opt.corner,true),closed:true}];
+    sel={p:0,i:-1};multi.clear();
     draw();updatePreview();
-    toast("已识别 "+paths[0].pts.length+" 个控点，可直接拖动调整");
+    toast("识别出 "+paths[0].pts.length+" 个控点，可拖动精修");
   }catch(e){toast("识别失败："+e.message)}
   busy(false);
 }
+function pickBackground(e){
+  const p=toImg(e.clientX,e.clientY);
+  if(!e.shiftKey)seeds=[];
+  seeds.push(p);
+  toast("已取样 "+seeds.length+" 处背景（Shift 点可继续加）");
+  autoTrace();
+}
 
-/* ================= 路径绘制与控点交互 ================= */
+/* ================= 曲线：锚点与手柄 ================= */
+// 每个锚点带两条手柄：h1 是进来的方向，h2 是出去的方向，都是相对坐标。
+function makeSmooth(list,tension,cornerDeg,closed){
+  const n=list.length;
+  return list.map((p,i)=>{
+    const a=closed?list[(i-1+n)%n]:list[Math.max(0,i-1)];
+    const b=closed?list[(i+1)%n]:list[Math.min(n-1,i+1)];
+    const v1x=p.x-a.x,v1y=p.y-a.y,v2x=b.x-p.x,v2y=b.y-p.y;
+    const l1=Math.hypot(v1x,v1y)||1,l2=Math.hypot(v2x,v2y)||1;
+    const cosv=clamp((v1x*v2x+v1y*v2y)/(l1*l2),-1,1);
+    const turn=Math.acos(cosv)*180/Math.PI;
+    const corner=cornerDeg>0&&turn>cornerDeg;
+    let tx=b.x-a.x,ty=b.y-a.y;
+    const tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
+    const k=tension/3;
+    return {x:p.x,y:p.y,corner,
+      h1x:-tx*l1*k,h1y:-ty*l1*k,
+      h2x:tx*l2*k,h2y:ty*l2*k};
+  });
+}
+function resmooth(p,tension,cornerDeg){
+  const s=makeSmooth(p.pts.map(c=>({x:c.x,y:c.y})),tension,cornerDeg,p.closed);
+  p.pts=s;
+}
 function pathD(p){
   const a=p.pts,n=a.length;
   if(n<2)return "";
   let d=`M${a[0].x} ${a[0].y}`;
-  for(let i=0;i<n;i++){
-    const c=a[i], nx=a[(i+1)%n];
-    if(i===n-1&&!p.closed)break;
-    const c1x=c.corner?c.x:c.x+c.hx, c1y=c.corner?c.y:c.y+c.hy;
-    const c2x=nx.corner?nx.x:nx.x-nx.hx, c2y=nx.corner?nx.y:nx.y-nx.hy;
+  const last=p.closed?n:n-1;
+  for(let i=0;i<last;i++){
+    const c=a[i],nx=a[(i+1)%n];
+    const c1x=c.corner?c.x:c.x+c.h2x, c1y=c.corner?c.y:c.y+c.h2y;
+    const c2x=nx.corner?nx.x:nx.x+nx.h1x, c2y=nx.corner?nx.y:nx.y+nx.h1y;
     d+=` C${c1x} ${c1y} ${c2x} ${c2y} ${nx.x} ${nx.y}`;
   }
   if(p.closed)d+="Z";
   return d;
 }
+function segD(p,i){
+  const a=p.pts,n=a.length;
+  const c=a[i],nx=a[(i+1)%n];
+  const c1x=c.corner?c.x:c.x+c.h2x, c1y=c.corner?c.y:c.y+c.h2y;
+  const c2x=nx.corner?nx.x:nx.x+nx.h1x, c2y=nx.corner?nx.y:nx.y+nx.h1y;
+  return `M${c.x} ${c.y} C${c1x} ${c1y} ${c2x} ${c2y} ${nx.x} ${nx.y}`;
+}
+
+/* ================= 绘制 ================= */
 function draw(){
   const ov=$("ov");
   if(!IW){ov.innerHTML="";return}
-  const ns="http://www.w3.org/2000/svg";
   let out="";
+  const showP=sel.p>=0&&paths[sel.p]?sel.p:(paths.length===1?0:-1);
+  // 第一层：曲线本身
   paths.forEach((p,pi)=>{
     const d=pathD(p);
-    out+=`<path class="hair" d="${d}"/><path class="cut" d="${d}"/>`;
-    out+=`<path class="seg" d="${d}" data-p="${pi}"/>`;
+    const dim=(showP>=0&&pi!==showP)?" dim":"";
+    out+=`<path class="hair" id="hr${pi}" d="${d}"/><path class="cut${dim}" id="cp${pi}" d="${d}"/>`;
   });
-  // 控点只画选中路径的，避免点太多时糊成一片
-  const showP=paths.length===1?0:(sel.p>=0?sel.p:0);
-  const p=paths[showP];
-  if(p){
+  // 第二层：曲线上的插点热区，压在控点下面
+  paths.forEach((p,pi)=>{
+    if(showP>=0&&pi!==showP)return;
+    const n=p.pts.length,last=p.closed?n:n-1;
+    for(let i=0;i<last;i++)out+=`<path class="seg" d="${segD(p,i)}" data-p="${pi}" data-i="${i}"/>`;
+  });
+  // 第三层：控点，永远在最上面，外面套一圈看不见的大命中区
+  paths.forEach((p,pi)=>{
+    const active=(showP<0||pi===showP);
     p.pts.forEach((c,i)=>{
-      const on=sel.p===showP&&sel.i===i;
-      if(on&&!c.corner){
-        // 手柄至少画到一定长度，否则控点密集时看不见也抓不住
-        const len=Math.hypot(c.hx,c.hy);
-        const k=len<18?(18/(len||1)):1;
-        const gx=c.hx*k, gy=c.hy*k;
-        out+=`<line class="hd" x1="${c.x-gx}" y1="${c.y-gy}" x2="${c.x+gx}" y2="${c.y+gy}"/>`;
-        out+=`<circle class="hp" cx="${c.x-gx}" cy="${c.y-gy}" r="${4.5/cam.z}" data-p="${showP}" data-i="${i}" data-h="1"/>`;
-        out+=`<circle class="hp" cx="${c.x+gx}" cy="${c.y+gy}" r="${4.5/cam.z}" data-p="${showP}" data-i="${i}" data-h="2"/>`;
-      }
-      out+=`<circle class="an${c.corner?" corner":""}${on?" on":""}" cx="${c.x}" cy="${c.y}" r="${(on?6.5:5)/cam.z}" data-p="${showP}" data-i="${i}" data-h="0"/>`;
+      const key=pi+":"+i;
+      const on=(sel.p===pi&&sel.i===i)||multi.has(key);
+      if(active)
+        out+=`<circle class="hit" cx="${c.x}" cy="${c.y}" r="${14/cam.z}" `+
+             `data-p="${pi}" data-i="${i}"/>`;
+      out+=`<circle class="an${c.corner?" corner":""}${on?" on":""}${active?"":" dim"}" `+
+        `id="an${pi}_${i}" cx="${c.x}" cy="${c.y}" r="${(on?6.4:5)/cam.z}"/>`;
     });
-  }
+  });
+  // 卡点：点就是点，不连线
+  if(mode==="pen")draft.forEach((p,i)=>{
+    const on=(dsel===i);
+    const cls="dp"+(on?" first":"");
+    const r=(on?6.4:5)/cam.z;
+    if(p.corner)                       // 直线点画成方块
+      out+=`<rect class="${cls}" x="${p.x-r}" y="${p.y-r}" width="${r*2}" height="${r*2}" data-d="${i}"/>`;
+    else
+      out+=`<circle class="${cls}" cx="${p.x}" cy="${p.y}" r="${r}" data-d="${i}"/>`;
+  });
   ov.innerHTML=out;
 }
-$("ov").addEventListener("pointerdown",e=>{
-  const t=e.target;
-  if(t.tagName==="circle"){
-    e.stopPropagation();
-    const pi=+t.dataset.p,i=+t.dataset.i,h=+t.dataset.h;
-    sel={p:pi,i,h};draw();
-    if(e.altKey&&h===0){                 // Alt 点锚点：在尖角与圆顺之间切换
-      const c=paths[pi].pts[i];
-      c.corner=!c.corner;
-      if(!c.corner){
-        const a=paths[pi].pts[(i-1+paths[pi].pts.length)%paths[pi].pts.length];
-        const b=paths[pi].pts[(i+1)%paths[pi].pts.length];
-        c.hx=(b.x-a.x)*opt.smooth/6;c.hy=(b.y-a.y)*opt.smooth/6;
-      }
-      draw();updatePreview();return;
+let fullId=0;
+function drawSoon(){if(fullId)return;fullId=requestAnimationFrame(()=>{fullId=0;draw()})}
+// 拖动时只改动到的那几个元素，不重建整棵树，这样点再多也不卡
+let rafId=0,rafPath=-1,rafKeys=null;
+function fastDraw(pi,keys){
+  rafPath=pi;rafKeys=keys;
+  if(rafId)return;
+  rafId=requestAnimationFrame(()=>{
+    rafId=0;
+    const p=paths[rafPath];if(!p)return;
+    const d=pathD(p);
+    const a=document.getElementById("cp"+rafPath), b=document.getElementById("hr"+rafPath);
+    if(a)a.setAttribute("d",d); if(b)b.setAttribute("d",d);
+    (rafKeys||[]).forEach(k=>{
+      const [x,y]=k.split(":").map(Number);
+      const c=paths[x]?.pts[y];if(!c)return;
+      const el=document.getElementById("an"+x+"_"+y);
+      if(el){el.setAttribute("cx",c.x);el.setAttribute("cy",c.y)}
+    });
+  });
+}
+
+/* ================= 编辑交互 ================= */
+// 直线点与曲线点互换：选中之后再点一下就切，Alt 点也可以
+function toggleCorner(pi,i){
+  const p=paths[pi];if(!p)return;
+  const c=p.pts[i],n=p.pts.length;
+  push();
+  c.corner=!c.corner;
+  if(!c.corner){
+    const a=p.pts[(i-1+n)%n],b=p.pts[(i+1)%n];
+    let tx=b.x-a.x,ty=b.y-a.y;const tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
+    const l1=Math.hypot(c.x-a.x,c.y-a.y),l2=Math.hypot(b.x-c.x,b.y-c.y);
+    const k=(opt.smooth||1)/3;
+    c.h1x=-tx*l1*k;c.h1y=-ty*l1*k;c.h2x=tx*l2*k;c.h2y=ty*l2*k;
+  }
+  const el=document.getElementById("an"+pi+"_"+i);
+  if(el)el.classList.toggle("corner",c.corner);
+  fastDraw(pi,[pi+":"+i]);
+  updatePreview();
+}
+// 选中状态只改受影响的那几个圆，不重建整棵树
+function paintSel(){
+  const ov=$("ov");
+  ov.querySelectorAll("circle.an.on").forEach(el=>{
+    el.classList.remove("on");el.setAttribute("r",5/cam.z);
+  });
+  const mark=k=>{
+    const [a,b]=k.split(":");
+    const el=document.getElementById("an"+a+"_"+b);
+    if(el){el.classList.add("on");el.setAttribute("r",6.4/cam.z)}
+  };
+  if(sel.i>=0)mark(sel.p+":"+sel.i);
+  multi.forEach(mark);
+}
+// 在屏幕坐标附近找最近的控点，找不到返回 null
+function nearestAnchor(cx,cy,rad){
+  const q=toImg(cx,cy);
+  const r=(rad||16)/cam.z;
+  const showP=sel.p>=0&&paths[sel.p]?sel.p:(paths.length===1?0:-1);
+  let best=null,bd=r*r;
+  paths.forEach((p,pi)=>{
+    if(showP>=0&&pi!==showP)return;
+    p.pts.forEach((c,i)=>{
+      const d=(c.x-q.x)**2+(c.y-q.y)**2;
+      if(d<bd){bd=d;best={p:pi,i}}
+    });
+  });
+  return best;
+}
+function beginAnchorDrag(pi,i,e,fresh){
+  dragging=true;
+  const key=pi+":"+i;
+  const preSel=fresh?{p:-1,i:-1}:{p:sel.p,i:sel.i};
+  const samePath=(sel.p===pi);
+  if(e.shiftKey&&!fresh){multi.has(key)?multi.delete(key):multi.add(key)}
+  else if(!multi.has(key))multi.clear();
+  sel={p:pi,i};
+  if(samePath)paintSel();else draw();
+  if(e.altKey){toggleCorner(pi,i);return}
+  const wasSel=(preSel.p===pi&&preSel.i===i&&!e.shiftKey);
+
+  let pushed=false;
+  const start=toImg(e.clientX,e.clientY);
+  const c=paths[pi].pts[i];
+  const o={x:c.x,y:c.y};
+  const group=multi.has(key)?[...multi].map(k=>{
+    const [a,b]=k.split(":").map(Number);
+    const cc=paths[a]?.pts[b];
+    return cc?{k,c:cc,x:cc.x,y:cc.y}:null;
+  }).filter(Boolean):null;
+  const keys=group?group.map(g=>g.k):[key];
+
+  const mv=ev=>{
+    if(!pushed){push();pushed=true}
+    const q=toImg(ev.clientX,ev.clientY);
+    const dx=q.x-start.x,dy=q.y-start.y;
+    if(group)group.forEach(g=>{g.c.x=g.x+dx;g.c.y=g.y+dy});
+    else{
+      const np={x:o.x+dx,y:o.y+dy};
+      c.x=np.x;c.y=np.y;
     }
-    const start=toImg(e.clientX,e.clientY);
-    const c=paths[pi].pts[i];
-    const o={x:c.x,y:c.y,hx:c.hx,hy:c.hy};
+    fastDraw(pi,keys);
+  };
+  const up=ev=>{
+    dragging=false;
+    removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    removeEventListener("pointercancel",up);
+    const moved=ev&&Math.hypot(ev.clientX-e.clientX,ev.clientY-e.clientY)>3;
+    if(wasSel&&!moved&&!pushed){toggleCorner(pi,i);return}
+    if(pushed||fresh){draw();updatePreview()}
+  };
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+  addEventListener("pointercancel",up);
+}
+
+$("ov").addEventListener("pointerdown",e=>{
+  if(e.button!==0||spaceDown)return;
+  if(mode!=="edit")return;
+  const t=e.target;
+
+  if(t.classList.contains("hit")){
+    e.stopPropagation();
+    beginAnchorDrag(+t.dataset.p,+t.dataset.i,e);
+    return;
+  }
+
+  if(t.classList.contains("seg")){        // 曲线上点一下：原位插点，不改形状
+    e.stopPropagation();
+    push();
+    const pi=+t.dataset.p,si=+t.dataset.i;
+    const p=paths[pi],n=p.pts.length;
+    const a=p.pts[si],b=p.pts[(si+1)%n];
+    const P0={x:a.x,y:a.y},
+          P1=a.corner?{x:a.x,y:a.y}:{x:a.x+a.h2x,y:a.y+a.h2y},
+          P2=b.corner?{x:b.x,y:b.y}:{x:b.x+b.h1x,y:b.y+b.h1y},
+          P3={x:b.x,y:b.y};
+    const q=toImg(e.clientX,e.clientY);
+    let bt=0.5,bd=1e18;
+    for(let k=0;k<=40;k++){
+      const t2=k/40,u=1-t2;
+      const x=u*u*u*P0.x+3*u*u*t2*P1.x+3*u*t2*t2*P2.x+t2*t2*t2*P3.x;
+      const y=u*u*u*P0.y+3*u*u*t2*P1.y+3*u*t2*t2*P2.y+t2*t2*t2*P3.y;
+      const dd=(x-q.x)**2+(y-q.y)**2;
+      if(dd<bd){bd=dd;bt=t2}
+    }
+    const L=(A,B,t2)=>({x:A.x+(B.x-A.x)*t2,y:A.y+(B.y-A.y)*t2});
+    const p01=L(P0,P1,bt),p12=L(P1,P2,bt),p23=L(P2,P3,bt);
+    const p012=L(p01,p12,bt),p123=L(p12,p23,bt);
+    const mid=L(p012,p123,bt);
+    if(!a.corner){a.h2x=p01.x-a.x;a.h2y=p01.y-a.y}
+    if(!b.corner){b.h1x=p23.x-b.x;b.h1y=p23.y-b.y}
+    p.pts.splice(si+1,0,{x:mid.x,y:mid.y,corner:false,
+      h1x:p012.x-mid.x,h1y:p012.y-mid.y,h2x:p123.x-mid.x,h2y:p123.y-mid.y});
+    multi.clear();sel={p:pi,i:si+1};draw();
+    beginAnchorDrag(pi,si+1,e,true);      // 插完就接着拖，不用松手再来一次
+  }
+});
+
+/* ================= 卡点：点就是点 ================= */
+// 想在哪点在哪点，顺序不用管，点错了拖走或删掉。
+// 按「生成曲线」时才排序成一个环，再沿图像边界把点之间连起来，最后拟合成贝塞尔。
+let lastDraft=[];             // 上一次生成用过的点，留着可以重来
+function setMode(m){
+  if(mode==="pen"&&m!=="pen"&&draft.length){   // 没生成就离开，点作废
+    draft=[];dsel=-1;draftPath=-1;
+  }
+  mode=m;
+  $("stage").classList.toggle("pen",m==="pen");
+  $("stage").classList.toggle("pick",m==="pick");
+  if(m==="pen")hint("随便点，顺序不用管。点错了拖开或选中按 Delete。点够了按 Enter 生成曲线，切去别的功能这些点会作废");
+  else if(m==="pick")hint("点一下背景取样，Shift 点可以多取几处");
+  else hint("");
+  buildBar();draw();
+}
+function penClick(e){
+  const t=e.target;
+  if(t.dataset&&t.dataset.d!==undefined){        // 点在已有的卡点上
+    e.stopPropagation();
+    const i=+t.dataset.d;
+    const wasSel=(dsel===i);
+    dsel=i;draw();
+    if(e.altKey){draft.splice(i,1);dsel=-1;draw();buildBar();return}
     const mv=ev=>{
       const q=toImg(ev.clientX,ev.clientY);
-      const dx=q.x-start.x, dy=q.y-start.y;
-      if(h===0){c.x=o.x+dx;c.y=o.y+dy}
-      else{
-        // 两条手柄对称：拖任意一端，另一端跟着反向
-        const s=h===2?1:-1;
-        c.hx=(q.x-c.x)*s;c.hy=(q.y-c.y)*s;
-        c.corner=false;
-      }
+      const np=q;
+      draft[i].x=np.x;draft[i].y=np.y;
       draw();
     };
-    const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
-      updatePreview()};
+    const up=ev=>{
+      removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+      const moved=ev&&Math.hypot(ev.clientX-e.clientX,ev.clientY-e.clientY)>3;
+      if(wasSel&&!moved){                        // 点第二次：直线点与曲线点互换
+        draft[i].corner=!draft[i].corner;draw();
+      }
+    };
     addEventListener("pointermove",mv);addEventListener("pointerup",up);
     return;
   }
-  if(t.classList.contains("seg")){       // 在曲线上点一下加一个锚点
-    e.stopPropagation();
-    const pi=+t.dataset.p;
-    const q=toImg(e.clientX,e.clientY);
-    const p=paths[pi];
-    let bi=0,bd=1e18;
-    p.pts.forEach((c,i)=>{
-      const nx=p.pts[(i+1)%p.pts.length];
-      const mx=(c.x+nx.x)/2,my=(c.y+nx.y)/2;
-      const d=(mx-q.x)**2+(my-q.y)**2;
-      if(d<bd){bd=d;bi=i}
-    });
-    const a=p.pts[bi], b=p.pts[(bi+1)%p.pts.length];
-    p.pts.splice(bi+1,0,{x:q.x,y:q.y,
-      hx:(b.x-a.x)*opt.smooth/12,hy:(b.y-a.y)*opt.smooth/12,corner:false});
-    sel={p:pi,i:bi+1,h:0};draw();updatePreview();
+  const raw=toImg(e.clientX,e.clientY);
+  draft.push({x:raw.x,y:raw.y,corner:false});
+  dsel=draft.length-1;
+  draw();buildBar();
+  const i=dsel;                          // 落点后不松手，可以直接微调位置
+  const mv=ev=>{const q=toImg(ev.clientX,ev.clientY);
+    draft[i].x=q.x;draft[i].y=q.y;draw()};
+  const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up)};
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+}
+
+/* ---- 把散点排成一个环：最近邻起手，再用 2-opt 解开交叉 ---- */
+function orderLoop(pts){
+  const n=pts.length;
+  if(n<4)return pts.slice();
+  const D=(a,b)=>Math.hypot(pts[a].x-pts[b].x,pts[a].y-pts[b].y);
+  const used=new Uint8Array(n);
+  let cur=0;used[0]=1;const ord=[0];
+  for(let k=1;k<n;k++){
+    let bi=-1,bd=1e18;
+    for(let i=0;i<n;i++)if(!used[i]){const d=D(cur,i);if(d<bd){bd=d;bi=i}}
+    used[bi]=1;ord.push(bi);cur=bi;
   }
-});
+  let improved=true,guard=0;
+  while(improved&&guard++<200){
+    improved=false;
+    for(let i=0;i<n-1;i++)for(let j=i+2;j<n;j++){
+      if(i===0&&j===n-1)continue;
+      const a=ord[i],b=ord[i+1],c=ord[j],d=ord[(j+1)%n];
+      if(D(a,b)+D(c,d)>D(a,c)+D(b,d)+1e-9){
+        let x=i+1,y=j;
+        while(x<y){const t=ord[x];ord[x]=ord[y];ord[y]=t;x++;y--}
+        improved=true;
+      }
+    }
+  }
+  return ord.map(i=>pts[i]);
+}
+
+/* ---- 沿边走：在梯度图上跑 Dijkstra，把两点之间贴着边界连起来 ---- */
+function livewire(a,b){
+  if(!GRAD)return null;
+  const {a:g,w,h,scale}=GRAD;
+  const ax=clamp(Math.round(a.x/scale),0,w-1), ay=clamp(Math.round(a.y/scale),0,h-1);
+  const bx=clamp(Math.round(b.x/scale),0,w-1), by=clamp(Math.round(b.y/scale),0,h-1);
+  const dist=Math.hypot(bx-ax,by-ay);
+  if(dist<2)return null;
+  const mg=Math.max(14,Math.round(dist*opt.wander));
+  const x0=clamp(Math.min(ax,bx)-mg,0,w-1), x1=clamp(Math.max(ax,bx)+mg,0,w-1);
+  const y0=clamp(Math.min(ay,by)-mg,0,h-1), y1=clamp(Math.max(ay,by)+mg,0,h-1);
+  const rw=x1-x0+1, rh=y1-y0+1, RN=rw*rh;
+  if(RN>420000)return null;
+  const idx=(x,y)=>(y-y0)*rw+(x-x0);
+  const D=new Float32Array(RN).fill(Infinity);
+  const prev=new Int32Array(RN).fill(-1);
+  const done=new Uint8Array(RN);
+  // 极简二叉堆
+  const hk=new Float32Array(RN*2), hv=new Int32Array(RN*2);let hn=0;
+  const hpush=(k,v)=>{let i=hn++;hk[i]=k;hv[i]=v;
+    while(i>0){const p=(i-1)>>1;if(hk[p]<=hk[i])break;
+      let t=hk[p];hk[p]=hk[i];hk[i]=t;let u=hv[p];hv[p]=hv[i];hv[i]=u;i=p}};
+  const hpop=()=>{const v=hv[0];hn--;
+    if(hn>0){hk[0]=hk[hn];hv[0]=hv[hn];let i=0;
+      for(;;){const l=i*2+1,r=l+1;let m=i;
+        if(l<hn&&hk[l]<hk[m])m=l; if(r<hn&&hk[r]<hk[m])m=r;
+        if(m===i)break;let t=hk[m];hk[m]=hk[i];hk[i]=t;let u=hv[m];hv[m]=hv[i];hv[i]=u;i=m}}
+    return v};
+  const s=idx(ax,ay), e=idx(bx,by);
+  D[s]=0;hpush(0,s);
+  const nb=[[1,0,1],[-1,0,1],[0,1,1],[0,-1,1],[1,1,1.414],[1,-1,1.414],[-1,1,1.414],[-1,-1,1.414]];
+  let found=false,guard=0;
+  while(hn&&guard++<RN*8){
+    const cu=hpop();
+    if(done[cu])continue;
+    done[cu]=1;
+    if(cu===e){found=true;break}
+    const cx=(cu%rw)+x0, cy=((cu/rw)|0)+y0;
+    for(const [dx,dy,len] of nb){
+      const nx=cx+dx,ny=cy+dy;
+      if(nx<x0||ny<y0||nx>x1||ny>y1)continue;
+      const ni=idx(nx,ny);
+      if(done[ni])continue;
+      const gv=g[ny*w+nx];
+      const cost=(0.06+Math.pow(1-Math.min(1,gv*opt.edgePull),1.6))*len;
+      const nd=D[cu]+cost;
+      if(nd<D[ni]){D[ni]=nd;prev[ni]=cu;hpush(nd,ni)}
+    }
+  }
+  if(!found)return null;
+  const out=[];let cu=e,steps=0;
+  while(cu>=0&&steps++<RN){
+    const cx=(cu%rw)+x0, cy=((cu/rw)|0)+y0;
+    out.push({x:cx*scale,y:cy*scale});
+    if(cu===s)break;
+    cu=prev[cu];
+  }
+  out.reverse();
+  // 走得太绕就不要，退回直线
+  if(out.length>dist*6+40)return null;
+  return out;
+}
+
+async function generateFromDraft(again){
+  if(again){draft=lastDraft.map(d=>({x:d.x,y:d.y,corner:!!d.corner}));draftPath=lastPath}
+  if(draft.length<3){toast("至少要 3 个点");return}
+  busy(true,"正在生成曲线…");
+  await new Promise(r=>setTimeout(r,20));
+  try{
+    const ring=opt.autoOrder?orderLoop(draft):draft.slice();
+    let dense=[];
+    for(let i=0;i<ring.length;i++){
+      const a=ring[i], b=ring[(i+1)%ring.length];
+      let seg=opt.follow?livewire(a,b):null;
+      if(!seg){                            // 直线补齐
+        const n=Math.max(2,Math.round(Math.hypot(b.x-a.x,b.y-a.y)/3));
+        seg=[];for(let k=0;k<n;k++)seg.push({x:a.x+(b.x-a.x)*k/n,y:a.y+(b.y-a.y)*k/n});
+      }
+      seg.forEach((p,k)=>{if(k<seg.length-1)dense.push(p)});
+    }
+    // 去掉重复点
+    dense=dense.filter((p,i)=>i===0||Math.hypot(p.x-dense[i-1].x,p.y-dense[i-1].y)>0.4);
+    if(dense.length<4){toast("生成失败，点之间离得太近了");busy(false);return}
+    if(opt.follow)dense=chaikin(dense,1);
+    let pts;
+    if(opt.count>=3&&opt.count<dense.length)pts=resample(dense,opt.count);
+    else{
+      pts=simplify(dense,Math.max(0.4,opt.detail));
+      if(pts.length>600)pts=pts.filter((p,i)=>i%Math.ceil(pts.length/600)===0);
+    }
+    if(pts.length<3)pts=ring.slice();
+    push();
+    const np={pts:makeSmooth(pts,opt.smooth,opt.corner,true),closed:true};
+    // 你标成直线点的那几个卡点，在生成的曲线上依然是尖角
+    draft.filter(d=>d.corner).forEach(d=>{
+      let bi=-1,bd=1e18;
+      np.pts.forEach((c,i)=>{const dd=(c.x-d.x)**2+(c.y-d.y)**2;if(dd<bd){bd=dd;bi=i}});
+      if(bi>=0)np.pts[bi].corner=true;
+    });
+    if(draftPath>=0&&paths[draftPath])paths[draftPath]=np;   // 重来一次就替换上一条
+    else {paths.push(np);draftPath=paths.length-1}
+    lastPath=draftPath;
+    sel={p:draftPath,i:-1};multi.clear();
+    draw();updatePreview();
+    lastDraft=draft.map(d=>({x:d.x,y:d.y,corner:!!d.corner}));
+    draft=[];dsel=-1;draftPath=-1;
+    toast((opt.follow?"已沿边界生成 ":"已生成 ")+np.pts.length+" 个控点，已切到编辑模式");
+    setMode("edit");
+  }catch(err){toast("生成失败："+err.message)}
+  busy(false);
+}
+function clearDraft(){
+  draft=[];dsel=-1;draftPath=-1;draw();buildBar();
+}
+
+/* ================= 撤销 ================= */
+let hist=[],hi=-1;
+function push(){
+  const s=JSON.stringify(paths);
+  if(hi>=0&&hist[hi]===s)return;
+  hist=hist.slice(0,hi+1);hist.push(s);
+  if(hist.length>80)hist.shift();
+  hi=hist.length-1;
+}
+function undo(){
+  if(hi<0){toast("没有可撤销的了");return}
+  if(hi===hist.length-1&&JSON.stringify(paths)!==hist[hi])hist.push(JSON.stringify(paths));
+  else hi--;
+  if(hi<0){hi=0}
+  paths=JSON.parse(hist[hi]);
+  sel={p:-1,i:-1};multi.clear();draw();updatePreview();
+}
+
+/* ================= 键盘 ================= */
 addEventListener("keydown",e=>{
   if(e.target.tagName==="INPUT")return;
-  if((e.key==="Backspace"||e.key==="Delete")&&sel.i>=0){
-    e.preventDefault();
-    const p=paths[sel.p];
-    if(p&&p.pts.length>4){p.pts.splice(sel.i,1);sel={p:-1,i:-1,h:0};draw();updatePreview()}
-    else toast("控点太少了");
-    return;
+  if(view==="collage"){
+    const k2=e.key.toLowerCase();
+    if((e.metaKey||e.ctrlKey)&&k2==="s"){e.preventDefault();saveProject();return}
+    if((e.key==="Delete"||e.key==="Backspace")&&csel>=0){
+      e.preventDefault();collage.splice(csel,1);csel=-1;renderCollage();return;
+    }
+    if(e.key==="Escape"){setCsel(-1);hideMenu()}
+    return;   // 拼贴模式里其它按键一律不处理
   }
-  if(e.key==="Escape"){sel={p:-1,i:-1,h:0};draw()}
-  if(e.key==="f"||e.key==="F")fit();
-  if((e.metaKey||e.ctrlKey)&&e.key.toLowerCase()==="s"){e.preventDefault();exportPNG()}
+  if(e.code==="Space"&&!spaceDown){spaceDown=true;$("stage").classList.add("canpan");e.preventDefault();return}
+  const k=e.key.toLowerCase();
+  if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();undo();return}
+  if((e.metaKey||e.ctrlKey)&&k==="s"){e.preventDefault();exportPNG();return}
+  if(mode==="pen"){
+    if(e.key==="Enter"){e.preventDefault();generateFromDraft();return}
+    if(e.key==="Backspace"||e.key==="Delete"){
+      e.preventDefault();
+      if(dsel>=0){draft.splice(dsel,1);dsel=-1}else draft.pop();
+      draw();buildBar();return;
+    }
+    if(e.key==="Escape"){dsel=-1;draw();setMode("edit");return}
+    if(e.key.startsWith("Arrow")&&dsel>=0){
+      e.preventDefault();
+      const s=(e.shiftKey?10:1)/cam.z;
+      const c=draft[dsel];
+      c.x+=e.key==="ArrowLeft"?-s:e.key==="ArrowRight"?s:0;
+      c.y+=e.key==="ArrowUp"?-s:e.key==="ArrowDown"?s:0;
+      draw();return;
+    }
+  }
+  if((e.key==="Backspace"||e.key==="Delete")&&mode==="edit"){
+    e.preventDefault();
+    const keys=multi.size?[...multi]:(sel.i>=0?[sel.p+":"+sel.i]:[]);
+    if(!keys.length)return;
+    push();
+    const byPath={};
+    keys.forEach(s=>{const [a,b]=s.split(":").map(Number);(byPath[a]=byPath[a]||[]).push(b)});
+    Object.keys(byPath).forEach(a=>{
+      const p=paths[a];if(!p)return;
+      const del=byPath[a].sort((x,y)=>y-x);
+      if(p.pts.length-del.length<3){toast("控点太少了");return}
+      del.forEach(i=>p.pts.splice(i,1));
+    });
+    paths=paths.filter(p=>p.pts.length>=3);
+    multi.clear();sel={p:-1,i:-1};draw();updatePreview();return;
+  }
+  if(e.key.startsWith("Arrow")&&mode==="edit"){
+    const keys=multi.size?[...multi]:(sel.i>=0?[sel.p+":"+sel.i]:[]);
+    if(!keys.length)return;
+    e.preventDefault();push();
+    const s=(e.shiftKey?10:1)/cam.z;
+    const dx=e.key==="ArrowLeft"?-s:e.key==="ArrowRight"?s:0;
+    const dy=e.key==="ArrowUp"?-s:e.key==="ArrowDown"?s:0;
+    keys.forEach(kk=>{const [a,b]=kk.split(":").map(Number);
+      const c=paths[a]?.pts[b];if(c){c.x+=dx;c.y+=dy}});
+    draw();updatePreview();return;
+  }
+  if(e.key==="Escape"){multi.clear();sel={p:-1,i:-1};draw()}
+  if(e.ctrlKey||e.metaKey||e.altKey)return;   // Ctrl / Cmd + C 之类不算快捷键
+  if(k==="f")fit();
+  if(k==="v")setMode("edit");
+  if(k==="p")setMode("pen");
+});
+addEventListener("keyup",e=>{
+  if(e.code==="Space"){spaceDown=false;$("stage").classList.remove("canpan")}
 });
 
 /* ================= 输出 ================= */
-function makeCutout(){
-  const cv=document.createElement("canvas");
-  cv.width=IW;cv.height=IH;
-  const g=cv.getContext("2d");
+function maskCanvas(k){
+  k=k||1;
+  const W=Math.max(1,Math.round(IW*k)),H=Math.max(1,Math.round(IH*k));
+  const m=document.createElement("canvas");m.width=W;m.height=H;
+  const g=m.getContext("2d");
+  g.setTransform(k,0,0,k,0,0);
   const pth=new Path2D();
-  paths.forEach(p=>pth.addPath(new Path2D(pathD(p))));
-  g.save();
-  if(opt.feather>0){
-    // 羽化：先把遮罩画到离屏并模糊，再用它裁切
-    const m=document.createElement("canvas");m.width=IW;m.height=IH;
-    const mg=m.getContext("2d");
-    mg.filter=`blur(${opt.feather}px)`;
-    mg.fillStyle="#fff";mg.fill(pth);
-    g.drawImage(IMG,0,0);
-    g.globalCompositeOperation="destination-in";
-    g.drawImage(m,0,0);
-  }else{
-    g.clip(pth);
-    g.drawImage(IMG,0,0);
+  paths.forEach(p=>{if(p.pts.length>2)pth.addPath(new Path2D(pathD(p)))});
+  g.fillStyle="#fff";g.lineJoin="round";g.lineCap="round";
+  if(opt.edge>0){g.strokeStyle="#fff";g.lineWidth=opt.edge*2;g.stroke(pth)}
+  g.fill(pth,"evenodd");
+  if(opt.edge<0){
+    g.globalCompositeOperation="destination-out";
+    g.strokeStyle="#000";g.lineWidth=-opt.edge*2;g.stroke(pth);
+    g.globalCompositeOperation="source-over";
   }
-  g.restore();
+  if(opt.feather>0){
+    const b=document.createElement("canvas");b.width=W;b.height=H;
+    const bg=b.getContext("2d");
+    bg.filter=`blur(${opt.feather*k}px)`;
+    bg.drawImage(m,0,0);
+    return b;
+  }
+  return m;
+}
+function makeCutout(k){
+  k=k||1;
+  const W=Math.max(1,Math.round(IW*k)),H=Math.max(1,Math.round(IH*k));
+  const cv=document.createElement("canvas");
+  cv.width=W;cv.height=H;
+  const g=cv.getContext("2d");
+  g.imageSmoothingQuality="high";
+  g.drawImage(IMG,0,0,W,H);
+  g.globalCompositeOperation="destination-in";
+  g.drawImage(maskCanvas(k),0,0);
   return cv;
 }
 function bboxOfPaths(){
   let x1=1e18,y1=1e18,x2=-1e18,y2=-1e18;
   paths.forEach(p=>p.pts.forEach(c=>{
-    x1=Math.min(x1,c.x-Math.abs(c.hx));y1=Math.min(y1,c.y-Math.abs(c.hy));
-    x2=Math.max(x2,c.x+Math.abs(c.hx));y2=Math.max(y2,c.y+Math.abs(c.hy));
+    const ex=Math.max(Math.abs(c.h1x),Math.abs(c.h2x));
+    const ey=Math.max(Math.abs(c.h1y),Math.abs(c.h2y));
+    x1=Math.min(x1,c.x-ex);y1=Math.min(y1,c.y-ey);
+    x2=Math.max(x2,c.x+ex);y2=Math.max(y2,c.y+ey);
   }));
   if(x1>x2)return null;
-  const pad=Math.ceil(opt.feather*2);
-  return {x:clamp(Math.floor(x1)-pad,0,IW),y:clamp(Math.floor(y1)-pad,0,IH),
-    w:clamp(Math.ceil(x2-x1)+pad*2,1,IW),h:clamp(Math.ceil(y2-y1)+pad*2,1,IH)};
+  const pad=Math.ceil(opt.feather*2+Math.abs(opt.edge)+2);
+  const bx=clamp(Math.floor(x1)-pad,0,IW-1), by=clamp(Math.floor(y1)-pad,0,IH-1);
+  return {x:bx,y:by,
+    w:clamp(Math.ceil(x2-x1)+pad*2,1,IW-bx),
+    h:clamp(Math.ceil(y2-y1)+pad*2,1,IH-by)};
 }
-function croppedCutout(){
-  const full=makeCutout();
+// 想要的输出倍数：原图 1 倍、自定义倍数，或者按长边定像素
+function outScale(){
+  if(opt.outMode==="scale")return clamp(opt.outScale,0.05,8);
+  if(opt.outMode==="long"){
+    const b=bboxOfPaths();
+    const long=b?Math.max(b.w,b.h):Math.max(IW,IH);
+    if(!long||!opt.outLong)return 1;
+    return clamp(opt.outLong/long,0.05,8);
+  }
+  return 1;
+}
+function sizeText(){
+  const o=outSize();
+  if(!o)return "还没有轮廓";
+  return "导出尺寸 "+o.w+" × "+o.h+" 像素"+(Math.abs(o.k-1)>0.001?"（"+o.k.toFixed(2)+" 倍）":"");
+}
+function outSize(){
+  const b=bboxOfPaths();if(!b)return null;
+  const k=outScale();
+  return {w:Math.max(1,Math.round(b.w*k)),h:Math.max(1,Math.round(b.h*k)),k};
+}
+function croppedCutout(k){
+  k=k===undefined?outScale():k;
   const b=bboxOfPaths();
+  const full=makeCutout(k);
   if(!b)return full;
+  const w=Math.max(1,Math.round(b.w*k)),h=Math.max(1,Math.round(b.h*k));
   const cv=document.createElement("canvas");
-  cv.width=Math.min(b.w,IW-b.x);cv.height=Math.min(b.h,IH-b.y);
-  cv.getContext("2d").drawImage(full,b.x,b.y,cv.width,cv.height,0,0,cv.width,cv.height);
+  cv.width=w;cv.height=h;
+  cv.getContext("2d").drawImage(full,Math.round(b.x*k),Math.round(b.y*k),w,h,0,0,w,h);
   return cv;
 }
 let prevT;
@@ -562,26 +1360,28 @@ function updatePreview(){
   clearTimeout(prevT);
   prevT=setTimeout(()=>{
     if(!paths.length){$("prev").classList.remove("on");return}
-    const cv=croppedCutout();
-    $("prev").classList.add("on");          // 先显示，否则量不到宽度
+    const cv=croppedCutout(1);
+    $("prev").classList.add("on");
     const c=$("prevc"),g=c.getContext("2d");
     const W=c.width=Math.max(2,(c.clientWidth||260))*2, H=c.height=190*2;
     g.clearRect(0,0,W,H);
     const s=Math.min(W/cv.width,H/cv.height)*0.92;
     g.drawImage(cv,(W-cv.width*s)/2,(H-cv.height*s)/2,cv.width*s,cv.height*s);
-    $("prevn").textContent=cv.width+"×"+cv.height+"  ·  "
-      +paths.reduce((n,p)=>n+p.pts.length,0)+" 控点";
-    $("prev").classList.add("on");
+    const o=outSize();
+    $("prevn").textContent=(o?o.w+"×"+o.h:cv.width+"×"+cv.height)
+      +(o&&Math.abs(o.k-1)>0.001?"  ·  "+o.k.toFixed(2)+"x":"")
+      +"  ·  "+paths.reduce((n,p)=>n+p.pts.length,0)+" 控点";
   },90);
 }
 $("prevx").onclick=()=>$("prev").classList.remove("on");
 function exportPNG(){
   if(!paths.length){toast("还没有轮廓");return}
-  croppedCutout().toBlob(b=>{
+  const cv=croppedCutout();
+  cv.toBlob(b=>{
     const a=document.createElement("a");
     a.href=URL.createObjectURL(b);a.download="cutout.png";a.click();
     setTimeout(()=>URL.revokeObjectURL(a.href),2000);
-    toast("已导出 PNG（带透明背景）");
+    toast("已导出 PNG "+cv.width+"×"+cv.height+"（带透明背景）");
   },"image/png");
 }
 async function copyPNG(){
@@ -593,7 +1393,314 @@ async function copyPNG(){
   }catch(e){toast("这个浏览器不允许直接写剪贴板，请用导出")}
 }
 
+
+/* ================= 素材库 ================= */
+let library=[];      // [{id,name,src,w,h}]
+let collage=[];      // [{id,item,x,y,scale}]，数组顺序就是叠放顺序
+let view="cut";      // cut | collage
+let dragging=false;  // 有拖动在进行中
+let csel=-1;
+let uid=1;
+let editingLibId=null;   // 正在回炉重修的素材
+const nid=()=>"i"+(uid++)+"_"+Date.now().toString(36);
+
+function setView(v){
+  if(dragging)return;                    // 拖着东西的时候不许换界面
+  view=v;
+  document.body.classList.toggle("collage",v==="collage");
+  hint(v==="collage"?"拖素材到板上，右键调整叠放顺序，选中后拖右下角缩放":"");
+  buildBar();
+}
+function renderLib(){
+  const box=$("libs");box.innerHTML="";
+  library.forEach((it,i)=>{
+    const d=document.createElement("div");
+    d.className="thumb"+(it.id===editingLibId?" editing":"");
+    d.title=(it.name||"素材")+(it.origin?"，双击继续调整":"");
+    d.dataset.i=i;
+    d.innerHTML=`<img src="${it.src}" alt="">`+
+      (it.origin?`<button class="e" title="回到抠图，继续调整控点">✎</button>`:"")+
+      `<button class="x" title="从素材库删掉">×</button>`;
+    if(it.origin){
+      d.querySelector(".e").onclick=ev=>{ev.stopPropagation();editLibItem(i)};
+      d.addEventListener("dblclick",()=>editLibItem(i));
+    }
+    d.querySelector(".x").onclick=ev=>{
+      ev.stopPropagation();
+      const id=library[i].id;
+      library.splice(i,1);
+      collage=collage.filter(c=>c.item!==id);
+      renderLib();renderCollage();
+    };
+    d.addEventListener("pointerdown",ev=>startLibDrag(ev,i));
+    box.appendChild(d);
+  });
+  $("libe").style.display=library.length?"none":"block";
+}
+function addToLibrary(src,w,h,name,origin){
+  const it={id:nid(),name:name||("素材 "+(library.length+1)),src,w,h,origin:origin||null};
+  library.push(it);renderLib();
+  return it;
+}
+// 抠图不是抠死的：素材里连原图和那条曲线一起收着
+function currentOrigin(){
+  return {src:$("img").src,
+    paths:JSON.parse(JSON.stringify(paths)),
+    draft:JSON.parse(JSON.stringify(draft)),
+    lastDraft:JSON.parse(JSON.stringify(lastDraft)),
+    out:{mode:opt.outMode,scale:opt.outScale,long:opt.outLong,
+      feather:opt.feather,edge:opt.edge}};
+}
+function stashCutout(){
+  if(!paths.length){toast("还没有抠出东西");return}
+  const cv=croppedCutout();     // 按当前输出设置渲染
+  const src=cv.toDataURL("image/png");
+  const org=currentOrigin();
+  const old=library.find(x=>x.id===editingLibId);
+  if(old){
+    old.src=src;old.w=cv.width;old.h=cv.height;old.origin=org;
+    renderLib();renderCollage();
+    clearWork();
+    toast("素材已更新，拼贴里用到它的地方也一起换了");
+    return;
+  }
+  addToLibrary(src,cv.width,cv.height,null,org);
+  clearWork();
+  toast("已存入素材库，之后双击缩略图还能回来改");
+}
+function editLibItem(i){
+  const it=library[i];
+  if(!it||!it.origin){toast("这件素材没存原图，改不了");return}
+  if(IW&&paths.length&&it.id!==editingLibId&&
+     !confirm("当前还有没存进素材库的抠图，继续会丢掉，确定吗？"))return;
+  editingLibId=it.id;
+  pendingWork=it.origin;
+  setView("cut");
+  loadImage(it.origin.src,it.name);
+}
+function clearWork(){
+  editingLibId=null;
+  IMG=null;IW=0;IH=0;paths=[];draft=[];draftPath=-1;dsel=-1;
+  lastDraft=[];lastPath=-1;seeds=[];multi.clear();sel={p:-1,i:-1};hist=[];hi=-1;GRAD=null;
+  $("img").removeAttribute("src");
+  $("img").style.width="0px";$("img").style.height="0px";
+  $("ov").innerHTML="";
+  $("empty").style.display="";
+  $("prev").classList.remove("on");
+  setMode("edit");buildBar();
+}
+
+/* ================= 拼贴板 ================= */
+function boardRect(){return $("board").getBoundingClientRect()}
+function renderCollage(){
+  const b=$("board");
+  [...b.querySelectorAll(".citem")].forEach(el=>el.remove());
+  collage.forEach((c,i)=>{
+    const it=library.find(x=>x.id===c.item);
+    if(!it)return;
+    const d=document.createElement("div");
+    d.className="citem"+(csel===i?" on":"");
+    d.style.left=c.x+"px";d.style.top=c.y+"px";
+    d.style.width=it.w+"px";d.style.height=it.h+"px";
+    d.style.transform=`scale(${c.scale})`;
+    d.style.zIndex=i+1;
+    d.dataset.i=i;
+    d.innerHTML=`<img src="${it.src}" alt=""><div class="rz"></div>`;
+    b.appendChild(d);
+  });
+  $("cempty").style.display=collage.length?"none":"flex";
+}
+function setCsel(i){
+  csel=i;
+  $("board").querySelectorAll(".citem").forEach(el=>{
+    el.classList.toggle("on",+el.dataset.i===i);
+  });
+}
+function startLibDrag(e,i){
+  if(e.button!==0||e.target.classList.contains("x")||e.target.classList.contains("e"))return;
+  if(dragging)return;                    // 画布上正在拖东西时不抢
+  e.preventDefault();
+  const it=library[i];if(!it)return;
+  const pid=e.pointerId;
+  let started=false,ci=-1;
+  const stop=()=>{
+    removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    removeEventListener("pointercancel",up);removeEventListener("blur",up);
+    dragging=false;
+  };
+  const mv=ev=>{
+    if(ev.pointerId!==pid||ev.buttons===0){stop();return}   // 按键早松了就作废
+    if(!started){
+      if(Math.hypot(ev.clientX-e.clientX,ev.clientY-e.clientY)<4)return;
+      dragging=true;
+      started=true;
+      if(view!=="collage")setView("collage");
+      const r=boardRect();
+      const sc=Math.min(1,300/Math.max(it.w,it.h));
+      collage.push({id:nid(),item:it.id,
+        x:ev.clientX-r.left-it.w*sc/2, y:ev.clientY-r.top-it.h*sc/2, scale:sc});
+      ci=collage.length-1;csel=ci;renderCollage();
+    }
+    const r=boardRect();
+    const c=collage[ci],itw=it.w*c.scale,ith=it.h*c.scale;
+    c.x=ev.clientX-r.left-itw/2;c.y=ev.clientY-r.top-ith/2;
+    const el=$("board").querySelector(`.citem[data-i="${ci}"]`);
+    if(el){el.style.left=c.x+"px";el.style.top=c.y+"px"}
+  };
+  const up=()=>stop();
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+  addEventListener("pointercancel",up);addEventListener("blur",up);
+}
+$("board").addEventListener("pointerdown",e=>{
+  hideMenu();
+  const el=e.target.closest(".citem");
+  if(!el){setCsel(-1);return}
+  const i=+el.dataset.i;
+  setCsel(i);
+  const c=collage[i];
+  const it=library.find(x=>x.id===c.item);
+  if(e.button!==0)return;
+  const resizing=e.target.classList.contains("rz");
+  const sx=e.clientX,sy=e.clientY;
+  const o={x:c.x,y:c.y,scale:c.scale};
+  const mv=ev=>{
+    const cur=$("board").querySelector(`.citem[data-i="${i}"]`);
+    if(!cur)return;
+    if(resizing){
+      const r=boardRect();
+      const dx=ev.clientX-r.left-o.x, dy=ev.clientY-r.top-o.y;
+      c.scale=clamp(Math.hypot(dx,dy)/(Math.hypot(it.w,it.h)||1),0.03,12);
+      cur.style.transform=`scale(${c.scale})`;
+    }else{
+      c.x=o.x+(ev.clientX-sx);c.y=o.y+(ev.clientY-sy);
+      cur.style.left=c.x+"px";cur.style.top=c.y+"px";
+    }
+  };
+  const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up)};
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+});
+$("board").addEventListener("contextmenu",e=>{
+  const el=e.target.closest(".citem");
+  e.preventDefault();
+  if(!el){hideMenu();return}
+  setCsel(+el.dataset.i);
+  showMenu(e.clientX,e.clientY);
+});
+function hideMenu(){$("menu").style.display="none"}
+function showMenu(x,y){
+  const m=$("menu");m.innerHTML="";
+  const add=(txt,fn)=>{
+    const b=document.createElement("button");b.textContent=txt;
+    b.onclick=()=>{fn();hideMenu()};m.appendChild(b);
+  };
+  add("上移一层",()=>reorder(1));
+  add("下移一层",()=>reorder(-1));
+  add("置于顶层",()=>reorder("top"));
+  add("置于底层",()=>reorder("bottom"));
+  const sep=document.createElement("div");sep.className="sepm";m.appendChild(sep);
+  add("复制一份",()=>{
+    const c=collage[csel];if(!c)return;
+    collage.push({id:nid(),item:c.item,x:c.x+24,y:c.y+24,scale:c.scale});
+    csel=collage.length-1;renderCollage();
+  });
+  add("从拼贴板移除",()=>{
+    if(csel<0)return;collage.splice(csel,1);csel=-1;renderCollage();
+  });
+  m.style.display="block";
+  m.style.left=Math.min(x,innerWidth-m.offsetWidth-8)+"px";
+  m.style.top=Math.min(y,innerHeight-m.offsetHeight-8)+"px";
+}
+function reorder(how){
+  if(csel<0||csel>=collage.length)return;
+  const c=collage.splice(csel,1)[0];
+  let ni;
+  if(how==="top")ni=collage.length;
+  else if(how==="bottom")ni=0;
+  else ni=clamp(csel+how,0,collage.length);
+  collage.splice(ni,0,c);csel=ni;renderCollage();
+}
+addEventListener("pointerdown",e=>{if(!e.target.closest("#menu"))hideMenu()});
+function exportCollage(){
+  if(!collage.length){toast("拼贴板是空的");return}
+  let x1=1e18,y1=1e18,x2=-1e18,y2=-1e18;
+  collage.forEach(c=>{
+    const it=library.find(x=>x.id===c.item);if(!it)return;
+    x1=Math.min(x1,c.x);y1=Math.min(y1,c.y);
+    x2=Math.max(x2,c.x+it.w*c.scale);y2=Math.max(y2,c.y+it.h*c.scale);
+  });
+  const pad=20;
+  const cv=document.createElement("canvas");
+  cv.width=Math.max(1,Math.ceil(x2-x1)+pad*2);cv.height=Math.max(1,Math.ceil(y2-y1)+pad*2);
+  const g=cv.getContext("2d");
+  let left=collage.length;
+  collage.forEach(c=>{
+    const it=library.find(x=>x.id===c.item);if(!it){left--;return}
+    const im=new Image();
+    im.onload=()=>{
+      g.drawImage(im,c.x-x1+pad,c.y-y1+pad,it.w*c.scale,it.h*c.scale);
+      if(--left===0)cv.toBlob(bl=>{
+        const a=document.createElement("a");
+        a.href=URL.createObjectURL(bl);a.download=dateName()+" collage.png";a.click();
+        setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+        toast("拼贴已导出 PNG");
+      },"image/png");
+    };
+    im.src=it.src;
+  });
+}
+
+/* ================= 存档 ================= */
+function dateName(){
+  const d=new Date(),z=n=>String(n).padStart(2,"0");
+  return `${z(d.getFullYear()%100)}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
+}
+async function saveProject(){
+  const data={app:"cutout",v:1,saved:new Date().toISOString(),
+    library,collage,
+    work:IMG?Object.assign(currentOrigin(),{editing:editingLibId}):null};
+  const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
+  const name=dateName()+" sketch.cutout";
+  if(window.showSaveFilePicker){
+    try{
+      const h=await showSaveFilePicker({suggestedName:name,
+        types:[{description:"抠图拼贴存档",accept:{"application/json":[".cutout"]}}]});
+      const w=await h.createWritable();await w.write(blob);await w.close();
+      toast("已保存 "+h.name);return;
+    }catch(err){if(err&&err.name==="AbortError")return}
+  }
+  const n2=(prompt("文件名（会存到浏览器的下载文件夹）",name)||name).replace(/\.cutout$/,"")+".cutout";
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);a.download=n2;a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+  toast("已保存 "+n2);
+}
+let pendingWork=null;
+function loadProject(txt,fname){
+  let o;
+  try{o=JSON.parse(txt)}catch(err){toast("这个文件读不了");return}
+  if(!o||o.app!=="cutout"){toast("这不是 cutout 存档");return}
+  library=o.library||[];collage=o.collage||[];csel=-1;
+  uid=library.length+collage.length+2;
+  renderLib();renderCollage();
+  if(o.work&&o.work.src){
+    pendingWork=o.work;editingLibId=o.work.editing||null;
+    loadImage(o.work.src,"续上的图");
+  }else{
+    clearWork();setView(collage.length?"collage":"cut");
+  }
+  toast("已打开 "+(fname||"存档")+"，素材 "+library.length+" 件");
+}
+$("pfile").onchange=e=>{
+  const f=e.target.files[0];e.target.value="";
+  if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>loadProject(rd.result,f.name);
+  rd.readAsText(f);
+};
+
 /* ================= 工具栏 ================= */
+let closeBar=()=>{};
+addEventListener("pointerdown",e=>{if(!e.target.closest("#bar"))closeBar()});
 function buildBar(){
   const b=$("bar");b.innerHTML="";
   const car='<span class="car">▾</span>';
@@ -623,103 +1730,217 @@ function buildBar(){
     cell.appendChild(pop);
     return {cell,pop,trig};
   };
-  addEventListener("pointerdown",e=>{if(!e.target.closest("#bar"))closeAll()});
+  const sld=(pop,label,key,min,max,step,fmt,after)=>{
+    const r=document.createElement("div");r.className="rowp";
+    const l=document.createElement("label");l.textContent=label;r.appendChild(l);
+    const i=document.createElement("input");i.type="range";
+    i.min=min;i.max=max;i.step=step;i.value=opt[key];
+    const v=document.createElement("span");v.className="val";v.textContent=fmt(opt[key]);
+    let t;
+    i.oninput=()=>{opt[key]=+i.value;v.textContent=fmt(+i.value);
+      clearTimeout(t);t=setTimeout(()=>after&&after(),220)};
+    r.appendChild(i);r.appendChild(v);pop.appendChild(r);
+  };
+  const num=(pop,label,key,ph,after)=>{
+    const r=document.createElement("div");r.className="rowp";
+    const l=document.createElement("label");l.textContent=label;r.appendChild(l);
+    const i=document.createElement("input");i.type="number";i.min=0;i.max=(key==="outLong"?20000:800);i.step=1;
+    i.value=opt[key]||"";i.placeholder=ph;
+    i.style.cssText="flex:1;height:24px;padding:0 7px;border:1px solid var(--pline);"+
+      "border-radius:6px;background:none;font-size:12px;width:100%";
+    i.oninput=()=>{const v=parseInt(i.value,10);
+      opt[key]=isNaN(v)?0:clamp(v,0,key==="outLong"?20000:800);after&&after()};
+    r.appendChild(i);pop.appendChild(r);
+  };
+  const chk=(pop,label,key,after)=>{
+    const lb=document.createElement("label");
+    lb.className="rowp";lb.style.cursor="pointer";
+    lb.innerHTML=`<input type="checkbox" ${opt[key]?"checked":""}
+      style="width:13px;height:13px;margin:0 6px 0 3px">
+      <span style="font-size:11.5px;opacity:.75">${label}</span>`;
+    lb.querySelector("input").onchange=e=>{opt[key]=e.target.checked;after&&after()};
+    pop.appendChild(lb);
+  };
+  closeBar=closeAll;
 
+  btn(b,"抠图",()=>setView("cut"),view==="cut"?"on":"");
+  btn(b,"拼贴",()=>setView("collage"),view==="collage"?"on":"");
+  div();
+  if(view==="collage"){
+    btn(b,"导出拼贴",()=>exportCollage());
+    div();
+    btn(b,"打开存档",()=>$("pfile").click());
+    btn(b,"保存",()=>saveProject());
+    return;
+  }
   btn(b,"打开图片",()=>$("file").click());
   div();
-  btn(b,"重新识别",()=>autoTrace());
-  cellWith("识别设置"+car,(pop,close)=>{
+  btn(b,"卡点",()=>setMode(mode==="pen"?"edit":"pen"),mode==="pen"?"on":"");
+  btn(b,"编辑",()=>setMode("edit"),mode==="edit"?"on":"");
+  const gen=cellWith("生成曲线 <b style='opacity:.5;font-weight:400'>"+
+    (draft.length>=1?draft.length:"")+"</b>"+car,(pop,close)=>{
+    pop.appendChild(Object.assign(document.createElement("div"),
+      {className:"hd2",textContent:"由卡点生成"}));
+    chk(pop,"沿图像边界走（贴着边连点）","follow");
+    chk(pop,"自动排序成环（点的先后不用管）","autoOrder");
+    sld(pop,"贴边强度","edgePull",0.6,6,0.2,v=>v.toFixed(1));
+    sld(pop,"允许绕行","wander",0.15,1.6,0.05,v=>v.toFixed(2));
+    num(pop,"控点数","count","留空 = 自动决定");
+    sld(pop,"圆顺","smooth",0,2.4,0.05,v=>v.toFixed(2));
+    sld(pop,"保留转角","corner",0,120,2,v=>v?v+"°":"关");
+    if(draft.length>=3){
+      const g=document.createElement("button");g.className="go";
+      g.textContent="生成曲线（"+draft.length+" 个点）";
+      g.onclick=()=>{close();generateFromDraft()};pop.appendChild(g);
+      const g3=document.createElement("button");g3.className="go ghost";
+      g3.textContent="清掉这些点";
+      g3.onclick=()=>{close();clearDraft();toast("卡点已清掉")};pop.appendChild(g3);
+    }
+    if(lastDraft.length>=3){
+      const g2=document.createElement("button");
+      g2.className="go"+(draft.length>=3?" ghost":"");
+      g2.textContent="用上次那 "+lastDraft.length+" 个点重新生成";
+      g2.onclick=()=>{close();generateFromDraft(true)};pop.appendChild(g2);
+    }
+    const n=document.createElement("div");n.className="note2";
+    n.textContent="生成之后卡点就消失了，曲线交给编辑模式改。参数不满意可以用上面那条重来，每次覆盖上一条，不会越堆越多。";
+    pop.appendChild(n);
+  });
+  gen.trig.disabled=(draft.length<3&&lastDraft.length<3);
+  div();
+  cellWith("自动识别"+car,(pop,close)=>{
+    pop.appendChild(Object.assign(document.createElement("div"),
+      {className:"hd2",textContent:"识别方式"}));
     const seg=document.createElement("div");seg.className="seg2";
-    [["border","按背景色"],["alpha","按透明通道"]].forEach(([v,txt])=>{
+    [["auto","按背景色"],["alpha","按透明通道"]].forEach(([v,txt])=>{
       const x=document.createElement("button");x.textContent=txt;
       if(opt.mode===v)x.classList.add("on");
       x.onclick=()=>{opt.mode=v;[...seg.children].forEach(z=>z.classList.remove("on"));
-        x.classList.add("on");autoTrace()};
+        x.classList.add("on")};
       seg.appendChild(x);
     });
-    pop.appendChild(Object.assign(document.createElement("div"),
-      {className:"hd2",textContent:"识别方式"}));
     pop.appendChild(seg);
-    const sld=(label,key,min,max,step,fmt)=>{
-      const r=document.createElement("div");r.className="rowp";
-      const l=document.createElement("label");l.textContent=label;r.appendChild(l);
-      const i=document.createElement("input");i.type="range";
-      i.min=min;i.max=max;i.step=step;i.value=opt[key];
-      const v=document.createElement("span");v.className="val";v.textContent=fmt(opt[key]);
-      let t;
-      i.oninput=()=>{opt[key]=+i.value;v.textContent=fmt(+i.value);
-        clearTimeout(t);t=setTimeout(()=>autoTrace(),260)};
-      r.appendChild(i);r.appendChild(v);pop.appendChild(r);
-    };
-    sld("容差","tol",4,90,1,v=>v);
-    sld("细节","detail",0.6,8,0.2,v=>v.toFixed(1));
-    sld("圆顺","smooth",0,4,0.1,v=>v.toFixed(1));
-    const lb=document.createElement("label");
-    lb.className="rowp";lb.style.cursor="pointer";
-    lb.innerHTML=`<input type="checkbox" ${opt.invert?"checked":""} style="width:13px;height:13px;margin:0 6px 0 3px">
-      <span style="font-size:11.5px;opacity:.75">反选（抠掉中间的物体）</span>`;
-    lb.querySelector("input").onchange=e=>{opt.invert=e.target.checked;autoTrace()};
-    pop.appendChild(lb);
+    sld(pop,"容差","tol",4,90,1,v=>v);
+    num(pop,"控点数","count","留空 = 自动决定");
+    sld(pop,"圆顺","smooth",0,2.4,0.05,v=>v.toFixed(2));
+    sld(pop,"保留转角","corner",0,120,2,v=>v?v+"°":"关");
+    chk(pop,"补上内部的洞","fillHoles");
+    chk(pop,"只保留最大的一块","biggest");
+    chk(pop,"反选（抠掉中间的物体）","invert");
+    const g1=document.createElement("button");g1.className="go";g1.textContent="开始识别";
+    g1.onclick=()=>{close();autoTrace()};pop.appendChild(g1);
+    const g2=document.createElement("button");g2.className="go ghost";
+    g2.textContent="点背景取样后再识别";
+    g2.onclick=()=>{close();setMode("pick")};pop.appendChild(g2);
     const n=document.createElement("div");n.className="note2";
-    n.textContent="自动只给出初稿。背景越干净越准，之后拖控点精修即可。";
+    n.textContent="控点数填了就按这个数出点，会优先落在转角上；留空则按细节自动决定。背景和主体颜色接近时自动很难准，这种图建议直接卡点。";
     pop.appendChild(n);
   });
-  div();
-  cellWith("边缘"+car,(pop)=>{
+  cellWith("曲线"+car,(pop)=>{
     pop.appendChild(Object.assign(document.createElement("div"),
-      {className:"hd2",textContent:"输出"}));
-    const r=document.createElement("div");r.className="rowp";
-    const l=document.createElement("label");l.textContent="羽化";r.appendChild(l);
-    const i=document.createElement("input");i.type="range";i.min=0;i.max=6;i.step=.2;i.value=opt.feather;
-    const v=document.createElement("span");v.className="val";v.textContent=opt.feather.toFixed(1);
-    i.oninput=()=>{opt.feather=+i.value;v.textContent=opt.feather.toFixed(1);updatePreview()};
-    r.appendChild(i);r.appendChild(v);pop.appendChild(r);
+      {className:"hd2",textContent:"当前路径"}));
+    sld(pop,"圆顺","smooth",0,2.4,0.05,v=>v.toFixed(2),()=>{
+      const p=paths[sel.p>=0?sel.p:0];
+      if(p){push();resmooth(p,opt.smooth,opt.corner);draw();updatePreview()}
+    });
+    sld(pop,"保留转角","corner",0,120,2,v=>v?v+"°":"关",()=>{
+      const p=paths[sel.p>=0?sel.p:0];
+      if(p){push();resmooth(p,opt.smooth,opt.corner);draw();updatePreview()}
+    });
+    const g=document.createElement("button");g.className="go";g.textContent="全部重新圆顺";
+    g.onclick=()=>{push();paths.forEach(p=>resmooth(p,opt.smooth,opt.corner));
+      draw();updatePreview();toast("已按当前参数重算所有控点")};
+    pop.appendChild(g);
     const n=document.createElement("div");n.className="note2";
-    n.textContent="羽化让边缘不那么生硬。头发、毛边这类可以调大一点。";
+    n.textContent="圆顺调大曲线更饱满，转角角度越小越容易保留尖角。单个点可以 Alt 点一下切换尖角。";
     pop.appendChild(n);
   });
-  btn(b,"全部圆顺",()=>{
-    paths.forEach(p=>{
-      const n=p.pts.length;
-      p.pts.forEach((c,i)=>{
-        const a=p.pts[(i-1+n)%n], z=p.pts[(i+1)%n];
-        c.corner=false;c.hx=(z.x-a.x)*opt.smooth/6;c.hy=(z.y-a.y)*opt.smooth/6;
-      });
+  cellWith("输出"+car,(pop)=>{
+    pop.appendChild(Object.assign(document.createElement("div"),
+      {className:"hd2",textContent:"分辨率"}));
+    const seg=document.createElement("div");seg.className="seg2";
+    const rows=[];
+    const refresh=()=>{
+      rows.forEach(r=>r.el.style.display=(opt.outMode===r.m)?"":"none");
+      info.textContent=sizeText();
+      updatePreview();
+    };
+    [["native","原图"],["scale","按倍数"],["long","按长边"]].forEach(([v,txt])=>{
+      const x=document.createElement("button");x.textContent=txt;
+      if(opt.outMode===v)x.classList.add("on");
+      x.onclick=()=>{opt.outMode=v;[...seg.children].forEach(z=>z.classList.remove("on"));
+        x.classList.add("on");refresh()};
+      seg.appendChild(x);
     });
-    draw();updatePreview();toast("已把所有控点改回圆顺");
+    pop.appendChild(seg);
+    const mark=(m)=>{rows.push({m,el:pop.lastChild})};
+    sld(pop,"倍数","outScale",0.1,4,0.05,v=>v.toFixed(2)+"x",()=>{info.textContent=sizeText();updatePreview()});
+    mark("scale");
+    num(pop,"长边像素","outLong","比如 2000",()=>{info.textContent=sizeText();updatePreview()});
+    mark("long");
+    const info=document.createElement("div");
+    info.className="note2";info.style.opacity=".6";
+    pop.appendChild(info);
+    pop.appendChild(Object.assign(document.createElement("div"),
+      {className:"hd2",textContent:"边缘"}));
+    sld(pop,"羽化","feather",0,6,0.2,v=>v.toFixed(1),()=>{info.textContent=sizeText();updatePreview()});
+    sld(pop,"收缩扩张","edge",-4,4,0.5,v=>(v>0?"+":"")+v,()=>{info.textContent=sizeText();updatePreview()});
+    const n=document.createElement("div");n.className="note2";
+    n.textContent="放大是按曲线重新渲染的，边缘依然是干净的矢量边，不是把成品拉大。边上留了一圈背景色时，把收缩调成负值往里咬一点。";
+    pop.appendChild(n);
+    refresh();
   });
   div();
+  btn(b,"撤销",()=>undo());
+  btn(b,"清空",()=>{if(!paths.length&&!draft.length)return;
+    push();paths=[];draft=[];draftPath=-1;dsel=-1;lastDraft=[];lastPath=-1;sel={p:-1,i:-1};multi.clear();
+    draw();$("prev").classList.remove("on");toast("已清空所有轮廓")});
   btn(b,"适应画面",()=>fit());
   cellWith("怎么用"+car,(pop)=>{
-    pop.style.minWidth="270px";
+    pop.style.minWidth="300px";
     const rows=[
-      ["拖动控点","调整轮廓"],
-      ["点一下控点","显示两侧手柄，拖手柄改曲率"],
-      ["Alt 点控点","在圆顺与尖角之间切换"],
-      ["点曲线上","在该处插入一个控点"],
-      ["Delete","删除选中的控点"],
-      ["滚轮 / 拖空白","缩放 / 平移"],
-      ["F","适应画面"],
+      ["卡点模式 P","在边缘上随便点，顺序不用管"],
+      ["拖卡点","位置点歪了直接拖走"],
+      ["再点一下卡点","直线点与曲线点互换"],
+      ["Alt 点卡点","删掉这个点"],
+      ["Enter","按现有的点生成曲线，随后自动进编辑"],
+      ["Delete","删掉选中的卡点"],
+      ["编辑模式 V","拖控点调形，控点判定范围更大了"],
+      ["点曲线","在该处插一个控点，形状不变"],
+      ["再点一下控点","直线点与曲线点互换，Alt 点同样"],
+      ["Shift 拖空白","框选多个控点，一起拖"],
+      ["存入素材库","抠好收进左栏，页面清空换下一张"],
+      ["拼贴板","拖素材进去，右键调叠放顺序"],
+      ["方向键","微调，Shift 加速"],
+      ["空格 / 中键 / 右键拖","平移画面"],
+      ["滚轮","缩放"],
+      ["Ctrl / Cmd + Z","撤销"],
       ["Ctrl / Cmd + S","导出 PNG"],
+      ["输出面板","设导出分辨率，倍数或长边像素"],
     ];
     pop.appendChild(Object.assign(document.createElement("div"),
       {className:"hd2",textContent:"操作"}));
     rows.forEach(([k,v])=>{
       const r=document.createElement("div");
       r.style.cssText="display:flex;gap:10px;padding:3px 4px;font-size:11.5px";
-      r.innerHTML=`<span style="width:104px;flex:none;opacity:.55;
+      r.innerHTML=`<span style="width:126px;flex:none;opacity:.55;
         font-family:'IBM Plex Mono',monospace;font-size:10.5px">${k}</span>
         <span style="opacity:.85">${v}</span>`;
       pop.appendChild(r);
     });
     const n=document.createElement("div");n.className="note2";
-    n.textContent="自动识别只给初稿，背景越干净越准。抠好后用「复制」直接粘进 board。";
+    n.textContent="卡点只在卡点模式里存在，一旦生成曲线或者切去别的功能就会清掉，不会和编辑互相干扰。左键只用来编辑，画面不会再跟着晃。";
     pop.appendChild(n);
   });
   div();
+  btn(b,"存入素材库",()=>stashCutout());
   btn(b,"复制",()=>copyPNG());
   btn(b,"导出 PNG",()=>exportPNG());
+  div();
+  btn(b,"打开存档",()=>$("pfile").click());
+  btn(b,"保存",()=>saveProject());
 }
+renderLib();renderCollage();
 buildBar();
 applyCam();
 </script>

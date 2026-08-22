@@ -627,6 +627,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   recent:"Recent files",recentNone:"Nothing yet",recentNewWin:"Open in a new window",
   recentGone:"That file is no longer reachable",noPerm:"Permission was not granted",
   newWindow:"New window",agoNow:"just now",agoMin:"m ago",agoHour:"h ago",agoDay:"d ago",
+  cutoutTool:"Cutout tool",cutoutHint:"Cut it out, hit Copy, then paste it back here",
+  cutoutBlocked:"The browser blocked the new tab. Open cutout.html by hand.",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   bibShow:"Show what is filed under this entry",
@@ -796,6 +798,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   recent:"最近打开",recentNone:"暂无记录",recentNewWin:"在新窗口打开",
   recentGone:"该文件已无法访问",noPerm:"未获得访问授权",
   newWindow:"新建窗口",agoNow:"刚刚",agoMin:" 分钟前",agoHour:" 小时前",agoDay:" 天前",
+  cutoutTool:"抠图工具",cutoutHint:"抠完点复制，回到画布 Ctrl/⌘+V 粘上",
+  cutoutBlocked:"新标签被浏览器拦住了，请手动打开 cutout.html",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   bibShow:"显示归在这条文献下的原文",
@@ -1576,6 +1580,17 @@ async function openRecent(id,newWin){
   }catch(e){alert(t("errImport")+"\n"+((e&&e.message)||e))}
 }
 function newWindow(){window.open(location.pathname+"?w="+uid(),"_blank")}
+// 抠图工具是**独立的一份单文件**（cutout.html），跟 board 不共享任何代码，
+// 只共用视觉语言；两边的交互模型完全不同，合进来只会互相干扰（见 NOTES 第一节）。
+// 所以这里放的只是一个入口：在新标签里打开它，抠完点"复制"，回到画布 Ctrl/⌘+V 粘上即可。
+// 用 new URL(...,location.href) 解析相对路径，部署在子目录、或者本地双击打开都能找对位置。
+// index.html 仍然可以脱离 cutout.html 独立运行：拿不到就只是打不开那个标签页，
+// 画布本身一切照旧，所以这里不做任何存在性检查（file:// 上也检查不了）。
+function openCutout(){
+  const w=window.open(new URL("cutout.html",location.href).href,"_blank");
+  if(!w){toast(t("cutoutBlocked"));return}
+  toast(t("cutoutHint"));
+}
 async function unbind(quiet){
   fileHandle=null;fileName=null;fileOK=false;
   try{await kvPut(FH,null)}catch(e){}
@@ -6403,6 +6418,55 @@ addEventListener("pointerdown",e=>{
 // 原卡片在画布上的位置和内容完全不受影响，稿子里的这一份也可以随便改、随便删，
 // 两边彻底独立，不再需要任何"猜当前上下文"的逻辑。
 // 分身/引用要的是相反的效果——跟着源卡片一起变——那条路走 wrPasteTwin，不受此影响。
+// ---- 送进稿子的顺序：结构连线优先，空间位置其次 ----
+// 框选得到的 sel 是 S.cards 的数组顺序（也就是卡片的创建先后），clipCards 又把它原样
+// 存进 CLIP.items，于是"复制一批卡片、粘到写作页"落地的段落顺序跟画布上的结构毫无关系：
+// 用结构线挂在某个二级标题后面的正文，只要它建得比标题早，就会整批浮到稿子最前面，
+// 看起来就是"层级信息完全丢了"。真正该决定顺序的是结构连线，其次才是空间位置，
+// 剪贴板里的先后从来都不该作数。写作页所有的入口（剪贴板粘贴、从画布导入）都走这里。
+//
+// 用的是树本身的顺序（buildTree().roots 的深度优先展开），**不是 .flat**：
+// .flat 还额外过了一道 pullTogether——关联连线（非结构线）会把相关的正文拉到相邻位置，
+// 那是导出成文时的排版意图，会把一段正文从它的结构父节点下面拽走，
+// 正是这里最不该发生的事。导出路径继续用 .flat，两边各取所需，互不影响。
+function wrOrderRank(ids){
+  const set=new Set((ids||[]).filter(Boolean));
+  const rank=new Map();
+  if(set.size<2)return rank;                     // 一张卡片无所谓顺序，省掉建树
+  // 画布上确实有结构连线时才值得建一次树；没有结构线就直接退回空间顺序
+  if(S.outline!==false&&structLinks().length){
+    const walk=l=>{
+      for(const n of l){
+        const id=n&&n.c&&n.c.id;
+        if(id&&set.has(id)&&!rank.has(id))rank.set(id,rank.size);
+        if(n&&n.children&&n.children.length)walk(n.children);
+      }
+    };
+    walk(buildTree().roots);
+  }
+  // 结构线没串到的（或压根没有结构线时的全部），按画布的空间阅读顺序接在后面
+  if(rank.size<set.size){
+    const rest=[...set].filter(id=>!rank.has(id)).map(card).filter(Boolean);
+    flow(rest).forEach(c=>{if(!rank.has(c.id))rank.set(c.id,rank.size)});
+  }
+  return rank;
+}
+const WR_TAIL=1e9;         // 画布上已经找不到的源卡片：保持原有先后，一律排在最后
+function wrOrderIds(ids){
+  const list=[...new Set((ids||[]).filter(Boolean))];
+  if(list.length<2)return list;
+  const rank=wrOrderRank(list);
+  return list.map((id,i)=>({id,i,r:rank.has(id)?rank.get(id):WR_TAIL}))
+    .sort((a,b)=>(a.r-b.r)||(a.i-b.i)).map(z=>z.id);
+}
+// 剪贴板条目同理：按各自的源卡片在大纲里的位置排。源卡片已经删掉的排不进树，
+// 就保持它们原有的先后接在最后，绝不丢条目。
+function wrOrderItems(items){
+  if(!items||items.length<2)return items||[];
+  const rank=wrOrderRank(items.map(it=>it.src));
+  return items.map((it,i)=>({it,i,r:rank.has(it.src)?rank.get(it.src):WR_TAIL}))
+    .sort((a,b)=>(a.r-b.r)||(a.i-b.i)).map(z=>z.it);
+}
 function wrCloneCard(c,d){
   const snap0=JSON.parse(JSON.stringify(cleanCard(orig(c))));
   const n={...snap0,id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:c.w,
@@ -6416,10 +6480,7 @@ function wrImport(ids,append,docId){
   if(!list.length){toast(t("wrPickFirst"));return}
   let d=docs().find(z=>z.id===docId)||wrDoc()||docs()[0];
   if(!d)d=addDoc(null,null);
-  const set=new Set(list.map(c=>c.id));
-  const ordered=buildTree().flat.filter(n=>set.has(n.c.id)).map(n=>n.c.id);
-  const rest=list.map(c=>c.id).filter(id=>!ordered.includes(id));
-  const seq=[...ordered,...rest];
+  const seq=wrOrderIds(list.map(c=>c.id));   // 结构连线优先，空间顺序兜底
   snap();
   const made=seq.map(id=>{
     const n=wrCloneCard(card(id),d);
@@ -6861,7 +6922,7 @@ function wrPasteTwin(hostId,d){
   // 折叠框里的分身是投影，不是画布上的一张卡片：带 wrIn 标记，只活在这份稿子里。
   // 它不在画布上占位置，删掉它也不会动到任何外部卡片。
   let made=0;
-  CLIP.items.forEach(it=>{
+  wrOrderItems(CLIP.items).forEach(it=>{     // 折叠框里的分身也按结构顺序排
     const src=it.src;
     if(!src||!S.cards.some(z=>z.id===src))return;     // 分身必须指向仍然存在的源
     made++;
@@ -6881,7 +6942,8 @@ function wrPasteTwin(hostId,d){
 // 是同一份数据、同一个道理），源卡片的位置、内容都不受影响。想要那种"跟着源卡片
 // 一起变"的活引用，走 wrPasteTwin（分身，挂在折叠框里）。
 function wrClonesFromClip(d){
-  return CLIP.items.map(it=>{
+  // 顺序按结构连线重排一次，不用剪贴板里的先后（那只是框选时的创建顺序）
+  return wrOrderItems(CLIP.items).map(it=>{
     const n={...it.snap,id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:it.w,
       s:{...it.s},wrIn:d.id};
     delete n.ref;delete n.lock;
@@ -7433,6 +7495,7 @@ function fileItems(x,y){
 function boardMenu(x,y){
   menuAt(x,y,[
     {label:t("insertImage"),on:()=>$("imgfile").click()},
+    {label:t("cutoutTool"),on:openCutout},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("insertTable"),sub:[{head:t("tbSize")},
       ...[[3,2],[3,3],[5,3],[3,4]].map(([r,cc])=>({

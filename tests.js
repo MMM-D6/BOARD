@@ -2292,6 +2292,119 @@ group("wrsend 送入写作页改用统一剪贴板", async (c) => {
   await c.run(() => closeMenus());
 });
 
+/* =====================================================================
+   写作页的顺序：结构连线优先，空间位置其次，剪贴板的先后从不作数
+   ---------------------------------------------------------------------
+   这一组守着一个真实回归：框选得到的 sel 是 S.cards 的数组顺序（卡片的创建先后），
+   clipCards 原样存进 CLIP，wrClonesFromClip 又原样落地，于是"复制一批卡片粘进写作页"
+   出来的段落跟画布上的结构毫无关系——用结构线挂在二级标题后面的正文，
+   只要建得比标题早，就会整批浮到稿子最前面。
+   ===================================================================== */
+
+// 刻意打乱创建顺序：正文全在前，标题全在后
+const ORD_CARDS = [
+  { id: "b11a", x: 520, y: 0, w: 200, text: "正文1.1甲", s: {} },
+  { id: "b11b", x: 520, y: 80, w: 200, text: "正文1.1乙", s: {} },
+  { id: "b12a", x: 520, y: 160, w: 200, text: "正文1.2甲", s: {} },
+  { id: "b21a", x: 520, y: 400, w: 200, text: "正文2.1甲", s: {} },
+  { id: "h11", x: 250, y: 0, w: 200, text: "一点一", level: 2, s: {} },
+  { id: "h12", x: 250, y: 160, w: 200, text: "一点二", level: 2, s: {} },
+  { id: "h21", x: 250, y: 400, w: 200, text: "二点一", level: 2, s: {} },
+  { id: "h1", x: 0, y: 0, w: 200, text: "第一章", level: 1, s: {} },
+  { id: "h2", x: 0, y: 400, w: 200, text: "第二章", level: 1, s: {} },
+];
+const ORD_LINKS = [
+  { id: "s1", a: "h1", b: "h11", st: true },
+  { id: "s2", a: "h1", b: "h12", st: true },
+  { id: "s3", a: "b11a", b: "h11", st: true },   // 线是从正文画向标题的，方向照样不作数
+  { id: "s4", a: "h11", b: "b11b", st: true },
+  { id: "s5", a: "h12", b: "b12a", st: true },
+  { id: "s6", a: "h2", b: "h21", st: true },
+  { id: "s7", a: "h21", b: "b21a", st: true },
+];
+const ORD_WANT = "第一章|一点一|正文1.1甲|正文1.1乙|一点二|正文1.2甲|第二章|二点一|正文2.1甲";
+
+group("wrorder 写作页里的顺序", async (c) => {
+  await c.board(ORD_CARDS, ORD_LINKS);
+  const r = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: 2000, y: 0 }, "顺序");
+    sel = S.cards.filter((z) => !z.wrIn).map((z) => z.id);   // 框选拿到的就是创建顺序
+    const clipOrder = sel.map((id) => card(id).text).join("|");
+    clipCards("copy");
+    wrPasteMain(d, 0);
+    return { clipOrder, docOrder: d.ids.map((id) => card(id).text).join("|"),
+      n: d.ids.length, onBoard: S.cards.filter((z) => !z.wrIn).length };
+  });
+  c.ok("剪贴板里本来就是乱的（正文在标题之前）", r.clipOrder.indexOf("正文1.1甲") < r.clipOrder.indexOf("第一章"));
+  c.ok("粘进稿子后按结构连线排列，正文紧跟它的标题", r.docOrder === ORD_WANT);
+  c.ok("一张不多一张不少", r.n === 9);
+  c.ok("画布上的原卡片一张都没动", r.onBoard === 9);
+
+  // 关联连线（非结构线）表达的是"排在一起"，那是导出成文时的意图，
+  // 不能把正文从它的结构父节点下面拽走。用的是树本身的顺序而不是 buildTree().flat。
+  await c.board(ORD_CARDS, [...ORD_LINKS, { id: "r1", a: "b21a", b: "h1" }]);
+  const r2 = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: 2000, y: 0 }, "顺序");
+    sel = S.cards.filter((z) => !z.wrIn).map((z) => z.id);
+    clipCards("copy");
+    wrPasteMain(d, 0);
+    return d.ids.map((id) => card(id).text).join("|");
+  });
+  c.ok("关联连线不会把正文从它的标题下面拽走", r2 === ORD_WANT);
+
+  // 没有结构连线时退回空间阅读顺序（也就是画布上的自然读法），而不是创建顺序
+  await c.board(ORD_CARDS, []);
+  const r3 = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: 2000, y: 0 }, "顺序");
+    sel = S.cards.filter((z) => !z.wrIn).map((z) => z.id);
+    clipCards("copy");
+    wrPasteMain(d, 0);
+    return { txt: d.ids.map((id) => card(id).text).join("|"),
+      same: d.ids.map((id) => card(id).text).join("|") === docOrder(S.cards.filter((z) => !z.wrIn)).map((z) => z.text).join("|") };
+  });
+  c.ok("没有结构连线时按空间顺序，不是创建顺序", r3.txt.indexOf("第一章") < r3.txt.indexOf("正文1.1甲"));
+  c.ok("空间顺序与画布的文档顺序一致", r3.same);
+
+  // 只挑一个子树粘贴：局部也要保持结构顺序
+  await c.board(ORD_CARDS, ORD_LINKS);
+  const r4 = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: 2000, y: 0 }, "顺序");
+    sel = ["b21a", "h21", "h2"];
+    clipCards("copy");
+    wrPasteMain(d, 0);
+    return d.ids.map((id) => card(id).text).join("|");
+  });
+  c.ok("只粘一个子树时局部顺序也对", r4 === "第二章|二点一|正文2.1甲");
+
+  // 单张卡片的粘贴不受影响（这条路径不建树，也不该报错）
+  const r5 = await c.run(() => {
+    const d = docs()[0];
+    sel = ["b11a"];
+    clipCards("copy");
+    const before = d.ids.length;
+    wrPasteMain(d, 1);
+    return { before, after: d.ids.length, at: card(d.ids[1]).text };
+  });
+  c.ok("单张卡片仍然粘在指定位置", r5.after === r5.before + 1 && r5.at === "正文1.1甲");
+
+  // 源卡片被删掉的剪贴板条目不能丢
+  const r6 = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: 2000, y: 0 }, "顺序");
+    sel = ["h1", "b11a", "h11"];
+    clipCards("copy");
+    S.cards = S.cards.filter((z) => z.id !== "b11a");
+    invalidateIndex();
+    wrPasteMain(d, 0);
+    return d.ids.map((id) => card(id).text).join("|");
+  });
+  c.ok("源卡片已删除的条目照样落地，排在最后", r6 === "第一章|一点一|正文1.1甲");
+});
+
 group("ports 连接点", async (c) => {
   await c.board([
     { id: "a", x: -300, y: 0, w: 360, text: "甲甲甲", s: {} },
@@ -2612,7 +2725,47 @@ group("static 静态检查", async (c) => {
    抠图工具（cutout.html）
    ===================================================================== */
 
+group("cutoutlink 抠图工具的入口", async (c) => {
+  // 两个文件仍然各自独立、互不依赖，index 这边只是多一个"在新标签里打开它"的入口。
+  await c.board([], []);
+  const r = await c.run(() => {
+    const real = window.open;
+    let url = null;
+    window.open = (u) => { url = u; return { closed: false }; };   // 别真的开标签页
+    boardMenu(60, 60);
+    const labels = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    const hit = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("cutoutTool")));
+    if (hit) hit.click();
+    window.open = real;
+    closeMenus();
+    return { labels, url, imgAt: labels.findIndex((z) => z.includes(t("insertImage"))),
+      cutAt: labels.findIndex((z) => z.includes(t("cutoutTool"))) };
+  });
+  c.ok("画布右键菜单里有抠图工具", r.cutAt >= 0);
+  c.ok("就放在插入图片旁边", r.cutAt === r.imgAt + 1);
+  c.ok("指向同目录的 cutout.html", !!r.url && /\/cutout\.html$/.test(r.url));
+  c.ok("是绝对地址，子目录部署也找得到", !!r.url && r.url.startsWith("file://"));
+  c.ok("中英文案都齐了", await c.run(() => !!(T.en.cutoutTool && T.zh.cutoutTool &&
+    T.en.cutoutHint && T.zh.cutoutHint && T.en.cutoutBlocked && T.zh.cutoutBlocked)));
+  c.ok("index 挂着 manifest", await c.run(() =>
+    !!document.querySelector('link[rel="manifest"]')));
+
+  // 装成桌面应用之后，图标右键/长按的快捷方式里也要有一条抠图。
+  // manifest 在 file:// 上 fetch 不到，直接把这一页打开读文本即可。
+  await c.page.goto("file://" + require("path").resolve(__dirname, "manifest.json"));
+  const mf = JSON.parse(await c.run(() => document.body.innerText));
+  c.ok("manifest 里有抠图快捷方式",
+    Array.isArray(mf.shortcuts) && mf.shortcuts.some((z) => /cutout\.html$/.test(z.url || "")));
+  c.ok("快捷方式落在 scope 之内", mf.scope === "./" && /^\.\//.test(mf.shortcuts[0].url));
+  c.ok("图标与主应用共用，不必再多两个文件",
+    mf.shortcuts[0].icons.every((z) => mf.icons.some((m) => m.src === z.src)));
+});
+
 group("cutout 抠图工具", async (c) => {
+  // 抠图是另一份完全独立的单文件，不与 board 共享代码，所以单独开一页测。
+  // 注意它现在的模型是"卡点 + 沿边走"：载入后进卡点模式，沿边缘随便点几下，
+  // 按 Enter（generateFromDraft）在梯度图上跑 livewire 把点之间贴着边界连起来。
+  // 早先那版是载入即自动泛洪识别，这一组曾按那个模型写，已随工具本身一起改过来。
   await c.page.goto("file://" + require("path").resolve(__dirname, "cutout.html"));
   await c.wait(700);
   const src = await c.run(() => {
@@ -2624,24 +2777,34 @@ group("cutout 抠图工具", async (c) => {
     return cv.toDataURL("image/png");
   });
   await c.run((s) => loadImage(s, "t.png"), src);
-  await c.wait(1800);
+  await c.wait(900);
 
-  const st = await c.run(() => ({
-    IW, IH, n: paths.length, pts: paths[0] ? paths[0].pts.length : 0,
-    handles: paths[0] ? paths[0].pts.every((z) => typeof z.hx === "number") : false,
-  }));
-  c.ok("图片可以载入", st.IW === 420 && st.IH === 320);
-  c.ok("自动识别出轮廓", st.n === 1 && st.pts > 8);
-  c.ok("控点带贝塞尔手柄", st.handles);
+  c.ok("图片可以载入", await c.run(() => IW === 420 && IH === 320));
+  c.ok("载入后直接进卡点模式", await c.run(() => mode === "pen"));
 
-  // 轮廓要真的贴着主体，而不是随便围一圈
-  const fitq = await c.run(() => {
-    const pts = paths[0].pts;
-    let inside = 0;
-    pts.forEach((z) => { if (Math.hypot((z.x - 210) / 120, (z.y - 160) / 90) < 1.4) inside++; });
-    return inside / pts.length;
+  // 沿椭圆随便点十二下——刻意点得很粗糙（半径按 ±6% 抖动），
+  // 贴合与否要靠 livewire 沿边走，不能靠点本身点得准
+  const st = await c.run(async () => {
+    draft = [];
+    for (let k = 0; k < 12; k++) {
+      const a = k / 12 * Math.PI * 2, j = 1 + (k % 3 - 1) * 0.06;
+      draft.push({ x: 210 + Math.cos(a) * 120 * j, y: 160 + Math.sin(a) * 90 * j, corner: false });
+    }
+    await generateFromDraft();
+    await new Promise((z) => setTimeout(z, 300));
+    const p = paths[0];
+    let on = 0;
+    if (p) p.pts.forEach((z) => {
+      if (Math.abs(Math.hypot((z.x - 210) / 120, (z.y - 160) / 90) - 1) < 0.25) on++;
+    });
+    return { n: paths.length, pts: p ? p.pts.length : 0, mode,
+      handles: p ? p.pts.every((z) => typeof z.h1x === "number" && typeof z.h2x === "number") : false,
+      fit: p ? on / p.pts.length : 0 };
   });
-  c.ok("轮廓贴合主体（" + (fitq * 100).toFixed(0) + "%）", fitq > 0.8);
+  c.ok("按现有的点生成得出曲线", st.n === 1 && st.pts > 8);
+  c.ok("生成后自动进编辑模式", st.mode === "edit");
+  c.ok("控点两侧都带贝塞尔手柄", st.handles);
+  c.ok("沿边走真的贴着主体（" + (st.fit * 100).toFixed(0) + "%）", st.fit > 0.8);
 
   c.ok("控点可移动", await c.run(() => {
     const z = paths[0].pts[0], x0 = z.x; z.x += 25; draw();
@@ -2650,9 +2813,10 @@ group("cutout 抠图工具", async (c) => {
   c.ok("可增删控点", await c.run(() => {
     const n0 = paths[0].pts.length;
     const a2 = paths[0].pts[0], b2 = paths[0].pts[1];
-    paths[0].pts.splice(1, 0, { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2, hx: 0, hy: 0, corner: false });
+    paths[0].pts.splice(1, 0, { x: (a2.x + b2.x) / 2, y: (a2.y + b2.y) / 2,
+      h1x: 0, h1y: 0, h2x: 0, h2y: 0, corner: false });
     const n1 = paths[0].pts.length;
-    paths[0].pts.splice(1, 1);
+    paths[0].pts.splice(1, 1); draw();
     return n1 === n0 + 1 && paths[0].pts.length === n0;
   }));
   c.ok("尖角控点有独立样式", await c.run(() => {
@@ -2661,13 +2825,18 @@ group("cutout 抠图工具", async (c) => {
     paths[0].pts[0].corner = false; draw();
     return has;
   }));
-  c.ok("选中控点会显示手柄", await c.run(() => {
-    sel = { p: 0, i: 2, h: 0 }; draw();
-    return document.querySelectorAll("#ov circle.hp").length === 2;
+  c.ok("撤销能退回上一步", await c.run(() => {
+    const before = paths.length; undo();
+    const mid = paths.length; push(); paths = []; undo();
+    return before === 1 && mid === 0;
   }));
 
+  // 撤销之后重新生成一条，后面的导出断言才有东西可导
+  await c.run(async () => {
+    if (!paths.length) { await generateFromDraft(true); await new Promise((z) => setTimeout(z, 300)); }
+  });
   const out = await c.run(() => {
-    const cv = croppedCutout();
+    const cv = croppedCutout(1);
     const g = cv.getContext("2d");
     const d = g.getImageData(0, 0, cv.width, cv.height).data;
     let opaque = 0;
