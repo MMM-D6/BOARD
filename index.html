@@ -472,8 +472,17 @@
   .fmtbar .chip{width:12px;height:12px;border-radius:3px;border:1px solid var(--pline);display:inline-block}
   .fmtbar .fx.lnkbtn{filter:grayscale(1)}
   .fmtbar .car{font-size:7px;opacity:.4;margin-left:1px}
-  /* 字体名与模板名可能很长（"苹方 / 微软雅黑"），不截住就会把整条栏顶到第二行 */
-  .fmtbar .lbl{max-width:88px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+  /* 字体名与模板名是会变的（换个字体、套个模板，字数就不一样），
+     用固定宽度而不是 max-width：否则每换一次，整条栏的按钮都会跟着左右挪一下，
+     换到临界宽度时还会整组跳到下一行——用户看到的就是"符号位置自己会变"。
+     固定宽度之后，栏上任何一个按钮的位置都不再跟当前字体/模板的名字长短有关。 */
+  .fmtbar .lbl{width:84px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    display:block;text-align:left}
+  /* 画布上的稿子正文区固定 560px，工具栏必然要折行。与其让它在临界宽度上飘忽不定，
+     不如**指定断点**：文字/字体/颜色一行，段落/整段/清除一行，两行长度接近，
+     也正好是"改字"与"改段"的分界。专注模式够宽，一行就够，断点在那里关掉。 */
+  .fmtbar .fbrk{flex-basis:100%;height:0;margin:0}
+  #wrfmt .fbrk{display:none}
   /* 需要先选中一段才有意义的控件（间距、锁定）：没选中时淡下去，
      但仍然可以点开——点开看到的是一句"先选中一段文字"，而不是一个空白的框 */
   .fmtbar .fx.off{opacity:.25}
@@ -6242,7 +6251,7 @@ function buildFmtBar(host){
       e.stopPropagation();
       const was=pop.classList.contains("on");
       closeFmtPops();
-      if(!was){pop.classList.add("on");trig.classList.add("on")}
+      if(!was){pop.classList.add("on");trig.classList.add("on");placePop(cell,pop)}
     });
     cell.appendChild(trig);
     const sws=document.createElement("div");sws.className="sws";
@@ -6282,7 +6291,7 @@ function buildFmtBar(host){
         const n=document.createElement("div");n.className="fnote";n.textContent=t("fmtNeedSel");
         pop.appendChild(n);
       }
-      pop.classList.add("on");trig.classList.add("on");
+      pop.classList.add("on");trig.classList.add("on");placePop(cell,pop);
     });
     cell.appendChild(trig);cell.appendChild(pop);
     return {cell,pop,trig};
@@ -6290,6 +6299,16 @@ function buildFmtBar(host){
   const car='<span class="car">\u25BE</span>';
   const ico=d=>`<span class="fico"><svg width="13" height="13" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${d}</svg></span>`;
+
+  // 弹层一律向左对齐展开，但画布上的稿子有 .dwrap{overflow:hidden}，
+  // 靠右的控件（间距、锁定、清除那一带）弹出来会被稿子的右边缘直接切掉一截，
+  // 滑块的数值就看不见了。所以打开时量一下：探出去就改成右对齐。
+  const placePop=(cell,pop)=>{
+    pop.style.left="0";pop.style.right="auto";
+    const box=cell.closest(".dwrap")||cell.closest("#wrbar")||document.documentElement;
+    const lim=box.getBoundingClientRect().right-6;
+    if(pop.getBoundingClientRect().right>lim){pop.style.left="auto";pop.style.right="0"}
+  };
 
   /* ---------- 一、文字：字重字形与链接 ---------- */
   grp();
@@ -6343,12 +6362,16 @@ function buildFmtBar(host){
     ()=>{setCardBg(lastBg());syncFmtBars()},null,null,t("cardBg"));
   sep();
 
+  // 指定断点：窄的时候在这里折行，"改字"与"改段"各占一行，长度也接近
+  host.appendChild(Object.assign(document.createElement("span"),{className:"fbrk"}));
+
   /* ---------- 四、段落：对齐，以及字重/字距/行距 ----------
      对齐是三个常用动作，留成三个按钮；其余细项收进一个**有名字**的弹层。
      早先这里是一个光秃秃的小三角，既看不出是干什么的，没选中段落时点开还是个空框。 */
   grp();
   ["left","center","right"].forEach(v=>btn(alSvg(v),()=>{setAlign(v);syncFmtBars()},t("fmtAlign")));
-  const para=popCell(`<span class="lbl">${esc(t("fmtSpacing"))}</span>${car}`,pop=>{
+  // 「间距」是固定的字，不用 .lbl 那个固定宽度（那是给会变长短的字体名/模板名用的）
+  const para=popCell(`<span>${esc(t("fmtSpacing"))}</span>${car}`,pop=>{
     const c=barCard();if(!c)return;
     const st={...DEF,...S.textDef,...(c.s||{})};
     const h2=document.createElement("div");h2.className="hd2";h2.textContent=t("weight");
@@ -6442,7 +6465,7 @@ function buildFmtBar(host){
       const n=document.createElement("div");n.className="fnote";n.textContent=t("fmtNeedSel");
       lockPop.appendChild(n);
     }
-    lockPop.classList.add("on");lockTrig.classList.add("on");
+    lockPop.classList.add("on");lockTrig.classList.add("on");placePop(lockCell,lockPop);
   });
   lockCell.appendChild(lockTrig);lockCell.appendChild(lockPop);
   sep();

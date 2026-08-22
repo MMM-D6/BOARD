@@ -2426,7 +2426,9 @@ group("fmtbar 写作页工具栏", async (c) => {
     return { groups: h.querySelectorAll(".fgrp").length,
       seps: h.querySelectorAll(".fsep").length,
       // 每个直接子元素要么是一组、要么是分隔线，不许有裸露的按钮
-      loose: kids.filter((z) => !z.classList.contains("fgrp") && !z.classList.contains("fsep")).length,
+      // .fbrk 是那个指定的折行点，宽高为零，不算按钮
+      loose: kids.filter((z) => !z.classList.contains("fgrp") &&
+        !z.classList.contains("fsep") && !z.classList.contains("fbrk")).length,
       // 一组之内的按钮必须在同一行（组不会被换行拆开）
       // 按行高分桶比 top 可靠：一组里字号那个小 span 比按钮矮，top 天生不一样
       split: [...h.querySelectorAll(".fgrp")].filter((g) => {
@@ -2515,9 +2517,59 @@ group("fmtbar 写作页工具栏", async (c) => {
   c.ok("加粗仍然真的写进了这一段", act.rich);
   c.ok("对齐仍然真的作用在这一段", act.align === "center");
 
-  // 画布上的稿子：文档级操作在上面一行，文字工具栏独占下面一整行
+  // 弹层不许被稿子的右边缘切掉：.dwrap 有 overflow:hidden，
+  // 靠右的控件（间距、锁定）向左对齐展开就会露在外面，被直接裁掉一截
   await c.run(() => closeWrite());
   await c.wait(500);
+  const clip = await c.run(() => {
+    const bar = document.querySelector(".doc .fmtbar");
+    const wrap = document.querySelector(".doc .dwrap").getBoundingClientRect();
+    const out = [];
+    [...bar.querySelectorAll(".fx")].forEach((x) => {
+      const pop = x.parentElement.querySelector(".fpop");
+      if (!pop || !x.classList.contains("caret") && !pop) return;
+      x.click();
+      if (pop.classList.contains("on")) {
+        const r3 = pop.getBoundingClientRect();
+        out.push({ right: Math.round(r3.right), lim: Math.round(wrap.right),
+          left: Math.round(r3.left), wl: Math.round(wrap.left) });
+      }
+      closeFmtPops();
+    });
+    return out;
+  });
+  c.ok("每一个弹层都完整落在稿子里（共 " + clip.length + " 个）",
+    clip.length >= 5 && clip.every((z) => z.right <= z.lim && z.left >= z.wl));
+
+  // 换字体、套模板不该让整条栏上的按钮跟着挪位置
+  const stable = await c.run(() => {
+    const bar = document.querySelector(".doc .fmtbar");
+    const pos = () => [...bar.querySelectorAll(".fx")].map((z) =>
+      Math.round(z.getBoundingClientRect().left) + "," + Math.round(z.getBoundingClientRect().top));
+    const d = docs()[0];
+    sel = [d.ids[0]]; paintSel(); syncFmtBars();
+    const a2 = pos();
+    setFamily("serif"); syncFmtBars();
+    const b2 = pos();
+    setFamily("sans"); syncFmtBars();
+    return { moved: a2.filter((z, i) => z !== b2[i]).length };
+  });
+  c.ok("换字体之后按钮一个都没有挪位置", stable.moved === 0);
+
+  // 窄的时候在指定的地方折行：改字一行、改段一行
+  const brk = await c.run(() => {
+    const bar = document.querySelector(".doc .fmtbar");
+    const rows2 = [...bar.querySelectorAll(".fgrp")].map((z) => Math.round(z.getBoundingClientRect().top));
+    const uniq = [...new Set(rows2)];
+    return { rows: uniq.length, first: rows2.filter((z) => z === uniq[0]).length,
+      hasBrk: !!bar.querySelector(".fbrk"),
+      brkHidden: getComputedStyle(document.querySelector("#wrfmt .fbrk")).display === "none" };
+  });
+  c.ok("画布上的稿子里正好折成两行", brk.rows === 2);
+  c.ok("断点在颜色组之后（前三组一行）", brk.first === 3);
+  c.ok("专注模式关掉这个断点", brk.hasBrk && brk.brkHidden);
+
+  // 画布上的稿子：文档级操作在上面一行，文字工具栏独占下面一整行
   const rows = await c.run(() => {
     const bar = document.querySelector(".doc .dbar");
     if (!bar) return null;
