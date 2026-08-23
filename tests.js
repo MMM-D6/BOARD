@@ -2605,6 +2605,97 @@ group("fmtbar 写作页工具栏", async (c) => {
   c.ok("文字工具栏独占一整行", !!rows && rows.fmtW > rows.barW * 0.9);
 });
 
+group("wrexport 稿子导出", async (c) => {
+  // 两件事：① 导出 Word 必须永远有结果——真正的 .docx 要靠 CDN 上的 docx 库，
+  // 联不上就退回写一份 .doc（HTML 外壳 + application/msword），Word 一样打得开；
+  // ② 稿子里看到的标题编号要跟着导出去，三种格式共用 wrNumMap 那一份规则。
+  await c.board([
+    { id: "a", x: 0, y: 0, w: 400, text: "Introduction", level: 1, s: {} },
+    { id: "b", x: 0, y: 200, w: 400, text: "引入", level: 2, s: {} },
+    { id: "d", x: 0, y: 400, w: 400, text: "正文一段", s: {} },
+    { id: "e", x: 0, y: 600, w: 400, text: "Background", level: 1, s: {} },
+    { id: "f", x: 0, y: 800, w: 400, text: "讨论", level: 2, s: {} },
+  ], []);
+  await c.run(() => {
+    S.docs = [];
+    const doc = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["a", "b", "d", "e", "f"]; clipCards("copy"); wrPasteMain(doc, 0);
+  });
+
+  const num = await c.run(() => {
+    const d = docs()[0], on = { vers: false, refs: false, nums: true },
+      off = { vers: false, refs: false, nums: false };
+    const md = wrMD(d, on), html = wrHTML(d, on), mdOff = wrMD(d, off);
+    return { heads: md.split("\n").filter((z) => z.startsWith("#")),
+      offHeads: mdOff.split("\n").filter((z) => z.startsWith("#")),
+      htmlNums: (html.match(/class="num">([^<]+)</g) || []).map((z) => z.replace(/\D*(\d[\d.]*)\D*/, "$1")),
+      // 编号不许落到正文段落上
+      bodyNum: /class="num">[^<]*<\/span>正文一段/.test(html) };
+  });
+  c.ok("Markdown 的标题带上了编号",
+    num.heads.join("|") === "# 稿子|## 1 Introduction|### 1.1 引入|## 2 Background|### 2.1 讨论");
+  c.ok("编号跟稿子里看到的是同一套（第二章从 2 起）", num.htmlNums.join(",") === "1,1.1,2,2.1");
+  c.ok("正文段落不编号", !num.bodyNum);
+  c.ok("取消勾选就一个编号都没有",
+    num.offHeads.join("|") === "# 稿子|## Introduction|### 引入|## Background|### 讨论");
+
+  // 联不上网：退回 .doc，而不是弹一句报错就没了
+  const off = await c.run(async () => {
+    const d = docs()[0];
+    const realLoad = window.loadDocx, realDl = window.dl, realDocx = window.docx;
+    window.docx = undefined;
+    window.loadDocx = () => Promise.reject(new Error("no network"));
+    let got = null; window.dl = (blob, name) => { got = { name, type: blob.type, size: blob.size } };
+    await wrExportWord(d, { vers: false, refs: false, nums: true });
+    const txt = got ? "ok" : "none";
+    window.loadDocx = realLoad; window.dl = realDl; window.docx = realDocx;
+    return { got, txt };
+  });
+  c.ok("库拿不到时照样导得出 Word", !!off.got && off.got.size > 0);
+  c.ok("退回的是 Word 能打开的 .doc",
+    !!off.got && /\.doc$/.test(off.got.name) && off.got.type === "application/msword");
+
+  // 库在时走真正的 .docx，编号与标题级别都要对
+  const real = await c.run(async () => {
+    const d = docs()[0];
+    const seen = [], realDl = window.dl, realDocx = window.docx;
+    class TextRun { constructor(o) { this.o = o; seen.push("run:" + (o.text || "")) } }
+    class Paragraph { constructor(o) { this.o = o;
+      seen.push("para:" + (o.text !== undefined ? o.text : "[rich]") + "|" + (o.heading || "-")) } }
+    window.docx = { Document: class { constructor(o) { this.o = o } },
+      Packer: { toBlob: async () => new Blob(["x"], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" }) },
+      Paragraph, TextRun,
+      HeadingLevel: { TITLE: "T", HEADING_1: "H1", HEADING_2: "H2", HEADING_3: "H3",
+        HEADING_4: "H4", HEADING_5: "H5", HEADING_6: "H6" } };
+    let got = null; window.dl = (blob, name) => { got = { name, type: blob.type } };
+    await wrExportWord(d, { vers: false, refs: false, nums: true });
+    window.dl = realDl; window.docx = realDocx;
+    return { got, seen };
+  });
+  c.ok("库在时导出的是真正的 .docx", !!real.got && /\.docx$/.test(real.got.name));
+  c.ok("标题级别映射到 Word 的内置标题",
+    real.seen.includes("para:1 Introduction|H1") && real.seen.includes("para:1.1 引入|H2"));
+  c.ok("正文段落不带标题级别", real.seen.includes("para:正文一段|-"));
+
+  // 文件名早先一律是 "undefined-稿子"：safeName 的序号参数是给存档包分页用的
+  c.ok("导出的文件名不再带 undefined 前缀",
+    !!real.got && real.got.name === "稿子.docx");
+  c.ok("存档包的分页名仍然带序号", await c.run(() => safeName("引言", 1) === "01-引言"));
+
+  // 导出面板里有这个开关，且默认是勾上的
+  const ui = await c.run(() => {
+    openWrExport(docs()[0], 100, 100);
+    const box = document.querySelector("#pop #wn");
+    const r = { has: !!box, checked: !!(box && box.checked),
+      label: box ? box.parentElement.textContent.trim() : "" };
+    document.querySelector("#pop").classList.remove("on");
+    return r;
+  });
+  c.ok("导出面板里有标题编号这个开关", ui.has);
+  c.ok("默认勾上", ui.checked);
+  c.ok("开关有中英文案", await c.run(() => !!(T.en.wrExpNumsOpt && T.zh.wrExpNumsOpt)));
+});
+
 group("wrlevel 写作页里设定层级", async (c) => {
   // 稿子里的标题层级就是画布上的 c.level（侧栏目录、正文编号、导出的标题级别
   // 全都读它，没有第二份数据）。写作页原来只能显示层级、没法设定——

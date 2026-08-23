@@ -729,6 +729,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrVerCopy:"Copy this version to the clipboard",wrVerCopied:"Copied. Paste it onto any page.",
   wrExpVers:"Other versions",wrExpRefs:"References",
   wrExpVersOpt:"Include the other versions",wrExpRefsOpt:"Include the folded references",
+  wrExpNumsOpt:"Number the headings",wrExpDocFallback:"Saved as .doc \u2014 Word opens it the same way.",
   wrRemove:"Remove from the draft",
   wrRemoved:"Removed from the draft",wrInsert:"Insert a card here",
   wrRefPaste:"Paste a twin here",
@@ -745,7 +746,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fmtSpacing:"Spacing",fmtNeedSel:"Select a paragraph first",
   fmtInk:"Text colour",fmtHL:"Highlight",
   lvShortNone:"Body",lvShort1:"H1",lvShort2:"H2",lvShort3:"H3",
-  wrExpDocxNote:"Word export loads a library from the network the first time.",
+  wrExpDocxNote:"Tries the real .docx first; falls back to .doc offline.",
   wrExpPdfNote:"Opens the print dialogue; choose Save as PDF there.",
   wrExpFileNote:"Written straight to a file, no network needed.",
   mapMenu:"Page map",mapFind:"Find a page",
@@ -903,6 +904,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrVerCopy:"把这一版复制到剪贴板",wrVerCopied:"已复制，可粘贴到任何页面",
   wrExpVers:"其他版本",wrExpRefs:"引用",
   wrExpVersOpt:"附上其他版本",wrExpRefsOpt:"附上折叠的引用",
+  wrExpNumsOpt:"标题带上编号",wrExpDocFallback:"已存为 .doc，Word 一样打得开",
   wrRemove:"从稿子里移除",
   wrRemoved:"已从稿子里移除",wrInsert:"在这里插入一张卡片",
   wrRefPaste:"在这里粘贴分身",
@@ -919,7 +921,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fmtSpacing:"间距",fmtNeedSel:"先选中一段文字",
   fmtInk:"文字颜色",fmtHL:"标记颜色",
   lvShortNone:"正文",lvShort1:"标题 1",lvShort2:"标题 2",lvShort3:"标题 3",
-  wrExpDocxNote:"Word 导出首次需要从网络加载一个库",
+  wrExpDocxNote:"优先导出真正的 .docx，联不上网就退回 .doc",
   wrExpPdfNote:"会打开打印对话框，在那里选「另存为 PDF」",
   wrExpFileNote:"直接写成文件，不需要联网",
   mapMenu:"页面地图",mapFind:"查找页面",
@@ -4022,6 +4024,9 @@ function dataURLtoBytes(u){
 function extOf(u){return /^data:image\/png/i.test(u)?"png":"jpg"}
 function safeName(x,i){
   const base=(x||"").replace(/[\\/:*?"<>|]/g,"").replace(/\s+/g," ").trim().slice(0,40);
+  // 存档包里的分页要带序号（01-引言.jpg）；单个文件导出不传 i，那就只用标题本身。
+  // 早先无条件拼 String(i)，写作页导出的文件名一律是"undefined-稿子.docx"。
+  if(i==null)return base||"untitled";
   return String(i).padStart(2,"0")+(base?"-"+base:"");
 }
 
@@ -4524,7 +4529,9 @@ function richRuns(html){
   walk(box,{});
   return out;
 }
-function paraFrom(c,D,extra){
+// pre 是可选的前缀（写作页的标题编号用它）：作为一个独立的 TextRun 插在
+// 第一段最前面，原有的富文本一个字都不动。不传就跟以前完全一样。
+function paraFrom(c,D,extra,pre){
   const {Paragraph,TextRun}=D;
   if(!c.rich)return null;
   const runs=richRuns(c.rich);
@@ -4537,7 +4544,9 @@ function paraFrom(c,D,extra){
     });
   });
   if(cur.length)paras.push(cur);
-  return paras.filter(p=>p.length).map(p=>new Paragraph({children:p,...(extra||{})}));
+  const out=paras.filter(p=>p.length);
+  if(pre&&out.length)out[0].unshift(new TextRun({text:pre}));
+  return out.map(p=>new Paragraph({children:p,...(extra||{})}));
 }
 async function exportDocx(D,o,tree){
   const {Document,Packer,Paragraph,TextRun,ImageRun,HeadingLevel,AlignmentType}=D;
@@ -7268,6 +7277,16 @@ function wrBlockMenu(x,y,c,i,d){
 }
 
 /* ---- 导出：所见即所得 ---- */
+// 稿子里看到的标题编号（侧栏与正文那一份，wrNums 算的）要能一起导出去。
+// 三种格式共用这一个函数，编号规则只有一份，不会出现"稿子里是 2.3、
+// Word 里却是 2.1"这种对不上的事。opt.nums 关掉就一个编号都不加。
+function wrNumMap(d,opt){
+  const list=d.ids.map(card).filter(Boolean);
+  const nums=wrNums(list);
+  const m=new Map();
+  if(!opt||opt.nums!==false)list.forEach((c,i)=>{if(nums[i])m.set(c.id,nums[i])});
+  return m;
+}
 function wrHTML(d,opt){
   const list=d.ids.map(card).filter(Boolean);
   let h=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(d.title)}</title>
@@ -7280,11 +7299,16 @@ function wrHTML(d,opt){
    .vh,.rh{font:400 8pt/1.6 monospace;letter-spacing:.1em;color:#999;text-transform:uppercase}
    .vt{font-size:10pt;color:#555;margin:2pt 0 6pt}
    .refs{margin:4pt 0 12pt 14pt;font-size:10pt;color:#666}
+   .num{margin-right:.5em;font-variant-numeric:tabular-nums}
   </style></head><body><div class="pg"><h1 class="doc">${esc(d.title)}</h1>`;
+  const nm=wrNumMap(d,opt);
   list.forEach(c=>{
     const o=orig(c),lv=wrLevelOf(c);
     const wrapS=o.bg?`background:${esc(o.bg)};padding:8pt 10pt;`:"";
-    const inner=o.rich?safeRich(o.rich):esc(o.text||"").replace(/\n/g,"<br>");
+    const n=nm.get(c.id);
+    // 编号只加在标题前面，跟稿子里看到的那一份是同一个来源
+    const inner=(n?`<span class="num">${esc(n)}</span>`:"")
+      +(o.rich?safeRich(o.rich):esc(o.text||"").replace(/\n/g,"<br>"));
     const so=wrStyleObj(o,lv);
     const css=Object.keys(so).map(k=>
       k.replace(/[A-Z]/g,m=>"-"+m.toLowerCase())+":"+so[k]).join(";");
@@ -7306,19 +7330,32 @@ function wrHTML(d,opt){
   });
   return h+`</div></body></html>`;
 }
-async function wrExportDocx(d,opt){
-  const D=await loadDocx();if(!D)return;
+// Word 导出。真正的 .docx 要靠 CDN 上的 docx 库，断网、被墙、CDN 抽风都会失败——
+// 早先失败就只弹一句报错，等于"写作页导不出 Word"。现在跟画布那边一个规矩：
+// 库拿不到就退回写一份 .doc（HTML 外壳 + application/msword），Word 一样打得开，
+// 样式、编号、底色全都在。**导出 Word 这件事必须永远有结果**，不能取决于能不能联网。
+async function wrExportWord(d,opt){
+  let D=null;
+  try{D=await loadDocx()}catch(e){D=null}
+  if(D){await wrExportDocx(D,d,opt);return}
+  dl(new Blob(["\uFEFF"+wrHTML(d,opt)],{type:"application/msword"}),safeName(d.title)+".doc");
+  toast(t("wrExpDocFallback"));
+}
+async function wrExportDocx(D,d,opt){
   const {Document,Packer,Paragraph,TextRun,HeadingLevel}=D;
   const HL=[null,HeadingLevel.HEADING_1,HeadingLevel.HEADING_2,HeadingLevel.HEADING_3,
     HeadingLevel.HEADING_4,HeadingLevel.HEADING_5,HeadingLevel.HEADING_6];
   const kids=[new Paragraph({text:d.title,heading:HeadingLevel.TITLE})];
+  const nm=wrNumMap(d,opt);
   d.ids.map(card).filter(Boolean).forEach(c=>{
     const o=orig(c),lv=wrLevelOf(c);
-    const rich=o.rich?paraFrom(o,D,lv?{heading:HL[Math.min(lv,6)]}:null):null;
+    const n=nm.get(c.id),pre=n?n+" ":"";
+    // 带格式的段落走 paraFrom（保住加粗、颜色、荧光笔），编号交给它当前缀插进去
+    const rich=o.rich?paraFrom(o,D,lv?{heading:HL[Math.min(lv,6)]}:null,pre):null;
     if(rich&&rich.length)rich.forEach(p=>kids.push(p));
     else{
       const txt=(o.text||"").split(/\n+/).filter(z=>z.trim());
-      if(lv){kids.push(new Paragraph({text:txt[0]||"",heading:HL[Math.min(lv,6)]}));
+      if(lv){kids.push(new Paragraph({text:pre+(txt[0]||""),heading:HL[Math.min(lv,6)]}));
         txt.slice(1).forEach(z=>kids.push(new Paragraph({text:z})))}
       else txt.forEach(z=>kids.push(new Paragraph({text:z})));
     }
@@ -7350,6 +7387,7 @@ function openWrExport(d,x,y){
     <div class="sec">${esc(t("expOpts"))}</div>
     <label class="opt"><input type="checkbox" id="wv"> ${esc(t("wrExpVersOpt"))}</label>
     <label class="opt"><input type="checkbox" id="wr2"> ${esc(t("wrExpRefsOpt"))}</label>
+    <label class="opt"><input type="checkbox" id="wn" checked> ${esc(t("wrExpNumsOpt"))}</label>
     <p class="note" id="wnote"></p>
     <button class="go" id="wgo">${esc(t("expGo"))}</button>`;
   const mx=(x==null?innerWidth/2-126:x),my=(y==null?90:y);
@@ -7368,10 +7406,11 @@ function openWrExport(d,x,y){
   };
   p.querySelector("#wex").onclick=()=>p.classList.remove("on");
   p.querySelector("#wgo").onclick=async()=>{
-    const opt={vers:p.querySelector("#wv").checked,refs:p.querySelector("#wr2").checked};
+    const opt={vers:p.querySelector("#wv").checked,refs:p.querySelector("#wr2").checked,
+      nums:p.querySelector("#wn").checked};
     p.classList.remove("on");
     try{
-      if(fmt==="docx")await wrExportDocx(d,opt);
+      if(fmt==="docx")await wrExportWord(d,opt);
       else if(fmt==="pdf")printHTML(wrHTML(d,opt),d.title);
       else if(fmt==="html")dl(new Blob([wrHTML(d,opt)],{type:"text/html;charset=utf-8"}),
         safeName(d.title)+".html");
@@ -7384,10 +7423,12 @@ function openWrExport(d,x,y){
 // 也方便直接倒进别的笔记软件——跟存档包里的分页 Markdown 是同一个思路。
 function wrMD(d,opt){
   let out="# "+(d.title||"")+"\n\n";
+  const nm=wrNumMap(d,opt);
   d.ids.map(card).filter(Boolean).forEach(c=>{
     const o=orig(c),lv=wrLevelOf(c);
     const txt=(o.text||"").trim();
-    if(lv)out+="#".repeat(Math.min(lv+1,6))+" "+txt+"\n\n";
+    const n=nm.get(c.id);
+    if(lv)out+="#".repeat(Math.min(lv+1,6))+" "+(n?n+" ":"")+txt+"\n\n";
     else if(txt)out+=txt+"\n\n";
     if(opt.vers)verList(o).forEach((v,k)=>{
       if(v.id===o.verOn||!String(v.text||"").trim())return;

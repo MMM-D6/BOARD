@@ -4,7 +4,7 @@
 读完这一份就能安全地改动，不必逐行摸索。
 
 当前规模：272 KB，5474 行，291 个函数，330 条双语文案，46 条说明书词条，
-数据结构版本 SCHEMA = 8，测试 41 组 461 条断言（含 cutout.html 那一组）。
+数据结构版本 SCHEMA = 8，测试 42 组 475 条断言（含 cutout.html 那一组）。
 
 ---
 
@@ -83,7 +83,7 @@ CHROME=/path/to/chrome node tests.js   # 用已有的 Chrome，免下载
 
 测试组一览：connectors 连线、text 文字格式、colors 颜色、twins 分身、
 wrorder 写作页里的顺序、wrback 定位只留给引文分身、fmtbar 写作页工具栏、
-wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、cutoutlink 抠图工具的入口、
+wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、cutoutlink 抠图工具的入口、
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
@@ -353,6 +353,23 @@ S = {
 与其让它在临界宽度上飘忽不定，不如在颜色组之后放一个 `.fbrk`（`flex-basis:100%`）：
 文字/字体/颜色一行，段落/整段/清除一行，两行长度接近，也正好是"改字"与"改段"的分界。
 专注模式够宽，`#wrfmt .fbrk{display:none}` 把断点关掉，仍然是一行。
+
+**导出 Word 必须永远有结果。** 真正的 `.docx` 要靠 CDN 上的 docx 库（`loadDocx()`），
+断网、被墙、CDN 抽风都会失败——早先失败就只弹一句报错，等于"写作页导不出 Word"。
+现在 `wrExportWord()` 跟画布那边一个规矩：库拿不到就退回写一份 `.doc`
+（HTML 外壳 + `application/msword`），Word 一样打得开，样式、编号、底色全都在。
+这一条不要"优化"成只留 `.docx`：这个程序的前提是断网也能用。
+
+**标题编号由 `wrNumMap()` 统一提供，三种格式共用。** 稿子里看到的编号是 `wrNums()`
+算的（侧栏目录与正文那一份），导出时必须是同一套规则，否则会出现"稿子里是 2.3、
+Word 里却是 2.1"这种对不上的事。导出面板里有「标题编号」开关，默认勾上；
+关掉就一个编号都不加。编号只加在标题上，正文段落不动。
+`.docx` 那条路把编号交给 `paraFrom(c,D,extra,pre)` 的第四个参数当前缀 run 插进第一段，
+不去碰原有的富文本（加粗、颜色、荧光笔都保住）。
+
+**`safeName(x,i)` 的第二个参数是给存档包分页用的（`01-引言.jpg`），单文件导出不要传。**
+早先写作页导出无条件拼 `String(i)`，于是每一个导出的文件都叫 `undefined-稿子.docx`。
+现在 `i` 省略时只用标题本身。
 
 **层级在写作页里也能设定，用的还是画布那一套 `setLevel()`。** 稿子里的标题层级就是
 卡片的 `c.level`——侧栏目录、正文编号、导出的标题级别全都读它，没有第二份数据
