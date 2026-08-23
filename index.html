@@ -570,9 +570,19 @@
   .blk .ref{padding:5px 0;opacity:.75;font-size:13px;line-height:1.75;cursor:text;
     user-select:text;-webkit-user-select:text}
   .blk .ref:hover{opacity:.95}
-  /* 长按之后进入调序：这一刻才关掉文字选区，平时是选得中的 */
-  .blk .ref.drag{opacity:.55;background:var(--whi);cursor:grabbing;
+  /* 调序状态：整个引用框换成 grabbing，其余条目不再有 hover 反应，
+     "现在在挪东西"这件事要一眼看得出来 */
+  .blk .fb.reorder{cursor:grabbing}
+  .blk .fb.reorder .ref{cursor:grabbing}
+  .blk .fb.reorder .ref:hover{opacity:.75}
+  /* 被拿起来的那一条：浮起来、跟着手指走，明确不是"还在原地" */
+  .blk .ref.lift{opacity:1;z-index:6;cursor:grabbing;
+    background:var(--panel);border-radius:7px;
+    box-shadow:0 8px 22px rgba(0,0,0,.16),0 0 0 1px var(--wline);
     user-select:none;-webkit-user-select:none}
+  /* 原地留下的坑：松手就落在这里 */
+  .blk .refph{border-radius:7px;background:var(--whi);
+    outline:1px dashed var(--wline);outline-offset:-1px}
   /* 从画布跳过来时闪一下，好认出是哪一条 */
   .blk .ref.flash{animation:refflash 1.3s ease-out}
   @keyframes refflash{0%,55%{background:var(--whi);box-shadow:0 0 0 4px var(--whi)}
@@ -6933,50 +6943,108 @@ function bindBody(root,getDoc){
   });
   // 稿子范围内的双击一律拦住冒泡：stage 那边是"双击空白画布新建卡片"，
   // 它不认识 .cap/.blk 已经算一张卡片，不拦就会凭空多建一张出来。
-  // 引文投影长按可以上下调顺序，**只在它自己的引用框里挪**，不会跑到别的段落下面。
-  // 为什么是长按：这一块的文字现在是可以选中的（引文就是拿来抄的），
-  // 一按下就拖会把划字变得没法用。所以按住 320ms 才进入调序；
-  // 在这之前一旦移动，就当成划字，调序取消。
+  // 引文投影可以在自己的引用框里上下调序。做成"真的把它拿起来"：
+  // 长按到时间，这一条**离开文字流**（改成 box 内的绝对定位、加阴影浮起来），
+  // 原地留一个同高的虚线占位；拖动时占位跟着走到手指所指的位置，
+  // 其余几条自然让开；松手就落进占位所在的位置。
+  //
+  // 上一版是"边拖边把它 insertBefore 来 insertBefore 去"，
+  // 元素在脚下反复重排，判定又只在指针正好压住某一条时才生效——
+  // 快一点、偏一点就没反应，还会一路误触到别的内容，完全没有"拿起来"的手感。
+  //
+  // 为什么仍然要长按：这一块的文字是可以选中的（引文就是拿来抄的），
+  // 一按下就拖会把划字变得没法用。按住 340ms 才拿起；在这之前一旦移动超过 5px，
+  // 就当成划字，调序取消。拿起的那一刻清掉文字选区，并把 .fb 标成 reorder
+  // （光标变成 grabbing、其余条目不再有 hover 反应），让"进入调序"这件事看得见。
   let refDrag=null,refT=null;
+  const refDrop=(commit)=>{
+    if(!refT)return false;
+    clearTimeout(refT);refT=null;
+    if(!refDrag)return false;
+    const {el,box,ph}=refDrag;refDrag=null;
+    el.classList.remove("lift");
+    el.style.cssText=el.dataset.css0||"";
+    delete el.dataset.css0;
+    box.classList.remove("reorder");
+    if(commit&&ph&&ph.parentElement===box)box.insertBefore(el,ph);
+    if(ph&&ph.parentElement)ph.remove();
+    box.style.position="";
+    if(commit)commitRefOrder(box);else redrawDocs();
+    return true;
+  };
   root.addEventListener("pointerdown",e=>{
     if(lock||e.button!==0)return;
     const ref=e.target.closest(".ref");if(!ref)return;
     const box=ref.parentElement;
     if(!box||box.querySelectorAll(":scope > .ref").length<2)return;   // 只有一条，没得排
     const sx=e.clientX,sy=e.clientY;
+    // 画布上的稿子整体带缩放，屏幕像素要换算回内容像素才对得上 offsetTop
+    const br=box.getBoundingClientRect();
+    const scale=(box.offsetHeight&&br.height/box.offsetHeight)||1;
     clearTimeout(refT);
     refT=setTimeout(()=>{
-      refDrag={el:ref,box};
-      ref.classList.add("drag");
+      const r0=ref.getBoundingClientRect();
+      const top0=(r0.top-br.top)/scale+box.scrollTop;
+      const h=r0.height/scale;
+      const ph=document.createElement("div");
+      ph.className="refph";ph.style.height=h+"px";
+      box.insertBefore(ph,ref);
+      ref.dataset.css0=ref.style.cssText||"";
+      box.style.position="relative";
+      box.classList.add("reorder");
+      ref.classList.add("lift");
+      Object.assign(ref.style,{position:"absolute",left:"0",right:"0",
+        top:top0+"px",margin:"0",pointerEvents:"none"});
+      refDrag={el:ref,box,ph,h,top0,scale,maxTop:Math.max(0,box.offsetHeight-h)};
       const s2=getSelection();if(s2&&s2.removeAllRanges)s2.removeAllRanges();
-    },320);
+    },340);
     const mv=ev=>{
       if(!refDrag){
-        if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>4)clearTimeout(refT);
+        if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>5){clearTimeout(refT);refT=null}
         return;
       }
       ev.preventDefault();
-      const sibs=[...refDrag.box.querySelectorAll(":scope > .ref")];
-      const hit=sibs.find(z=>{
-        const r=z.getBoundingClientRect();
-        return ev.clientY>=r.top&&ev.clientY<=r.bottom;
-      });
-      if(hit&&hit!==refDrag.el){
-        const r=hit.getBoundingClientRect();
-        refDrag.box.insertBefore(refDrag.el,
-          ev.clientY>r.top+r.height/2?hit.nextSibling:hit);
+      const D=refDrag;
+      // 只跟纵向，而且夹在框内：它不会跑出这个引用框，也就不会误触别的段落
+      const top=Math.max(0,Math.min(D.maxTop,D.top0+(ev.clientY-sy)/D.scale));
+      D.el.style.top=top+"px";
+      // 落点按**指针**算，不按浮起来那一条的位置算：后者被夹在框内，
+      // 拖到最底下时它的中线可能差零点几个像素够不到最后一条的中线，
+      // 于是"怎么拖都放不到末尾"。指针是人瞄准的东西，也不受夹取影响。
+      const bx=D.box.getBoundingClientRect();
+      const py=(ev.clientY-bx.top)/D.scale+D.box.scrollTop;
+      const sibs=[...D.box.children].filter(z=>z!==D.el&&z!==D.ph&&z.classList.contains("ref"));
+      // 指针正好压在某一条的中线上时，按拖动方向决定归属：往下拖就归后一位、
+      // 往上拖就归前一位。不加这半个像素的偏置，"正好拖到最后一条的中间"
+      // 会被判成留在原处，手感就是"怎么都放不到末尾"。
+      const eps=(ev.clientY-sy)>=0?0.5:-0.5;
+      let at=sibs.length;
+      for(let i=0;i<sibs.length;i++){
+        if(py+eps<sibs[i].offsetTop+sibs[i].offsetHeight/2){at=i;break}
+      }
+      const want=sibs[at]||null;
+      if(D.ph.nextElementSibling!==want||want===null&&D.box.lastElementChild!==D.ph){
+        D.box.insertBefore(D.ph,want);
       }
     };
     const up=()=>{
-      clearTimeout(refT);
       removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
-      if(!refDrag)return;
-      const el2=refDrag.el,box2=refDrag.box;refDrag=null;
-      el2.classList.remove("drag");
-      commitRefOrder(box2);
+      removeEventListener("keydown",esc,true);
+      refDrop(true);
+      clearTimeout(refT);refT=null;
     };
+    const esc=ev=>{
+      if(ev.key!=="Escape")return;
+      ev.preventDefault();ev.stopPropagation();
+      removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+      removeEventListener("keydown",esc,true);
+      refDrop(false);                       // 中途反悔：放回原处，什么都不改
+    };
+    refT=refT||1;                            // 让 refDrop 知道这一轮是活的
     addEventListener("pointermove",mv);addEventListener("pointerup",up);
+    addEventListener("keydown",esc,true);
   });
+
   root.addEventListener("dblclick",e=>{if(!lock)e.stopPropagation()});
   root.addEventListener("focusin",e=>{
     const el=e.target.closest(".cap");if(!el)return;

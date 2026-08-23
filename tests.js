@@ -2691,58 +2691,103 @@ group("wrrefsel 引文可选中、跳转对得准", async (c) => {
 });
 
 group("wrreford 引文长按调序", async (c) => {
-  // 引文投影可以在自己的引用框里上下调顺序，**但绝不跑出这个框**。
+  // 引文投影在自己的引用框里上下调序，做成"真的把它拿起来"：
+  // 长按到时间这一条离开文字流（框内绝对定位 + 阴影浮起），原地留一个同高的占位，
+  // 拖动时占位跟着指针走，松手落进占位所在的位置。
   // 顺序就是 wrKids 的顺序，而 wrKids 读的是 S.cards 的数组顺序，
   // 所以调序= 把这几张卡片在 S.cards 里原位对调，不新增字段、存档格式不变。
-  // 为什么用长按：这一块的文字是可以选中的（引文就是拿来抄的），
-  // 一按下就拖会把划字变得没法用。
   await c.board([
     { id: "host", x: 0, y: 0, w: 400, text: "承载段落", s: {} },
     { id: "q1", x: 0, y: 100, w: 400, text: "引文甲", s: {} },
     { id: "q2", x: 0, y: 200, w: 400, text: "引文乙", s: {} },
     { id: "q3", x: 0, y: 300, w: 400, text: "引文丙", s: {} },
+    { id: "q4", x: 0, y: 400, w: 400, text: "引文丁", s: {} },
   ], []);
   await c.run(() => {
     S.docs = [];
     const d = addDoc({ x: -900, y: 0 }, "稿子");
     sel = ["host"]; clipCards("copy"); wrPasteMain(d, 0);
-    ["q1", "q2", "q3"].forEach((id) => { sel = [id]; clipCards("twin"); wrPasteTwin(d.ids[0], d) });
+    ["q1", "q2", "q3", "q4"].forEach((id) => { sel = [id]; clipCards("twin"); wrPasteTwin(d.ids[0], d) });
     d.open = {}; d.open[d.ids[0]] = true; openWrite(d.id);
   });
   await c.wait(700);
   const order = () => c.run(() => wrKids(wrDoc().ids[0]).map((k) => orig(k).text).join("|"));
-  c.ok("三条引文都挂在同一段下面", await order() === "引文甲|引文乙|引文丙");
-
-  const pos = await c.run(() => [...document.querySelectorAll("#wrmain .ref")].map((e) => {
+  const pts = () => c.run(() => [...document.querySelectorAll("#wrmain .ref")].map((e) => {
     const r2 = e.getBoundingClientRect();
-    return { x: r2.left + r2.width / 2, y: r2.top + r2.height / 2, h: r2.height };
+    return { x: r2.left + r2.width / 2, y: r2.top + r2.height / 2 };
   }));
-  await c.page.mouse.move(pos[0].x, pos[0].y);
+  const drag = async (from, to) => {
+    const q = await pts();
+    await c.page.mouse.move(q[from].x, q[from].y);
+    await c.page.mouse.down();
+    await c.wait(430);                       // 长按到进入调序
+    await c.page.mouse.move(q[from].x, q[to].y, { steps: 10 });
+    await c.page.mouse.up();
+    await c.wait(350);
+  };
+  c.ok("四条引文都挂在同一段下面", await order() === "引文甲|引文乙|引文丙|引文丁");
+
+  // 长按之后要看得出"被拿起来了"：浮起的那一条 + 原地的占位
+  const q0 = await pts();
+  await c.page.mouse.move(q0[0].x, q0[0].y);
   await c.page.mouse.down();
-  await c.wait(450);                                  // 长按到进入调序
-  await c.page.mouse.move(pos[0].x, pos[2].y + pos[2].h / 2 - 2, { steps: 8 });
+  await c.wait(430);
+  const lift = await c.run(() => {
+    const el = document.querySelector("#wrmain .ref.lift");
+    const box = document.querySelector("#wrmain .fb");
+    return { lifted: !!el, ph: !!box.querySelector(".refph"),
+      reorder: box.classList.contains("reorder"),
+      absolute: el ? getComputedStyle(el).position === "absolute" : false,
+      shadow: el ? getComputedStyle(el).boxShadow !== "none" : false };
+  });
+  c.ok("长按之后这一条浮起来了", lift.lifted && lift.absolute && lift.shadow);
+  c.ok("原地留下同高的占位", lift.ph);
+  c.ok("整个引用框进入调序状态", lift.reorder);
   await c.page.mouse.up();
-  await c.wait(400);
-  c.ok("长按拖动改变了引文顺序", await order() === "引文乙|引文丙|引文甲");
-  c.ok("三条都还在这个引用框里，一条没跑出去", await c.run(() => {
+  await c.wait(300);
+
+  await drag(0, 3);
+  c.ok("能一路拖到末尾（不是差一位停下）", await order() === "引文乙|引文丙|引文丁|引文甲");
+  await drag(3, 0);
+  c.ok("也能一路拖回最前", await order() === "引文甲|引文乙|引文丙|引文丁");
+  await drag(1, 2);
+  c.ok("相邻两条能对调", await order() === "引文甲|引文丙|引文乙|引文丁");
+
+  c.ok("四条都还在这个引用框里，一条没跑出去", await c.run(() => {
     const d = wrDoc();
-    return document.querySelectorAll("#wrmain .fb .ref").length === 3
-      && wrKids(d.ids[0]).length === 3 && d.ids.length === 1;
+    return document.querySelectorAll("#wrmain .fb .ref").length === 4
+      && wrKids(d.ids[0]).length === 4 && d.ids.length === 1;
   }));
   c.ok("它们仍然是投影，源卡片一张没动", await c.run(() =>
-    ["q1", "q2", "q3"].every((id) => card(id) && !card(id).wrIn)
+    ["q1", "q2", "q3", "q4"].every((id) => card(id) && !card(id).wrIn)
     && wrKids(wrDoc().ids[0]).every((k) => !!k.ref)));
 
-  // 短按快拖 = 划字，不许当成调序
-  const p2 = await c.run(() => [...document.querySelectorAll("#wrmain .ref")].map((e) => {
+  // 拖到一半按 Esc：放回原处，什么都不改
+  const q1 = await pts();
+  await c.page.mouse.move(q1[0].x, q1[0].y);
+  await c.page.mouse.down();
+  await c.wait(430);
+  await c.page.mouse.move(q1[0].x, q1[3].y, { steps: 8 });
+  await c.page.keyboard.press("Escape");
+  await c.page.mouse.up();
+  await c.wait(350);
+  c.ok("中途按 Esc 就地取消，顺序不变", await order() === "引文甲|引文丙|引文乙|引文丁");
+  c.ok("取消之后没有留下浮起的元素或占位", await c.run(() =>
+    document.querySelectorAll("#wrmain .refph,#wrmain .ref.lift,#wrmain .fb.reorder").length === 0));
+
+  // 单击、以及没长按就快拖，都不许当成调序
+  const q2 = await pts();
+  await c.page.mouse.click(q2[0].x, q2[0].y);
+  c.ok("单击不会动到顺序", await order() === "引文甲|引文丙|引文乙|引文丁");
+  const p3 = await c.run(() => [...document.querySelectorAll("#wrmain .ref")].map((e) => {
     const r2 = e.getBoundingClientRect();
     return { x1: r2.left + 6, x2: r2.left + r2.width * 0.6, y: r2.top + r2.height / 2 };
   }));
-  await c.page.mouse.move(p2[0].x1, p2[0].y);
+  await c.page.mouse.move(p3[0].x1, p3[0].y);
   await c.page.mouse.down();
-  await c.page.mouse.move(p2[0].x2, p2[0].y, { steps: 6 });
+  await c.page.mouse.move(p3[0].x2, p3[0].y, { steps: 6 });
   await c.page.mouse.up();
-  c.ok("没长按就拖，仍然是划字而不是调序", await order() === "引文乙|引文丙|引文甲");
+  c.ok("没长按就拖，仍然是划字而不是调序", await order() === "引文甲|引文丙|引文乙|引文丁");
   c.ok("而且真的划到了字", await c.run(() => getSelection().toString().length > 0));
   await c.run(() => closeWrite());
 });
