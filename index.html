@@ -564,10 +564,19 @@
   .blk .fb{display:none;margin:2px 0 8px;padding-left:14px;
     border-left:2px solid var(--wline)}
   .blk .fold.on .fb{display:block}
-  /* 引用条目是投影，不是内容：不可编辑，右键可以跳回原文所在的位置 */
-  .blk .ref{padding:5px 0;opacity:.75;font-size:13px;line-height:1.75;cursor:default;
-    user-select:none;-webkit-user-select:none}
+  /* 引用条目是投影，不是内容：contenteditable="false" 已经保证改不动它。
+     **不要再加 user-select:none**——不可编辑和不可选中是两回事：
+     引文的用处就是抄一句出来放进正文，选不中等于废了一半。 */
+  .blk .ref{padding:5px 0;opacity:.75;font-size:13px;line-height:1.75;cursor:text;
+    user-select:text;-webkit-user-select:text}
   .blk .ref:hover{opacity:.95}
+  /* 长按之后进入调序：这一刻才关掉文字选区，平时是选得中的 */
+  .blk .ref.drag{opacity:.55;background:var(--whi);cursor:grabbing;
+    user-select:none;-webkit-user-select:none}
+  /* 从画布跳过来时闪一下，好认出是哪一条 */
+  .blk .ref.flash{animation:refflash 1.3s ease-out}
+  @keyframes refflash{0%,55%{background:var(--whi);box-shadow:0 0 0 4px var(--whi)}
+    100%{background:transparent;box-shadow:none}}
   .blk .rempty{padding:5px 0;opacity:.3;font-size:11.5px}
   .blk.ctx .gut{display:none}
   .blk.ctx{margin-bottom:2px}
@@ -733,6 +742,10 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrRemove:"Remove from the draft",
   wrRemoved:"Removed from the draft",wrInsert:"Insert a card here",
   wrRefPaste:"Paste a twin here",
+  wrCut:"Cut this paragraph",wrCutN:"Cut these {n} paragraphs",
+  wrCutBefore:"Move the cut paragraphs above",wrCutAfter:"Move the cut paragraphs below",
+  wrCutEnd:"Move the cut paragraphs to the end",
+  wrCutReady:"{n} cut \u2014 right-click where they should go",wrCutMoved:"{n} moved",
   wrRefGoto:"Go to the original",wrRefDrop:"Drop this projection",
   wrRefDropped:"Dropped. The original is untouched.",
   wrRefsClear:"Drop every projection here",wrRefsCleared:"{n} projections dropped",
@@ -908,6 +921,10 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrRemove:"从稿子里移除",
   wrRemoved:"已从稿子里移除",wrInsert:"在这里插入一张卡片",
   wrRefPaste:"在这里粘贴分身",
+  wrCut:"剪切这一段",wrCutN:"剪切这 {n} 段",
+  wrCutBefore:"把剪切的段落移到上方",wrCutAfter:"把剪切的段落移到下方",
+  wrCutEnd:"把剪切的段落移到末尾",
+  wrCutReady:"已剪切 {n} 段，右键选择移到哪里",wrCutMoved:"已移动 {n} 段",
   wrRefGoto:"跳转到原文位置",wrRefDrop:"撤掉这条投影",
   wrRefDropped:"已撤掉，原文不受影响",
   wrRefsClear:"撤掉这里的全部投影",wrRefsCleared:"已撤掉 {n} 条投影",
@@ -1174,7 +1191,28 @@ function gotoTwin(c,back){
   if(back){const o=orig(c);sel=[o.id];paintSel();focusOn([o],true);return}
   const i=list.indexOf(c);
   const nx=list[(i+1)%list.length];
+  // 挂在稿子折叠框里的那种分身没有"位置"可言：它的 x/y 是拷贝时随手写的
+  // 稿子左上角。拿它去 focusOn，镜头就停在稿子的左上角，看不到那条引文——
+  // 用户报的"跳回写作页却不是对准引用条目"就是这个。改成把稿子打开、
+  // 展开它所在的折叠框、滚到那一条并闪一下。
+  if(docOnly(nx)){revealRef(nx);return}
   sel=[nx.id];paintSel();focusOn([nx],true);
+}
+// 把稿子里的某一条引文投影翻出来给人看
+function revealRef(tw){
+  const d=docs().find(z=>z.id===tw.wrIn);
+  if(!d){toast(t("wrNoDoc"));return}
+  if(tw.wrUnder){d.open=d.open||{};d.open[tw.wrUnder]=true;save()}
+  if(wrOpenState()&&wrId===d.id)drawWrite();
+  else openWrite(d.id);
+  requestAnimationFrame(()=>{
+    const box=$("wrmain");
+    const el=box&&box.querySelector(`.ref[data-id="${tw.id}"]`);
+    if(!el)return;
+    scrollBlockInto(box,el);
+    el.classList.add("flash");
+    setTimeout(()=>el.classList.remove("flash"),1400);
+  });
 }
 function unlinkTwin(c){
   const o=orig(c);
@@ -3372,7 +3410,7 @@ addEventListener("keydown",e=>{
     if(e.key==="ArrowRight"||e.key==="ArrowDown"||e.key===" "){e.preventDefault();step(1)}
     if(e.key==="ArrowLeft"||e.key==="ArrowUp"){e.preventDefault();step(-1)}
     if(k==="f")fit();
-  if(k==="m")toggleMap();
+    if(k==="m")toggleMap();
     return;
   }
   if((e.metaKey||e.ctrlKey)&&k==="z"){e.preventDefault();e.shiftKey?applyUndo(redo,undo):applyUndo(undo,redo);return}
@@ -3417,6 +3455,9 @@ addEventListener("keydown",e=>{
     if(sel.length||selLink){e.preventDefault();del()}
   }
   if(k==="f")fit();
+  // M 开关页面地图。原来这一句被错缩进写在 if(lock){...} 里面，
+  // 于是只有演示模式按得动，正常编辑时怎么按都没反应——菜单上却明明写着 M。
+  if(k==="m"&&!e.metaKey&&!e.ctrlKey)toggleMap();
   if(k==="z"&&!e.metaKey&&!e.ctrlKey)focusSel();
   if(k==="0")camTo(tgt.x,tgt.y,1);
   if(k==="t"&&sel.length)syncBar();
@@ -6121,8 +6162,7 @@ function renderDocs(){
     // 模式切换、专注、导出这些功能控件放进页面内部的工具栏，跟文字工具栏并排，
     // 不再摆在标题旁边的外侧——外侧只留标题这一样东西。
     el.innerHTML=`<div class="dttl">
-        <span class="dt" contenteditable="${lock?"false":"true"}" spellcheck="false"
-          >${esc(d.title)}</span>
+        <span class="dt" spellcheck="false">${esc(d.title)}</span>
       </div>
       <div class="dwrap">
         <div class="dside">${wrOutlineHTML(list,nums)}</div>
@@ -6163,6 +6203,7 @@ function docMenu(x,y,d){
     // 空稿子没有"末尾"可言，菜单上就该只说"粘贴"
     ...(CLIP?[{label:d.ids.length?t("wrPasteEnd"):t("wrPasteHere"),
       on:()=>wrPasteMain(d,d.ids.length)}]:[]),
+    ...(WRCUT?[{label:t("wrCutEnd"),on:()=>wrCutPaste(d,d.ids.length)}]:[]),
     {label:t("wrDocExport"),on:()=>openWrExport(d,x,y)},
     "-",
     {label:t("wrDocDel"),danger:true,on:()=>{snap();
@@ -6691,16 +6732,20 @@ function docBodyHTML(d,extNums){
   return h;
 }
 function bindDoc(el,d){
+  // 标题跟页面框的标题一个规矩：点一下是"选中这份稿子"（随后按 Z 就能定位过去），
+  // 按住可以拖动整页，右键出菜单（改名在菜单里），双击才就地改名。
+  // 早先它是 contenteditable，点一下光标就进去了——想选中它反而没有办法。
   const dt=el.querySelector(".dt");
-  dt.addEventListener("pointerdown",e=>e.stopPropagation());
-  dt.addEventListener("blur",()=>{
-    const v=dt.innerText.trim();
-    if(v&&v!==d.title){snap();d.title=v;save();renderDocs()}else dt.innerText=d.title;
-  });
-  dt.addEventListener("keydown",e=>{
+  dt.addEventListener("pointerdown",e=>{
+    if(lock||e.button!==0)return;
     e.stopPropagation();
-    if(e.key==="Enter"){e.preventDefault();dt.blur()}
-    if(e.key==="Escape"){dt.innerText=d.title;dt.blur()}
+    selectDoc(d.id);
+    startDocMove(e,d);
+  });
+  dt.addEventListener("dblclick",e=>{
+    if(lock)return;e.stopPropagation();
+    const v=prompt(t("wrDocRename"),d.title);
+    if(v!==null){snap();d.title=v.trim()||d.title;save();renderDocs()}
   });
   el.querySelectorAll(".dtool button").forEach(b=>{
     b.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
@@ -6740,6 +6785,23 @@ function bindDoc(el,d){
     });
   }
   bindBody(el,d);
+}
+// 引用框里的顺序就是 wrKids 的顺序，而 wrKids 读的是 S.cards 的数组顺序。
+// 所以"调整引文顺序"= 把这几张卡片在 S.cards 里按新顺序重新摆一遍：
+// 占用的还是原来那几个位置，只是内容对调，别的卡片一张都不动。
+// 不新增字段，存档格式不变，SCHEMA 不用加一。
+function commitRefOrder(box){
+  if(!box)return;
+  const ids=[...box.querySelectorAll(":scope > .ref[data-id]")].map(z=>z.dataset.id);
+  const objs=ids.map(id=>card(id));
+  if(!ids.length||objs.some(z=>!z))return;
+  const set=new Set(ids),slots=[];
+  S.cards.forEach((c,i)=>{if(set.has(c.id))slots.push(i)});
+  if(slots.length!==ids.length)return;
+  if(slots.every((p,i)=>S.cards[p].id===ids[i]))return;      // 顺序没变，别白存一次
+  snap();
+  slots.forEach((p,i)=>{S.cards[p]=objs[i]});
+  invalidateIndex();save();redrawDocs();
 }
 // 把某一段滚进它自己的滚动容器。
 // **不要用 scrollIntoView**：它会连带滚动所有祖先滚动容器，
@@ -6822,6 +6884,14 @@ function drawSide(){
 // 双击才真正进入编辑，退出编辑（失焦）后回到"已选中但未编辑"的状态。
 function bindBody(root,getDoc){
   const doc=()=>typeof getDoc==="function"?getDoc():getDoc;
+  // 右键点在一个已经多选的段落上时，要保住这份多选。
+  // 不这么做的话：右键会让 contenteditable 拿到焦点，focusin 立刻把 sel 打回一段，
+  // 于是菜单永远只认得"这一段"，多选剪切根本用不了。
+  let ctxKeep=false;
+  root.addEventListener("pointerdown",e=>{
+    const blk=e.target.closest(".blk");
+    ctxKeep=e.button===2&&!!blk&&sel.length>1&&sel.includes(blk.dataset.id);
+  },true);
   root.addEventListener("input",e=>{
     const el=e.target.closest(".cap");if(!el)return;
     const c=card(el.dataset.id);if(!c||isLocked(c.id))return;
@@ -6838,15 +6908,79 @@ function bindBody(root,getDoc){
     const wrap=e.target.closest(".wrap");if(!wrap)return;
     const blk=wrap.closest(".blk");if(!blk)return;
     e.stopPropagation();
+    const id=blk.dataset.id;
+    // Shift / Ctrl(⌘) 点选：整段整段地挑，跟画布上多选卡片是同一个意思。
+    // 必须 preventDefault：不然浏览器会把它当成"扩展文字选区"，光标一落进去，
+    // focusin 立刻把 sel 打回一段，多选永远选不起来。
+    if(e.shiftKey||e.metaKey||e.ctrlKey){
+      e.preventDefault();
+      const d=doc();
+      if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
+      editing=false;
+      if(e.shiftKey&&sel.length&&d){
+        const ids=d.ids,a=ids.indexOf(sel[sel.length-1]),b=ids.indexOf(id);
+        if(a>=0&&b>=0){
+          const lo=Math.min(a,b),hi=Math.max(a,b);
+          sel=[...new Set([...sel,...ids.slice(lo,hi+1)])];
+        }else sel=[...new Set([...sel,id])];
+      }else sel=sel.includes(id)?sel.filter(z=>z!==id):[...sel,id];
+      selLink=null;paintSel();syncBar();syncFmtBars();
+      return;
+    }
     const cap=wrap.querySelector(".cap");
     if(cap&&cap.isContentEditable)return;               // 可编辑：交给浏览器放置光标/划选
-    sel=[blk.dataset.id];selLink=null;editing=false;paintSel();syncBar();
+    sel=[id];selLink=null;editing=false;paintSel();syncBar();
   });
   // 稿子范围内的双击一律拦住冒泡：stage 那边是"双击空白画布新建卡片"，
   // 它不认识 .cap/.blk 已经算一张卡片，不拦就会凭空多建一张出来。
+  // 引文投影长按可以上下调顺序，**只在它自己的引用框里挪**，不会跑到别的段落下面。
+  // 为什么是长按：这一块的文字现在是可以选中的（引文就是拿来抄的），
+  // 一按下就拖会把划字变得没法用。所以按住 320ms 才进入调序；
+  // 在这之前一旦移动，就当成划字，调序取消。
+  let refDrag=null,refT=null;
+  root.addEventListener("pointerdown",e=>{
+    if(lock||e.button!==0)return;
+    const ref=e.target.closest(".ref");if(!ref)return;
+    const box=ref.parentElement;
+    if(!box||box.querySelectorAll(":scope > .ref").length<2)return;   // 只有一条，没得排
+    const sx=e.clientX,sy=e.clientY;
+    clearTimeout(refT);
+    refT=setTimeout(()=>{
+      refDrag={el:ref,box};
+      ref.classList.add("drag");
+      const s2=getSelection();if(s2&&s2.removeAllRanges)s2.removeAllRanges();
+    },320);
+    const mv=ev=>{
+      if(!refDrag){
+        if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>4)clearTimeout(refT);
+        return;
+      }
+      ev.preventDefault();
+      const sibs=[...refDrag.box.querySelectorAll(":scope > .ref")];
+      const hit=sibs.find(z=>{
+        const r=z.getBoundingClientRect();
+        return ev.clientY>=r.top&&ev.clientY<=r.bottom;
+      });
+      if(hit&&hit!==refDrag.el){
+        const r=hit.getBoundingClientRect();
+        refDrag.box.insertBefore(refDrag.el,
+          ev.clientY>r.top+r.height/2?hit.nextSibling:hit);
+      }
+    };
+    const up=()=>{
+      clearTimeout(refT);
+      removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+      if(!refDrag)return;
+      const el2=refDrag.el,box2=refDrag.box;refDrag=null;
+      el2.classList.remove("drag");
+      commitRefOrder(box2);
+    };
+    addEventListener("pointermove",mv);addEventListener("pointerup",up);
+  });
   root.addEventListener("dblclick",e=>{if(!lock)e.stopPropagation()});
   root.addEventListener("focusin",e=>{
     const el=e.target.closest(".cap");if(!el)return;
+    if(ctxKeep&&sel.includes(el.dataset.id)){ctxKeep=false;syncFmtBars();return}
     sel=[el.dataset.id];editing=true;selLink=null;paintSel();syncBar();syncFmtBars();
   });
   // 失焦只是退出"正在打字"的状态，段落本身仍然保持可编辑
@@ -7215,6 +7349,43 @@ function wrRemoveSel(selBlk){
 // 拷贝进来的），本来就没有稿子之外的身份，所以移出的同时直接从 S.cards 里删掉，
 // 留着只会变成永远找不到的孤儿；画布上真正的源卡片（如果这段内容是从哪张卡片
 // 拷贝来的）是完全独立的另一个对象，不会被这里牵连。
+// 写作页里的"剪切"：**搬运，不是拷贝**。
+// 走剪贴板的话粘出来是一份新的独立拷贝，版本、挂在它下面的引文投影全都留在原地丢了；
+// 而这里要的只是"把这几段挪到别处去"，所以只记下 id，等粘贴那一刻直接在 d.ids 里
+// 重新排位——层级、版本、底色、引文投影一样不动，因为压根没有新建任何东西。
+// 剪切当下也不改数据：中途反悔什么都没损失。
+let WRCUT=null;                                  // {doc:稿子id, ids:[段落id]}
+function wrCutBlocks(d,ids){
+  if(!d)return;
+  const set=new Set(ids||[]);
+  const ordered=d.ids.filter(id=>set.has(id));   // 一律按稿子里的先后，不按点选顺序
+  if(!ordered.length)return;
+  WRCUT={doc:d.id,ids:ordered};
+  toast(t("wrCutReady").replace("{n}",ordered.length));
+}
+function wrCutPaste(d,i){
+  if(!WRCUT||!d)return;
+  const ids=WRCUT.ids.filter(id=>card(id));      // 中途被删掉的就不搬了
+  if(!ids.length){WRCUT=null;return}
+  const from=docs().find(z=>z.id===WRCUT.doc);
+  const set=new Set(ids);
+  snap();
+  // 插入点要换算成"移走之后"的位置，否则同一份稿子里往后挪会差几位
+  let at=Math.max(0,Math.min(i,d.ids.length));
+  if(from&&from.id===d.id)at=d.ids.slice(0,at).filter(id=>!set.has(id)).length;
+  if(from)from.ids=from.ids.filter(id=>!set.has(id));
+  if(from&&from.id!==d.id){                      // 跨稿子：连同挂在它下面的投影一起改换门庭
+    ids.forEach(id=>{
+      const c=card(id);if(c&&c.wrIn)c.wrIn=d.id;
+      wrKids(id).forEach(k=>{if(k.wrIn)k.wrIn=d.id});
+    });
+  }
+  d.ids.splice(at,0,...ids);
+  const n=ids.length;
+  WRCUT=null;sel=ids.slice();selLink=null;
+  save();redrawDocs();paintSel();
+  toast(t("wrCutMoved").replace("{n}",n));
+}
 function wrDropAt(d,i){
   const id=d.ids[i];if(!id)return;
   const c=card(id);
@@ -7254,6 +7425,14 @@ function wrBlockMenu(x,y,c,i,d){
     items.push({label:t("wrVerDel"),danger:true,on:()=>{verDel(c,o.verOn);redrawDocs()}});
   }
   items.push("-",{label:t("wrVerCopy"),on:()=>verToClip(c,o.verOn)});
+  // 剪切：右键落在一个已经多选的段落上，就整批剪；否则只剪这一段
+  const cutIds=(sel.length>1&&sel.includes(c.id))?sel.slice():[c.id];
+  if(d)items.push("-",{label:cutIds.length>1
+      ?t("wrCutN").replace("{n}",cutIds.length):t("wrCut"),
+    on:()=>wrCutBlocks(d,cutIds)});
+  if(WRCUT&&d)items.push(
+    {label:t("wrCutBefore"),on:()=>wrCutPaste(d,i)},
+    {label:t("wrCutAfter"),on:()=>wrCutPaste(d,i+1)});
   if(CLIP&&d)items.push("-",
     ...(caretHere?[{label:t("wrPasteHere"),on:()=>wrPasteAtCaret(d,c,cap)}]:[]),
     {label:t("wrPasteBefore"),on:()=>wrPasteMain(d,i)},
@@ -7335,9 +7514,15 @@ function wrHTML(d,opt){
 // 库拿不到就退回写一份 .doc（HTML 外壳 + application/msword），Word 一样打得开，
 // 样式、编号、底色全都在。**导出 Word 这件事必须永远有结果**，不能取决于能不能联网。
 async function wrExportWord(d,opt){
-  let D=null;
-  try{D=await loadDocx()}catch(e){D=null}
-  if(D){await wrExportDocx(D,d,opt);return}
+  // **任何一步出问题都必须落到 .doc**，不能只弹一句"导出未完成"。
+  // 失败的方式不止"网络连不上"一种：CDN 半截返回、拿到的 window.docx 缺东少西、
+  // Packer 自己抛错……所以整段都包起来，连拿到库之后的构建也算在内。
+  try{
+    const D=await loadDocx();
+    if(D&&D.Document&&D.Packer&&D.Paragraph&&D.HeadingLevel){
+      await wrExportDocx(D,d,opt);return;
+    }
+  }catch(e){}
   dl(new Blob(["\uFEFF"+wrHTML(d,opt)],{type:"application/msword"}),safeName(d.title)+".doc");
   toast(t("wrExpDocFallback"));
 }

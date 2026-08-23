@@ -1183,6 +1183,17 @@ group("map 页面地图", async (c) => {
     invalidateIndex(); render(); fit(true);
   });
   await c.wait(600);
+  // 快捷键 M：这一句原来被错缩进写在 if(lock){...} 里面，
+  // 于是只有演示模式按得动，正常编辑时怎么按都没反应——菜单上却明明写着 M
+  await c.run(() => { sel = []; selDoc = null; paintSel();
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur() });
+  await c.page.keyboard.press("m");
+  await c.wait(350);
+  c.ok("按 M 能打开地图", await c.run(() => mapOn && $("map").classList.contains("on")));
+  await c.page.keyboard.press("m");
+  await c.wait(350);
+  c.ok("再按一次关掉", await c.run(() => !mapOn));
+
   await c.run(() => toggleMap());
   await c.wait(400);
   c.ok("地图可以打开", await c.run(() => $("map").classList.contains("on")));
@@ -1890,12 +1901,14 @@ group("docpage 稿子在画布上", async (c) => {
   c.ok("编辑稿子里的段落完全不牵动画布上的原卡片",
     (await c.run(() => card("p2").text)) === "第二段内容。");
 
+  // 标题不再是 contenteditable：点一下是选中这份稿子，双击才改名（见 wrtitle 组）
   await c.run(() => {
+    window.prompt = () => "改了名字";
     const dt = document.querySelector("#docs .doc .dttl .dt");
-    dt.innerText = "改了名字"; dt.dispatchEvent(new FocusEvent("blur", { bubbles: true }));
+    dt.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
   });
   await c.wait(400);
-  c.ok("标题可以就地改名", (await c.run(() => S.docs[0].title)) === "改了名字");
+  c.ok("标题双击可以改名", (await c.run(() => S.docs[0].title)) === "改了名字");
 
   c.ok("页内有模式与导出按钮",
     (await c.run(() => document.querySelectorAll("#docs .doc .dtool button").length)) === 4);
@@ -2605,6 +2618,246 @@ group("fmtbar 写作页工具栏", async (c) => {
   c.ok("文字工具栏独占一整行", !!rows && rows.fmtW > rows.barW * 0.9);
 });
 
+group("wrrefsel 引文可选中、跳转对得准", async (c) => {
+  // 不可编辑 ≠ 不可选中。引文投影的用处就是抄一句出来放进正文，
+  // 早先 .ref 上挂着 user-select:none，等于废了一半。
+  // 另一头：挂在稿子折叠框里的分身没有"位置"（x/y 是稿子的左上角），
+  // 拿它去 focusOn，镜头只会停在稿子左上角——所以改成翻开折叠框、滚到那一条。
+  await c.board([
+    { id: "q", x: 0, y: 0, w: 400, text: "Prior literature reviews on digital fashion focus on business.", s: {} },
+    ...Array.from({ length: 12 }, (_, i) => ({ id: "f" + i, x: 0, y: 100 + i * 60, w: 400, text: "填充段落" + i, s: {} })),
+  ], []);
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = S.cards.filter((z) => z.id !== "q").map((z) => z.id);
+    clipCards("copy"); wrPasteMain(d, 0);
+    sel = ["q"]; clipCards("twin"); wrPasteTwin(d.ids[10], d);
+    d.open = {}; openWrite(d.id);
+  });
+  await c.wait(700);
+  await c.run(() => { const d = wrDoc(); d.open[d.ids[10]] = true; drawWrite() });
+  await c.wait(300);
+
+  const st = await c.run(() => {
+    const el = document.querySelector("#wrmain .ref");
+    return el ? { us: getComputedStyle(el).userSelect, ce: el.getAttribute("contenteditable") } : null;
+  });
+  c.ok("引文没有被 user-select:none 锁住", !!st && st.us !== "none");
+  c.ok("但它依然不可编辑", !!st && st.ce === "false");
+
+  // 真鼠标划一遍，确认选得中
+  const box = await c.run(() => {
+    const e = document.querySelector("#wrmain .ref"), r2 = e.getBoundingClientRect();
+    return { x1: r2.left + 6, x2: r2.left + r2.width * 0.5, y: r2.top + r2.height / 2 };
+  });
+  await c.page.mouse.move(box.x1, box.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(box.x2, box.y, { steps: 10 });
+  await c.page.mouse.up();
+  c.ok("鼠标划得动，选得到文字", await c.run(() => getSelection().toString().length > 8));
+  c.ok("改不动它的内容", await c.run(() => {
+    const e = document.querySelector("#wrmain .ref"), before = e.textContent;
+    e.focus();
+    try { document.execCommand("insertText", false, "XXX") } catch (err) {}
+    return e.textContent === before;
+  }));
+
+  // 从画布点分身角标跳过来：要落在那一条引文上，不是稿子左上角
+  await c.run(() => { closeWrite(); camTo(0, 0, 1, true) });
+  await c.wait(400);
+  const jump = await c.run(() => {
+    const el = nodes.get("q");
+    const has = !!(el && el.querySelector(".twin"));
+    gotoTwin(card("q"), false);
+    return has;
+  });
+  c.ok("画布上的源卡片有分身角标", jump);
+  await c.wait(900);
+  const land = await c.run(() => {
+    const box2 = document.getElementById("wrmain");
+    const el = box2 && box2.querySelector(".ref");
+    if (!el) return { wr: document.body.classList.contains("wr"), found: false };
+    const r2 = el.getBoundingClientRect(), br = box2.getBoundingClientRect();
+    return { wr: document.body.classList.contains("wr"), found: true,
+      inView: r2.top >= br.top - 2 && r2.bottom <= br.bottom + 2,
+      flash: el.classList.contains("flash"), scroll: box2.scrollTop };
+  });
+  c.ok("跳过去会把稿子打开", land.wr);
+  c.ok("折叠框被翻开，那一条引文渲染出来了", land.found);
+  c.ok("镜头落在引文上，不是稿子左上角", land.inView && land.scroll > 20);
+  c.ok("闪一下好认出是哪一条", land.flash);
+  await c.run(() => closeWrite());
+});
+
+group("wrreford 引文长按调序", async (c) => {
+  // 引文投影可以在自己的引用框里上下调顺序，**但绝不跑出这个框**。
+  // 顺序就是 wrKids 的顺序，而 wrKids 读的是 S.cards 的数组顺序，
+  // 所以调序= 把这几张卡片在 S.cards 里原位对调，不新增字段、存档格式不变。
+  // 为什么用长按：这一块的文字是可以选中的（引文就是拿来抄的），
+  // 一按下就拖会把划字变得没法用。
+  await c.board([
+    { id: "host", x: 0, y: 0, w: 400, text: "承载段落", s: {} },
+    { id: "q1", x: 0, y: 100, w: 400, text: "引文甲", s: {} },
+    { id: "q2", x: 0, y: 200, w: 400, text: "引文乙", s: {} },
+    { id: "q3", x: 0, y: 300, w: 400, text: "引文丙", s: {} },
+  ], []);
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["host"]; clipCards("copy"); wrPasteMain(d, 0);
+    ["q1", "q2", "q3"].forEach((id) => { sel = [id]; clipCards("twin"); wrPasteTwin(d.ids[0], d) });
+    d.open = {}; d.open[d.ids[0]] = true; openWrite(d.id);
+  });
+  await c.wait(700);
+  const order = () => c.run(() => wrKids(wrDoc().ids[0]).map((k) => orig(k).text).join("|"));
+  c.ok("三条引文都挂在同一段下面", await order() === "引文甲|引文乙|引文丙");
+
+  const pos = await c.run(() => [...document.querySelectorAll("#wrmain .ref")].map((e) => {
+    const r2 = e.getBoundingClientRect();
+    return { x: r2.left + r2.width / 2, y: r2.top + r2.height / 2, h: r2.height };
+  }));
+  await c.page.mouse.move(pos[0].x, pos[0].y);
+  await c.page.mouse.down();
+  await c.wait(450);                                  // 长按到进入调序
+  await c.page.mouse.move(pos[0].x, pos[2].y + pos[2].h / 2 - 2, { steps: 8 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  c.ok("长按拖动改变了引文顺序", await order() === "引文乙|引文丙|引文甲");
+  c.ok("三条都还在这个引用框里，一条没跑出去", await c.run(() => {
+    const d = wrDoc();
+    return document.querySelectorAll("#wrmain .fb .ref").length === 3
+      && wrKids(d.ids[0]).length === 3 && d.ids.length === 1;
+  }));
+  c.ok("它们仍然是投影，源卡片一张没动", await c.run(() =>
+    ["q1", "q2", "q3"].every((id) => card(id) && !card(id).wrIn)
+    && wrKids(wrDoc().ids[0]).every((k) => !!k.ref)));
+
+  // 短按快拖 = 划字，不许当成调序
+  const p2 = await c.run(() => [...document.querySelectorAll("#wrmain .ref")].map((e) => {
+    const r2 = e.getBoundingClientRect();
+    return { x1: r2.left + 6, x2: r2.left + r2.width * 0.6, y: r2.top + r2.height / 2 };
+  }));
+  await c.page.mouse.move(p2[0].x1, p2[0].y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(p2[0].x2, p2[0].y, { steps: 6 });
+  await c.page.mouse.up();
+  c.ok("没长按就拖，仍然是划字而不是调序", await order() === "引文乙|引文丙|引文甲");
+  c.ok("而且真的划到了字", await c.run(() => getSelection().toString().length > 0));
+  await c.run(() => closeWrite());
+});
+
+group("wrtitle 稿子标题点选", async (c) => {
+  // 跟页面框的标题一个规矩：点一下是选中（随后按 Z 定位），右键出菜单（改名在里面），
+  // 双击才就地改名。早先它是 contenteditable，点一下光标直接进去，反而选不中。
+  await c.board([{ id: "a", x: 0, y: 0, w: 400, text: "段落", s: {} }], []);
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -300, y: -200 }, "稿子 1");
+    sel = ["a"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = []; selDoc = null; paintSel(); camTo(0, 0, 1, true);
+  });
+  await c.wait(600);
+  const t2 = await c.run(() => {
+    const e = document.querySelector(".doc .dt"), r2 = e.getBoundingClientRect();
+    return { x: r2.left + r2.width / 2, y: r2.top + r2.height / 2, ce: e.isContentEditable };
+  });
+  c.ok("标题不再是可直接编辑的", !t2.ce);
+  await c.page.mouse.click(t2.x, t2.y);
+  c.ok("点一下就选中了这份稿子", await c.run(() => selDoc === docs()[0].id));
+  c.ok("点完没有把光标塞进标题里", await c.run(() => !document.activeElement.isContentEditable));
+
+  await c.page.keyboard.press("z");
+  await c.wait(800);
+  c.ok("按 Z 能定位过去", await c.run(() => String(focusKey).startsWith("doc:")));
+
+  await c.page.mouse.click(t2.x, t2.y, { button: "right" });
+  await c.wait(250);
+  const menu = await c.run(() => {
+    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    closeMenus();
+    return { items, rename: t("wrDocRename") };
+  });
+  c.ok("右键出的是这份稿子的菜单，改名在里面",
+    menu.items.some((z) => z.includes(menu.rename)));
+
+  await c.run(() => { window.prompt = () => "新名字" });
+  const t3 = await c.run(() => {
+    const e = document.querySelector(".doc .dt"), r2 = e.getBoundingClientRect();
+    return { x: r2.left + r2.width / 2, y: r2.top + r2.height / 2 };
+  });
+  await c.page.mouse.click(t3.x, t3.y, { clickCount: 2 });
+  await c.wait(300);
+  c.ok("双击才就地改名", await c.run(() => docs()[0].title === "新名字"));
+});
+
+group("wrcut 多选与剪切搬运", async (c) => {
+  // 写作页里调段落顺序：Shift/Ctrl 点选整段，右键剪切，再到目标位置右键移过去。
+  // **剪切是搬运，不是拷贝**——只在 d.ids 里重新排位，所以层级、版本、底色、
+  // 挂在段落下面的引文投影全都原样跟着走，因为压根没有新建任何东西。
+  await c.board([
+    { id: "h1", x: 0, y: 0, w: 400, text: "Introduction", level: 1, s: {} },
+    { id: "p1", x: 0, y: 100, w: 400, text: "段落一", s: {} },
+    { id: "p2", x: 0, y: 200, w: 400, text: "段落二", s: {} },
+    { id: "h2", x: 0, y: 300, w: 400, text: "Background", level: 2, s: {} },
+    { id: "p3", x: 0, y: 400, w: 400, text: "段落三", s: {} },
+    { id: "q", x: 0, y: 500, w: 400, text: "引文原文", s: {} },
+  ], []);
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["h1", "p1", "p2", "h2", "p3"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = ["q"]; clipCards("twin"); wrPasteTwin(d.ids[3], d);   // 引文挂在 Background 下面
+    sel = []; paintSel(); openWrite(d.id);
+  });
+  await c.wait(700);
+
+  const pt = async (i) => await c.run((i) => {
+    const e = document.querySelectorAll("#wrmain .blk .cap")[i], r2 = e.getBoundingClientRect();
+    return { x: r2.left + r2.width / 2, y: r2.top + r2.height / 2 };
+  }, i);
+  const a = await pt(3), b = await pt(4), first = await pt(0);
+
+  await c.page.mouse.click(a.x, a.y, { modifiers: ["Meta"] });
+  await c.page.keyboard.down("Shift");
+  await c.page.mouse.click(b.x, b.y);
+  await c.page.keyboard.up("Shift");
+  const ms = await c.run(() => ({ n: sel.length, painted: document.querySelectorAll("#wrmain .blk.sel").length,
+    txt: sel.map((z) => card(z).text).join("|") }));
+  c.ok("Shift 点选能选中一段以上", ms.n === 2 && ms.txt === "Background|段落三");
+  c.ok("选中的段落都亮起来了", ms.painted === 2);
+
+  await c.page.mouse.click(b.x, b.y, { button: "right" });
+  await c.wait(250);
+  const menu = await c.run(() => [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim()));
+  c.ok("右键不会把多选打回一段（菜单说的是 2 段）", menu.some((z) => /剪切这 2 段|Cut these 2/.test(z)));
+  await c.run(() => [...document.querySelectorAll("#menu .mi")]
+    .find((z) => /剪切|^Cut/.test(z.textContent.trim())).click());
+  await c.wait(200);
+  c.ok("剪切当下不动数据，反悔无损失", await c.run(() => wrDoc().ids.length === 5));
+
+  await c.page.mouse.click(first.x, first.y, { button: "right" });
+  await c.wait(250);
+  c.ok("目标位置的菜单里出现了移动项", await c.run(() =>
+    [...document.querySelectorAll("#menu .mi")].some((z) => /移到上方|Move the cut/.test(z.textContent))));
+  await c.run(() => [...document.querySelectorAll("#menu .mi")]
+    .find((z) => /移到上方|Move the cut paragraphs above/.test(z.textContent)).click());
+  await c.wait(400);
+
+  const after = await c.run(() => {
+    const d = wrDoc();
+    const hd = d.ids.find((z) => card(z).text === "Background");
+    return { order: d.ids.map((z) => card(z).text).join("|"),
+      lv: card(hd).level, refs: wrKids(hd).length, n: d.ids.length,
+      cards: S.cards.filter((z) => z.wrIn === d.id && !z.ref).length };
+  });
+  c.ok("两段一起搬到了新位置", after.order === "Background|段落三|Introduction|段落一|段落二");
+  c.ok("层级跟着一起走", after.lv === 2);
+  c.ok("挂在它下面的引文投影没有丢", after.refs === 1);
+  c.ok("是搬运不是复制，段落总数没变", after.n === 5 && after.cards === 5);
+  await c.run(() => closeWrite());
+});
+
 group("wrexport 稿子导出", async (c) => {
   // 两件事：① 导出 Word 必须永远有结果——真正的 .docx 要靠 CDN 上的 docx 库，
   // 联不上就退回写一份 .doc（HTML 外壳 + application/msword），Word 一样打得开；
@@ -2694,6 +2947,33 @@ group("wrexport 稿子导出", async (c) => {
   c.ok("导出面板里有标题编号这个开关", ui.has);
   c.ok("默认勾上", ui.checked);
   c.ok("开关有中英文案", await c.run(() => !!(T.en.wrExpNumsOpt && T.zh.wrExpNumsOpt)));
+
+  // 失败的方式不止"网络连不上"一种：CDN 半截返回、拿到的库缺东少西、
+  // Packer 自己抛错……每一种都必须落到 .doc，不能弹一句"导出未完成"就没了
+  const broken = await c.run(async () => {
+    const d = docs()[0], realDl = window.dl, realDocx = window.docx, realLoad = window.loadDocx;
+    const out = [];
+    const cases = [
+      () => { window.loadDocx = () => Promise.reject(new Error("offline")) },
+      () => { window.loadDocx = () => Promise.resolve(null) },
+      () => { window.loadDocx = () => Promise.resolve({ Document: function () {} }) },   // 缺东少西
+      () => { window.loadDocx = () => Promise.resolve({ Document: function () {},
+        Paragraph: function () {}, HeadingLevel: {},
+        Packer: { toBlob: () => { throw new Error("boom") } } }) },                      // 构建时炸
+    ];
+    for (const setup of cases) {
+      window.docx = undefined; setup();
+      let got = null; window.dl = (blob, name) => { got = { name, size: blob.size } };
+      let threw = false;
+      try { await wrExportWord(d, { vers: false, refs: false, nums: true }) } catch (e) { threw = true }
+      out.push({ ok: !!got && got.size > 0 && /\.doc$/.test(got.name), threw });
+    }
+    window.dl = realDl; window.docx = realDocx; window.loadDocx = realLoad;
+    return out;
+  });
+  c.ok("四种失败方式全都落到 .doc（" + broken.filter((z) => z.ok).length + "/4）",
+    broken.every((z) => z.ok));
+  c.ok("一次都没有抛到外面变成「导出未完成」", broken.every((z) => !z.threw));
 });
 
 group("wrlevel 写作页里设定层级", async (c) => {

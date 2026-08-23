@@ -4,7 +4,7 @@
 读完这一份就能安全地改动，不必逐行摸索。
 
 当前规模：272 KB，5474 行，291 个函数，330 条双语文案，46 条说明书词条，
-数据结构版本 SCHEMA = 8，测试 42 组 475 条断言（含 cutout.html 那一组）。
+数据结构版本 SCHEMA = 8，测试 46 组 509 条断言（含 cutout.html 那一组）。
 
 ---
 
@@ -83,7 +83,7 @@ CHROME=/path/to/chrome node tests.js   # 用已有的 Chrome，免下载
 
 测试组一览：connectors 连线、text 文字格式、colors 颜色、twins 分身、
 wrorder 写作页里的顺序、wrback 定位只留给引文分身、fmtbar 写作页工具栏、
-wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、cutoutlink 抠图工具的入口、
+wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 抠图工具的入口、
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
@@ -354,9 +354,56 @@ S = {
 文字/字体/颜色一行，段落/整段/清除一行，两行长度接近，也正好是"改字"与"改段"的分界。
 专注模式够宽，`#wrfmt .fbrk{display:none}` 把断点关掉，仍然是一行。
 
+**引文投影长按可以调序，只在自己的引用框里挪。** 顺序就是 `wrKids()` 的顺序，
+而 `wrKids()` 读的是 `S.cards` 的数组顺序——所以 `commitRefOrder(box)` 做的事是：
+把这几张卡片在 `S.cards` 里**原位对调**（占用的还是原来那几个下标，别的卡片一张不动）。
+不新增字段，存档格式不变，SCHEMA 不用加一。
+为什么是长按（320ms）而不是按下就拖：这一块的文字现在是可以选中的（见下一条），
+一按下就拖会把划字变得没法用；在长按计时走完之前只要移动超过 4px，就当成划字，调序取消。
+
+**稿子标题跟页面框的标题一个规矩：点选、拖动、右键菜单、双击改名。**
+早先 `.dt` 是 `contenteditable`，点一下光标直接进去，想"选中这份稿子再按 Z 定位"
+反而没有办法。现在点一下 `selectDoc()` 并可拖动整页，右键落到 `docMenu`（改名在里面），
+双击才 `prompt` 改名。专注模式的 `#wrtitle` 仍然是就地编辑——那里本来就在写字，
+不需要"选中"这个概念。
+
+**M 开关页面地图那一句，原来被错缩进写在 `if(lock){...}` 里面。**
+于是只有演示模式按得动，正常编辑时怎么按都没反应，而菜单上明明写着 `M`。
+`map` 组现在按真键来验证。缩进错位造成的作用域错误不会有任何语法报错，
+改这一段 `keydown` 时留意。
+
+**不可编辑 ≠ 不可选中。** 引文投影是 `contenteditable="false"`，改不动它这一点已经够了；
+`.ref` 上原来还挂着 `user-select:none`，于是连一句话都抄不出来——而引文的用处
+恰恰就是抄一句放进正文。那条 CSS 已经删掉，`cursor` 也改成 `text`。
+`wrrefsel` 组用真鼠标划一遍来守这条，同时确认它仍然改不动。
+
+**稿子折叠框里的分身没有"位置"，跳转不能用 `focusOn`。** 它的 `x/y` 是拷贝时随手写的
+稿子左上角，所以 `gotoTwin()` 轮到这种分身时，镜头只会停在稿子的左上角，
+根本看不到那一条引文。现在改走 `revealRef(tw)`：把承载它的稿子打开、
+展开它所在的折叠框、`scrollBlockInto` 滚到那一条，再闪一下（`.ref.flash`）好认。
+
+**写作页里的"剪切"是搬运，不是拷贝。** 调段落顺序用的是 `WRCUT={doc,ids}` +
+`wrCutPaste(d,i)`：只在 `d.ids` 里重新排位，**不新建任何卡片**，
+所以层级、版本、底色、挂在段落下面的引文投影全都原样跟着走。
+如果走剪贴板（`clipCards`/`wrPasteMain`），粘出来的是一份新的独立拷贝，
+版本与投影会留在原地一起丢掉——两条路不要混。
+剪切当下也不改数据，真正的搬运发生在粘贴那一刻，中途反悔什么都没损失。
+插入点要换算成"移走之后"的位置，否则同一份稿子里往后挪会差几位；
+跨稿子搬运时，段落和它下面的投影都要改 `wrIn`。
+
+**写作页的多选：Shift 连选、Ctrl/⌘ 单个增减，都要 `preventDefault()`。**
+段落是 `contenteditable`，不拦住的话浏览器会把 Shift+点击当成"扩展文字选区"，
+光标一落进去，`focusin` 立刻把 `sel` 打回一段，多选永远选不起来。
+右键同理：右键会让 `contenteditable` 拿到焦点，所以 `bindBody` 里用 `ctxKeep`
+记一笔"这次右键点在多选里"，让那一次 `focusin` 放行——
+不然菜单永远只认得"这一段"，多选剪切根本用不了。
+
 **导出 Word 必须永远有结果。** 真正的 `.docx` 要靠 CDN 上的 docx 库（`loadDocx()`），
-断网、被墙、CDN 抽风都会失败——早先失败就只弹一句报错，等于"写作页导不出 Word"。
-现在 `wrExportWord()` 跟画布那边一个规矩：库拿不到就退回写一份 `.doc`
+失败的方式不止"网络连不上"一种：CDN 半截返回、拿到的 `window.docx` 缺东少西、
+`Packer.toBlob` 自己抛错——**每一种都要落到 .doc**，所以 `wrExportWord()` 里
+连"拿到库之后的构建"也一起包在 try 里，并且先检查 `Document/Packer/Paragraph/HeadingLevel`
+都在才敢走 `.docx`。只包住 `loadDocx()` 是不够的，那样后面炸了照样弹"导出未完成"。
+现在跟画布那边一个规矩：库拿不到（或者用不了）就退回写一份 `.doc`
 （HTML 外壳 + `application/msword`），Word 一样打得开，样式、编号、底色全都在。
 这一条不要"优化"成只留 `.docx`：这个程序的前提是断网也能用。
 
