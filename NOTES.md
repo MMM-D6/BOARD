@@ -4,7 +4,7 @@
 读完这一份就能安全地改动，不必逐行摸索。
 
 当前规模：272 KB，5474 行，291 个函数，330 条双语文案，46 条说明书词条，
-数据结构版本 SCHEMA = 8，测试 46 组 524 条断言（含 cutout.html 那一组）。
+数据结构版本 SCHEMA = 8，测试 47 组 531 条断言（含 cutout.html 那一组）。
 
 ---
 
@@ -83,7 +83,7 @@ CHROME=/path/to/chrome node tests.js   # 用已有的 Chrome，免下载
 
 测试组一览：connectors 连线、text 文字格式、colors 颜色、twins 分身、
 wrorder 写作页里的顺序、wrback 定位只留给引文分身、fmtbar 写作页工具栏、
-wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 抠图工具的入口、
+wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrmarq 稿子里不许拉出画布的框选、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 抠图工具的入口、
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
@@ -368,6 +368,15 @@ S = {
 加阴影浮起来），原地插一个同高的虚线占位 `.refph`；拖动时只有占位在动，
 松手把元素落进占位的位置。整个 `.fb` 加 `.reorder`（光标 grabbing、hover 反应关掉），
 让"进入调序"这件事看得见。中途 `Esc` 就地取消，什么都不改。
+
+**稿子内部的按下，一律不许冒到画布上去。** `.doc` 的 `pointerdown` 里原来对
+`.ref/.fold/.vv/.wrnav` 这些控件是直接 `return`（不拦截），事件于是一路到达 `stage`，
+在整张画布上拉起框选——表现就是"在稿子里按住一拖，蒙出一个灰色的大方框"。
+那是画布圈选卡片用的 `#marq`，跟稿子里的文字选中完全是两回事，出现在这里毫无道理。
+现在无论落在稿子的哪一处都先 `stopPropagation()`，再决定要不要拖动整页；
+`closeMenus()` 单独补一句（原来是顺手由 stage 的 `pointerdown` 做的）。
+专注模式不受影响：`body.wr` 下 `#stage` 是 `display:none`，本来就冒不过去。
+`wrmarq` 组两头都守：稿子里拖不许出现 `#marq`，画布空白处必须照样框选得出来。
 
 **划选与拿起必须分得开，这一条是这个交互能不能用的关键。** 同一块文字既要能划选
 （引文就是拿来抄的）、又要能长按拿起来调序，两件事撞在一起的表现是：

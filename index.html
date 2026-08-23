@@ -6782,8 +6782,15 @@ function bindDoc(el,d){
   el.addEventListener("pointerdown",e=>{
     if(lock){e.stopPropagation();return}
     if(e.button!==0)return;
+    // 稿子内部的**任何**按下都不许冒到画布上去。
+    // 早先这里对 .ref/.fold/.vv 这些控件是直接 return（不拦截），事件于是一路到 stage，
+    // 在整张画布上拉起框选——表现就是"在稿子里按住一拖，蒙出一个灰色的大方框"，
+    // 那是画布用来圈选卡片的东西，跟稿子里的文字选中完全是两回事。
+    // 菜单该关还是要关，所以这一步单独补上（原来由 stage 的 pointerdown 顺手做）。
+    closeMenus();
+    e.stopPropagation();
     if(e.target.closest(".wrap,.dt,.dtool,.vv,.fh,.fold,.ref,.wrnav,.fmtbar"))return;
-    e.stopPropagation();startDocMove(e,d);
+    startDocMove(e,d);
   });
   el.addEventListener("contextmenu",e=>{
     if(lock)return;

@@ -2690,6 +2690,85 @@ group("wrrefsel 引文可选中、跳转对得准", async (c) => {
   await c.run(() => closeWrite());
 });
 
+group("wrmarq 稿子里不许拉出画布的框选", async (c) => {
+  // 画布上的稿子内部按住一拖，会蒙出一个灰色大方框——那是画布用来圈选卡片的
+  // #marq，跟稿子里的文字选中完全是两回事。根因：.doc 的 pointerdown 对
+  // .ref/.fold/.vv 这些控件是直接 return（不拦截），事件一路冒到 stage 拉起框选。
+  await c.board([
+    { id: "far", x: 1200, y: 0, w: 300, text: "画布卡片", s: {} },
+    { id: "host", x: 0, y: 0, w: 400, text: "承载段落的一段文字", s: {} },
+    { id: "q1", x: 0, y: 100, w: 400, text: "引文甲的一段比较长的文字", s: {} },
+    { id: "q2", x: 0, y: 200, w: 400, text: "引文乙的一段比较长的文字", s: {} },
+  ], []);
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -380, y: -260 }, "稿子");
+    sel = ["host"]; clipCards("copy"); wrPasteMain(d, 0);
+    ["q1", "q2"].forEach((id) => { sel = [id]; clipCards("twin"); wrPasteTwin(d.ids[0], d) });
+    d.open = {}; d.open[d.ids[0]] = true;
+    sel = []; paintSel(); camTo(0, 0, 1, true); render();
+  });
+  await c.wait(700);
+
+  const probe = async (q2) => {
+    const pt = await c.run((s2) => {
+      const e = document.querySelector(s2), r2 = e.getBoundingClientRect();
+      return { x: r2.left + 20, y: r2.top + r2.height / 2 };
+    }, q2);
+    await c.page.mouse.move(pt.x, pt.y);
+    await c.page.mouse.down();
+    await c.page.mouse.move(pt.x + 120, pt.y + 90, { steps: 6 });
+    const shown = await c.run(() => getComputedStyle($("marq")).display !== "none");
+    await c.page.mouse.up();
+    return shown;
+  };
+  c.ok("在引文上拖不会拉出框选", !(await probe(".doc .ref")));
+  c.ok("在正文段落上拖不会拉出框选", !(await probe(".doc .cap")));
+  c.ok("在折叠框上拖不会拉出框选", !(await probe(".doc .fold")));
+
+  // 画布本身的框选一点没动
+  const st = await c.run(() => {
+    const r2 = $("stage").getBoundingClientRect();
+    return { x: r2.left + 60, y: r2.bottom - 60 };
+  });
+  await c.page.mouse.move(st.x, st.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(st.x + 200, st.y - 200, { steps: 6 });
+  const canvasMarq = await c.run(() => getComputedStyle($("marq")).display !== "none");
+  await c.page.mouse.up();
+  c.ok("画布空白处仍然框选得出来", canvasMarq);
+
+  // 稿子仍然能拖动，菜单仍然会被关掉
+  const moved = await (async () => {
+    const q3 = await c.run(() => {
+      const e = document.querySelector(".doc .dside"), r2 = e.getBoundingClientRect();
+      return { x: r2.left + Math.min(30, r2.width / 2), y: r2.top + r2.height / 2 };
+    });
+    const before = await c.run(() => ({ x: docs()[0].x, y: docs()[0].y }));
+    await c.page.mouse.move(q3.x, q3.y);
+    await c.page.mouse.down();
+    await c.page.mouse.move(q3.x + 50, q3.y + 40, { steps: 8 });
+    await c.page.mouse.up();
+    const after = await c.run(() => ({ x: docs()[0].x, y: docs()[0].y }));
+    return after.x !== before.x || after.y !== before.y;
+  })();
+  c.ok("稿子空白处仍然能拖动整页", moved);
+
+  await c.run(() => {
+    const e = document.querySelector(".doc .cap"), r2 = e.getBoundingClientRect();
+    e.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: r2.left + 20, clientY: r2.top + 10 }));
+  });
+  await c.wait(200);
+  c.ok("稿子里右键出得来菜单", await c.run(() => $("menu").classList.contains("on")));
+  const rf = await c.run(() => {
+    const e = document.querySelector(".doc .ref"), r2 = e.getBoundingClientRect();
+    return { x: r2.left + 20, y: r2.top + 8 };
+  });
+  await c.page.mouse.click(rf.x, rf.y);
+  await c.wait(200);
+  c.ok("在稿子里按一下会关掉菜单", await c.run(() => !$("menu").classList.contains("on")));
+});
+
 group("wrreford 引文长按调序", async (c) => {
   // 引文投影在自己的引用框里上下调序，做成"真的把它拿起来"：
   // 长按到时间这一条离开文字流（框内绝对定位 + 阴影浮起），原地留一个同高的占位，
