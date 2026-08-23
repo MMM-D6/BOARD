@@ -571,10 +571,17 @@
     user-select:text;-webkit-user-select:text}
   .blk .ref:hover{opacity:.95}
   /* 调序状态：整个引用框换成 grabbing，其余条目不再有 hover 反应，
-     "现在在挪东西"这件事要一眼看得出来 */
+     "现在在挪东西"这件事要一眼看得出来。
+     **整框连同子元素一起 user-select:none**：只给被拖的那一条加是不够的，
+     浏览器的划选是跨元素进行的，不把整框关掉，拖动时底下会一路刷出蓝色选区
+     ——"想挪位置，结果划了一片字"，正是划选与拖动撞在一起的样子。 */
+  .blk .fb.reorder,.blk .fb.reorder *{user-select:none;-webkit-user-select:none}
   .blk .fb.reorder{cursor:grabbing}
   .blk .fb.reorder .ref{cursor:grabbing}
   .blk .fb.reorder .ref:hover{opacity:.75}
+  /* 长按预备态：按住约 140ms 之后先给一点反馈，让人知道"这一下正在被当作长按，
+     不是在划字"。真正拿起来是 340ms。 */
+  .blk .ref.armed{background:var(--whi);border-radius:7px;cursor:grab}
   /* 被拿起来的那一条：浮起来、跟着手指走，明确不是"还在原地" */
   .blk .ref.lift{opacity:1;z-index:6;cursor:grabbing;
     background:var(--panel);border-radius:7px;
@@ -6956,13 +6963,18 @@ function bindBody(root,getDoc){
   // 一按下就拖会把划字变得没法用。按住 340ms 才拿起；在这之前一旦移动超过 5px，
   // 就当成划字，调序取消。拿起的那一刻清掉文字选区，并把 .fb 标成 reorder
   // （光标变成 grabbing、其余条目不再有 hover 反应），让"进入调序"这件事看得见。
-  let refDrag=null,refT=null;
+  let refDrag=null,refT=null,refArm=null;
+  const dropSelection=()=>{
+    const s2=getSelection();
+    if(s2&&s2.rangeCount&&!s2.isCollapsed&&s2.removeAllRanges)s2.removeAllRanges();
+  };
   const refDrop=(commit)=>{
+    clearTimeout(refArm);refArm=null;
     if(!refT)return false;
     clearTimeout(refT);refT=null;
     if(!refDrag)return false;
     const {el,box,ph}=refDrag;refDrag=null;
-    el.classList.remove("lift");
+    el.classList.remove("lift","armed");
     el.style.cssText=el.dataset.css0||"";
     delete el.dataset.css0;
     box.classList.remove("reorder");
@@ -6981,7 +6993,8 @@ function bindBody(root,getDoc){
     // 画布上的稿子整体带缩放，屏幕像素要换算回内容像素才对得上 offsetTop
     const br=box.getBoundingClientRect();
     const scale=(box.offsetHeight&&br.height/box.offsetHeight)||1;
-    clearTimeout(refT);
+    clearTimeout(refT);clearTimeout(refArm);
+    refArm=setTimeout(()=>ref.classList.add("armed"),140);
     refT=setTimeout(()=>{
       const r0=ref.getBoundingClientRect();
       const top0=(r0.top-br.top)/scale+box.scrollTop;
@@ -6996,14 +7009,22 @@ function bindBody(root,getDoc){
       Object.assign(ref.style,{position:"absolute",left:"0",right:"0",
         top:top0+"px",margin:"0",pointerEvents:"none"});
       refDrag={el:ref,box,ph,h,top0,scale,maxTop:Math.max(0,box.offsetHeight-h)};
-      const s2=getSelection();if(s2&&s2.removeAllRanges)s2.removeAllRanges();
+      dropSelection();
     },340);
     const mv=ev=>{
       if(!refDrag){
-        if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>5){clearTimeout(refT);refT=null}
+        // 还没拿起来：动了就说明这一下是划字，长按取消，选区留给浏览器自己处理
+        if(Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>5){
+          clearTimeout(refT);refT=null;
+          clearTimeout(refArm);ref.classList.remove("armed");
+        }
         return;
       }
       ev.preventDefault();
+      // 按住不放的这段时间里浏览器可能已经起了一小段选区，而且鼠标没松就会一直延长。
+      // 光在拿起的那一刻清一次不够（CSS 的 user-select 只挡新的、挡不住已经在跑的那一次），
+      // 所以拖动过程中每一帧都清一次：调序时屏幕上不该出现任何蓝色选区。
+      dropSelection();
       const D=refDrag;
       // 只跟纵向，而且夹在框内：它不会跑出这个引用框，也就不会误触别的段落
       const top=Math.max(0,Math.min(D.maxTop,D.top0+(ev.clientY-sy)/D.scale));
@@ -7030,14 +7051,17 @@ function bindBody(root,getDoc){
     const up=()=>{
       removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
       removeEventListener("keydown",esc,true);
-      refDrop(true);
+      const was=refDrop(true);
       clearTimeout(refT);refT=null;
+      clearTimeout(refArm);refArm=null;ref.classList.remove("armed");
+      if(was)dropSelection();          // 落下之后不留一片选中的字
     };
     const esc=ev=>{
       if(ev.key!=="Escape")return;
       ev.preventDefault();ev.stopPropagation();
       removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
       removeEventListener("keydown",esc,true);
+      clearTimeout(refArm);refArm=null;ref.classList.remove("armed");
       refDrop(false);                       // 中途反悔：放回原处，什么都不改
     };
     refT=refT||1;                            // 让 refDrop 知道这一轮是活的

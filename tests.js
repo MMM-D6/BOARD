@@ -2746,6 +2746,39 @@ group("wrreford 引文长按调序", async (c) => {
   await c.page.mouse.up();
   await c.wait(300);
 
+  // 划选与拿起要分得开：拿起之后全程不该冒出任何蓝色选区
+  const q9 = await pts();
+  await c.page.mouse.move(q9[0].x, q9[0].y);
+  await c.page.mouse.down();
+  await c.wait(200);
+  c.ok("按住约 200ms 先给出预备反馈", await c.run(() =>
+    !!document.querySelector("#wrmain .ref.armed")));
+  await c.wait(250);
+  c.ok("调序时整个引用框禁止划选", await c.run(() =>
+    getComputedStyle(document.querySelector("#wrmain .fb")).userSelect === "none"));
+  const during = [];
+  for (const k of [1, 2]) {
+    await c.page.mouse.move(q9[0].x + 40, q9[k].y, { steps: 6 });
+    during.push(await c.run(() => getSelection().toString().length));
+  }
+  await c.page.mouse.up();
+  await c.wait(350);
+  c.ok("拖动全程一个字都没被划中", during.every((z) => z === 0));
+  c.ok("落下之后也没有留下选中的字", await c.run(() => getSelection().toString().length === 0));
+  c.ok("预备态没有残留", await c.run(() => document.querySelectorAll("#wrmain .ref.armed").length === 0));
+  c.ok("松手之后划选恢复正常", await c.run(() =>
+    getComputedStyle(document.querySelector("#wrmain .fb")).userSelect !== "none"));
+  await c.run(() => {
+    // 顺序被上面这一拖改过了，先复原再往下测
+    const d = wrDoc(), want = ["引文甲", "引文乙", "引文丙", "引文丁"];
+    const kids = wrKids(d.ids[0]);
+    const slots = []; S.cards.forEach((z, i) => { if (kids.some((k) => k.id === z.id)) slots.push(i) });
+    slots.forEach((pp, i) => { S.cards[pp] = kids.find((k) => orig(k).text === want[i]) });
+    invalidateIndex(); redrawDocs();
+  });
+  await c.wait(300);
+  c.ok("复原成功，继续测拖动落点", await order() === "引文甲|引文乙|引文丙|引文丁");
+
   await drag(0, 3);
   c.ok("能一路拖到末尾（不是差一位停下）", await order() === "引文乙|引文丙|引文丁|引文甲");
   await drag(3, 0);
