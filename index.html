@@ -547,7 +547,7 @@
   .vv:hover{background:var(--whi);opacity:.9}
   .vv.on{background:var(--pfg);color:var(--panel);opacity:1}
   /* 正文就是一份可以直接打字的稿子：点哪里光标就落在哪里，
-     回车切成下一张卡片，删除键在段首并回上一段，跟 Word 的手感一致 */
+     回车是段内换行，Cmd/Ctrl+回车才切成下一张卡片，删除键在段首并回上一段 */
   .blk .cap{outline:none;caret-color:var(--acc);white-space:pre-wrap;word-break:break-word;
     cursor:text;user-select:text;-webkit-user-select:text}
   .blk .cap.hd{letter-spacing:-.01em}
@@ -2374,6 +2374,14 @@ function syncCap(c0,cap){
   const h=cap.innerHTML;
   if(/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(h))c.rich=h;else delete c.rich;
 }
+// 从 Zotero 笔记复制出来的纯文本会带 zotero://select 和 zotero://open-pdf 这两种链接尾巴。
+// 只精确匹配这两种固定结构，其余文字（包括普通链接、普通括号）原样不动。
+function cleanZoteroTail(txt){
+  if(!txt||txt.indexOf("zotero://")<0)return txt;
+  return txt
+    .replace(/\s*\(\[pdf\]\s*\(zotero:\/\/open-pdf\/[^)]*\)\)/gi,"")
+    .replace(/\(\[([^\]]*)\]\s*\(zotero:\/\/select\/[^)]*\)\)/gi,"($1)");
+}
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
@@ -2402,7 +2410,7 @@ function makeCard(c){
     if(!cap.isContentEditable)return;
     e.preventDefault();
     const txt=(e.clipboardData||window.clipboardData).getData("text/plain");
-    document.execCommand("insertText",false,txt);
+    document.execCommand("insertText",false,cleanZoteroTail(txt));
   });
   cap.addEventListener("mouseup",()=>setTimeout(syncBar,0));
   cap.addEventListener("keyup",()=>setTimeout(syncBar,0));
@@ -7117,10 +7125,13 @@ function bindBody(root,getDoc){
     if(e.key==="Escape"){cap.blur();editing=false;syncBar();return}
     const d=doc(),c=card(cap.dataset.id);
     if(!d||!c||lock||isLocked(c.id))return;
-    // 回车 = 从光标处切成下一张卡片，跟 Word 里换段一样自然。
-    // Shift+回车仍然是段内换行，留给需要软换行的场合。
-    if(e.key==="Enter"&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey){
+    // 回车 = 段内换行，不拆卡片，跟大多数编辑器手感一致。
+    // Cmd/Ctrl+回车 才是"真的要拆成下一张卡片"，需要专门按才会触发，不会误伤。
+    if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){
       e.preventDefault();wrSplitAtCaret(d,c,cap);return;
+    }
+    if(e.key==="Enter"){
+      e.preventDefault();document.execCommand("insertLineBreak");return;
     }
     // 段首按退格 = 并回上一段，空段落则直接从稿子里移出（不删源卡片）
     if(e.key==="Backspace"&&caretAtStart(cap)){
