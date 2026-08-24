@@ -4,7 +4,7 @@
 读完这一份就能安全地改动，不必逐行摸索。
 
 当前规模：272 KB，5474 行，291 个函数，330 条双语文案，46 条说明书词条，
-数据结构版本 SCHEMA = 8，测试 47 组 531 条断言（含 cutout.html 那一组）。
+数据结构版本 SCHEMA = 8，测试 48 组 547 条断言（含 cutout.html 那一组）。
 
 ---
 
@@ -83,7 +83,7 @@ CHROME=/path/to/chrome node tests.js   # 用已有的 Chrome，免下载
 
 测试组一览：connectors 连线、text 文字格式、colors 颜色、twins 分身、
 wrorder 写作页里的顺序、wrback 定位只留给引文分身、fmtbar 写作页工具栏、
-wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrmarq 稿子里不许拉出画布的框选、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 抠图工具的入口、
+wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrmarq 稿子里不许拉出画布的框选、wrwc 写作页字数统计、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 抠图工具的入口、
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
@@ -327,6 +327,15 @@ S = {
 不会跟画布上的普通卡片重叠，选中画布上完全没进过任何稿子的普通卡片时，
 `#bar` 一直照常弹出；哪怕一张卡片被复制进过某份稿子，它在画布上的原始位置
 也完全不受影响，因为稿子里那份根本是另一个独立的 id。
+
+**字数统计：中日韩按"字"、拉丁按"词"，相加才是中英混排稿子里说的字数。**
+只数字符或者只按空格分词，在这种稿子上都会算得离谱。数的是纯文本 `o.text`，
+不碰 `rich`——格式标签不该算进字数。`wcDoc(d)` 只数这份稿子自己的段落：
+折叠框里的引文是别人的话、其他版本是没被采用的稿子，都不算"我写了多少"。
+划选优先：`wcSelection()` 用 `anchorNode` 反查宿主（`#wrmain` 或某个 `.doc`），
+所以画布上同时摆着好几份稿子时，只有选区所在的那一份换成"选中 N"。
+读数挂在 `selectionchange` 上，并到一帧里重算（`wcSoon`）；
+打字那一路由 `refreshDocMeta()` 顺带刷新。它是**读数不是按钮**，摆在工具栏最后。
 
 **`fmtbar` 按功能分成五组，组内不许被换行拆开。** 早先它是一长串按钮加分隔线，
 每两三个就来一条竖线，顺序也没有道理（卡片底色夹在段落细项和模板中间，

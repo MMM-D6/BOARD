@@ -2454,7 +2454,7 @@ group("fmtbar 写作页工具栏", async (c) => {
       naked: [...h.querySelectorAll(".fx")].filter((z) =>
         z.textContent.trim() === "\u25BE" && !z.classList.contains("caret")).length };
   });
-  c.ok("按功能分成了五组加清除（共 " + st.groups + " 组）", st.groups === 6);
+  c.ok("按功能分成了五组加清除、字数（共 " + st.groups + " 组）", st.groups === 7);
   c.ok("分隔线只出现在组之间", st.seps === st.groups - 1);
   c.ok("没有游离在组之外的按钮", st.loose === 0);
   c.ok("换行不会把一组拆开", st.split === 0);
@@ -2595,7 +2595,11 @@ group("fmtbar 写作页工具栏", async (c) => {
   // 窄的时候在指定的地方折行：改字一行、改段一行
   const brk = await c.run(() => {
     const bar = document.querySelector(".doc .fmtbar");
-    const rows2 = [...bar.querySelectorAll(".fgrp")].map((z) => Math.round(z.getBoundingClientRect().top));
+    // 按行高分桶：字数那一块是个矮 span，top 天生跟按钮不一样
+    const rows2 = [...bar.querySelectorAll(".fgrp")].map((z) => {
+      const r3 = z.getBoundingClientRect();
+      return Math.round((r3.top + r3.height / 2) / 14);
+    });
     const uniq = [...new Set(rows2)];
     return { rows: uniq.length, first: rows2.filter((z) => z === uniq[0]).length,
       hasBrk: !!bar.querySelector(".fbrk"),
@@ -2687,6 +2691,90 @@ group("wrrefsel 引文可选中、跳转对得准", async (c) => {
   c.ok("折叠框被翻开，那一条引文渲染出来了", land.found);
   c.ok("镜头落在引文上，不是稿子左上角", land.inView && land.scroll > 20);
   c.ok("闪一下好认出是哪一条", land.flash);
+  await c.run(() => closeWrite());
+});
+
+group("wrwc 写作页字数统计", async (c) => {
+  // 中日韩按"字"、拉丁按"词"，两者相加才是中英混排稿子里通常说的字数。
+  // 数的是纯文本，不碰 rich；折叠框里的引文（别人的话）和其他版本（没采用的稿子）
+  // 都不算进"我写了多少"。划选之后只报选中的那一段。
+  await c.board([
+    { id: "h", x: 0, y: 0, w: 400, text: "Introduction", level: 1, s: {} },
+    { id: "p1", x: 0, y: 100, w: 400, text: "数字时尚是一个新兴领域，尚未发展出稳固的理论和定义。", s: {} },
+    { id: "p2", x: 0, y: 200, w: 400, text: "This article proposes that digital fashion is an emerging subfield.", s: {} },
+    { id: "q", x: 0, y: 300, w: 400, text: "引文原文不该被算进去", s: {} },
+  ], []);
+  const calc = await c.run(() => ({
+    en: wcOf("This article proposes that digital fashion is an emerging subfield."),
+    cn: wcOf("数字时尚是一个新兴领域。"),
+    mix: wcOf("数字时尚是一个新兴领域（Baek et al., 2022）"),
+    empty: wcOf("   "), none: wcOf(""),
+    punct: wcOf("。，、；：！"),
+  }));
+  c.ok("英文按词数（10 词）", calc.en.words === 10);
+  c.ok("中文按字数，标点不算（11 字）", calc.cn.words === 11);
+  c.ok("中英混排两者相加", calc.mix.words === 11 + 4);
+  c.ok("空文本是 0，不报错", calc.empty.words === 0 && calc.none.words === 0);
+  c.ok("光是标点算 0 个字", calc.punct.words === 0);
+
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["h", "p1", "p2"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = ["q"]; clipCards("twin"); wrPasteTwin(d.ids[1], d);
+    openWrite(d.id);
+  });
+  await c.wait(800);
+
+  const doc = await c.run(() => {
+    const d = wrDoc();
+    return { ...wcDoc(d), refs: wrKids(d.ids[1]).length };
+  });
+  c.ok("整份稿子的字数是各段之和（1 + 24 + 10）", doc.words === 35);
+  c.ok("折叠框里的引文不计入", doc.words === 35 && doc.refs === 1);
+  c.ok("段数只数有内容的段", doc.paras === 3);
+
+  const bar = await c.run(() => {
+    const el = document.querySelector("#wrfmt .fwc");
+    return { txt: el.textContent, title: el.title, on: el.classList.contains("on") };
+  });
+  c.ok("工具栏最后显示的是整份稿子的字数", /35/.test(bar.txt));
+  c.ok("悬停能看到字符数与段数", /35/.test(bar.title) && /96/.test(bar.title) && /3/.test(bar.title));
+  c.ok("没划选时不加重", !bar.on);
+
+  // 划选之后只报选中的部分
+  const selr = await c.run(() => {
+    const e = document.querySelectorAll("#wrmain .cap")[1], n = e.firstChild;
+    const r2 = document.createRange();
+    r2.setStart(n, 0); r2.setEnd(n, 6);
+    const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(r2);
+    return getSelection().toString();
+  });
+  await c.wait(300);
+  const selBar = await c.run(() => {
+    const el = document.querySelector("#wrfmt .fwc");
+    return { txt: el.textContent, on: el.classList.contains("on") };
+  });
+  c.ok("划选之后只统计选中的部分", selr.length === 6 && /6/.test(selBar.txt));
+  c.ok("划选时读数加重，看得出换了口径", selBar.on);
+
+  await c.run(() => getSelection().removeAllRanges());
+  await c.wait(300);
+  c.ok("取消选中就回到全文字数", await c.run(() =>
+    /35/.test(document.querySelector("#wrfmt .fwc").textContent)));
+
+  // 打字之后要跟着变
+  await c.run(() => {
+    const d = wrDoc(), c2 = card(d.ids[1]);
+    c2.text = "数字时尚。";
+    refreshDocMeta();
+  });
+  await c.wait(300);
+  c.ok("改了内容之后读数跟着变（1 + 4 + 10）", await c.run(() =>
+    /15/.test(document.querySelector("#wrfmt .fwc").textContent)));
+
+  c.ok("中英文案都齐了", await c.run(() =>
+    !!(T.en.wcWords && T.zh.wcWords && T.en.wcSel && T.zh.wcSel && T.en.wcTitle && T.zh.wcTitle)));
   await c.run(() => closeWrite());
 });
 

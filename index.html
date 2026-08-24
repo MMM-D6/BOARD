@@ -485,6 +485,10 @@
      切换层级时后面的按钮不会跟着挪） */
   .fmtbar .lbl.lvl{width:54px}
   .fmtbar .lbl.lvl.ishd{font-weight:600}
+  /* 字数是读数不是按钮：不做成可点的样子，划选时才加重 */
+  .fmtbar .fwc{font:400 11px/1 "IBM Plex Mono",monospace;color:var(--pmut);
+    padding:0 4px;white-space:nowrap;cursor:default;font-variant-numeric:tabular-nums}
+  .fmtbar .fwc.on{color:var(--pfg);font-weight:500}
   .fmtbar .fbrk{flex-basis:100%;height:0;margin:0}
   #wrfmt .fbrk{display:none}
   /* 需要先选中一段才有意义的控件（间距、锁定）：没选中时淡下去，
@@ -776,6 +780,9 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fmtSpacing:"Spacing",fmtNeedSel:"Select a paragraph first",
   fmtInk:"Text colour",fmtHL:"Highlight",
   lvShortNone:"Body",lvShort1:"H1",lvShort2:"H2",lvShort3:"H3",
+  wcWords:"words",wcSel:"selected",wcTitle:"Words in this draft",
+  wcDetail:"{w} words \u00B7 {c} characters \u00B7 {p} paragraphs",
+  wcSelHint:"Select some text to count just that part",
   wrExpDocxNote:"Tries the real .docx first; falls back to .doc offline.",
   wrExpPdfNote:"Opens the print dialogue; choose Save as PDF there.",
   wrExpFileNote:"Written straight to a file, no network needed.",
@@ -955,6 +962,9 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fmtSpacing:"间距",fmtNeedSel:"先选中一段文字",
   fmtInk:"文字颜色",fmtHL:"标记颜色",
   lvShortNone:"正文",lvShort1:"标题 1",lvShort2:"标题 2",lvShort3:"标题 3",
+  wcWords:"字",wcSel:"选中",wcTitle:"这份稿子的字数",
+  wcDetail:"{w} 字 \u00B7 {c} 字符 \u00B7 {p} 段",
+  wcSelHint:"划选一段文字就只统计那一段",
   wrExpDocxNote:"优先导出真正的 .docx，联不上网就退回 .doc",
   wrExpPdfNote:"会打开打印对话框，在那里选「另存为 PDF」",
   wrExpFileNote:"直接写成文件，不需要联网",
@@ -6549,6 +6559,14 @@ function buildFmtBar(host){
   grp();
   btn(ico('<path d="M8.5 20.5 3.9 15.9a2 2 0 0 1 0-2.8l8.6-8.6a2 2 0 0 1 2.8 0l4.6 4.6a2 2 0 0 1 0 2.8l-8.6 8.6z"/><path d="M9.5 8.5 15.5 14.5"/><path d="M11 20.5h9.5"/>'),
     ()=>clearFmt(),t("fmtClear"));
+
+  /* ---------- 七、字数 ----------
+     不是按钮，是一块读数：平时报这份稿子的字数，划选之后只报选中的部分。
+     摆在最后、跟着 fbrk 一起换行，不跟任何操作抢位置。 */
+  sep();
+  grp();
+  const wc=document.createElement("span");
+  wc.className="fwc";cur.appendChild(wc);
 }
 function closeFmtPops(){
   document.querySelectorAll(".fmtbar .fpop.on").forEach(p=>p.classList.remove("on"));
@@ -6580,6 +6598,8 @@ function syncFmtBars(){
         t(["lvShortNone","lvShort1","lvShort2","lvShort3"][v]||"lvShortNone");
       lvEl.classList.toggle("ishd",!!(o0&&!o0.role&&o0.level));
     }
+    const wcEl=host.querySelector(".fwc");
+    if(wcEl)wcSoon();
     const lockEl=host.querySelector("#fmtlock");
     if(lockEl){
       const cur=sel.map(card).filter(Boolean);
@@ -7404,6 +7424,7 @@ function redrawDocs(){
 // 注意别在这里重绘正文：正在打字的节点一旦被重建，光标就没了。
 function refreshDocMeta(){
   if(wrOpenState())wrSideSoon();
+  syncWordCount();
 }
 function wrBind(){
   bindBody($("wrmain"),()=>wrDoc());
@@ -7553,6 +7574,73 @@ function wrBlockMenu(x,y,c,i,d){
     {label:t("wrRemove"),on:()=>{if(!d)return;wrDropAt(d,i)}});
   menuAt(x,y,items);
 }
+
+/* ---- 字数统计 ---- */
+// 中日韩按"字"算，拉丁文按"词"算，两者相加就是通常说的字数——
+// 中英混排的稿子里，只数字符或者只数空格分词都会算得离谱。
+// 数的是纯文本（o.text），不碰 rich：格式标签不该算进字数。
+const WC_CJK=/[\u3400-\u4DBF\u4E00-\u9FFF\uF900-\uFAFF\u3040-\u30FF\uAC00-\uD7AF]/g;
+function wcOf(str){
+  const t0=(str||"").trim();
+  if(!t0)return {words:0,chars:0};
+  const cjk=(t0.match(WC_CJK)||[]).length;
+  // 去掉 CJK 之后剩下的按空白分词；标点单独出现的不算一个词
+  const rest=t0.replace(WC_CJK," ").split(/\s+/).filter(z=>/[\p{L}\p{N}]/u.test(z)).length;
+  return {words:cjk+rest,chars:[...t0.replace(/\s+/g,"")].length};
+}
+// 一份稿子的字数：只数它自己的段落。折叠框里的引文是别人的话、
+// 其他版本是没被采用的稿子，都不该算进"我写了多少"。
+function wcDoc(d){
+  let words=0,chars=0,paras=0;
+  (d&&d.ids||[]).forEach(id=>{
+    const c=card(id);if(!c)return;
+    const r=wcOf(orig(c).text);
+    if(r.words)paras++;
+    words+=r.words;chars+=r.chars;
+  });
+  return {words,chars,paras};
+}
+// 划选优先：选区落在哪一份稿子里，那一份就显示选中的字数。
+// 用 anchorNode 找宿主，而不是"当前打开的稿子"——画布上可以同时摆好几份。
+function wcSelection(){
+  const s2=getSelection();
+  if(!s2||!s2.rangeCount||s2.isCollapsed)return null;
+  const txt=s2.toString();
+  if(!txt.trim())return null;
+  let n=s2.anchorNode;
+  if(n&&n.nodeType===3)n=n.parentElement;
+  const host=n&&n.closest&&n.closest("#wrmain,.doc");
+  return {host,...wcOf(txt)};
+}
+function syncWordCount(){
+  const sel2=wcSelection();
+  document.querySelectorAll(".fmtbar .fwc").forEach(el=>{
+    const inFocus=!!el.closest("#wrbar");
+    const docEl=el.closest(".doc");
+    const host=inFocus?document.getElementById("wrmain"):docEl;
+    const d=inFocus?wrDoc():(docEl?docs().find(z=>z.id===docEl.dataset.id):null);
+    if(sel2&&host&&sel2.host===host){
+      el.textContent=t("wcSel")+" "+sel2.words.toLocaleString();
+      el.classList.add("on");
+      el.title=t("wcSelHint");
+      return;
+    }
+    el.classList.remove("on");
+    const r=d?wcDoc(d):{words:0,chars:0,paras:0};
+    el.textContent=r.words.toLocaleString()+" "+t("wcWords");
+    el.title=t("wcTitle")+"\n"+t("wcDetail")
+      .replace("{w}",r.words.toLocaleString())
+      .replace("{c}",r.chars.toLocaleString())
+      .replace("{p}",r.paras.toLocaleString());
+  });
+}
+// 划选随时在变，但重算很便宜；仍然并到一帧里做，免得拖选时每个 mousemove 都算一遍
+let wcRaf=0;
+function wcSoon(){
+  if(wcRaf)return;
+  wcRaf=requestAnimationFrame(()=>{wcRaf=0;syncWordCount()});
+}
+document.addEventListener("selectionchange",wcSoon);
 
 /* ---- 导出：所见即所得 ---- */
 // 稿子里看到的标题编号（侧栏与正文那一份，wrNums 算的）要能一起导出去。
