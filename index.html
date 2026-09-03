@@ -539,7 +539,10 @@
     display:flex;flex-direction:column;align-items:flex-end;gap:1px;
     opacity:0;transition:opacity .14s}
   .blk:hover .gut,.blk .gut:focus-within,.blk.sel .gut{opacity:1}
-  .blk .gut .num{font:400 10px/1.4 "IBM Plex Mono",monospace;opacity:.4}
+  /* 编号是可以点的：点一下输入新编号，整节搬过去 */
+  .blk .gut .num{font:400 10px/1.4 "IBM Plex Mono",monospace;opacity:.4;
+    border:none;background:none;color:inherit;padding:0 2px;border-radius:3px;cursor:pointer}
+  .blk .gut .num:hover{opacity:1;background:var(--whi);outline:1px solid var(--wline)}
   .blk .vb{display:flex;flex-direction:column;align-items:flex-end;gap:1px}
   .vv{border:none;background:none;cursor:pointer;color:inherit;border-radius:3px;
     padding:0 2px;min-width:16px;max-width:100%;text-align:center;letter-spacing:-.02em;
@@ -547,7 +550,7 @@
   .vv:hover{background:var(--whi);opacity:.9}
   .vv.on{background:var(--pfg);color:var(--panel);opacity:1}
   /* 正文就是一份可以直接打字的稿子：点哪里光标就落在哪里，
-     回车是段内换行，Cmd/Ctrl+回车才切成下一张卡片，删除键在段首并回上一段 */
+     回车切成下一张卡片，删除键在段首并回上一段，跟 Word 的手感一致 */
   .blk .cap{outline:none;caret-color:var(--acc);white-space:pre-wrap;word-break:break-word;
     cursor:text;user-select:text;-webkit-user-select:text}
   .blk .cap.hd{letter-spacing:-.01em}
@@ -781,6 +784,10 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fmtInk:"Text colour",fmtHL:"Highlight",
   lvShortNone:"Body",lvShort1:"H1",lvShort2:"H2",lvShort3:"H3",
   wcWords:"words",wcSel:"selected",wcTitle:"Words in this draft",
+  numGo:"Type a number to move this section",numAsk:"Move this section to which number?",
+  numBad:"Use digits and dots, like 2 or 3.1",
+  numMoved:"Moved to {n}",numSame:"Already there",
+  numNoRoom:"No such position \u2014 moved as close as possible ({n})",
   wcDetail:"{w} words \u00B7 {c} characters \u00B7 {p} paragraphs",
   wcSelHint:"Select some text to count just that part",
   wrExpDocxNote:"Tries the real .docx first; falls back to .doc offline.",
@@ -963,6 +970,10 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fmtInk:"文字颜色",fmtHL:"标记颜色",
   lvShortNone:"正文",lvShort1:"标题 1",lvShort2:"标题 2",lvShort3:"标题 3",
   wcWords:"字",wcSel:"选中",wcTitle:"这份稿子的字数",
+  numGo:"输入编号，把这一节移过去",numAsk:"把这一节移到哪个编号？",
+  numBad:"只能用数字和点，比如 2 或 3.1",
+  numMoved:"已移到 {n}",numSame:"本来就在这里",
+  numNoRoom:"没有这个位置，已移到最接近的 {n}",
   wcDetail:"{w} 字 \u00B7 {c} 字符 \u00B7 {p} 段",
   wcSelHint:"划选一段文字就只统计那一段",
   wrExpDocxNote:"优先导出真正的 .docx，联不上网就退回 .doc",
@@ -2374,14 +2385,6 @@ function syncCap(c0,cap){
   const h=cap.innerHTML;
   if(/<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(h))c.rich=h;else delete c.rich;
 }
-// 从 Zotero 笔记复制出来的纯文本会带 zotero://select 和 zotero://open-pdf 这两种链接尾巴。
-// 只精确匹配这两种固定结构，其余文字（包括普通链接、普通括号）原样不动。
-function cleanZoteroTail(txt){
-  if(!txt||txt.indexOf("zotero://")<0)return txt;
-  return txt
-    .replace(/\s*\(\[pdf\]\s*\(zotero:\/\/open-pdf\/[^)]*\)\)/gi,"")
-    .replace(/\(\[([^\]]*)\]\s*\(zotero:\/\/select\/[^)]*\)\)/gi,"($1)");
-}
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
@@ -2410,7 +2413,7 @@ function makeCard(c){
     if(!cap.isContentEditable)return;
     e.preventDefault();
     const txt=(e.clipboardData||window.clipboardData).getData("text/plain");
-    document.execCommand("insertText",false,cleanZoteroTail(txt));
+    document.execCommand("insertText",false,txt);
   });
   cap.addEventListener("mouseup",()=>setTimeout(syncBar,0));
   cap.addEventListener("keyup",()=>setTimeout(syncBar,0));
@@ -2572,10 +2575,20 @@ function frameIndex(){                    // 页面按左边界排序，配合�
   FIDXsrc=S.frames;
   return FIDX;
 }
+// 一张卡片属于哪一页。两条铁律：
+// ① **只活在稿子里的段落（wrIn）永远不属于任何页面。** 它们的 x/y 是拷贝时随手写的
+//    稿子左上角，画布上根本不画它们；一旦被算成"页面里的卡片"，
+//    删除那一页就会把稿子的段落一起删掉——目录层级凭空全没了，还找不到原因。
+//    这是真出过的事故，不要因为"看起来多余"把这一行去掉。
+// ② **判定点不能依赖实测高度。** hOf 在没量过时退回拿宽度当高度（可能差几百像素），
+//    而只有渲染到屏幕上的卡片才量得到——于是同一张卡片"在视野里"和"在视野外"
+//    会归属不同页面，表现就是移动页面时莫名其妙丢下几张。
+//    改成锚在卡片顶部往下 40px 以内：量没量过都是同一个答案。
 const frameOf=c=>{
+  if(docOnly(c))return null;
   const fs=frameIndex();
   if(!fs.length)return null;
-  const cx=c.x+c.w/2,cy=c.y+hOf(c)/2;
+  const cx=c.x+c.w/2,cy=c.y+Math.min(hOf(c)/2,40);
   let lo=0,hi=fs.length-1,start=fs.length;
   while(lo<=hi){const m=(lo+hi)>>1;if(fs[m].x<=cx){lo=m+1}else{start=m;hi=m-1}}
   for(let i=start-1;i>=0;i--){            // 只回看左边界不超过 cx 的页面
@@ -6758,7 +6771,7 @@ function docBodyHTML(d,extNums){
     const openF=!!(d.open&&d.open[c.id]);
     h+=`<div class="blk${lv?" hd":""}${locked?" lk":""}${selCls}" data-i="${i}" data-id="${c.id}">
       <div class="gut">
-        ${lv?`<span class="num">${nums[i]}</span>`:""}
+        ${lv?`<button class="num" data-id="${c.id}" title="${esc(t("numGo"))}">${nums[i]}</button>`:""}
         ${vs.length>1?`<span class="vb">${vs.map((v,k)=>
           `<button class="vv${v.id===o.verOn?" on":""}" data-i="${i}" data-v="${v.id}"
             title="${esc(verLabel(v,k))}">${esc(verLabel(v,k))}</button>`).join("")}</span>`:""}
@@ -7104,6 +7117,16 @@ function bindBody(root,getDoc){
     addEventListener("keydown",esc,true);
   });
 
+  // 点编号：输入一个新编号，把这一整节搬过去
+  root.addEventListener("click",e=>{
+    const nb=e.target.closest(".gut .num");if(!nb)return;
+    e.stopPropagation();e.preventDefault();
+    if(lock)return;
+    const d=doc();if(!d)return;
+    const v=prompt(t("numAsk"),nb.textContent.trim());
+    if(v===null)return;
+    wrMoveToNumber(d,nb.dataset.id,v);
+  });
   root.addEventListener("dblclick",e=>{if(!lock)e.stopPropagation()});
   root.addEventListener("focusin",e=>{
     const el=e.target.closest(".cap");if(!el)return;
@@ -7125,13 +7148,10 @@ function bindBody(root,getDoc){
     if(e.key==="Escape"){cap.blur();editing=false;syncBar();return}
     const d=doc(),c=card(cap.dataset.id);
     if(!d||!c||lock||isLocked(c.id))return;
-    // 回车 = 段内换行，不拆卡片，跟大多数编辑器手感一致。
-    // Cmd/Ctrl+回车 才是"真的要拆成下一张卡片"，需要专门按才会触发，不会误伤。
-    if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){
+    // 回车 = 从光标处切成下一张卡片，跟 Word 里换段一样自然。
+    // Shift+回车仍然是段内换行，留给需要软换行的场合。
+    if(e.key==="Enter"&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey){
       e.preventDefault();wrSplitAtCaret(d,c,cap);return;
-    }
-    if(e.key==="Enter"){
-      e.preventDefault();document.execCommand("insertLineBreak");return;
     }
     // 段首按退格 = 并回上一段，空段落则直接从稿子里移出（不删源卡片）
     if(e.key==="Backspace"&&caretAtStart(cap)){
@@ -7586,6 +7606,92 @@ function wrBlockMenu(x,y,c,i,d){
   menuAt(x,y,items);
 }
 
+/* ---- 用编号调位置 ---- */
+// 稿子里每个标题左边都有编号（1、2.1……）。点一下编号、输入一个新编号，
+// 这一**整节**就搬到那个位置去——比一段一段剪切粘贴快得多，也是写论文时
+// 最自然的调结构方式（"把 3.2 挪到 2.1"）。
+//
+// 三条规矩，改动时不要破坏：
+// ① 搬的是**整节**：标题连同它下面的正文、以及所有更低级的子标题一起走。
+//    只搬标题会把正文丢在原地，稿子立刻错乱。
+// ② 目标编号的**位数决定层级**："3" 是一级、"2.1" 是二级。所以把 3 移到 2.1
+//    会顺带把它降成二级标题，子标题跟着同样的位移，节内结构保持不变。
+// ③ 编号是**算出来的**，不是存下来的（wrNums 现数现算）。所以这里不能去"改编号"，
+//    只能算出"要得到这个编号，该插在哪一位"，然后搬过去。
+//    做法是把这一节抽出来，在剩下的段落上逐个位置试插，看哪一位算出来正好是目标编号。
+
+// 这一节覆盖的范围 [a,b)：从标题本身到下一个同级或更高级标题之前
+function wrSectionRange(list,i){
+  const lv=wrLevelOf(list[i]);
+  if(!lv)return [i,i+1];
+  let j=i+1;
+  while(j<list.length){
+    const l2=wrLevelOf(list[j]);
+    if(l2&&l2<=lv)break;
+    j++;
+  }
+  return [i,j];
+}
+const numKey=s2=>String(s2||"").trim().replace(/[．。]/g,".").replace(/\s+/g,"");
+const numOk=s2=>/^\d+(\.\d+)*$/.test(s2);
+// 两个编号比大小：逐段比，"2" < "2.1" < "3"
+function numCmp(a,b){
+  const x=String(a).split("."),y=String(b).split(".");
+  for(let i=0;i<Math.max(x.length,y.length);i++){
+    const u=+(x[i]||0),v=+(y[i]||0);
+    if(u!==v)return u<v?-1:1;
+  }
+  return 0;
+}
+function wrMoveToNumber(d,id,raw){
+  const want=numKey(raw);
+  if(!numOk(want)){toast(t("numBad"));return}
+  const i=d.ids.indexOf(id);
+  if(i<0)return;
+  const list=d.ids.map(card).filter(Boolean);
+  if(list.length!==d.ids.length)return;          // 有段落找不到卡片，先不动，免得越理越乱
+  const lv0=wrLevelOf(list[i]);
+  if(!lv0)return;                                // 只有标题才有编号可言
+  const nowNum=wrNums(list)[i];
+  const [a,b]=wrSectionRange(list,i);
+  const block=d.ids.slice(a,b);
+  const rest=d.ids.slice(0,a).concat(d.ids.slice(b));
+  const lvNew=Math.min(want.split(".").length,6);
+  const shift=lvNew-lv0;
+  // 试着插在每一个位置，看哪一位能算出目标编号。位置数最多是段落数，
+  // 每次 wrNums 是一遍线性扫描——稿子几百段的量级完全够用。
+  const probe=k=>{
+    const ids=rest.slice(0,k).concat(block,rest.slice(k));
+    const cs=ids.map(card);
+    const saved=block.map(z=>{const c=card(z);return c?c.level:null});
+    block.forEach(z=>{const c=card(z);if(c&&c.level)c.level=Math.max(1,Math.min(6,c.level+shift))});
+    const n=wrNums(cs)[k];
+    block.forEach((z,q)=>{const c=card(z);if(c&&saved[q]!=null)c.level=saved[q]});
+    return n;
+  };
+  // 取**最后一个**能算出目标编号的位置，不是第一个：
+  // "把第三章移到 2"，第一个匹配位是"紧跟在第一章标题后面"（第一章的正文还没开始），
+  // 那会把它插进第一章的肚子里；最后一个匹配位才是"第一章整节讲完之后"，
+  // 也就是人说这句话时真正的意思。
+  let at=-1,best=-1;
+  for(let k=0;k<=rest.length;k++){
+    const n=probe(k);
+    if(!n)continue;
+    if(n===want)at=k;
+    else if(numCmp(n,want)<0)best=k;               // 还没超过目标的最后一个位置
+  }
+  if(at<0)at=best>=0?best:0;
+  const landed=probe(at)||"";
+  if(at===a&&landed===nowNum){toast(t("numSame"));return}
+  snap();
+  block.forEach(z=>{const c=card(z);if(c&&c.level)c.level=Math.max(1,Math.min(6,c.level+shift))});
+  d.ids=rest.slice(0,at).concat(block,rest.slice(at));
+  sel=[id];selLink=null;
+  save();redrawDocs();paintSel();syncFmtBars();
+  toast(landed===want?t("numMoved").replace("{n}",landed)
+    :t("numNoRoom").replace("{n}",landed));
+}
+
 /* ---- 字数统计 ---- */
 // 中日韩按"字"算，拉丁文按"词"算，两者相加就是通常说的字数——
 // 中英混排的稿子里，只数字符或者只数空格分词都会算得离谱。
@@ -7677,6 +7783,9 @@ function wrHTML(d,opt){
    .vt{font-size:10pt;color:#555;margin:2pt 0 6pt}
    .refs{margin:4pt 0 12pt 14pt;font-size:10pt;color:#666}
    .num{margin-right:.5em;font-variant-numeric:tabular-nums}
+   /* 标题用真的 h1-h6 标签，Word 与 PDF 目录才认得出层级；
+      字号字体仍然按卡片自己的样式内联覆盖，所见即所得不受影响 */
+   h1,h2,h3,h4,h5,h6{margin:0;font-weight:inherit}
   </style></head><body><div class="pg"><h1 class="doc">${esc(d.title)}</h1>`;
   const nm=wrNumMap(d,opt);
   list.forEach(c=>{
@@ -7689,7 +7798,12 @@ function wrHTML(d,opt){
     const so=wrStyleObj(o,lv);
     const css=Object.keys(so).map(k=>
       k.replace(/[A-Z]/g,m=>"-"+m.toLowerCase())+":"+so[k]).join(";");
-    h+=`<div class="blk"><div style="${wrapS}"><div style="${css}">${inner}</div></div></div>`;
+    // **标题要落成真正的 h1-h6，不能只是"字大一点的段落 + 一个数字"。**
+    // Word 打开 .doc 时是按标签认层级的：用 div 的话，导出的文稿在 Word 里
+    // 没有任何大纲结构，导航窗格是空的，也生成不了目录——看起来像"有层级"，
+    // 其实只是文本加数字。PDF 的书签同理。
+    const tag=lv?"h"+Math.min(lv,6):"div";
+    h+=`<div class="blk"><div style="${wrapS}"><${tag} style="${css}">${inner}</${tag}></div></div>`;
     if(opt.vers){
       const vs=verList(o);
       if(vs.length>1){

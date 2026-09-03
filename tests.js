@@ -2694,6 +2694,134 @@ group("wrrefsel 引文可选中、跳转对得准", async (c) => {
   await c.run(() => closeWrite());
 });
 
+group("frameown 页面归属：不吃稿子、不看实测高度", async (c) => {
+  // 两起真事故：
+  // ① 删掉一页，旁边写作页的目录层级全没了——因为稿子里的段落（wrIn）x/y 是稿子的
+  //    左上角，落在那一页的范围里就被当成"页面里的卡片"一起删了。
+  // ② 移动一页时莫名丢下几张卡片——因为归属点用了实测高度，而只有渲染到屏幕上的
+  //    卡片才量得到，同一张卡片"在视野里"和"在视野外"会归到不同页面。
+  await c.run(() => {
+    S.cards = []; S.links = []; S.frames = []; S.docs = [];
+    S.frames.push({ id: "f1", x: 0, y: 0, w: 900, h: 700, title: "页面" });
+    // 三张卡片：矮的、很高的、以及一张从没渲染过（没有实测高度）的
+    S.cards.push({ id: "s", x: 40, y: 40, w: 300, text: "矮卡片", s: {} });
+    S.cards.push({ id: "tall", x: 40, y: 200, w: 600, h: 900, text: "很高的卡片", s: {} });
+    S.cards.push({ id: "un", x: 400, y: 300, w: 600, text: "没量过的卡片", s: {} });
+    // 稿子摆在这一页的范围里（人在画布上就是这么排的）
+    const d = addDoc({ x: 200, y: 200 }, "稿子");
+    S.cards.push({ id: "h1", x: 200, y: 200, w: 520, text: "Introduction", level: 1, wrIn: d.id, s: {} });
+    S.cards.push({ id: "p1", x: 200, y: 200, w: 520, text: "正文一段", wrIn: d.id, s: {} });
+    d.ids = ["h1", "p1"];
+    invalidateIndex(); render();
+  });
+  await c.wait(400);
+
+  const own = await c.run(() => ({
+    doc: ["h1", "p1"].map((id) => frameOf(card(id)) === null),
+    cards: ["s", "tall", "un"].map((id) => !!frameOf(card(id))),
+    inN: inFrame(S.frames[0]).length,
+  }));
+  c.ok("稿子里的段落不属于任何页面", own.doc.every(Boolean));
+  c.ok("画布上的卡片照常归到这一页", own.cards.every(Boolean));
+  c.ok("这一页里数出来的就是那三张", own.inN === 3);
+
+  // 没量过 ≠ 归属不同：把实测高度清掉，答案必须一模一样
+  c.ok("归属跟有没有量过高度无关", await c.run(() => {
+    const before = inFrame(S.frames[0]).map((z) => z.id).sort().join(",");
+    Object.keys(size).forEach((k) => delete size[k]);
+    delete card("tall").h;
+    const after = inFrame(S.frames[0]).map((z) => z.id).sort().join(",");
+    return before === after && before === "s,tall,un";
+  }));
+
+  // 移动这一页：三张卡片一起走，稿子的段落一动不动
+  const mv = await c.run(() => {
+    const f = S.frames[0];
+    const b0 = { s: card("s").x, tall: card("tall").x, un: card("un").x, h1: card("h1").x };
+    const kids = inFrame(f);
+    kids.forEach((z) => { z.x += 500 });
+    f.x += 500;
+    return { moved: kids.length, b0,
+      a0: { s: card("s").x, tall: card("tall").x, un: card("un").x, h1: card("h1").x } };
+  });
+  c.ok("移动页面时三张卡片一张不落", mv.moved === 3
+    && mv.a0.s === mv.b0.s + 500 && mv.a0.tall === mv.b0.tall + 500 && mv.a0.un === mv.b0.un + 500);
+  c.ok("稿子的段落不会被页面拖着走", mv.a0.h1 === mv.b0.h1);
+
+  // 删掉这一页（连同卡片）：稿子必须完好
+  const del = await c.run(() => {
+    delFrame(S.frames[0], true);
+    const d = docs()[0];
+    return { docIds: d.ids.length, alive: d.ids.every((id) => !!card(id)),
+      cards: S.cards.filter((z) => !z.wrIn).length, frames: S.frames.length };
+  });
+  c.ok("删页面连同卡片，卡片确实删掉了", del.cards === 0 && del.frames === 0);
+  c.ok("旁边稿子的段落一段都没被误删", del.docIds === 2 && del.alive);
+});
+
+group("wrnum 用编号调位置", async (c) => {
+  // 点标题左边的编号、输入一个新编号，这一**整节**就搬过去：
+  // 标题连同它的正文和所有子标题一起走；目标编号有几位就决定它变成几级标题，
+  // 子标题跟着同样的位移。编号是 wrNums 现算的，所以这里不是"改编号"，
+  // 而是算出"要得到这个编号该插在哪一位"再搬。
+  await c.board([], []);
+  await c.run(() => {
+    const mk = (id, tx, lv) => ({ id, x: 0, y: 0, w: 400, text: tx, level: lv || 0, s: {} });
+    S.cards = [mk("a", "第一章", 1), mk("a1", "一章正文"), mk("a11", "一点一", 2), mk("a11b", "一点一正文"),
+      mk("b", "第二章", 1), mk("b1", "二章正文"), mk("b11", "二点一", 2),
+      mk("d", "第三章", 1), mk("d1", "三章正文"), mk("d11", "三点一", 2), mk("d11b", "三点一正文")];
+    S.links = []; S.frames = []; S.docs = [];
+    invalidateIndex(); render();
+    const doc = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = S.cards.map((z) => z.id); clipCards("copy"); wrPasteMain(doc, 0);
+    openWrite(doc.id);
+  });
+  await c.wait(800);
+  const show = () => c.run(() => {
+    const d = wrDoc(), l = d.ids.map(card), n = wrNums(l);
+    return l.map((z, i) => (n[i] ? n[i] + " " : "") + orig(z).text + (wrLevelOf(z) ? "[h" + wrLevelOf(z) + "]" : "")).join("|");
+  });
+  const move = async (tx, to) => {
+    await c.run((a2) => {
+      const d = wrDoc(), id = d.ids.find((z) => orig(card(z)).text === a2.tx);
+      wrMoveToNumber(d, id, a2.to);
+    }, { tx, to });
+    await c.wait(300);
+    return show();
+  };
+  c.ok("编号是可以点的按钮", await c.run(() =>
+    !!document.querySelector("#wrmain .gut button.num")));
+  c.ok("初始编号正确", (await show()).startsWith("1 第一章[h1]|一章正文|1.1 一点一[h2]"));
+
+  const r1 = await move("第三章", "2");
+  c.ok("第三章移到 2：整节一起走，落在第一章讲完之后",
+    r1 === "1 第一章[h1]|一章正文|1.1 一点一[h2]|一点一正文|2 第三章[h1]|三章正文|2.1 三点一[h2]|三点一正文|3 第二章[h1]|二章正文|3.1 二点一[h2]");
+
+  const r2 = await move("三点一", "1.2");
+  c.ok("子节移到 1.2，跨章搬过去",
+    r2 === "1 第一章[h1]|一章正文|1.1 一点一[h2]|一点一正文|1.2 三点一[h2]|三点一正文|2 第三章[h1]|三章正文|3 第二章[h1]|二章正文|3.1 二点一[h2]");
+
+  const r3 = await move("第二章", "1.1");
+  c.ok("一级移到 1.1：自己降成二级，子标题跟着降成三级",
+    /1\.1 第二章\[h2\]/.test(r3) && /1\.1\.1 二点一\[h3\]/.test(r3));
+
+  const snapshot = await show();
+  c.ok("乱输入不动任何东西", (await move("第一章", "abc")) === snapshot);
+  c.ok("空输入不动任何东西", (await move("第一章", "   ")) === snapshot);
+  c.ok("移到自己现在的编号是空操作", (await move("第一章", "1")) === snapshot);
+  c.ok("超出范围的编号不会丢段落", (await move("第一章", "9.9.9")).split("|").length === snapshot.split("|").length);
+
+  c.ok("段落总数自始至终没变", await c.run(() =>
+    wrDoc().ids.length === 11 && wrDoc().ids.every((id) => !!card(id))));
+  c.ok("每一次搬动都进了撤销栈", await c.run(() => {
+    const before = wrDoc().ids.join(",");
+    applyUndo(undo, redo);
+    const after = (docs()[0] || {}).ids.join(",");
+    return before !== after;
+  }));
+  await c.run(() => closeWrite());
+});
+
 group("wrwc 写作页字数统计", async (c) => {
   // 中日韩按"字"、拉丁按"词"，两者相加才是中英混排稿子里通常说的字数。
   // 数的是纯文本，不碰 rich；折叠框里的引文（别人的话）和其他版本（没采用的稿子）
@@ -3130,6 +3258,18 @@ group("wrexport 稿子导出", async (c) => {
       // 编号不许落到正文段落上
       bodyNum: /class="num">[^<]*<\/span>正文一段/.test(html) };
   });
+  // Word/PDF 认的是标签，不是"字大一点的段落"：必须落成真的 h1-h6
+  const tags = await c.run(() => {
+    const html = wrHTML(docs()[0], { vers: false, refs: false, nums: true });
+    return { h1: (html.match(/<h1[ >]/g) || []).length, h2: (html.match(/<h2[ >]/g) || []).length,
+      hasNum: /<h1[^>]*><span class="num">1<\/span>/.test(html.replace(/\s+/g, " ")),
+      // 正文那一段不能被包成 h 标签
+      body: !/<h\d[^>]*>[^<]*正文一段/.test(html) && /正文一段/.test(html) };
+  });
+  c.ok("标题落成真的 h1/h2 标签，不是 div", tags.h1 >= 3 && tags.h2 >= 2);
+  c.ok("编号在标题标签里面", tags.hasNum);
+  c.ok("正文仍然是 div，不会被当成标题", tags.body);
+
   c.ok("Markdown 的标题带上了编号",
     num.heads.join("|") === "# 稿子|## 1 Introduction|### 1.1 引入|## 2 Background|### 2.1 讨论");
   c.ok("编号跟稿子里看到的是同一套（第二章从 2 起）", num.htmlNums.join(",") === "1,1.1,2,2.1");
