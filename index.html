@@ -2413,7 +2413,7 @@ function makeCard(c){
     if(!cap.isContentEditable)return;
     e.preventDefault();
     const txt=(e.clipboardData||window.clipboardData).getData("text/plain");
-    document.execCommand("insertText",false,txt);
+    document.execCommand("insertText",false,stripZotero(txt));
   });
   cap.addEventListener("mouseup",()=>setTimeout(syncBar,0));
   cap.addEventListener("keyup",()=>setTimeout(syncBar,0));
@@ -3363,7 +3363,7 @@ addEventListener("paste",e=>{
     toast(t("tbPasted")+" "+tsvGrid.length+"\u00D7"+cols);
     return;
   }
-  const txt=plain;
+  const txt=stripZotero(plain);
   if(txt&&txt.trim()){e.preventDefault();snap();
     const c={id:uid(),src:null,x:Math.round(p.x-160),y:Math.round(p.y-16),w:320,text:txt.trim(),s:newStyle()};
     invalidateIndex();S.cards.push(c);sel=[c.id];render();save()}
@@ -4715,6 +4715,50 @@ async function exportDocx(D,o,tree){
   dl(blob,o.title+".docx");
 }
 const o2u=c=>orig(c).url||"";
+/* ---- Zotero 粘进来的小尾巴 ---- */
+// Zotero 的「带引注复制」会在引文后面缀一段 markdown 链接：
+//   …coding stage.” ([Särmäkari, 2021, p. 7](zotero://select/library/items/EX9CBTSX))
+//   ([pdf](zotero://open-pdf/library/items/G9BSIDLW?page=8))
+// 要留的是人读的那一部分「(Särmäkari, 2021, p. 7)」；链接目标和整个 ([pdf](…))
+// 都是给 Zotero 自己跳转用的，写进稿子里就是一串没人看的乱码。
+//
+// 三条规矩：
+// ① **不含 zotero:// 就原样返回**，一个字符都不碰。粘贴是高频操作，
+//    不能因为这个功能把别的粘贴内容改坏。
+// ② 只吃 zotero:// 这一种链接：普通的 markdown 链接（比如 [官网](https://…)）留着不动。
+// ③ ([pdf](zotero://open-pdf/…)) 整组扔掉，别的 [标签](zotero://…) 只脱掉链接、留下标签。
+function stripZotero(s){
+  if(!s||s.indexOf("zotero://")<0)return s;
+  let o=s.replace(/[ \t\u00A0]*\(\s*\[[^\]]*\]\(zotero:\/\/open-pdf[^)]*\)\s*\)/gi,"");
+  o=o.replace(/\[([^\]]*)\]\(zotero:\/\/[^)\s]*\)/gi,"$1");
+  o=o.replace(/[ \t\u00A0]*<?zotero:\/\/[^\s)>\]]*>?/gi,"");   // 没有 markdown 包装的裸链接
+  o=o.replace(/\(\s*\)/g,"");                                 // 脱完只剩空括号
+  return o.replace(/[ \t\u00A0]{2,}/g," ").replace(/[ \t\u00A0]+$/g,"");
+}
+// HTML 形态（从 Zotero 的阅读器里直接拖/复制富文本时）：
+// 引注是 <a href="zotero://…">，指向 open-pdf 的那个整条删掉（连同它外面的括号），
+// 其余的只脱掉 <a>、留下文字。
+function stripZoteroHTML(html){
+  if(!html||html.indexOf("zotero://")<0)return html;
+  const box=document.createElement("div");box.innerHTML=html;
+  box.querySelectorAll('a[href^="zotero:"]').forEach(a=>{
+    if(/open-pdf/i.test(a.getAttribute("href")||""))a.remove();
+    else a.replaceWith(...a.childNodes);
+  });
+  // 脱完之后文字里会剩下空括号（原来包着 [pdf] 的那一对）
+  box.innerHTML=box.innerHTML.replace(/\(\s*\)/g,"").replace(/[ \t\u00A0]{2,}/g," ");
+  return box.innerHTML;
+}
+// 粘贴时统一走这里：不含 zotero:// 就返回 null，表示"别插手，交给浏览器原样处理"
+function zoteroPaste(e){
+  const dt=e.clipboardData||window.clipboardData;
+  if(!dt)return null;
+  const html=dt.getData("text/html")||"",txt=dt.getData("text/plain")||"";
+  if(!/zotero:\/\//i.test(html)&&!/zotero:\/\//i.test(txt))return null;
+  return /zotero:\/\//i.test(html)
+    ?{html:safeRich(stripZoteroHTML(html))}
+    :{text:stripZotero(txt)};
+}
 function safeRich(html){
   const box=document.createElement("div");box.innerHTML=html||"";
   box.querySelectorAll("*").forEach(el=>{
@@ -6957,6 +7001,16 @@ function bindBody(root,getDoc){
     const blk=e.target.closest(".blk");
     ctxKeep=e.button===2&&!!blk&&sel.length>1&&sel.includes(blk.dataset.id);
   },true);
+  // 写作页粘贴：只在内容里真的带着 zotero:// 时才接管，其余情况一概交给浏览器，
+  // 免得为了这一个小功能把平时的粘贴行为改坏
+  root.addEventListener("paste",e=>{
+    const cap=e.target.closest(".cap");if(!cap||!cap.isContentEditable)return;
+    const got=zoteroPaste(e);if(!got)return;
+    e.preventDefault();
+    if(got.html)document.execCommand("insertHTML",false,got.html);
+    else document.execCommand("insertText",false,got.text);
+    cap.dispatchEvent(new Event("input",{bubbles:true}));
+  });
   root.addEventListener("input",e=>{
     const el=e.target.closest(".cap");if(!el)return;
     const c=card(el.dataset.id);if(!c||isLocked(c.id))return;

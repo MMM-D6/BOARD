@@ -2822,6 +2822,78 @@ group("wrnum 用编号调位置", async (c) => {
   await c.run(() => closeWrite());
 });
 
+group("zotero 粘贴时去掉引注小尾巴", async (c) => {
+  // Zotero 的「带引注复制」会在引文后面缀一段 markdown 链接：
+  //   …coding stage.” ([Särmäkari, 2021, p. 7](zotero://select/library/items/EX9CBTSX))
+  //   ([pdf](zotero://open-pdf/library/items/G9BSIDLW?page=8))
+  // 要留的是人读的「(Särmäkari, 2021, p. 7)」，链接目标和整个 ([pdf](…)) 都是多余的。
+  await c.board([{ id: "p1", x: 0, y: 0, w: 400, text: "起始段", s: {} }], []);
+  const pure = await c.run(() => {
+    const A = '正文。” ([Särmäkari, 2021, p. 7](zotero://select/library/items/EX9CBTSX)) ([pdf](zotero://open-pdf/library/items/G9BSIDLW?page=8))';
+    const B = '正文 ([Chan et al., 2024, p. 165](zotero://select/library/items/ABC))';
+    const C = '普通文本，没有尾巴 [官网](https://example.com)';
+    const D = '裸链接 zotero://select/library/items/Q 也要去掉';
+    const H = '<p>引文。 (<a href="zotero://select/library/items/EX9">Särmäkari, 2021, p. 7</a>) (<a href="zotero://open-pdf/library/items/G9?page=8">pdf</a>)</p>';
+    return { a: stripZotero(A), b: stripZotero(B), c: stripZotero(C), d: stripZotero(D),
+      h: stripZoteroHTML(H) };
+  });
+  c.ok("引注保留人读的部分，链接目标去掉", pure.a === '正文。” (Särmäkari, 2021, p. 7)');
+  c.ok("([pdf](…)) 整组扔掉", !/pdf/.test(pure.a) && !/zotero/.test(pure.a));
+  c.ok("只有引注时也处理干净", pure.b === "正文 (Chan et al., 2024, p. 165)");
+  c.ok("普通 markdown 链接一个字都不动", pure.c === '普通文本，没有尾巴 [官网](https://example.com)');
+  c.ok("没有 markdown 包装的裸链接也去掉", !/zotero/.test(pure.d) && /裸链接/.test(pure.d));
+  c.ok("HTML 形态：脱掉 a 标签留文字，pdf 那条整条删",
+    /Särmäkari, 2021, p. 7/.test(pure.h) && !/zotero/.test(pure.h) && !/>pdf</.test(pure.h));
+
+  // 真的粘一次到写作页
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["p1"]; clipCards("copy"); wrPasteMain(d, 0);
+    openWrite(d.id);
+  });
+  await c.wait(700);
+  const pasted = await c.run(() => {
+    const cap = document.querySelector("#wrmain .cap");
+    cap.focus();
+    const r2 = document.createRange();
+    r2.selectNodeContents(cap); r2.collapse(false);
+    const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(r2);
+    const dt = new DataTransfer();
+    dt.setData("text/plain", ' 引文。 ([Särmäkari, 2021, p. 7](zotero://select/library/items/EX9)) ([pdf](zotero://open-pdf/library/items/G9?page=8))');
+    cap.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    return card(wrDoc().ids[0]).text;
+  });
+  await c.wait(300);
+  c.ok("粘进写作页的是干净的引文", pasted === "起始段 引文。 (Särmäkari, 2021, p. 7)");
+
+  // 不含 zotero:// 的粘贴一概交还浏览器，行为跟以前完全一样
+  c.ok("普通粘贴不接管", await c.run(() => {
+    const cap = document.querySelector("#wrmain .cap");
+    cap.focus();
+    const dt = new DataTransfer();
+    dt.setData("text/plain", "普通文本");
+    const ev = new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true });
+    cap.dispatchEvent(ev);
+    return !ev.defaultPrevented;
+  }));
+  await c.run(() => closeWrite());
+
+  // 画布上的卡片、以及粘到空白处新建卡片，同样要洗干净
+  c.ok("粘进画布卡片也洗干净", await c.run(() => {
+    const el = nodes.get("p1");
+    const cap = el.querySelector(".cap");
+    cap.contentEditable = "true"; cap.focus();
+    const r2 = document.createRange();
+    r2.selectNodeContents(cap); r2.collapse(false);
+    const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(r2);
+    const dt = new DataTransfer();
+    dt.setData("text/plain", '甲 ([X, 2020](zotero://select/library/items/Z))');
+    cap.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+    return !/zotero/.test(cap.innerText) && /\(X, 2020\)/.test(cap.innerText);
+  }));
+});
+
 group("wrenter 回车是段内换行", async (c) => {
   // 写东西时绝大多数回车都是"在这一段里继续写"。让回车去切分段落，
   // 等于每敲一次就多出一张卡片，稿子很快碎掉。所以：
