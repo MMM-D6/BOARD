@@ -2879,6 +2879,64 @@ group("zotero 粘贴时去掉引注小尾巴", async (c) => {
   }));
   await c.run(() => closeWrite());
 
+  // ---- 不许吃掉正文：一批容易被正则误伤的样本 ----
+  const keep = await c.run(() => {
+    const cases = [
+      ["普通中文", "这是一段普通的中文，带（全角括号）和「引号」。"],
+      ["原文自带的空括号", "这里有一对空括号 () 是原文就有的"],
+      ["普通 markdown 链接", "参见 [官网](https://example.com) 与 [PDF](https://x/y.pdf)"],
+      ["方括号引注", "如 [1] 与 [Smith 2020] 所述"],
+      ["代码", "if (a[0]) { return b(); }"],
+      ["特殊字符", "α β γ — – … “引号” 🙂 <b>&amp;</b>"],
+      ["多行", "第一行\n第二行\n\n第四行"],
+      ["制表符", "列一\t列二\t列三"],
+      ["两万字长文", "甲".repeat(20000)],
+      ["含 pdf 字样", "这篇 pdf 很重要，([pdf] 是我写的)"],
+    ];
+    return cases.filter(([, v]) => stripZotero(v) !== v).map(([n]) => n);
+  });
+  c.ok("不含 zotero 的文本一个字符都不改（10 类样本）", keep.length === 0);
+
+  const mixed = await c.run(() => {
+    const chk = (a2, b2) => stripZotero(a2) === b2;
+    return {
+      paren: chk("前面 () 中间 ([X, 2020](zotero://select/library/items/Z)) 后面", "前面 () 中间 (X, 2020) 后面"),
+      nl: chk("第一段\n第二段 ([X, 2020](zotero://select/library/items/Z))\n第三段",
+        "第一段\n第二段 (X, 2020)\n第三段"),
+      link: chk("[官网](https://example.com) ([X, 2020](zotero://select/library/items/Z))",
+        "[官网](https://example.com) (X, 2020)"),
+      inner: chk("([Smith (ed.), 2020, p. 3](zotero://select/library/items/Z))", "(Smith (ed.), 2020, p. 3)"),
+      many: chk("甲 ([A, 1](zotero://select/library/items/1)) 乙 ([B, 2](zotero://select/library/items/2))",
+        "甲 (A, 1) 乙 (B, 2)"),
+      bare: chk("正文 (zotero://select/library/items/Q) 后续", "正文 后续"),
+      long: (() => {
+        const body = "“" + "文字内容 ".repeat(300) + "”";
+        return stripZotero(body + " ([S, 2021, p. 7](zotero://select/library/items/E)) ([pdf](zotero://open-pdf/library/items/G?page=8))")
+          === body + " (S, 2021, p. 7)";
+      })(),
+    };
+  });
+  c.ok("含 zotero 时也不动正文里本来就有的空括号", mixed.paren);
+  c.ok("换行一律保留，多段引文不会被并成一行", mixed.nl);
+  c.ok("同一段里的普通链接不受影响", mixed.link);
+  c.ok("引注文字里自带的括号不被吃掉", mixed.inner);
+  c.ok("一段里连着多条引注都处理得对", mixed.many);
+  c.ok("裸链接连同它自己那对括号一起去掉", mixed.bare);
+  c.ok("长引文的正文一字不少", mixed.long);
+
+  // HTML 形态：分段、格式都不能丢
+  const htm = await c.run(() => {
+    const H = '<p>第一段。 (<a href="zotero://select/library/items/E">S, 2021, p. 7</a>) (<a href="zotero://open-pdf/library/items/G?page=8">pdf</a>)</p><p>加粗 <b>要保住</b> 与 <i>斜体</i>。</p>';
+    const box = document.createElement("div");
+    box.innerHTML = safeRich(stripZoteroHTML(H));
+    return { txt: box.innerText, blocks: box.querySelectorAll("div").length,
+      b: !!box.querySelector("b"), i: !!box.querySelector("i"), html: box.innerHTML };
+  });
+  c.ok("HTML：两段都在，没有被并成一行", /第一段/.test(htm.txt) && /加粗/.test(htm.txt) && htm.blocks >= 2);
+  c.ok("HTML：加粗斜体都保住", htm.b && htm.i);
+  c.ok("HTML：引注文字留下、链接与 pdf 去掉",
+    /S, 2021, p\. 7/.test(htm.txt) && !/zotero/.test(htm.html) && !/pdf/i.test(htm.txt));
+
   // 画布上的卡片、以及粘到空白处新建卡片，同样要洗干净
   c.ok("粘进画布卡片也洗干净", await c.run(() => {
     const el = nodes.get("p1");

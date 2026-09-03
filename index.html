@@ -4731,22 +4731,33 @@ function stripZotero(s){
   if(!s||s.indexOf("zotero://")<0)return s;
   let o=s.replace(/[ \t\u00A0]*\(\s*\[[^\]]*\]\(zotero:\/\/open-pdf[^)]*\)\s*\)/gi,"");
   o=o.replace(/\[([^\]]*)\]\(zotero:\/\/[^)\s]*\)/gi,"$1");
-  o=o.replace(/[ \t\u00A0]*<?zotero:\/\/[^\s)>\]]*>?/gi,"");   // 没有 markdown 包装的裸链接
-  o=o.replace(/\(\s*\)/g,"");                                 // 脱完只剩空括号
-  return o.replace(/[ \t\u00A0]{2,}/g," ").replace(/[ \t\u00A0]+$/g,"");
+  // 没有 markdown 包装的裸链接。连同**它自己那对括号**一起去掉，
+  // 不要事后再来一句全局的 "把空括号删掉"——那会顺手删掉正文里本来就有的空括号。
+  o=o.replace(/[ \t\u00A0]*\(\s*<?zotero:\/\/[^\s)>\]]*>?\s*\)/gi,"");
+  o=o.replace(/[ \t\u00A0]*<?zotero:\/\/[^\s)>\]]*>?/gi,"");
+  // 只把**行内**多余的空格并掉，绝不碰换行：多段引文粘进来时，段落分隔全靠这些换行
+  return o.replace(/[^\S\r\n]{2,}/g," ").replace(/[^\S\r\n]+$/gm,"");
 }
 // HTML 形态（从 Zotero 的阅读器里直接拖/复制富文本时）：
 // 引注是 <a href="zotero://…">，指向 open-pdf 的那个整条删掉（连同它外面的括号），
 // 其余的只脱掉 <a>、留下文字。
 function stripZoteroHTML(html){
   if(!html||html.indexOf("zotero://")<0)return html;
-  const box=document.createElement("div");box.innerHTML=html;
+  const box=document.createElement("div");
+  // safeRich 的白名单里没有 P，直接交给它会把段落全部并成一行——先换成 DIV 保住分段
+  box.innerHTML=String(html).replace(/<p(\s[^>]*)?>/gi,"<div>").replace(/<\/p>/gi,"</div>");
   box.querySelectorAll('a[href^="zotero:"]').forEach(a=>{
-    if(/open-pdf/i.test(a.getAttribute("href")||""))a.remove();
-    else a.replaceWith(...a.childNodes);
+    const href=a.getAttribute("href")||"";
+    if(/open-pdf/i.test(href)){
+      // 连同它外面那对括号一起去掉："(" 与 ")" 通常是它前后的纯文本节点
+      const prev=a.previousSibling,next=a.nextSibling;
+      if(next&&next.nodeType===3&&/^\s*\)/.test(next.nodeValue))
+        next.nodeValue=next.nodeValue.replace(/^\s*\)/,"");
+      if(prev&&prev.nodeType===3&&/\(\s*$/.test(prev.nodeValue))
+        prev.nodeValue=prev.nodeValue.replace(/[ \t\u00A0]*\(\s*$/,"");
+      a.remove();
+    }else a.replaceWith(...a.childNodes);
   });
-  // 脱完之后文字里会剩下空括号（原来包着 [pdf] 的那一对）
-  box.innerHTML=box.innerHTML.replace(/\(\s*\)/g,"").replace(/[ \t\u00A0]{2,}/g," ");
   return box.innerHTML;
 }
 // 粘贴时统一走这里：不含 zotero:// 就返回 null，表示"别插手，交给浏览器原样处理"
