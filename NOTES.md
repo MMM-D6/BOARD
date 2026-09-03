@@ -4,7 +4,7 @@
 读完这一份就能安全地改动，不必逐行摸索。
 
 当前规模：272 KB，5474 行，291 个函数，330 条双语文案，46 条说明书词条，
-数据结构版本 SCHEMA = 8，测试 50 组 569 条断言（含 cutout.html 那一组）。
+数据结构版本 SCHEMA = 8，测试 51 组 577 条断言（含 cutout.html 那一组）。
 
 ---
 
@@ -84,7 +84,7 @@ CHROME=/path/to/chrome node tests.js   # 用已有的 Chrome，免下载
 测试组一览：connectors 连线、text 文字格式、colors 颜色、twins 分身、
 wrorder 写作页里的顺序、wrback 定位只留给引文分身、fmtbar 写作页工具栏、
 wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrmarq 稿子里不许拉出画布的框选、wrwc 写作页字数统计、
-frameown 页面归属、wrnum 用编号调位置、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 抠图工具的入口、
+frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 抠图工具的入口、
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
@@ -549,7 +549,14 @@ Word 里却是 2.1"这种对不上的事。导出面板里有「标题编号」�
 点哪里光标就落在哪里，不再有"先双击进入编辑"这一步——那一步是早期设计，
 用起来像在填表格而不是在写东西。锁定的段落仍然只读。
 配套的三个键盘行为都在 `bindBody` 的 `keydown` 里：
-回车走 `wrSplitAtCaret()`，从光标处把这一段切成两张卡片（Shift+回车仍是段内换行）；
+**回车 = 段内换行；Shift/⌘/Ctrl+回车 = 从光标处切成下一段**（走 `wrSplitAtCaret()`）。
+这两个键的分工在 2026-08 调过来了，早先是反的：写东西时绝大多数回车都是
+"在这一段里继续写"，让它去切分段落，等于每敲一次就多出一张卡片，稿子很快碎掉。
+换行显式走 `document.execCommand("insertLineBreak")` 插 `<br>`——交给浏览器默认行为
+各家可能插 `<div>`，结构不统一，重绘之后换行会走样。能存得住是因为
+`.cap` 是 `white-space:pre-wrap`（纯文本里的 `\n` 照样显示成换行），
+`safeRich` 的白名单里也有 `BR`/`DIV`（带格式的段落走 rich 那条路）。
+`wrenter` 组把"重绘之后换行还在"单独列成一条守着——那是最容易丢的一步。
 段首退格走 `wrMergeBack()`，把这一段并回上一段；
 选中但未编辑时的退格仍走 `wrRemoveSel()`，只把它移出稿子。
 划选一段自由文字后右键选"变成卡片"走 `wrSelToCard()`，

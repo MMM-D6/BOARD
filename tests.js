@@ -2163,7 +2163,7 @@ group("wredit 写作页自由编辑", async (c) => {
     return { ids: d.ids.length, head: card("p1").text,
       tail: card(d.ids[2]) ? card(d.ids[2]).text : "" };
   });
-  c.ok("回车从光标处切成下一张卡片", split.ids === 4);
+  c.ok("从光标处切分得出下一张卡片", split.ids === 4);
   c.ok("切分的前后内容各归其位", split.head === "第一段" && split.tail === "。");
 
   // 划选自由文字，把它单独立成一张卡片
@@ -2818,6 +2818,83 @@ group("wrnum 用编号调位置", async (c) => {
     applyUndo(undo, redo);
     const after = (docs()[0] || {}).ids.join(",");
     return before !== after;
+  }));
+  await c.run(() => closeWrite());
+});
+
+group("wrenter 回车是段内换行", async (c) => {
+  // 写东西时绝大多数回车都是"在这一段里继续写"。让回车去切分段落，
+  // 等于每敲一次就多出一张卡片，稿子很快碎掉。所以：
+  // 回车 = 段内换行；Shift/⌘/Ctrl+回车 = 切成下一段。
+  // 换行要经得起重绘：.cap 是 white-space:pre-wrap，纯文本里的 "\n" 存得住；
+  // 显式 insertLineBreak 保证插的是 <br> 而不是各家浏览器自己的 <div>。
+  await c.board([
+    { id: "p1", x: 0, y: 0, w: 400, text: "第一段内容", s: {} },
+    { id: "p2", x: 0, y: 100, w: 400, text: "第二段", s: {} },
+  ], []);
+  await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["p1", "p2"]; clipCards("copy"); wrPasteMain(d, 0);
+    openWrite(d.id);
+  });
+  await c.wait(700);
+  const caretEnd = () => c.run(() => {
+    const cap = document.querySelectorAll("#wrmain .cap")[0];
+    cap.focus();
+    const r2 = document.createRange();
+    r2.selectNodeContents(cap); r2.collapse(false);
+    const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(r2);
+    return cap.getBoundingClientRect().height;
+  });
+
+  const h0 = await caretEnd();
+  await c.page.keyboard.press("Enter");
+  await c.page.keyboard.type("第二行");
+  await c.wait(500);
+  const after = await c.run(() => {
+    const d = wrDoc();
+    return { n: d.ids.length, text: card(d.ids[0]).text,
+      h: document.querySelectorAll("#wrmain .cap")[0].getBoundingClientRect().height };
+  });
+  c.ok("回车没有切出新段落", after.n === 2);
+  c.ok("回车在这一段里换了行", after.text === "第一段内容\n第二行");
+  c.ok("换行是看得见的（高度长了一行）", after.h > h0 * 1.5);
+
+  // 重绘之后换行还在（这是最容易丢的一步）
+  await c.run(() => drawWrite());
+  await c.wait(300);
+  const redraw = await c.run(() => {
+    const d = wrDoc(), cap = document.querySelectorAll("#wrmain .cap")[0];
+    return { text: card(d.ids[0]).text, h: cap.getBoundingClientRect().height,
+      ws: getComputedStyle(cap).whiteSpace };
+  });
+  c.ok("重绘之后换行没丢", redraw.text === "第一段内容\n第二行" && redraw.h > h0 * 1.5);
+  c.ok(".cap 保留空白，换行才存得住", /pre/.test(redraw.ws));
+
+  // Shift+回车才是切成下一段
+  await caretEnd();
+  await c.page.keyboard.down("Shift");
+  await c.page.keyboard.press("Enter");
+  await c.page.keyboard.up("Shift");
+  await c.wait(400);
+  c.ok("Shift+回车切成下一段", await c.run(() => wrDoc().ids.length === 3));
+  c.ok("切分之后原来那一段的换行仍在", await c.run(() =>
+    card(wrDoc().ids[0]).text === "第一段内容\n第二行"));
+
+  // 带格式的段落里换行也不能把格式弄丢
+  c.ok("带格式的段落换行后格式还在", await c.run(() => {
+    const d = wrDoc(), id = d.ids[0], c2 = card(id);
+    c2.rich = "<b>粗体</b>普通"; c2.text = "粗体普通";
+    drawWrite();
+    const cap = document.querySelector(`#wrmain .cap[data-id="${id}"]`);
+    cap.focus();
+    const r2 = document.createRange();
+    r2.selectNodeContents(cap); r2.collapse(false);
+    const s2 = getSelection(); s2.removeAllRanges(); s2.addRange(r2);
+    document.execCommand("insertLineBreak");
+    cap.dispatchEvent(new Event("input", { bubbles: true }));
+    return /<b>/i.test(card(id).rich || "") && /粗体/.test(card(id).text);
   }));
   await c.run(() => closeWrite());
 });

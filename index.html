@@ -7148,10 +7148,19 @@ function bindBody(root,getDoc){
     if(e.key==="Escape"){cap.blur();editing=false;syncBar();return}
     const d=doc(),c=card(cap.dataset.id);
     if(!d||!c||lock||isLocked(c.id))return;
-    // 回车 = 从光标处切成下一张卡片，跟 Word 里换段一样自然。
-    // Shift+回车仍然是段内换行，留给需要软换行的场合。
-    if(e.key==="Enter"&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey){
-      e.preventDefault();wrSplitAtCaret(d,c,cap);return;
+    // 回车 = **段内换行**。写东西的时候绝大多数回车都是在同一段里继续写，
+    // 让它去切分段落，等于每敲一次回车就多出一张卡片，稿子很快就碎掉。
+    // 要真的切成下一段，用 Shift/⌘/Ctrl+回车；右键菜单里的"在下方插入空白段落"
+    // 也是一条路。（这两个键的分工在 2026-08 调过来了，早先是反的。）
+    if(e.key==="Enter"){
+      e.preventDefault();
+      if(e.shiftKey||e.metaKey||e.ctrlKey){wrSplitAtCaret(d,c,cap);return}
+      // 显式插一个 <br>：交给浏览器默认行为的话，不同浏览器可能插 <div>，
+      // 结构不统一，重绘之后换行会走样。safeRich 的白名单里 BR 是允许的，
+      // .cap 又是 white-space:pre-wrap，所以纯文本段落里的 "\n" 一样存得住。
+      document.execCommand("insertLineBreak");
+      cap.dispatchEvent(new Event("input",{bubbles:true}));
+      return;
     }
     // 段首按退格 = 并回上一段，空段落则直接从稿子里移出（不删源卡片）
     if(e.key==="Backspace"&&caretAtStart(cap)){
