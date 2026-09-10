@@ -4034,6 +4034,249 @@ group("interact 交互响应", async (c) => {
   c.ok("检索够快（实测 " + r.find.toFixed(0) + "ms）", r.find < 200);
 });
 
+/* =====================================================================
+   网页快照
+   ===================================================================== */
+
+group("websnap 网页快照", async (c) => {
+  // 快照直接克隆画布自己的 DOM：要守的是\"全都在、一模一样、改不动、选得中、程序没被碰\"。
+  // 一千一百张远处卡片是故意的：超过 NODE_CAP（900），只拿视野里的节点就会漏。
+  const info = await c.run(async () => {
+    const cards = [
+      { id: "h1", x: 0, y: 0, w: 360, text: "第一章 身体作为服装", level: 1, s: { ...DEF, size: 24 } },
+      { id: "p1", x: 0, y: 120, w: 360, text: "数字时装把身体当作可设计的表面。Särmäkari (2021)", s: { ...DEF },
+        tags: ["theory"], url: "example.com/paper" },
+      { id: "p2", x: 460, y: 120, w: 300, text: "锁定的引文仍然可以划选复制", s: { ...DEF }, lock: "all", bg: "#FFF2A0" },
+      { id: "p3", x: 460, y: 300, w: 300, text: "富文本",
+        rich: '带 <b>加粗</b> 与 <a href="https://example.org">链接</a> 和 <a href="javascript:alert(1)">坏链接</a>', s: { ...DEF } },
+      { id: "tb", x: 0, y: 360, w: 360, text: "", tb: { cols: [120, 120, 120], rows: [["A", "B", "C"], ["1", "2", "3"]], head: true } },
+      { id: "emp", x: 860, y: 420, w: 200, text: "", s: { ...DEF } },
+    ];
+    for (let i = 0; i < 1100; i++)
+      cards.push({ id: "f" + i, x: 3000 + (i % 40) * 260, y: Math.floor(i / 40) * 180, w: 220, text: "远处卡片 " + i, s: { ...DEF } });
+    S.cards = cards;
+    S.links = [{ id: "l1", a: "h1", b: "p1", st: true }, { id: "l2", a: "p1", b: "p2" }, { id: "l3", a: "p1", b: "f1099" }];
+    S.frames = [{ id: "fr1", x: -60, y: -60, w: 1200, h: 640, title: "第一页" }];
+    S.sheets = []; S.docs = [];
+    invalidateIndex(); render();
+    const d = addDoc({ x: 0, y: 800 }, "论文草稿");
+    const ids = [];
+    for (let i = 0; i < 30; i++) {
+      S.cards.push({ id: "w" + i, x: 0, y: 9000 + i * 100, w: 300,
+        text: i % 6 === 0 ? "小节 " + i : ("这是第 " + i + " 段正文，用来撑出滚动条。").repeat(4),
+        level: i % 6 === 0 ? 2 : undefined, s: { ...DEF } });
+      ids.push("w" + i);
+    }
+    invalidateIndex(); wrImport(ids, false, d.id);
+    S.cards = S.cards.filter((z) => !/^w\d+$/.test(z.id)); invalidateIndex(); render();
+    camTo(-400, -300, 0.8, true);
+    await new Promise((r) => setTimeout(r, 400));
+    document.querySelector("#docs .dbody").scrollTop = 300;
+    sel = ["p1"]; paintSel();
+    const before = { nodes: nodes.size, dom: document.querySelectorAll("#cards .card").length };
+    const t0 = performance.now();
+    const html = await buildWebSnap("快照测试");
+    return {
+      html, ms: performance.now() - t0, before,
+      after: { nodes: nodes.size, dom: document.querySelectorAll("#cards .card").length },
+      cap: NODE_CAP, m: CULL.m, sel: [...sel],
+      total: S.cards.filter((z) => !docOnly(z)).length, links: S.links.length,
+      appP1: (() => { const r = nodes.get("p1").getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })(),
+      appDoc: (() => { const r = document.querySelector("#docs .doc .dwrap").getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })(),
+    };
+  });
+
+  c.ok("生成快照不超过五秒（" + Math.round(info.ms) + "ms）", info.ms < 5000);
+  c.ok("导出之后剔除上限与边距原样还回去", info.cap === 900 && info.m === 700);
+  c.ok("导出之后画布上的节点数与导出前一致", info.after.nodes === info.before.nodes && info.after.dom === info.before.dom);
+  c.ok("导出之后选中状态还在", info.sel.length === 1 && info.sel[0] === "p1");
+
+  const st = await c.run((html) => {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const js = (doc.getElementById("snapjs") || {}).textContent || "";
+    return {
+      cards: doc.querySelectorAll("#world .card").length,
+      ce: doc.querySelectorAll("[contenteditable]").length,
+      chrome: doc.querySelectorAll(".hnd,.port,.ring,.cgrip,.dbar,.fmtbar,#links .hit").length,
+      marks: doc.querySelectorAll(".card.sel,.card.multi,.doc.on,.frame.sel,.blk.sel").length,
+      lines: doc.querySelectorAll("#links path.ln").length,
+      frames: doc.querySelectorAll(".frame").length, docs: doc.querySelectorAll(".doc").length,
+      scripts: [...doc.querySelectorAll("script")].map((s) => s.id).join(","),
+      storage: /indexedDB|localStorage|sessionStorage/.test(js),
+      badHref: doc.querySelectorAll('a[href^="javascript"]').length,
+      lnkA: !!doc.querySelector('a.lnk[href="https://example.com/paper"][target="_blank"]'),
+      fontLink: !!doc.querySelector('link[href*="fonts.googleapis.com"]'),
+      st: (doc.querySelector(".dbody") || {}).dataset?.st,
+    };
+  }, info.html);
+  c.ok(`视野外、超出节点上限的卡片也全在（${st.cards}/${info.total}）`, st.cards === info.total);
+  c.ok("连线、页面、稿子一样不少", st.lines === info.links && st.frames === 1 && st.docs === 1);
+  c.ok("快照里没有任何可编辑的元素", st.ce === 0);
+  c.ok("编辑用的零件都摘掉了", st.chrome === 0);
+  c.ok("选中之类的临时痕迹不带进去", st.marks === 0);
+  c.ok("只有配置与查看脚本两段脚本", st.scripts === "snapcfg,snapjs");
+  c.ok("查看脚本不碰浏览器存储", !st.storage);
+  c.ok("javascript: 链接被摘掉", st.badHref === 0);
+  c.ok("来源链接变成真的链接，新标签打开", st.lnkA);
+  c.ok("字体取不到时仍留着 Google Fonts 的链接", st.fontLink);
+  c.ok("稿子当前的滚动位置记下来了", st.st === "300");
+
+  // 打开快照本身，跟编辑页并排比
+  const fs2 = require("fs"), os = require("os"), path2 = require("path");
+  const file = path2.join(os.tmpdir(), "board-websnap-test.html");
+  fs2.writeFileSync(file, info.html);
+  const pg = await c.page.browser().newPage();
+  const errs = [];
+  pg.on("pageerror", (e) => errs.push(e.message));
+  await pg.goto("file://" + file);
+  await c.wait(900);
+  const R = (fn, ...a) => pg.evaluate(fn, ...a);
+  const box = (sel) => R((s) => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; }, sel);
+  const near = (a, b) => ["x", "y", "w", "h"].every((k) => Math.abs(a[k] - b[k]) < 1.5);
+  c.ok("卡片在屏幕上的位置与大小跟编辑页一致", near(await box('.card[data-id="p1"]'), info.appP1));
+  c.ok("稿子在屏幕上的位置与大小跟编辑页一致", near(await box(".doc .dwrap"), info.appDoc));
+  c.ok("打开时稿子滚回导出时的位置", Math.abs((await R(() => document.querySelector(".dbody").scrollTop)) - 300) < 2);
+  c.ok("空卡片不显示编辑用的占位提示",
+    await R(() => getComputedStyle(document.querySelector('.card[data-id="emp"] .cap'), "::before").content) === '""');
+  c.ok("锁定卡片的文字在快照里可以选中",
+    await R(() => getComputedStyle(document.querySelector('.card[data-id="p2"] .cap')).userSelect) === "text");
+
+  const tf = () => R(() => document.getElementById("world").style.transform);
+  // 真鼠标划一段字：选得中，而且画面不跟着动
+  const t0 = await tf();
+  const cap = await box('.card[data-id="p2"] .cap');
+  await pg.mouse.move(cap.x + 3, cap.y + cap.h / 2);
+  await pg.mouse.down();
+  await pg.mouse.move(cap.x + cap.w * 0.5, cap.y + cap.h / 2, { steps: 6 });
+  await pg.mouse.up();
+  const picked = await R(() => getSelection().toString());
+  c.ok("在文字上拖动是划选（选中了「" + picked + "」）", picked.length >= 3);
+  c.ok("划选时画面不平移", (await tf()) === t0);
+
+  // 改不动：点进去打字，内容不变
+  await pg.mouse.click(cap.x + 10, cap.y + cap.h / 2);
+  await pg.keyboard.type("XYZ");
+  c.ok("点进文字打字，内容纹丝不动",
+    await R(() => document.querySelector('.card[data-id="p2"] .cap').textContent) === "锁定的引文仍然可以划选复制");
+
+  // 空白处拖动是平移，并且顺手清掉选区
+  await pg.mouse.move(40, 60);
+  await pg.mouse.down();
+  await pg.mouse.move(140, 120, { steps: 5 });
+  await pg.mouse.up();
+  const t1 = await tf();
+  c.ok("在空白处拖动是平移", t1 !== t0 && /translate\(-300px, -240px\)/.test(t1));
+  c.ok("平移不会顺带划出一片选区", (await R(() => getSelection().toString())) === "");
+
+  await pg.mouse.move(40, 60);
+  await pg.mouse.wheel({ deltaY: -240 });
+  await c.wait(100);
+  const sc = (s) => +((s.match(/scale\(([\d.]+)\)/) || [])[1] || 0);
+  c.ok("空白处滚轮是缩放", sc(await tf()) > 0.85);
+
+  // 滚轮落在稿子正文上：翻稿子，不缩放画布。先把稿子挪到屏幕中间，免得前面的缩放把它推出视口
+  await R(() => { document.querySelector(".dbody").scrollTop = 0; });
+  await pg.keyboard.press("f");
+  await c.wait(1200);
+  const t2 = await tf();
+  const body = await box(".dbody");
+  const bx = body.x + body.w / 2, by = body.y + Math.min(40, body.h / 2);
+  const hitBody = await R(([x, y]) => !!document.elementFromPoint(x, y)?.closest(".dbody"), [bx, by]);
+  c.ok("稿子正文在屏幕上（前提）", hitBody);
+  await pg.mouse.move(bx, by);
+  await pg.mouse.wheel({ deltaY: 300 });
+  await c.wait(300);
+  c.ok("滚轮在稿子上是往下翻", (await R(() => document.querySelector(".dbody").scrollTop)) > 50);
+  c.ok("翻稿子时画布不动", (await tf()) === t2);
+
+  // 目录跳转与折叠框
+  await R(() => { document.querySelector(".dbody").scrollTop = 0; document.querySelectorAll(".wrnav")[3].click(); });
+  await c.wait(900);
+  c.ok("点目录跳到对应标题", (await R(() => document.querySelector(".dbody").scrollTop)) > 200);
+  const fold = await R(() => {
+    const f = document.querySelector(".blk .fold"), a = f.classList.contains("on");
+    f.querySelector(".fh").click();
+    return { a, b: f.classList.contains("on") };
+  });
+  c.ok("折叠框可以开合", fold.a !== fold.b);
+
+  // 适应画面：全部内容都落进视口
+  await pg.click('#snapbar [data-a="fit"]');
+  await c.wait(1200);
+  const inView = await R(() => {
+    let ok = true;
+    document.querySelectorAll("#world .card,#world .doc,#world .frame").forEach((el) => {
+      const r = el.getBoundingClientRect();
+      if (r.left < -2 || r.top < -2 || r.right > innerWidth + 2 || r.bottom > innerHeight + 2) ok = false;
+    });
+    return ok;
+  });
+  c.ok("适应画面之后全部内容都在视口里", inView);
+  c.ok("缩放读数跟着变", /^\d+%$/.test(await R(() => document.querySelector('#snapbar [data-a="z100"]').textContent)));
+  await pg.keyboard.press("0");
+  await c.wait(1200);
+  c.ok("按 0 回到 100%", Math.abs(sc(await tf()) - 1) < 0.001);
+  c.ok("快照页面没有脚本错误" + (errs.length ? "：" + errs[0] : ""), errs.length === 0);
+  await pg.close();
+  try { fs2.unlinkSync(file); } catch (e) {}
+
+  // 字体内联：只挑用到的字族、只要 latin 与 latin-ext；取不到时安静退回空字符串
+  const fonts = await c.run(async () => {
+    const css = "/* cyrillic */\n@font-face{font-family:'IBM Plex Sans';src:url(https://x/c.woff2) format('woff2');}\n" +
+      "/* latin */\n@font-face{font-family:'IBM Plex Sans';src:url(https://x/a.woff2) format('woff2');}\n" +
+      "/* latin */\n@font-face{font-family:'Syne';src:url(https://x/s.woff2) format('woff2');}\n" +
+      "/* latin-ext */\n@font-face{font-family:'Fraunces';src:url(https://x/f.woff2) format('woff2');}\n";
+    const picked = snapFontBlocks(css, new Set(["IBM Plex Sans", "Fraunces"]));
+    const real = window.fetch;
+    window.fetch = async (u) => /googleapis/.test(u)
+      ? new Response(css) : new Response(new Blob([new Uint8Array([1, 2, 3])], { type: "font/woff2" }));
+    const ok = await snapFonts('<div style="font-family:&quot;Fraunces&quot;">x</div>');
+    window.fetch = async () => { throw new Error("offline"); };
+    const off = await snapFonts("");
+    window.fetch = real;
+    return { n: picked.length, cyr: picked.some((b) => b.includes("c.woff2")), syne: picked.some((b) => b.includes("Syne")),
+      data: (ok.match(/url\(data:/g) || []).length, remote: /https:\/\/x\//.test(ok), off };
+  });
+  c.ok("只挑用到的字族", fonts.n === 2 && !fonts.syne);
+  c.ok("不要 latin 以外的子集", !fonts.cyr);
+  c.ok("字体被内联成 data URI", fonts.data === 2 && !fonts.remote);
+  c.ok("断网时安静地什么都不内联", fonts.off === "");
+
+  // 导出面板
+  const panel = await c.run(() => {
+    openExport(100, 100);
+    const p = $("pop"), q = (s) => p.querySelector(s), vis = (s) => q(s).style.display !== "none";
+    const n = p.querySelectorAll("#exf button").length;
+    q('#exf button[data-v="web"]').click();
+    const web = { note: vis("#exweb"), doc: vis("#exdoc"), scope: vis("#exsc") || vis("#exsch"), img: vis("#eximg") };
+    q('#exf button[data-v="word"]').click();
+    const word = { note: vis("#exweb"), doc: vis("#exdoc"), scope: vis("#exsc") && vis("#exsch") };
+    p.classList.remove("on", "wide");
+    return { n, web, word };
+  });
+  c.ok("导出面板多了一项网页快照，八项正好两列四行", panel.n === 8);
+  c.ok("选网页快照时只显示说明，没有选项与范围", panel.web.note && !panel.web.doc && !panel.web.scope && !panel.web.img);
+  c.ok("切回 Word，原来的选项与范围照常出现", !panel.word.note && panel.word.doc && panel.word.scope);
+
+  const out = await c.run(async () => {
+    const real = window.dl; let got = null;
+    window.dl = (b, n) => { got = { type: b.type, name: n, size: b.size }; };
+    await doExport({ fmt: "web", title: "26-09-10-进度" });
+    const viaPanel = got; got = null;
+    const d = docs()[0]; openWrite(d.id);
+    await exportWebSnap();
+    const inFocus = got;
+    closeWrite();
+    window.dl = real;
+    return { viaPanel, inFocus };
+  });
+  c.ok("面板导出得到一个 .html 文件", !!out.viaPanel && out.viaPanel.name === "26-09-10-进度.html" && /text\/html/.test(out.viaPanel.type));
+  c.ok("专注模式下不导出（画布不在屏幕上，量不到高度）", out.inFocus === null);
+  c.ok("文件菜单里有导出网页快照", await c.run(() => fileItems(0, 0).some((z) => z && z.label === t("webSnap"))));
+  c.ok("中英文案都齐了", await c.run(() => ["fmtWeb", "webSnap", "snapWork", "snapDone", "snapFail",
+    "snapNeedCanvas", "snapRO", "snapHint", "snapNote"].every((k) => T.en[k] && T.zh[k])));
+});
+
 group("static 静态检查", async (c) => {
   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");
   const js = src.split("<script>").pop().split("</script>")[0];

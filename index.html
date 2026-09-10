@@ -832,6 +832,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   needSel:"Select something first",manual:"Manual",
   expOpts:"Options",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
+  fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag empty space to pan, scroll or pinch to zoom, select any text to copy it",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
   scale:"Scale",expPrint:"The print dialog opens. Choose Save as PDF.",expShot:"Rendering the canvas…",
   expRender:"Rendering…",expImg:"Include images",expTags:"Include tags",
   errCDN:"The rendering library could not be loaded.",errShot:"Canvas export failed.",
@@ -1019,6 +1020,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   needSel:"请先选中内容",manual:"使用说明",
   expOpts:"包含内容",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
+  fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动空白处平移，滚轮或双指缩放，文字可以直接划选复制",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
   scale:"倍率",expPrint:"打印窗口已打开，目标选择另存为 PDF 即可。",expShot:"正在渲染画布…",
   expRender:"正在渲染…",expImg:"包含图片",expTags:"包含标签",
   errCDN:"渲染库加载失败，请检查网络连接。",errShot:"画面导出未完成。",
@@ -2838,7 +2840,9 @@ function viewRect(m){
   return {x:a.x-p,y:a.y-p,x2:b.x+p,y2:b.y+p};
 }
 const inRect=(c,r)=>c.x+c.w>r.x&&c.x<r.x2&&c.y+hOf(c)>r.y&&c.y<r.y2;
-const NODE_CAP=900;                        // 页面里同时存在的卡片节点上限
+// 页面里同时存在的卡片节点上限。用 let 是给网页快照留的：导出那一瞬间要把全部卡片画出来，
+// 用完立刻还原（见 buildWebSnap），平时没有任何地方改它
+let NODE_CAP=900;
 function syncCards(){
   const box=$("cards"),r=viewRect(),want=new Set();
   const hit=[];
@@ -3877,6 +3881,12 @@ const MANUAL=[
   <p>可选勾选"同时渲染每页的图片"，再附一份 images/ 目录，保留画布的空间布局。</p>
   <p class="tip">建议每完成一个阶段就导一次存档包，放进云盘。即使本程序某天无法运行，pages 和 assets 仍是完整可读的资料，不依赖任何软件。</p>`],
 
+ ["网页快照","WANGYEKUAIZHAO",`
+  <p>导出面板选<b>网页快照</b>（或<b>文件 → 导出网页快照</b>），得到一个 .html 文件：画布此刻的样子原封不动，位置、连线、页面、标准页、写作页全在原处，但一个字都改不了。</p>
+  <p>打开之后：拖动空白处平移，滚轮或双指缩放，<kbd>F</kbd> 适应画面，<kbd>0</kbd> 回到 100%。写作页照样在固定高度里往下翻，点左侧目录跳到对应标题，折叠的引用可以展开。所有文字都能划选复制，链接可以点开。</p>
+  <p>它是单个文件，图片已经内嵌，发给导师双击就能看，不需要安装本程序，也不会读写任何浏览器存储。</p>
+  <p class="tip">快照只负责"看"，不能导回来继续编辑。要能还原的，仍然是 json 或存档包。</p>`],
+
  ["自动快照","ZIDONGKUAIZHAO",`
   <p>程序每十分钟自动在浏览器本地存一份结构快照，保留最近十二份，并按天各保留一份共七天。</p>
   <p>因为图片是单独存放的，快照只含结构数据，通常只有几百 KB，存几十份也不占地方。</p>
@@ -4399,10 +4409,10 @@ function openExport(x,y){
     <div class="hd"><b>${t("expTitle")}</b><button id="pcx">\u00D7</button></div>
     <div class="sec">${t("fmt")}</div>
     <div class="grid" id="exf">
-      ${[["word","fmtWord"],["pdfdoc","fmtPdfDoc"],["pdfview","fmtPdfView"],["jpg","fmtJpg"],["md","fmtMd"],["json","fmtJson"],["zip","fmtZip"]]
-        .map(([v,k],i)=>`<button data-v="${v}" class="${i===0?"on":""}"${i===4?' style="grid-column:1 / -1"':""}>${t(k)}</button>`).join("")}
+      ${[["word","fmtWord"],["pdfdoc","fmtPdfDoc"],["pdfview","fmtPdfView"],["jpg","fmtJpg"],["web","fmtWeb"],["md","fmtMd"],["json","fmtJson"],["zip","fmtZip"]]
+        .map(([v,k],i)=>`<button data-v="${v}" class="${i===0?"on":""}">${t(k)}</button>`).join("")}
     </div>
-    <div class="sec">${t("scope")}</div>
+    <div class="sec" id="exsch">${t("scope")}</div>
     <div class="pair" id="exsc">
       <button data-v="all" class="on">${t("scopeAll")}</button>
       <button data-v="sel" ${sel.length?"":"disabled"}>${t("scopeSel")}</button>
@@ -4413,6 +4423,9 @@ function openExport(x,y){
       <div class="sec">${t("expOpts")}</div>
       <label class="opt"><input type="checkbox" id="exshot"> ${t("zipShots")}</label>
       <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("zipNote")}</div>
+    </div>
+    <div id="exweb" style="display:none">
+      <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("snapNote")}</div>
     </div>
     <div id="exdoc">
       <div class="sec">${t("expOpts")}</div>
@@ -4442,7 +4455,11 @@ function openExport(x,y){
     p.querySelector("#exdoc").style.display=(isImg||fmt==="json"||fmt==="zip")?"none":"";
     p.querySelector("#eximg").style.display=(isImg||fmt==="zip")?"":"none";
     p.querySelector("#exzip").style.display=fmt==="zip"?"":"none";
-    const bp=p.querySelector("#exbp");if(bp)bp.parentNode.style.display=isImg?"":"none"};
+    const bp=p.querySelector("#exbp");if(bp)bp.parentNode.style.display=isImg?"":"none";
+    // 网页快照永远是整块画布，没有选项，也不分范围
+    const isWeb=fmt==="web";if(isWeb)p.querySelector("#exdoc").style.display="none";
+    p.querySelector("#exweb").style.display=isWeb?"":"none";
+    p.querySelector("#exsch").style.display=p.querySelector("#exsc").style.display=isWeb?"none":""};
   p.querySelector("#exs").onclick=e=>{const b=e.target.closest("button");if(!b)return;
     [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");scale=+b.dataset.v};
   p.querySelector("#exgo").onclick=()=>{
@@ -4532,6 +4549,7 @@ async function exportPagePDF(o){
     `</body></html>`,o.title);
 }
 async function doExport(o){
+  if(o.fmt==="web"){await exportWebSnap(o);return}
   const list=exportSet(o);
   if(o.scope==="sel"&&!list){toast(t("needSel"));return}
   if(o.fmt==="json"){download(bundle(list),o.title+".json");return}
@@ -5011,6 +5029,320 @@ function docHTML(o,tree,forPrint){
 function dl(blob,name){
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ================= 网页快照 ================= */
+// 把画布此刻的样子原样存成一个只读网页：永久留住某个空间状态，也方便发给导师看进度。
+// 做法不是另写一套排版去"模仿"画布，而是直接拿画布自己的 DOM 和自己的 CSS：
+// 临时解除剔除，把全部卡片画出来、量准高度、画全连线，克隆 #world，
+// 再摘掉编辑用的零件（控制点、连接点、选中框、稿子的工具栏、contenteditable）。
+// 所以版式与编辑页完全一致，位置、连线、页面、标准页、稿子全都在原处；
+// 稿子保留固定高度加内部滚动，文字一律可以划选复制。
+// 快照里只带一个很小的查看脚本 snapViewer：平移、缩放、适应画面、稿子目录跳转、折叠框开合。
+// 它不读写 IndexedDB 或 localStorage，打开快照不可能碰到程序自己的数据。
+// 整条路只读 S、不写 S（measure 顺手更新的 c.h 是实测高度，画面导出也一样会写），
+// 结束时把剔除参数与选中状态原样还回去。
+const SNAP_CSS=`
+  body.snap #stage{cursor:grab}
+  body.snap #stage.pan,body.snap #stage.space,body.snap #stage.space *{cursor:grabbing !important}
+  /* 只读不等于不可选：锁定卡片原本是 user-select:none，快照里一律放开 */
+  body.snap .card,body.snap .card *,body.snap .doc,body.snap .doc *{
+    -webkit-user-select:text !important;user-select:text !important}
+  body.snap .card .cap,body.snap .card td,body.snap .doc .cap,body.snap .doc .ref,
+  body.snap .doc .dt{cursor:text}
+  body.snap .card img,body.snap .card .tg,body.snap .card .twin,body.snap .card .bibdot,
+  body.snap .frame .ttl,body.snap .sheet .ttl,body.snap .blk .gut .num,body.snap .blk .gut .vv{cursor:inherit}
+  body.snap .card .lnk{cursor:pointer}
+  /* 占位提示是写给编辑者的，快照里不出现 */
+  body.snap .card .cap:empty:before,body.snap .blk .cap:empty:before{content:"" !important}
+  body.snap .doc .dempty{visibility:hidden}
+  body.snap .doc .dbody,body.snap .doc .dside{overscroll-behavior:contain}
+  #snapbar{position:fixed;right:14px;bottom:12px;z-index:60;display:flex;align-items:center;gap:1px;
+    padding:4px 5px 4px 12px;border-radius:10px;background:var(--glass);border:1px solid var(--glassline);
+    backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
+    color:var(--pfg,#111);font:400 12px/1.4 "IBM Plex Sans","PingFang SC","Microsoft YaHei",sans-serif;
+    white-space:nowrap;-webkit-user-select:none;user-select:none;cursor:default}
+  #snapbar .sbt{font-weight:600;max-width:34vw;overflow:hidden;text-overflow:ellipsis}
+  #snapbar .sbs{margin-left:10px;opacity:.45;font-size:11px}
+  #snapbar .wb{font-variant-numeric:tabular-nums}
+  /* 提示放在顶上：底部居中那一带正好常是稿子正文，压在字上面不好读 */
+  #snaphint{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:59;
+    font:400 12px/1.5 "IBM Plex Sans","PingFang SC","Microsoft YaHei",sans-serif;color:var(--pfg,#111);
+    opacity:.45;pointer-events:none;transition:opacity .6s;white-space:nowrap}
+  #snaphint.gone{opacity:0}
+  @media (max-width:760px){#snapbar .sbs{display:none}#snaphint{white-space:normal;width:86vw;text-align:center}}
+`;
+function snapAttr(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")}
+// 链接照样能点，但只放行正常的地址
+function snapUrl(u){u=String(u||"").trim();return /^(javascript|vbscript|data):/i.test(u)?"":u}
+function snapClean(w){
+  w.removeAttribute("style");                       // 相机由查看脚本重新给
+  w.querySelectorAll(".port,.hnd,.ring,.cgrip,.dbar,.refph,#links .hit,input,textarea,select")
+    .forEach(el=>el.remove());
+  w.querySelectorAll("[contenteditable]").forEach(el=>el.removeAttribute("contenteditable"));
+  w.querySelectorAll("[spellcheck]").forEach(el=>el.removeAttribute("spellcheck"));
+  // 选中、检索、文献强调这些都是"此刻正在操作"的痕迹，不是内容
+  const drop=(q,cls)=>w.querySelectorAll(q).forEach(el=>el.classList.remove(...cls));
+  drop(".card",["sel","multi","hit","nomatch","bibon"]);drop(".frame",["sel"]);drop(".doc",["on"]);
+  drop(".blk",["sel","armed"]);drop(".fb",["reorder"]);drop("td",["tsel"]);
+  drop(".bibdot",["act"]);drop(".ref",["flash","lift"]);
+  w.querySelectorAll(".num[title],.bibdot[title]").forEach(el=>el.removeAttribute("title"));
+  w.querySelectorAll("a[href]").forEach(a=>{
+    const u=snapUrl(a.getAttribute("href"));
+    if(!u){a.removeAttribute("href");return}
+    a.setAttribute("href",u);a.target="_blank";a.rel="noopener noreferrer";
+  });
+  // 卡片的来源链接在画布上是个小图标，点击由脚本打开；快照里换成真正的链接
+  w.querySelectorAll(".lnk[title]").forEach(el=>{
+    const a=document.createElement("a");a.className=el.className;a.innerHTML=el.innerHTML;
+    a.setAttribute("style",el.getAttribute("style")||"");a.title=el.title;
+    const u=snapUrl(normUrl(el.title));
+    if(u){a.href=u;a.target="_blank";a.rel="noopener noreferrer"}
+    el.replaceWith(a);
+  });
+  return w;
+}
+// 快照要能多年以后、断网也原样打开，而英文字体来自 Google Fonts。
+// 导出时尽力把实际用到的字族内联进去（只取 latin 与 latin-ext 两个子集，体积可控），
+// 原来的 <link> 也照样留着：有网时补齐其余子集，断网时靠内联的这一份。
+// 取不到就只剩 <link>，断网打开会退回系统字体、换行可能略有出入。
+// 这一步只在导出时发生，失败不会让导出失败。
+function snapFontBlocks(css,used){
+  const out=[];
+  const re=/(?:\/\*\s*([\w-]+)\s*\*\/\s*)?(@font-face\s*\{[^}]*\})/g;let m;
+  while((m=re.exec(css))){
+    const fam=((m[2].match(/font-family:\s*['"]?([^;'"]+)['"]?\s*;/)||[])[1]||"").trim();
+    if(!fam||!used.has(fam))continue;
+    if(m[1]&&m[1]!=="latin"&&m[1]!=="latin-ext")continue;
+    out.push(m[2]);
+  }
+  return out;
+}
+function blobDataURL(b){
+  return new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=rej;r.readAsDataURL(b)});
+}
+async function snapFonts(html){
+  const link=document.querySelector('link[rel="stylesheet"][href*="fonts.googleapis.com"]');
+  if(!link||typeof fetch!=="function")return "";
+  const used=new Set(["IBM Plex Sans","IBM Plex Mono"]);    // 界面上的小字（页面标题、编号）用这两款
+  FONTS.forEach(f=>{if(f[2]==="en"&&f[3]&&html.includes(f[3]))used.add(f[3])});
+  const ctl=typeof AbortController==="function"?new AbortController():null;
+  const opt=ctl?{signal:ctl.signal}:{};
+  const timer=setTimeout(()=>{if(ctl)ctl.abort()},9000);
+  try{
+    const res=await fetch(link.href,opt);if(!res.ok)return "";
+    const blocks=snapFontBlocks(await res.text(),used);
+    const out=await Promise.all(blocks.map(async b=>{
+      const m=b.match(/url\((['"]?)([^'")]+)\1\)/);if(!m)return "";
+      try{
+        const r=await fetch(m[2],opt);if(!r.ok)return "";
+        const data=await blobDataURL(await r.blob());
+        return b.split(m[0]).join("url("+data+")");
+      }catch(e){return ""}
+    }));
+    return out.filter(Boolean).join("\n");
+  }catch(e){return ""}
+  finally{clearTimeout(timer)}
+}
+async function buildWebSnap(title){
+  await loadImgs(S.cards.map(orig));
+  const live=$("world");
+  const prev={m:CULL.m,cap:NODE_CAP,hover:hoverId,sel,selLink};
+  let w;
+  // 跟 captureCanvas 同一个办法，只是连 NODE_CAP 一起放开：快照要的是全部卡片，
+  // 不是视野中心的九百张
+  CULL.m=1e9;NODE_CAP=Infinity;hoverId=null;sel=[];selLink=null;
+  try{
+    syncCards();measure();drawLinks();
+    w=live.cloneNode(true);
+    // 稿子的滚动位置不会随 cloneNode 带过去，记下来交给查看脚本在打开时补回
+    const a=live.querySelectorAll(".dbody,.dside"),b=w.querySelectorAll(".dbody,.dside");
+    a.forEach((el,i)=>{if(b[i]&&el.scrollTop)b[i].dataset.st=Math.round(el.scrollTop)});
+  }finally{
+    CULL.m=prev.m;NODE_CAP=prev.cap;hoverId=prev.hover;sel=prev.sel;selLink=prev.selLink;
+    syncCards();measure();drawLinks();
+  }
+  snapClean(w);
+  const inner=w.outerHTML;
+  const fontCSS=await snapFonts(inner);
+  const css=[...document.querySelectorAll("head style")].map(s=>s.textContent).join("\n");
+  const fontLinks=[...document.querySelectorAll('link[href*="fonts.googleapis.com"],link[href*="fonts.gstatic.com"]')]
+    .map(l=>l.outerHTML).join("\n");
+  const d=new Date(),p2=n=>String(n).padStart(2,"0");
+  const stamp=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes());
+  const cfg={v:1,cam:{x:cam.x,y:cam.y,z:cam.z},made:d.toISOString()};
+  return `<!doctype html>
+<html lang="${LANG==="zh"?"zh-CN":"en-GB"}"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="generator" content="Board web snapshot">
+<title>${esc(title)}</title>
+${fontCSS?`<style id="snapfonts">${fontCSS}</style>`:""}
+${fontLinks}
+<style>${css}</style>
+<style>${SNAP_CSS}</style>
+</head><body class="snap" style="${snapAttr(document.body.getAttribute("style"))}">
+<div id="stage">${inner}</div>
+<div id="snapbar"><span class="sbt">${esc(title)}</span><span class="sbs">${esc(t("snapRO"))}  ${esc(stamp)}</span>
+<span class="wsep"></span><button class="wb" data-a="fit">${esc(t("fitView"))}</button><button class="wb" data-a="z100" title="${snapAttr(t("zoom100"))}">100%</button></div>
+<div id="snaphint">${esc(t("snapHint"))}</div>
+<script type="application/json" id="snapcfg">${JSON.stringify(cfg).replace(/</g,"\\u003c")}<\/script>
+<script id="snapjs">(${snapViewer.toString()})();<\/script>
+</body></html>`;
+}
+async function exportWebSnap(o){
+  // 专注模式下画布是 display:none，量不到任何高度，快照会是一堆叠在一起的卡片
+  if(!$("stage").offsetWidth){toast(t("snapNeedCanvas"));return}
+  const title=(o&&o.title)||stampName(fileName||"Board");
+  toast(t("snapWork"));
+  try{
+    const html=await buildWebSnap(title);
+    dl(new Blob([html],{type:"text/html;charset=utf-8"}),title+".html");
+    toast(t("snapDone"));
+  }catch(e){console.error(e);toast(t("snapFail"))}
+}
+// 快照里的查看脚本。它会被 toString() 原样写进导出的网页，所以必须自给自足：
+// 不许引用程序里的任何变量或函数，只碰快照自己的 DOM。
+// 相机与画布同一套约定（#world 在视口中心，translate + scale，--iz = 1/缩放），
+// 滚轮与触控板的判断也照抄 stage 的 wheel 监听，手感跟编辑页一致。
+function snapViewer(){
+  var stage=document.getElementById("stage"),world=document.getElementById("world");
+  var zb=document.querySelector('#snapbar [data-a="z100"]'),hint=document.getElementById("snaphint");
+  var cfg={};try{cfg=JSON.parse(document.getElementById("snapcfg").textContent)||{}}catch(e){}
+  // --iz 一改整棵子树重算样式（NOTES 第六节），卡片多时只在停下来之后补一次
+  var many=world.querySelectorAll(".card").length>400;
+  var cam={x:0,y:0,z:1},tgt={x:0,y:0,z:1},raf=0,izT=0,space=false,hid=false;
+  // 落在这些元素上的鼠标拖动交给浏览器划选文字，其余位置拖动是平移
+  var TEXTY=".cap,td,.ref,.dbody,.dside,.dt,a,button",SCROLLY=".dbody,.dside";
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+  function setIz(){world.style.setProperty("--iz",String(1/cam.z))}
+  function apply(){
+    world.style.transform="translate("+cam.x+"px,"+cam.y+"px) scale("+cam.z+")";
+    if(many){clearTimeout(izT);izT=setTimeout(setIz,120)}else setIz();
+    if(zb)zb.textContent=Math.round(cam.z*100)+"%";
+  }
+  function tick(){
+    raf=0;var k=.24,dx=tgt.x-cam.x,dy=tgt.y-cam.y,dz=tgt.z-cam.z;
+    if(Math.abs(dx)>.05||Math.abs(dy)>.05||Math.abs(dz)>.0004){
+      cam.x+=dx*k;cam.y+=dy*k;cam.z+=dz*k;apply();raf=requestAnimationFrame(tick);
+    }else{cam={x:tgt.x,y:tgt.y,z:tgt.z};apply()}
+  }
+  function go(x,y,z,now){
+    tgt={x:x,y:y,z:z};
+    if(now){if(raf)cancelAnimationFrame(raf);raf=0;cam={x:x,y:y,z:z};apply()}
+    else if(!raf)raf=requestAnimationFrame(tick);
+  }
+  function zoomAt(f,cx,cy,smooth){
+    var nz=clamp(tgt.z*f,.06,6),ox=cx-innerWidth/2,oy=cy-innerHeight/2;
+    go(ox-(ox-tgt.x)*(nz/tgt.z),oy-(oy-tgt.y)*(nz/tgt.z),nz,!smooth);
+  }
+  function box(){
+    var x=Infinity,y=Infinity,xe=-Infinity,ye=-Infinity;
+    world.querySelectorAll(".card,.doc,.frame,.sheet").forEach(function(el){
+      var l=parseFloat(el.style.left),tp=parseFloat(el.style.top);
+      if(!isFinite(l)||!isFinite(tp))return;
+      x=Math.min(x,l);y=Math.min(y,tp);
+      xe=Math.max(xe,l+el.offsetWidth);ye=Math.max(ye,tp+el.offsetHeight);
+    });
+    return isFinite(x)?{x:x,y:y,w:xe-x,h:ye-y}:null;
+  }
+  function fit(now){
+    var b=box();if(!b)return go(0,0,1,now);
+    var z=clamp(Math.min((innerWidth-170)/Math.max(40,b.w),(innerHeight-170)/Math.max(40,b.h)),.05,1.6);
+    go(-(b.x+b.w/2)*z,-(b.y+b.h/2)*z,z,now);
+  }
+  function gone(){if(hid||!hint)return;hid=true;hint.classList.add("gone")}
+  var c0=cfg.cam;
+  if(c0&&isFinite(c0.x)&&isFinite(c0.y)&&c0.z>0)go(c0.x,c0.y,c0.z,true);else fit(true);
+  world.querySelectorAll("[data-st]").forEach(function(el){el.scrollTop=+el.getAttribute("data-st")||0});
+  setTimeout(gone,9000);
+
+  var pts=new Map(),pan=null,pinch=null;
+  function two(){var a=Array.from(pts.values());
+    return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)}}
+  function startPan(p){pan={x:p.x,y:p.y,cx:tgt.x,cy:tgt.y}}
+  stage.addEventListener("pointerdown",function(e){
+    gone();
+    var el=e.target;
+    if(e.pointerType==="touch"){
+      if(!pts.size&&el.closest(SCROLLY))return;       // 稿子里的手指滑动交给它自己滚
+    }else{
+      if(e.button===2)return;
+      var force=e.button===1||space;
+      if(!force&&(e.button!==0||el.closest(TEXTY)))return;
+      e.preventDefault();
+      var s=getSelection();if(s&&!e.shiftKey)s.removeAllRanges();
+    }
+    pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
+    try{stage.setPointerCapture(e.pointerId)}catch(_){}
+    if(pts.size===1){startPan(pts.get(e.pointerId));stage.classList.add("pan")}
+    else if(pts.size===2){pinch={m:two(),x:tgt.x,y:tgt.y,z:tgt.z};pan=null}
+  });
+  stage.addEventListener("pointermove",function(e){
+    var p=pts.get(e.pointerId);if(!p)return;
+    p.x=e.clientX;p.y=e.clientY;
+    if(pinch&&pts.size>=2){
+      var m=two(),z=clamp(pinch.z*m.d/Math.max(1,pinch.m.d),.06,6),cx=innerWidth/2,cy=innerHeight/2;
+      var wx=(pinch.m.x-cx-pinch.x)/pinch.z,wy=(pinch.m.y-cy-pinch.y)/pinch.z;
+      go(m.x-cx-wx*z,m.y-cy-wy*z,z,true);
+    }else if(pan)go(pan.cx+e.clientX-pan.x,pan.cy+e.clientY-pan.y,tgt.z,true);
+  });
+  function up(e){
+    if(!pts.delete(e.pointerId))return;
+    if(pts.size<2)pinch=null;
+    if(pts.size===1)startPan(pts.values().next().value);
+    if(!pts.size){pan=null;stage.classList.remove("pan")}
+  }
+  stage.addEventListener("pointerup",up);stage.addEventListener("pointercancel",up);
+  // pointerdown 的 preventDefault 挡不住所有浏览器起头划选，mousedown 这里再挡一次
+  stage.addEventListener("mousedown",function(e){
+    if(e.button===1||space||(e.button===0&&!e.target.closest(TEXTY)))e.preventDefault();
+  });
+  stage.addEventListener("wheel",function(e){
+    gone();
+    if(!(e.ctrlKey||e.metaKey)&&Math.abs(e.deltaY)>=Math.abs(e.deltaX)){
+      // 稿子本身能滚时，滚轮先翻稿子，跟读一份网页文档一样
+      var sc=e.target.closest&&e.target.closest(SCROLLY);
+      if(sc&&sc.scrollHeight>sc.clientHeight+1)return;
+    }
+    e.preventDefault();
+    var pad=e.deltaX!==0||(e.deltaMode===0&&Math.abs(e.deltaY)<16);
+    if(e.ctrlKey||e.metaKey||(!pad&&!e.shiftKey))zoomAt(Math.exp(-e.deltaY*.0022),e.clientX,e.clientY);
+    else go(tgt.x-e.deltaX,tgt.y-e.deltaY,tgt.z,true);
+  },{passive:false});
+  // 浏览器的页内查找会去滚 #stage 来露出匹配项；把这段滚动折算成相机位移，画面才对得上
+  stage.addEventListener("scroll",function(){
+    var l=stage.scrollLeft,tp=stage.scrollTop;if(!l&&!tp)return;
+    stage.scrollLeft=0;stage.scrollTop=0;go(tgt.x-l,tgt.y-tp,tgt.z,true);
+  });
+  world.addEventListener("click",function(e){
+    var fh=e.target.closest(".fh");
+    if(fh){var f=fh.closest(".fold");if(f)f.classList.toggle("on");return}
+    var nav=e.target.closest(".wrnav");if(!nav)return;
+    var d=nav.closest(".doc"),body=d&&d.querySelector(".dbody");
+    var blk=body&&body.querySelector('.blk[data-i="'+nav.getAttribute("data-i")+'"]');
+    if(!body||!blk)return;
+    var br=body.getBoundingClientRect(),er=blk.getBoundingClientRect();
+    var k=(body.offsetHeight&&br.height/body.offsetHeight)||1;   // 画布整体带缩放，换算回内容像素
+    body.scrollTo({top:Math.max(0,body.scrollTop+(er.top-br.top)/k-12),behavior:"smooth"});
+  });
+  var bar=document.getElementById("snapbar");
+  if(bar)bar.addEventListener("click",function(e){
+    var b=e.target.closest("[data-a]");if(!b)return;gone();
+    if(b.getAttribute("data-a")==="fit")fit(false);else zoomAt(1/tgt.z,innerWidth/2,innerHeight/2,true);
+  });
+  addEventListener("keydown",function(e){
+    if(e.ctrlKey||e.metaKey||e.altKey)return;
+    if(e.key===" "){if(!space){space=true;stage.classList.add("space")}e.preventDefault();return}
+    var k=(e.key||"").toLowerCase(),cx=innerWidth/2,cy=innerHeight/2;
+    if(k==="f")fit(false);
+    else if(k==="0")zoomAt(1/tgt.z,cx,cy,true);
+    else if(k==="+"||k==="=")zoomAt(1.25,cx,cy,true);
+    else if(k==="-"||k==="_")zoomAt(.8,cx,cy,true);
+    else return;
+    gone();
+  });
+  addEventListener("keyup",function(e){if(e.key===" "){space=false;stage.classList.remove("space")}});
+  addEventListener("blur",function(){space=false;stage.classList.remove("space")});
 }
 
 /* ================= 文字工具条 ================= */
@@ -8225,6 +8557,7 @@ function fileItems(x,y){
     {label:t("mergeJSON"),on:()=>$("mergefile").click()},
     "-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
+    {label:t("webSnap"),on:()=>exportWebSnap()},
     {label:t("clearAll"),danger:true,on:async()=>{if(confirm(t("clearConfirm"))){
       snap();invalidateIndex();S.cards=[];S.links=[];sel=[];await unbind(true);render();save();toast(t("unbound"))}}}
   ];
