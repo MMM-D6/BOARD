@@ -622,6 +622,18 @@
   #stage.space{cursor:grab}
   #status{position:fixed;right:14px;bottom:12px;z-index:40;font:400 11px/1.7 "IBM Plex Mono",monospace;
     opacity:.32;pointer-events:none;text-align:right}
+  /* 绑定了文件却没在往里写时，左下角一直挂着这条提示（见 NOTES 第十节：写回失败从前是完全静默的） */
+  #fwarn{position:fixed;left:14px;bottom:12px;z-index:90;display:none;align-items:center;gap:8px;
+    max-width:min(560px,calc(100vw - 28px));padding:5px 5px 5px 11px;border-radius:10px;
+    background:var(--glass);border:1px solid var(--glassline);color:var(--pfg);font-size:12px;line-height:1.35;
+    backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
+    box-shadow:0 6px 22px rgba(0,0,0,.10)}
+  #fwarn.on{display:flex}
+  #fwarn i{width:7px;height:7px;border-radius:50%;background:#C8553D;flex:none}
+  #fwarn button{height:24px;padding:0 10px;border:1px solid var(--pline);border-radius:6px;background:none;
+    color:inherit;font:inherit;cursor:pointer;flex:none}
+  #fwarn button:hover{background:var(--pfg);color:var(--panel)}
+  body.lock #fwarn{display:none !important}
   #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:95;
     background:rgba(20,20,20,.9);color:#fff;padding:8px 14px;border-radius:8px;font-size:12.5px;
     opacity:0;transition:opacity .2s;pointer-events:none}
@@ -659,6 +671,7 @@
 <div id="marq"></div>
 <div id="hint"></div>
 <div id="status"></div>
+<div id="fwarn" role="status"><i></i><span id="fwarnt"></span><button id="fwarnb"></button></div>
 <div id="toast"></div>
 <div class="menu" id="menu"></div>
 <div class="menu" id="submenu"></div>
@@ -833,6 +846,10 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   expOpts:"Options",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag to pan, scroll or pinch to zoom, press Z over a card to zoom in, M for the page map. Text can be selected and copied.",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
+  snapPwShow:"Show",snapPwHide:"Hide",snapPwGen:"Generate",snapPwCopied:"A strong password was generated and copied. Keep it in your password manager.",snapPwWeak:"Too easy to guess",snapPwOk:"Acceptable",snapPwStrong:"Strong",snapPwWeakBlock:"This password is too easy to guess. Make it longer, or use Generate.",
+  readingN:"Reading the file, cards so far:",
+  filePerm:"Not auto-saving to the file: permission is needed again.",fileIO:"Not auto-saving to the file: the last write failed. It may have been moved, deleted or locked by another app.",fileBig:"Not auto-saving to the file: it is past the limit of roughly 500 MB for a single file.",fileResume:"Resume",fileLost:"Writing to the file failed, so auto-save to the file has stopped. See the note at the bottom left.",filePermStart:"The linked file needs your permission again. Click Resume at the bottom left.",storeFail:"Saving inside the browser failed. Please save to a file now.",
+  snapLock:"Password protection",snapPw1:"Password (at least 12 characters)",snapPw2:"Type it again",snapPwNote:"The file is encrypted with this password (AES-256). Without it, nothing inside can be read, not the text and not the images. The password is kept in memory only until you close this page and is never saved; if it is forgotten, simply export again. Send it to the reader through a different channel from the file.",snapPwShort:"The password needs at least 12 characters.",snapPwMismatch:"The two passwords do not match.",snapNoCrypto:"This browser cannot encrypt, so a protected snapshot cannot be made.",snapSealing:"Encrypting the snapshot…",
   scale:"Scale",expPrint:"The print dialog opens. Choose Save as PDF.",expShot:"Rendering the canvas…",
   expRender:"Rendering…",expImg:"Include images",expTags:"Include tags",
   errCDN:"The rendering library could not be loaded.",errShot:"Canvas export failed.",
@@ -1021,6 +1038,10 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   expOpts:"包含内容",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动平移，滚轮或双指缩放，指着卡片按 Z 放大，M 打开页面地图。文字可以划选复制。",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
+  snapPwShow:"显示",snapPwHide:"隐藏",snapPwGen:"生成",snapPwCopied:"已生成强密码并复制到剪贴板，请存进密码管理器。",snapPwWeak:"太容易猜",snapPwOk:"可以",snapPwStrong:"强",snapPwWeakBlock:"这个密码太容易猜，请再长一些，或者点「生成」。",
+  readingN:"正在读取文件，已读卡片：",
+  filePerm:"文件没有在自动保存：需要重新授权。",fileIO:"文件没有在自动保存：上次写入失败，文件可能被移动、删除或被别的程序占用。",fileBig:"文件没有在自动保存：已超过单个文件约 500MB 的上限。",fileResume:"恢复",fileLost:"写入文件失败，自动保存到文件已经停止，见左下角的提示。",filePermStart:"上次绑定的文件需要重新授权，请点左下角的「恢复」。",storeFail:"浏览器内的保存失败了，请立刻保存到文件。",
+  snapLock:"密码保护",snapPw1:"设置密码（至少 12 位）",snapPw2:"再输入一遍",snapPwNote:"文件内容会用这个密码加密（AES-256），没有密码既打不开，也读不出里面的文字和图片。密码只在这次打开程序期间记在内存里，不会写进任何存储；忘了就重新导出一份。请把密码和文件分开发给对方。",snapPwShort:"密码至少要 12 位。",snapPwMismatch:"两次输入的密码不一致。",snapNoCrypto:"这个浏览器不支持加密，无法生成带密码的快照。",snapSealing:"正在加密快照…",
   scale:"倍率",expPrint:"打印窗口已打开，目标选择另存为 PDF 即可。",expShot:"正在渲染画布…",
   expRender:"正在渲染…",expImg:"包含图片",expTags:"包含标签",
   errCDN:"渲染库加载失败，请检查网络连接。",errShot:"画面导出未完成。",
@@ -1269,7 +1290,6 @@ function unlinkTwin(c){
   }
   render();save();
 }
-const srcOf=c=>(c.ih&&IMG.get(c.ih))||c.src||"";
 const hOf=c=>c.h||size[c.id]?.h||c.w;
 async function hashStr(str){
   try{
@@ -1278,18 +1298,85 @@ async function hashStr(str){
   }catch(e){let a=5381;for(let i=0;i<str.length;i++)a=((a<<5)+a+str.charCodeAt(i))>>>0;
     return "f"+a.toString(16)+str.length.toString(16)}
 }
-async function putImg(dataURL){
-  const h=await hashStr(dataURL);
-  if(!IMG.has(h)){
-    IMG.set(h,dataURL);
-    const ok=await kvPut("img:"+h,dataURL);
-    if(!ok)return {h,ok:false};
-  }
-  return {h,ok:true};
+/* ---------------- 图片仓库（按 GB 级改造） ----------------
+   从前：图片以 base64 字符串存进 IndexedDB，而且打开程序时 loadImgs 把全部图片读进内存。
+   JS 堆约为图片总量的两倍，图片到 1 到 2GB 标签页就会内存不足（NOTES 第十节）。
+   现在：
+     存：以 Blob（二进制）存，比 base64 小四分之一；旧数据里的字符串照样认，读到时顺手转存成 Blob。
+     看：画面上用 blob: 地址，只在卡片真的要画出来时才去读（needImg 批量读）。
+         从 IndexedDB 读出来的 Blob 由浏览器放在磁盘上，不占 JS 内存。
+     导出：要 data URL 的地方（Word、PDF 文档、HTML）用 withImgData 临时准备一份，用完就丢；
+         写文件、存档包、快照都是一张一张地读，内存里任何时候只有一张图。
+   哈希仍然按 data URL 字符串算，跟旧数据一致，去重照旧。 */
+const IMGB=new Map();                     // h -> Blob（本次会话里读过或新存的）
+let IMGX=null;                             // 导出期间：h -> data URL
+let IMG_QUIET=false;
+let IMGEXT=null;                           // 存档包导出期间：h -> "png" | "jpg"，Markdown 里的图片链接要用                       // 网页快照临时画全部卡片时，不去触发成千上万次读取
+const srcOf=c=>(c.ih&&((IMGX&&IMGX.get(c.ih))||IMG.get(c.ih)))||c.src||"";
+const hasImg=c=>!!(c&&(c.ih||c.src));
+function dataURLBlob(u){
+  const m=/^data:([^;,]+)/.exec(u);
+  return new Blob([dataURLtoBytes(u)],{type:m?m[1]:"application/octet-stream"});
 }
+async function putImg(dataURL,opt){
+  const keep=!(opt&&opt.keep===false);   // 大文件导入时不留在内存里，要画的时候再读
+  const h=await hashStr(dataURL);
+  if(IMGB.has(h))return {h,ok:true};
+  const b=dataURLBlob(dataURL);
+  const ok=await kvPut("img:"+h,b);
+  if(keep||!ok){IMGB.set(h,b);if(!IMG.has(h))IMG.set(h,URL.createObjectURL(b));paintImg(h)}
+  return {h,ok:!!ok};
+}
+async function imgBlob(h){
+  if(!h)return null;
+  if(IMGB.has(h))return IMGB.get(h);
+  const v=await kvGet("img:"+h);
+  if(!v)return null;
+  let b=v;
+  if(typeof v==="string"){               // 旧数据：顺手转存成 Blob，下次读就不再经过字符串
+    b=dataURLBlob(v);
+    try{await kvPut("img:"+h,b)}catch(e){}
+  }
+  IMGB.set(h,b);
+  return b;
+}
+async function imgDataURL(h){
+  if(IMGX&&IMGX.has(h))return IMGX.get(h);
+  const b=await imgBlob(h);
+  return b?await blobDataURL(b):"";
+}
+// 让页面上所有用到这张图的 <img> 换上地址
+function paintImg(h){
+  const u=IMG.get(h);if(!u)return;
+  document.querySelectorAll('img[data-ih="'+h+'"]').forEach(im=>{if(!im.getAttribute("src"))im.src=u});
+}
+const imgWant=new Set();let imgT=0;
+function needImg(h){
+  if(!h||IMG.has(h)||imgWant.has(h))return;
+  imgWant.add(h);
+  if(!imgT)imgT=setTimeout(loadWanted,0);
+}
+async function loadWanted(){
+  imgT=0;
+  const hs=[...imgWant];imgWant.clear();
+  for(const h of hs){
+    try{const b=await imgBlob(h);if(b&&!IMG.has(h)){IMG.set(h,URL.createObjectURL(b));paintImg(h)}}catch(e){}
+  }
+}
+// 需要确定图片都已经就位的地方用（比如截图导出）；平时画面上走 needImg 的懒加载
 async function loadImgs(cards){
-  const need=[...new Set(cards.map(c=>c.ih).filter(x=>x&&!IMG.has(x)))];
-  for(const h of need){const v=await kvGet("img:"+h);if(v)IMG.set(h,v)}
+  const need=[...new Set(cards.map(c=>c&&c.ih).filter(x=>x&&!IMG.has(x)))];
+  for(const h of need){
+    try{const b=await imgBlob(h);if(b&&!IMG.has(h)){IMG.set(h,URL.createObjectURL(b));paintImg(h)}}catch(e){}
+  }
+}
+// 导出成 Word、PDF 文档、HTML 时，图片要以 data URL 写进去：只为这次导出的卡片准备，用完就丢
+async function withImgData(cards,fn){
+  const hs=[...new Set((cards||S.cards).map(c=>orig(c).ih).filter(Boolean))];
+  const m=new Map();
+  for(const h of hs){try{const u=await imgDataURL(h);if(u)m.set(h,u)}catch(e){}}
+  const prev=IMGX;IMGX=m;
+  try{return await fn()}finally{IMGX=prev}
 }
 async function migrateInline(cards){
   for(const c of cards){
@@ -1487,11 +1574,12 @@ async function loadState(){
   const v=await kvGet(KEY);if(v)return v;
   try{const l=localStorage.getItem("boardmin");return l?JSON.parse(l):null}catch(e){return null}
 }
-let st;const save=()=>{clearTimeout(st);st=setTimeout(async()=>{
+let st,storeWarnT=0;const save=()=>{clearTimeout(st);st=setTimeout(async()=>{
   const plain=JSON.parse(JSON.stringify({...S,cards:S.cards.map(cleanCard)}));
   const ok=await kvPut(KEY,plain);
   autoBackup(false);
-  if(!ok){try{localStorage.setItem("boardmin",JSON.stringify(S))}catch(e){}}
+  if(!ok){try{localStorage.setItem("boardmin",JSON.stringify(S))}
+    catch(e){if(Date.now()-storeWarnT>60000){storeWarnT=Date.now();toast(t("storeFail"))}}}   // 两处都没存进去才提示，一分钟最多一次
   fileAutoSave();
 },400)};
 
@@ -1508,12 +1596,43 @@ function stampName(base,ext){
   b=b.trim()||"board";
   return datePrefix()+"-"+b+(ext||"");
 }
+// 整份数据的结构部分（卡片里的图片仍是 ih 引用）。真正写文件时由 writeBundle 把图片逐张内联进去。
 function bundle(list){
-  const cards=(list||S.cards).map(c=>{const o=cleanCard(c);if(o.ih){o.src=IMG.get(o.ih)||"";delete o.ih}return o});
+  const cards=(list||S.cards).map(cleanCard);
   const ids=new Set(cards.map(c=>c.id));
   return {...S,v:SCHEMA,cards,
     links:S.links.filter(l=>ids.has(l.a)&&ids.has(l.b)),
   };
+}
+// 把整份数据（连同图片）按顺序写出去。从前是 JSON.stringify 拼成一整个字符串：
+// 图片一多主线程要卡好几秒，超过约 512MB（单个字符串的上限）直接失败。
+// 现在一张卡片一张卡片地写，图片逐张从仓库读出来转成 base64，内存里任何时候只有一张图；
+// 每写一段就把主线程让出来，界面不会卡住。输出仍是同一种 JSON（图片内联在 src 里），新旧版本可以互相读。
+// 开始时先把结构拍一份快照，写的过程中继续编辑也不会写出前后不一致的文件。
+async function writeBundle(list,put){
+  const data=bundle(list),cards=data.cards;delete data.cards;
+  const keys=Object.keys(data).filter(k=>data[k]!==undefined);
+  let out="{\n";
+  keys.forEach((k,i)=>{out+=(i?",\n":"")+" "+JSON.stringify(k)+": "+JSON.stringify(data[k],null,1)});
+  out+=(keys.length?",\n":"")+' "cards": [';
+  await put(out);
+  let buf=[],bl=0;
+  for(let i=0;i<cards.length;i++){
+    const o=cards[i];
+    if(o.ih){o.src=(await imgDataURL(o.ih))||o.src||"";delete o.ih}
+    const s=(i?",\n":"\n")+JSON.stringify(o,null,1);
+    buf.push(s);bl+=s.length;
+    if(bl>4e6){await put(buf.join(""));buf=[];bl=0}
+  }
+  if(buf.length)await put(buf.join(""));
+  await put("\n ]\n}");
+}
+// 同样的内容写成一个 Blob（下载、存档包用）。每攒到 32MB 就并进 Blob，交给浏览器自己去管，
+// 不在 JS 里攒一个巨大的字符串
+async function bundleBlob(list){
+  let acc=new Blob([]),parts=[],n=0;
+  await writeBundle(list,s=>{parts.push(s);n+=s.length;if(n>32e6){acc=new Blob([acc,...parts]);parts=[];n=0}});
+  return new Blob([acc,...parts],{type:"application/json"});
 }
 function normCard(c){
   const o={...c};
@@ -1594,7 +1713,7 @@ async function absorb(data,merge){
       frames:Array.isArray(data.frames)?data.frames:[],
       links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>({...l,id:l.id||uid()})),
   };
-    await loadImgs(cards);return cards.length;
+    return cards.length;                  // 图片不再在这里全部读进内存，画到哪张读哪张（needImg）
   }
   const map={},b=bbox(),ox=b?b.x+b.w+120:0,oy=b?b.y:0;
   const nb=bbox(cards)||{x:0,y:0};
@@ -1612,10 +1731,11 @@ async function absorb(data,merge){
     S.frames=(S.frames||[]).concat([{...f,id:uid(),
       x:Math.round((+f.x||0)-nb.x+ox),y:Math.round((+f.y||0)-nb.y+oy),
       w:Math.max(120,+f.w||400),h:Math.max(100,+f.h||300)}])});
-  await loadImgs(cards);
+  // 图片按需加载，不再在这里全部读进内存
   return cards.length;
 }
 function statusBar(){
+  fileState();
   const z=Math.round(cam.z*100)+"%";
   $("status").innerHTML=(S.work&&!lock&&fileName?esc(fileName)+"<br>":"")+z;
 }
@@ -1635,27 +1755,67 @@ async function pickFile(){
   const n=prompt(t("saveNamePrompt"),stampName(fileName||"board"));
   if(!n)return;fileName=/\.json$/i.test(n)?n:n+".json";download();statusBar();
 }
-function download(data,name){
-  const b=new Blob([JSON.stringify(data||bundle(),null,1)],{type:"application/json"});
+async function download(list,name){
+  const b=await bundleBlob(list);
   const fn=name||fileName||"board.json";
   const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=fn;a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+  setTimeout(()=>URL.revokeObjectURL(a.href),60000);     // 大文件下载开始得慢，地址多留一会儿
   toast(t("savedTo")+" "+fn);
 }
-async function writeFile(quiet){
+// 写文件排队：大文件一次要写好几秒，期间再触发的自动写回只排一次，不会两次同时写同一个文件
+let fileQ=Promise.resolve(),fileQueued=false,lastWriteMs=0;
+function writeFile(quiet){
+  if(!fileHandle)return Promise.resolve(false);
+  if(quiet&&fileQueued)return fileQ;
+  if(quiet)fileQueued=true;
+  const run=fileQ.then(()=>{if(quiet)fileQueued=false;return writeFileNow(quiet)});
+  fileQ=run.catch(()=>false);
+  return run;
+}
+async function writeFileNow(quiet){
   if(!fileHandle)return false;
+  const was=fileOK,t0=performance.now();
   try{
     if(fileHandle.queryPermission){
       let p=await fileHandle.queryPermission({mode:"readwrite"});
-      if(p!=="granted"){p=await fileHandle.requestPermission({mode:"readwrite"});if(p!=="granted"){fileOK=false;return false}}
+      if(p!=="granted"){p=await fileHandle.requestPermission({mode:"readwrite"});
+        if(p!=="granted"){fileOK=false;fileErr="perm";fileState();return false}}
     }
     const w=await fileHandle.createWritable();
-    await w.write(JSON.stringify(bundle(),null,1));await w.close();
-    fileOK=true;
+    // 浏览器先写进一份临时文件，close 时才替换原文件；中途出错就 abort，原文件原封不动
+    try{await writeBundle(null,x=>w.write(x));await w.close()}
+    catch(e){try{await w.abort()}catch(_){};throw e}
+    lastWriteMs=performance.now()-t0;
+    fileOK=true;fileErr="";fileState();
     if(!quiet){toast(t("savedTo")+" "+fileName);pushRecent(fileHandle,fileName)}
     return true;
-  }catch(e){fileOK=false;return false}
+  }catch(e){
+    fileOK=false;
+    // 分清原因：权限（没有用户操作时不能弹授权框，会抛 SecurityError）、太大（单个字符串上限）、其他写入错误
+    const n=e&&e.name;
+    fileErr=(n==="SecurityError"||n==="NotAllowedError")?"perm":n==="RangeError"?"big":"io";
+    fileState();
+    if(was&&quiet)toast(t("fileLost"));    // 从「一直在写」变成「写不了」的那一刻明说一次，之后靠左下角常驻提示
+    return false;
+  }
 }
+// 绑定文件的写回状态。从前写回失败是完全静默的：浏览器重启后收回写权限、文件被挪走或占用、
+// 磁盘满、超过单个字符串上限，都只是悄悄把 fileOK 置为 false，之后的自动写回一直停着，
+// 用户以为文件一直在自动保存。现在只要绑定了文件却没在写，左下角就一直挂着一条提示，
+// 写明原因；能靠授权或重试解决的，带一个「恢复」按钮（就是手动保存，点击本身就是授权需要的用户操作）。
+let fileErr="";                            // "perm" | "io" | "big"
+function fileState(){
+  const el=$("fwarn");if(!el)return;
+  const bad=!!fileHandle&&!fileOK;
+  if(el.classList.contains("on")!==bad)el.classList.toggle("on",bad);
+  if(!bad)return;
+  const msg=t(fileErr==="big"?"fileBig":fileErr==="io"?"fileIO":"filePerm");
+  const tx=$("fwarnt");if(tx.textContent!==msg)tx.textContent=msg;
+  el.title=fileName||"";
+  const b=$("fwarnb");b.textContent=t("fileResume");
+  b.style.display=fileErr==="big"?"none":"";      // 太大时重试也没用，不给按钮
+}
+$("fwarnb").onclick=()=>saveNow();
 let RECENTS=[];
 async function loadRecents(){
   try{RECENTS=(await kvGet("recent"))||[]}catch(e){RECENTS=[]}
@@ -1688,7 +1848,7 @@ async function openRecent(id,newWin){
       if(p!=="granted"){toast(t("noPerm"));return}
     }
     const f=await h.getFile();
-    const d=JSON.parse(await f.text());
+    const d=await readBoardFile(f);
     if(!d||!Array.isArray(d.cards))throw new Error(t("errShape"));
     snap();
     await absorb(d,false);
@@ -1712,7 +1872,7 @@ function openCutout(){
   toast(t("cutoutHint"));
 }
 async function unbind(quiet){
-  fileHandle=null;fileName=null;fileOK=false;
+  fileHandle=null;fileName=null;fileOK=false;fileErr="";fileState();
   try{await kvPut(FH,null)}catch(e){}
   statusBar();if(!quiet)toast(t("unbound"));
 }
@@ -1764,7 +1924,6 @@ async function restoreBackup(it){
   const d=migrate(bk.data);
   S={...S,...d};invalidateIndex();S.cards=d.cards||[];S.links=d.links||[];
   S.frames=d.frames||[];
-  await loadImgs(S.cards);
   sel=[];selLink=null;render();fit(true);save();
   toast(t("bkDone"));
 }
@@ -1780,7 +1939,8 @@ function bkItems(){
 let ft;function fileAutoSave(){
   if(!fileHandle||!fileOK)return;
   if(!S.cards.length){toast(t("emptyGuard"));return}
-  clearTimeout(ft);ft=setTimeout(()=>writeFile(true),1200);
+  // 写一次要多久，就至少隔它的三倍再写，写回最多占三分之一的时间；小文件仍是停手 1.2 秒后写
+  clearTimeout(ft);ft=setTimeout(()=>writeFile(true),Math.min(30000,Math.max(1200,lastWriteMs*3)));
 }
 
 /* ================= camera ================= */
@@ -2397,11 +2557,14 @@ function makeCard(c){
   else{el.style.background="";el.style.padding="";el.style.borderRadius=""}
   const oc=orig(c);
   if(oc.tb){buildTable(el,c,oc,s);return finishCard(el,c,s)}
-  const csrc=srcOf(oc);
-  if(csrc){
-    const im=document.createElement("img");im.src=csrc;im.draggable=false;
+  const csrc=srcOf(oc),withImg=hasImg(oc);
+  if(withImg){
+    // 图片按需加载：还没读进来时先放一个按宽高比占好位置的空 <img>，读到后 paintImg 补上地址，
+    // 卡片高度不会因此跳动
+    const im=document.createElement("img");if(csrc)im.src=csrc;im.draggable=false;
+    if(oc.ih){im.dataset.ih=oc.ih;if(!csrc&&!IMG_QUIET)needImg(oc.ih)}
     if(oc.ar)im.style.aspectRatio=`1 / ${oc.ar}`;
-    im.onload=()=>{if(!oc.ar)oc.ar=im.naturalHeight/im.naturalWidth;measure();drawLinks()};
+    im.onload=()=>{if(!oc.ar){oc.ar=im.naturalHeight/im.naturalWidth;measure();drawLinks()}};
     el.appendChild(im);
   }
   const cap=document.createElement("div");cap.className="cap";
@@ -2409,7 +2572,7 @@ function makeCard(c){
   cap.spellcheck=false;cap.dataset.ph=t("placeholder");
   Object.assign(cap.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",fontWeight:s.weight,
     lineHeight:s.lh,letterSpacing:s.spacing+"em",textAlign:s.align,color:s.color,
-    fontStyle:s.italic?"italic":"normal",marginTop:(csrc?10:0)+"px"});
+    fontStyle:s.italic?"italic":"normal",marginTop:(withImg?10:0)+"px"});
   cap.addEventListener("input",()=>{syncCap(c,cap);measure();drawLinksSoon();save()});
   cap.addEventListener("paste",e=>{
     if(!cap.isContentEditable)return;
@@ -3571,7 +3734,7 @@ function align(mode){
 }
 function sizeImages(all){
   const cap=S.imgMax||360;
-  const list=(all?S.cards:movableSel().map(card).filter(Boolean)).filter(c=>srcOf(c));
+  const list=(all?S.cards:movableSel().map(card).filter(Boolean)).filter(c=>hasImg(c));
   if(!list.length)return;
   snap();
   list.forEach(c=>{if(isPinned(c.id))return;
@@ -3885,6 +4048,7 @@ const MANUAL=[
   <p>导出面板选<b>网页快照</b>（或<b>文件 → 导出网页快照</b>），得到一个 .html 文件：画布此刻的样子原封不动，位置、连线、页面、标准页、写作页全在原处，但一个字都改不了。</p>
   <p>打开之后：拖动空白处平移，滚轮或双指缩放，<kbd>F</kbd> 适应画面，<kbd>0</kbd> 回到 100%。写作页照样在固定高度里往下翻，点左侧目录跳到对应标题，折叠的引用可以展开。所有文字都能划选复制，链接可以点开。</p>
   <p>它是单个文件，图片已经内嵌，发给导师双击就能看，不需要安装本程序，也不会读写任何浏览器存储。</p>
+  <p>导出面板里「密码保护」默认勾着：整份快照用你设的密码加密，没有密码既打不开，也读不出里面的字和图。密码至少 12 位，点「生成」可以得到一个强密码并复制到剪贴板。密码和文件请分开发给对方。解锁后闲置 15 分钟会自动回到锁屏。</p>
   <p class="tip">快照只负责"看"，不能导回来继续编辑。要能还原的，仍然是 json 或存档包。</p>`],
 
  ["自动快照","ZIDONGKUAIZHAO",`
@@ -4114,6 +4278,70 @@ function zipMake(files){
   end.setUint16(10,files.length,true);end.setUint32(12,cdSize,true);end.setUint32(16,offset,true);
   return new Blob([...parts,...central,new Uint8Array(end.buffer)],{type:"application/zip"});
 }
+// 存档包的打包：条目可以是 Blob（图片原件、board.json），逐块读出来算 CRC，输出也拼成 Blob，
+// 不在内存里攒一份完整的压缩包。超过 4GB 或 65535 个条目时自动用 ZIP64（普通 zip 的偏移只有 32 位）。
+// force64 只给测试用：小文件也按 ZIP64 写，好检验这条路。
+function crcUpdate(c,u8){for(let i=0;i<u8.length;i++)c=CRCT[(c^u8[i])&0xFF]^(c>>>8);return c}
+async function crc32Blob(b){
+  let c=0xFFFFFFFF;const CH=8*1048576;
+  for(let p=0;p<b.size;p+=CH)c=crcUpdate(c,new Uint8Array(await b.slice(p,p+CH).arrayBuffer()));
+  return (c^0xFFFFFFFF)>>>0;
+}
+async function zipMakeAsync(files,force64){
+  const now=dosTime(new Date()),parts=[],central=[],Z=0xFFFFFFFF;
+  let offset=0,any64=!!force64;
+  const u64=(dv,at,v)=>{dv.setUint32(at,v%4294967296,true);dv.setUint32(at+4,Math.floor(v/4294967296),true)};
+  for(const f of files){
+    const name=enc.encode(f.name);
+    const data=typeof f.data==="string"?enc.encode(f.data):f.data;
+    const isBlob=data instanceof Blob,size=isBlob?data.size:data.length;
+    const crc=isBlob?await crc32Blob(data):crc32(data);
+    const big=!!force64||size>=Z,far=!!force64||offset>=Z;
+    if(big||far)any64=true;
+    const ver=(big||far)?45:20;
+    const lx=big?20:0;
+    const lh=new DataView(new ArrayBuffer(30+lx));
+    lh.setUint32(0,0x04034b50,true);lh.setUint16(4,ver,true);lh.setUint16(6,0x0800,true);
+    lh.setUint16(8,0,true);lh.setUint16(10,now.t,true);lh.setUint16(12,now.d,true);
+    lh.setUint32(14,crc,true);lh.setUint32(18,big?Z:size,true);lh.setUint32(22,big?Z:size,true);
+    lh.setUint16(26,name.length,true);lh.setUint16(28,lx,true);
+    const lhb=new Uint8Array(lh.buffer);
+    if(big){const e=new DataView(new ArrayBuffer(20));e.setUint16(0,1,true);e.setUint16(2,16,true);u64(e,4,size);u64(e,12,size);
+      parts.push(lhb.slice(0,30),name,new Uint8Array(e.buffer),data)}
+    else parts.push(lhb,name,data);
+    const cx=(big?16:0)+(far?8:0),cxl=cx?cx+4:0;
+    const ch=new DataView(new ArrayBuffer(46));
+    ch.setUint32(0,0x02014b50,true);ch.setUint16(4,ver,true);ch.setUint16(6,ver,true);
+    ch.setUint16(8,0x0800,true);ch.setUint16(10,0,true);
+    ch.setUint16(12,now.t,true);ch.setUint16(14,now.d,true);
+    ch.setUint32(16,crc,true);ch.setUint32(20,big?Z:size,true);ch.setUint32(24,big?Z:size,true);
+    ch.setUint16(28,name.length,true);ch.setUint16(30,cxl,true);ch.setUint16(32,0,true);
+    ch.setUint16(34,0,true);ch.setUint16(36,0,true);ch.setUint32(38,0,true);
+    ch.setUint32(42,far?Z:offset,true);
+    central.push(new Uint8Array(ch.buffer),name);
+    if(cxl){const e=new DataView(new ArrayBuffer(cxl));e.setUint16(0,1,true);e.setUint16(2,cx,true);let at=4;
+      if(big){u64(e,at,size);u64(e,at+8,size);at+=16}
+      if(far)u64(e,at,offset);
+      central.push(new Uint8Array(e.buffer))}
+    offset+=30+lx+name.length+size;
+  }
+  let cdSize=0;central.forEach(x=>cdSize+=x.length);
+  const n=files.length,tail=[];
+  if(any64||n>=0xFFFF||offset>=Z||cdSize>=Z){
+    const r=new DataView(new ArrayBuffer(56));
+    r.setUint32(0,0x06064b50,true);u64(r,4,44);r.setUint16(12,45,true);r.setUint16(14,45,true);
+    r.setUint32(16,0,true);r.setUint32(20,0,true);u64(r,24,n);u64(r,32,n);u64(r,40,cdSize);u64(r,48,offset);
+    const loc=new DataView(new ArrayBuffer(20));
+    loc.setUint32(0,0x07064b50,true);loc.setUint32(4,0,true);u64(loc,8,offset+cdSize);loc.setUint32(16,1,true);
+    tail.push(new Uint8Array(r.buffer),new Uint8Array(loc.buffer));
+    any64=true;
+  }
+  const end=new DataView(new ArrayBuffer(22));
+  end.setUint32(0,0x06054b50,true);
+  end.setUint16(8,any64?0xFFFF:n,true);end.setUint16(10,any64?0xFFFF:n,true);
+  end.setUint32(12,any64?Z:cdSize,true);end.setUint32(16,any64?Z:offset,true);
+  return new Blob([...parts,...central,...tail,new Uint8Array(end.buffer)],{type:"application/zip"});
+}
 function dataURLtoBytes(u){
   const i=u.indexOf(",");const b=atob(u.slice(i+1));
   const out=new Uint8Array(b.length);
@@ -4133,7 +4361,7 @@ function safeName(x,i){
 function snippet(c0,n){
   const c=orig(c0);
   const s=(c.text||"").replace(/\s+/g," ").trim();
-  if(!s)return srcOf(c)?"[image]":"[empty]";
+  if(!s)return hasImg(c)?"[image]":"[empty]";
   return s.length>(n||28)?s.slice(0,n||28)+"…":s;
 }
 // 同理：按 y 升序后只与当前这一带比较
@@ -4402,7 +4630,7 @@ function secTag(n){
   return n.num?("\u00A7"+n.num+" "):(n.sec?("\u00A7"+n.sec+" "):"");
 }
 function refLabel(n){return secTag(n)+snippet(orig(n.c),26)}
-function openExport(x,y){
+function openExport(x,y,pre){
   if(lock)return;
   const p=$("pop");
   p.innerHTML=`
@@ -4426,6 +4654,17 @@ function openExport(x,y){
     </div>
     <div id="exweb" style="display:none">
       <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("snapNote")}</div>
+      <label class="opt"><input type="checkbox" id="exlock" ${snapLockOn?"checked":""}> ${t("snapLock")}</label>
+      <div id="expw" style="${snapLockOn?"":"display:none"}">
+        <input class="ti" id="expw1" type="password" autocomplete="new-password" placeholder="${esc(t("snapPw1"))}">
+        <input class="ti" id="expw2" type="password" autocomplete="new-password" placeholder="${esc(t("snapPw2"))}" style="margin-top:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px">
+          <span id="expwm" style="flex:1;font-size:11px;opacity:.6"></span>
+          <button class="wb" id="expwv" type="button">${t("snapPwShow")}</button>
+          <button class="wb" id="expwg" type="button">${t("snapPwGen")}</button>
+        </div>
+        <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("snapPwNote")}</div>
+      </div>
     </div>
     <div id="exdoc">
       <div class="sec">${t("expOpts")}</div>
@@ -4444,6 +4683,22 @@ function openExport(x,y){
   p.classList.add("on");
   p.querySelector("#pcx").onclick=()=>{p.classList.remove("on","wide")};
   p.querySelector("#exn").addEventListener("keydown",e=>e.stopPropagation());
+  // 网页快照的密码：只在内存里记着（snapPw），方便这次打开程序期间连续导出，不写进任何存储
+  const pw1=p.querySelector("#expw1"),pw2=p.querySelector("#expw2"),lk=p.querySelector("#exlock");
+  pw1.value=pw2.value=snapPw||"";
+  [pw1,pw2].forEach(el=>el.addEventListener("keydown",e=>{e.stopPropagation();if(e.key==="Enter")p.querySelector("#exgo").click()}));
+  lk.onchange=()=>{snapLockOn=lk.checked;p.querySelector("#expw").style.display=lk.checked?"":"none"};
+  // 强度提示、显示/隐藏、生成强密码。生成的密码顺手放进剪贴板，方便存进密码管理器
+  const meter=p.querySelector("#expwm");
+  const paintMeter=()=>{const v=pw1.value;if(!v){meter.textContent="";return}
+    const b=pwBits(v);meter.textContent=t(b<PW_MIN_BITS||v.length<PW_MIN_LEN?"snapPwWeak":b<80?"snapPwOk":"snapPwStrong")};
+  pw1.addEventListener("input",paintMeter);paintMeter();
+  p.querySelector("#expwv").onclick=()=>{const show=pw1.type==="password";pw1.type=pw2.type=show?"text":"password";
+    p.querySelector("#expwv").textContent=t(show?"snapPwHide":"snapPwShow")};
+  p.querySelector("#expwg").onclick=async()=>{
+    const g=genPw();pw1.value=pw2.value=g;pw1.type=pw2.type="text";p.querySelector("#expwv").textContent=t("snapPwHide");paintMeter();
+    try{await navigator.clipboard.writeText(g);toast(t("snapPwCopied"))}catch(e){}
+  };
   let fmt="word",scale=2,scope=sel.length?"sel":"all";
   const scb=p.querySelector("#exsc");
   if(sel.length){[...scb.children].forEach(z=>z.classList.toggle("on",z.dataset.v==="sel"))}
@@ -4463,7 +4718,15 @@ function openExport(x,y){
   p.querySelector("#exs").onclick=e=>{const b=e.target.closest("button");if(!b)return;
     [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");scale=+b.dataset.v};
   p.querySelector("#exgo").onclick=()=>{
-    const o={fmt,scale,scope,byPage:!!p.querySelector("#exbp")?.checked,
+    let pw=null;
+    if(fmt==="web"&&lk.checked){
+      // 校验不过就留在面板里，什么都不导出
+      if(pw1.value.length<PW_MIN_LEN){toast(t("snapPwShort"));pw1.focus();return}
+      if(pwBits(pw1.value)<PW_MIN_BITS){toast(t("snapPwWeakBlock"));pw1.focus();return}
+      if(pw1.value!==pw2.value){toast(t("snapPwMismatch"));pw2.focus();return}
+      pw=snapPw=pw1.value;
+    }
+    const o={fmt,scale,scope,pw,byPage:!!p.querySelector("#exbp")?.checked,
       shots:!!p.querySelector("#exshot")?.checked,
       title:stampName(p.querySelector("#exn").value.trim()||"Board"),
       img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
@@ -4472,6 +4735,7 @@ function openExport(x,y){
     toast(o.fmt==="jpg"||o.fmt==="pdfview"?t("expShot"):t("expWork"));
     setTimeout(()=>doExport(o),60);
   };
+  if(pre){const b=p.querySelector(`#exf button[data-v="${pre}"]`);if(b)b.click()}
 }
 function exportSet(o){
   if(o.scope!=="sel")return null;
@@ -4489,22 +4753,28 @@ async function exportArchive(o){
     "- `assets/` 全部图片原件，Markdown 中按文件名引用",
     "- `board.json` 完整画布数据，可重新导入本程序",
     "- 若本程序某天无法使用，`pages/` 和 `assets/` 依然是完整可读的资料",""];
-  groups.forEach((g,i)=>{
-    const nm=safeName(g.title,i+1);
-    const tree=buildTree(g.cards);
-    files.push({name:"pages/"+nm+".md",data:docMD({...o,title:g.title},tree)});
-    index.push("- pages/"+nm+".md　"+g.cards.length+t("bkCards"));
-  });
+  // 2) 图片原件：逐张从仓库取 Blob，不经过字符串；先取，好让下面 Markdown 里的链接用上真实扩展名
+  const used=new Set(),assets=[];
+  S.cards.forEach(c=>{const o2=orig(c);if(o2.ih)used.add(o2.ih)});
+  const ext=new Map();
+  for(const h of used){
+    const b=await imgBlob(h);if(!b)continue;
+    const e=/png/i.test(b.type)?"png":"jpg";ext.set(h,e);
+    assets.push({name:"assets/"+h+"."+e,data:b});
+  }
+  IMGEXT=ext;
+  try{
+    groups.forEach((g,i)=>{
+      const nm=safeName(g.title,i+1);
+      const tree=buildTree(g.cards);
+      files.push({name:"pages/"+nm+".md",data:docMD({...o,title:g.title},tree)});
+      index.push("- pages/"+nm+".md　"+g.cards.length+t("bkCards"));
+    });
+  }finally{IMGEXT=null}
   files.push({name:"README.md",data:index.join("\n")});
-  // 2) 图片原件
-  const used=new Set();
-  S.cards.forEach(c=>{const o2=orig(c);if(o2.ih&&IMG.has(o2.ih))used.add(o2.ih)});
-  used.forEach(h=>{
-    const u=IMG.get(h);
-    files.push({name:"assets/"+h+"."+extOf(u),data:dataURLtoBytes(u)});
-  });
-  // 3) 完整数据
-  files.push({name:"board.json",data:JSON.stringify(bundle(null),null,1)});
+  files.push(...assets);
+  // 3) 完整数据：逐张卡片写成 Blob，不拼成一个大字符串
+  files.push({name:"board.json",data:await bundleBlob(null)});
   // 4) 可选：每页一张渲染图
   if(o.shots){
     for(let i=0;i<groups.length;i++){
@@ -4515,7 +4785,7 @@ async function exportArchive(o){
       }catch(e){}
     }
   }
-  dl(zipMake(files),o.title+".zip");
+  dl(await zipMakeAsync(files),o.title+".zip");
   toast(t("expDone"));
 }
 async function exportPageShots(o){
@@ -4552,7 +4822,7 @@ async function doExport(o){
   if(o.fmt==="web"){await exportWebSnap(o);return}
   const list=exportSet(o);
   if(o.scope==="sel"&&!list){toast(t("needSel"));return}
-  if(o.fmt==="json"){download(bundle(list),o.title+".json");return}
+  if(o.fmt==="json"){await download(list,o.title+".json");return}
   if(o.fmt==="md"){
     const tree=buildTree(list);
     dl(new Blob([docMD(o,tree)],{type:"text/markdown;charset=utf-8"}),o.title+".md");
@@ -4573,10 +4843,13 @@ async function doExport(o){
     return;
   }
   const tree=buildTree(list);
-  if(o.fmt==="pdfdoc"){printHTML(docHTML(o,tree,true),o.title);toast(t("expPrint"));return}
-  try{const D=await loadDocx();await exportDocx(D,o,tree)}
-  catch(e){exportDocHTML(o,tree)}
-  toast(t("expDone"));
+  // Word 与 PDF 文档要把图片以 data URL 写进去：只为这次导出的卡片临时准备一份
+  await withImgData(o.img?(list||S.cards):[],async()=>{
+    if(o.fmt==="pdfdoc"){printHTML(docHTML(o,tree,true),o.title);toast(t("expPrint"));return}
+    try{const D=await loadDocx();await exportDocx(D,o,tree)}
+    catch(e){exportDocHTML(o,tree)}
+    toast(t("expDone"));
+  });
 }
 function loadDocx(){
   if(window.docx)return Promise.resolve(window.docx);
@@ -4847,6 +5120,7 @@ async function captureCanvas(scale,list,rect){
     inner.querySelectorAll("[data-link]").forEach(el=>{if(!okL.has(el.dataset.link))el.remove()});
   }
   wrap.appendChild(inner);host.appendChild(wrap);document.body.appendChild(host);
+  const pendImg=[...inner.querySelectorAll("img[data-ih]")];   // 按需加载：克隆里可能有还没读进来的图
   // 连线原本挂在一张 40000 见方的巨型 SVG 上，导出前换成刚好覆盖取景范围的尺寸
   const svg=inner.querySelector("#links");
   if(svg){
@@ -4856,6 +5130,8 @@ async function captureCanvas(scale,list,rect){
     svg.style.transform=`translate(${b.x-pad}px,${b.y-pad}px)`;
   }
   try{
+    // 截图里的图片直接用原图的 data URL，不依赖画面上是否已经读进来，也不让截图库再去取 blob 地址
+    for(const im of pendImg){try{const u=await imgDataURL(im.dataset.ih);if(u)im.src=u}catch(e){}}
     try{
       const h2i=await loadH2I();
       return await h2i.toCanvas(wrap,{pixelRatio:scale||2,backgroundColor:S.bg,
@@ -4952,7 +5228,8 @@ function docMD(o,tree){
       lines.push(...rows,"");
       return;
     }
-    if(o.img&&srcOf(oc))lines.push("!["+(t("expImg"))+"]("+(oc.ih?("assets/"+oc.ih+".png"):"embedded")+")","");
+    // 存档包里图片原件按真实格式存成 .png 或 .jpg，这里的链接要跟着同一个扩展名（从前一律写 .png，JPEG 的链接是断的）
+    if(o.img&&hasImg(oc))lines.push("!["+(t("expImg"))+"]("+(oc.ih?("assets/"+oc.ih+"."+((IMGEXT&&IMGEXT.get(oc.ih))||"png")):"embedded")+")","");
     const txt=(oc.text||"").split(/\n+/).filter(z=>z.trim());
     if(n.out){
       lines.push("#".repeat(Math.min(6,n.out+1))+" "+(n.num?n.num+" ":"")+(txt[0]||snippet(oc)),"");
@@ -5164,14 +5441,28 @@ async function snapFonts(html){
   }catch(e){return ""}
   finally{clearTimeout(timer)}
 }
+// 快照里的图片：原图最长边可到 1600px，卡片上一般只显示三四百像素宽。
+// 按卡片显示宽度的两倍重新采样，放大看仍然清楚，体积通常只有原图的几分之一；图片多的画布，快照才不会大到打不开。
+// PNG 仍出 PNG（保留透明），其余出 JPEG。原图本来就不大的，原样放进去。
+async function snapImgData(h,cssW){
+  const b=await imgBlob(h);if(!b)return "";
+  const tw=Math.max(64,Math.ceil((cssW||360)*2));
+  try{
+    const bm=await createImageBitmap(b);
+    if(bm.width<=tw*1.15){if(bm.close)bm.close();return await blobDataURL(b)}
+    const cv=document.createElement("canvas");cv.width=tw;cv.height=Math.max(1,Math.round(bm.height*tw/bm.width));
+    cv.getContext("2d").drawImage(bm,0,0,cv.width,cv.height);if(bm.close)bm.close();
+    return cv.toDataURL(/png/i.test(b.type)?"image/png":"image/jpeg",.86);
+  }catch(e){return await blobDataURL(b)}
+}
 async function buildWebSnap(title){
-  await loadImgs(S.cards.map(orig));
   const live=$("world");
   const prev={m:CULL.m,cap:NODE_CAP,hover:hoverId,sel,selLink};
   let w;
   // 跟 captureCanvas 同一个办法，只是连 NODE_CAP 一起放开：快照要的是全部卡片，
   // 不是视野中心的九百张
   CULL.m=1e9;NODE_CAP=Infinity;hoverId=null;sel=[];selLink=null;
+  IMG_QUIET=true;             // 临时画出来的几千张卡片不去逐张读图，快照里的图片下面单独处理
   try{
     syncCards();measure();drawLinks();
     w=live.cloneNode(true);
@@ -5180,9 +5471,23 @@ async function buildWebSnap(title){
     a.forEach((el,i)=>{if(b[i]&&el.scrollTop)b[i].dataset.st=Math.round(el.scrollTop)});
   }finally{
     CULL.m=prev.m;NODE_CAP=prev.cap;hoverId=prev.hover;sel=prev.sel;selLink=prev.selLink;
+    IMG_QUIET=false;
     syncCards();measure();drawLinks();
+    // 导出期间新建、又留在画面上的卡片，图片还没读；补一次
+    live.querySelectorAll("img[data-ih]:not([src])").forEach(im=>needImg(im.dataset.ih));
   }
   snapClean(w);
+  // 图片：同一张图（分身）按最宽的那处算一次
+  const ims=[...w.querySelectorAll("img[data-ih]")],widest=new Map();
+  ims.forEach(im=>{const c=im.closest(".card"),cw=c?parseFloat(c.style.width)||360:360;
+    widest.set(im.dataset.ih,Math.max(widest.get(im.dataset.ih)||0,cw))});
+  const done=new Map();let k=0;
+  for(const [h,cw] of widest){
+    try{done.set(h,await snapImgData(h,cw))}catch(e){done.set(h,"")}
+    if(++k%40===0)toast(t("snapWork")+" "+k+"/"+widest.size);
+  }
+  ims.forEach(im=>{const u=done.get(im.dataset.ih);if(u)im.src=u;else im.removeAttribute("src");im.removeAttribute("data-ih")});
+  w.querySelectorAll('img[src^="blob:"]').forEach(im=>im.removeAttribute("src"));   // blob 地址离开本程序就失效
   const inner=w.outerHTML;
   const fontCSS=await snapFonts(inner);
   const css=[...document.querySelectorAll("head style")].map(s=>s.textContent).join("\n");
@@ -5225,10 +5530,152 @@ async function exportWebSnap(o){
   const title=(o&&o.title)||stampName(fileName||"Board");
   toast(t("snapWork"));
   try{
-    const html=await buildWebSnap(title);
+    let html=await buildWebSnap(title);
+    if(o&&o.pw){toast(t("snapSealing"));html=await sealWebSnap(html,o.pw)}
     dl(new Blob([html],{type:"text/html;charset=utf-8"}),title+".html");
     toast(t("snapDone"));
-  }catch(e){console.error(e);toast(t("snapFail"))}
+  }catch(e){console.error(e);toast(e&&e.message==="nocrypto"?t("snapNoCrypto"):t("snapFail"))}
+}
+/* ---------------- 网页快照的密码保护 ----------------
+   快照里是整个 PhD 期间的想法和笔记，文件会经过邮件、网盘、导师的电脑。
+   所以这里做的是真正的加密，不是「页面上弹个框问密码」那种样子货（那种一看源码就全在）：
+   整份快照网页先 gzip，再用 AES-256-GCM 加密；密钥由密码经 PBKDF2-SHA256 迭代 60 万次派生，
+   盐和 IV 每次导出都随机生成。导出的文件里只有密文和一个很小的解锁页，
+   标题也换成通用的 「Protected snapshot」，解锁前不向任何外部地址发请求。
+   密码对了，解锁页用 document.write 把原来那份快照原样写出来，之后一切跟没加密时一样。
+   密码只在这次打开程序期间记在内存里（snapPw），不进 S、不进 IndexedDB、不进 localStorage。
+   忘了密码没有任何办法找回，但原始内容一直在画布里，重新导出一份即可。 */
+let snapPw=null,snapLockOn=true;
+// 加密本身破不了；拿到文件的人（或程序、AI）唯一能做的是离线一个个猜密码，而且可以无限次地猜。
+// 所以真正决定强度的是密码本身和每猜一次的代价：
+//   迭代 200 万次（OWASP 2023 建议的 60 万次的三倍多），每猜一次的代价跟着乘上去；
+//   正常解锁在电脑上约零点几秒、手机上一两秒，对本人无感，对批量猜测是实打实的成本。
+//   密码至少 12 位，并且挡掉一眼就能猜的（重复、顺序、常见词）。
+// 旧快照里记着自己的迭代次数，照样能打开。
+const SNAP_KDF_ITER=2000000;
+const PW_MIN_LEN=12,PW_MIN_BITS=50;
+// 粗略估计密码强度（位）。只是个提醒，不是严格的熵计算：按字符种类估一个上限，再给重复、顺序、常见词打折
+function pwBits(s){
+  let pool=0;
+  if(/[a-z]/.test(s))pool+=26;if(/[A-Z]/.test(s))pool+=26;if(/[0-9]/.test(s))pool+=10;
+  if(/[^a-zA-Z0-9\u0080-\uFFFF]/.test(s))pool+=33;if(/[\u0080-\uFFFF]/.test(s))pool+=100;
+  let bits=[...s].length*Math.log2(Math.max(pool,2));
+  const uniq=new Set(s).size;if(uniq<s.length/2)bits*=uniq/(s.length/2);
+  if(/(.)\1\1/.test(s))bits*=.8;
+  if(/0123|1234|2345|3456|4567|5678|6789|abcd|bcde|qwer|asdf|zxcv|pass|word|love|admin|board|thesis|phd|2025|2026/i.test(s))bits*=.6;
+  return Math.round(bits);
+}
+// 生成强密码：去掉容易看错的字符（0 O 1 l I），20 位分成五组，约 99 位强度
+function genPw(){
+  const al="abcdefghjkmnpqrstuvwxyz23456789",out=[];
+  const buf=new Uint8Array(64);crypto.getRandomValues(buf);
+  for(const x of buf){if(x<248)out.push(al[x%31]);if(out.length===20)break}
+  while(out.length<20){const b=new Uint8Array(1);crypto.getRandomValues(b);if(b[0]<248)out.push(al[b[0]%31])}
+  return out.join("").replace(/(.{4})(?=.)/g,"$1-");
+}
+function bytesB64(u8){return blobDataURL(new Blob([u8])).then(s=>s.slice(s.indexOf(",")+1))}
+async function snapKey(pw,salt,iter,use){
+  const base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:iter,hash:"SHA-256"},
+    base,{name:"AES-GCM",length:256},false,[use]);
+}
+async function sealWebSnap(html,pw){
+  if(!(window.crypto&&crypto.subtle&&crypto.getRandomValues))throw new Error("nocrypto");
+  let bytes=new TextEncoder().encode(html),gz=0;
+  // 先压缩：快照里的图片是 base64，压缩后再加密再 base64，体积跟不加密时差不多
+  if(typeof CompressionStream==="function"){
+    try{
+      bytes=new Uint8Array(await new Response(new Blob([bytes]).stream()
+        .pipeThrough(new CompressionStream("gzip"))).arrayBuffer());gz=1;
+    }catch(e){bytes=new TextEncoder().encode(html);gz=0}
+  }
+  const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await snapKey(pw,salt,SNAP_KDF_ITER,"encrypt");
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,bytes));
+  const meta={v:1,kdf:"PBKDF2-SHA256",iter:SNAP_KDF_ITER,cipher:"AES-256-GCM",
+    salt:await bytesB64(salt),iv:await bytesB64(iv),gz};
+  return `<!doctype html>
+<html lang="en-GB"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive, nosnippet, noimageindex, noai, noimageai">
+<meta name="referrer" content="no-referrer">
+<meta name="generator" content="Board web snapshot (protected)">
+<title>Protected snapshot</title>
+<style>${SNAP_LOCK_CSS}</style>
+</head><body>
+<div class="box">
+<div class="h">Protected snapshot</div>
+<div class="s">Enter the password to open it.</div>
+<div class="row"><input id="pw" type="password" autocomplete="current-password" autofocus aria-label="Password"><button id="go">Open</button></div>
+<div id="msg" role="status"></div>
+</div>
+<script type="application/json" id="snapmeta">${JSON.stringify(meta)}<\/script>
+<script type="application/octet-stream" id="snapdata">${await bytesB64(ct)}<\/script>
+<script id="snapunlock">(${snapUnlock.toString()})();<\/script>
+</body></html>`;
+}
+const SNAP_LOCK_CSS=`
+  html,body{height:100%;margin:0}
+  body{display:flex;align-items:center;justify-content:center;background:#F4F4F2;color:#1E2220;
+    font:400 14px/1.5 "IBM Plex Sans",-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  .box{width:min(340px,86vw)}
+  .h{font-weight:600;font-size:15px}
+  .s{opacity:.55;font-size:12.5px;margin:2px 0 14px}
+  .row{display:flex;gap:6px}
+  input{flex:1;min-width:0;height:34px;padding:0 10px;border:1px solid rgba(0,0,0,.18);border-radius:8px;
+    background:#fff;color:inherit;font:inherit;outline:none}
+  input:focus{border-color:rgba(0,0,0,.45)}
+  button{height:34px;padding:0 14px;border:none;border-radius:8px;background:#1E2220;color:#F4F4F2;
+    font:inherit;cursor:pointer}
+  button:disabled{opacity:.45;cursor:default}
+  #msg{min-height:20px;margin-top:10px;font-size:12.5px;opacity:.7}
+  @media (prefers-color-scheme:dark){
+    body{background:#1E2220;color:#EDEDEA}
+    input{background:#2A2F2C;border-color:rgba(255,255,255,.18)}
+    input:focus{border-color:rgba(255,255,255,.5)}
+    button{background:#EDEDEA;color:#1E2220}}
+`;
+// 解锁页里的脚本。跟 snapViewer 一样用 toString() 写进文件，必须自给自足。
+function snapUnlock(){
+  var pw=document.getElementById("pw"),go=document.getElementById("go"),msg=document.getElementById("msg");
+  var meta={};try{meta=JSON.parse(document.getElementById("snapmeta").textContent)}catch(e){}
+  var OLD="This browser cannot open protected snapshots. Please use a recent version of Chrome, Edge, Firefox or Safari.";
+  function say(t){msg.textContent=t}
+  if(!(window.crypto&&crypto.subtle&&window.TextEncoder)){say(OLD);go.disabled=true;pw.disabled=true;return}
+  function unb64(s){var b=atob(s),u=new Uint8Array(b.length);for(var i=0;i<b.length;i++)u[i]=b.charCodeAt(i);return u}
+  var data=null,busy=false;
+  async function open(){
+    if(busy||!pw.value)return;
+    busy=true;go.disabled=true;say("Opening…");
+    var bytes;
+    try{
+      if(!data)data=unb64(document.getElementById("snapdata").textContent.trim());
+      var base=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw.value),"PBKDF2",false,["deriveKey"]);
+      var key=await crypto.subtle.deriveKey({name:"PBKDF2",salt:unb64(meta.salt),iterations:meta.iter,hash:"SHA-256"},
+        base,{name:"AES-GCM",length:256},false,["decrypt"]);
+      bytes=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv:unb64(meta.iv)},key,data));
+    }catch(e){busy=false;go.disabled=false;say("Wrong password.");pw.select();return}
+    try{
+      if(meta.gz){
+        if(typeof DecompressionStream!=="function")throw new Error("gz");
+        bytes=new Uint8Array(await new Response(new Blob([bytes]).stream()
+          .pipeThrough(new DecompressionStream("gzip"))).arrayBuffer());
+      }
+      var html=new TextDecoder().decode(bytes);
+      // 解锁后闲置 15 分钟，或切走超过 5 分钟再回来，就重新载入这个文件，回到锁屏：
+      // 人走开时屏幕上不会一直摊着内容，内存里解出来的内容也随之丢掉
+      var S1="<scr"+"ipt>",S2="</scr"+"ipt>";
+      var relock=S1+"(function(){var T=15*60*1000,t,hid=0;function arm(){clearTimeout(t);t=setTimeout(function(){location.reload()},T)}"+
+        "['pointerdown','pointermove','keydown','wheel','touchstart'].forEach(function(e){addEventListener(e,arm,{passive:true})});arm();"+
+        "document.addEventListener('visibilitychange',function(){if(document.hidden)hid=Date.now();else{if(hid&&Date.now()-hid>5*60*1000)location.reload();hid=0}})})();"+S2;
+      var at=html.lastIndexOf("</body>");
+      html=at>=0?html.slice(0,at)+relock+html.slice(at):html+relock;
+      pw.value="";
+      document.open();document.write(html);document.close();
+    }catch(e){busy=false;go.disabled=false;say(OLD)}
+  }
+  go.addEventListener("click",open);
+  pw.addEventListener("keydown",function(e){if(e.key==="Enter")open()});
 }
 // 快照里的查看脚本。它会被 toString() 原样写进导出的网页，所以必须自给自足：
 // 不许引用程序里的任何变量或函数，只碰快照自己的 DOM。
@@ -8810,7 +9257,7 @@ function fileItems(x,y){
     {label:t("mergeJSON"),on:()=>$("mergefile").click()},
     "-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
-    {label:t("webSnap"),on:()=>exportWebSnap()},
+    {label:t("webSnap"),on:()=>openExport(x,y,"web")},   // 走导出面板，密码保护不会被绕过
     {label:t("clearAll"),danger:true,on:async()=>{if(confirm(t("clearConfirm"))){
       snap();invalidateIndex();S.cards=[];S.links=[];sel=[];await unbind(true);render();save();toast(t("unbound"))}}}
   ];
@@ -8874,7 +9321,7 @@ function cardItems(x,y){
     "-",
     {label:t("linkFromHere"),on:()=>{linkFrom=sel[0];stage.style.cursor="crosshair";toast(t("clickTarget"))}}
   ];
-  if(one&&srcOf(one))items.push({label:t("replaceImage"),on:()=>{
+  if(one&&hasImg(one))items.push({label:t("replaceImage"),on:()=>{
     const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
     inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,async(d,w,h)=>{snap();
       const r=await putImg(d);one.ih=r.h;if(r.ok)delete one.src;else one.src=d;
@@ -9005,13 +9452,119 @@ addEventListener("pointerdown",e=>{
 },true);
 
 /* ================= import ================= */
+// 读画布文件。小文件照旧整份 JSON.parse；超过 STREAM_MIN 的走流式读取：
+// 从前整份读成一个字符串，超过约 512MB 根本读不进来，而且全部图片会同时留在内存里。
+// 流式读取一张卡片一张卡片地解析，图片当场存进图片仓库、只留哈希，内存里任何时候只有一张图。
+// 逐块读取一个顶层是对象的 JSON：cards 数组里的元素一个个交出去（onCard），其余键整值交出去（onTop）。
+// 只在深度 1 上认键；任何字符串里的内容（包括几 MB 的 base64）都用 indexOf 快进，不逐字扫描。
+async function streamBoardJSON(next,onTop,onCard,onCards){
+  let d=0,inS=false,esc=false,started=false,ended=false;
+  let want="key",key=null,arr=false,buf=null,from=0,kind="";
+  const cut=(s,i)=>{buf.push(s.slice(from,i));const out=buf.join("");buf=null;return out};
+  const bad=()=>{throw new SyntaxError("Unexpected structure in board file")};
+  for(;;){
+    const s=await next();if(s==null)break;
+    from=0;let i=0;const n=s.length;
+    while(i<n){
+      if(inS){
+        if(esc){esc=false;i++;continue}
+        const q=s.indexOf('"',i),b=s.indexOf("\\",i);
+        if(q<0&&b<0){i=n;break}
+        if(b>=0&&(q<0||b<q)){esc=true;i=b+1;continue}
+        inS=false;i=q+1;
+        if(d===1){
+          if(want==="keyread"){key=JSON.parse(cut(s,i));want="colon"}
+          else if(want==="strval"){onTop(key,JSON.parse(cut(s,i)));want="after"}
+        }
+        continue;
+      }
+      const ch=s.charCodeAt(i);
+      if(ch===32||ch===10||ch===13||ch===9){i++;continue}
+      if(!started){if(ch===0xFEFF){i++;continue}if(ch!==123)bad();started=true;d=1;i++;continue}
+      if(ended)bad();
+      if(ch===34){                                   // "
+        if(d===1){
+          if(want==="key"){buf=[];from=i;want="keyread"}
+          else if(want==="value"){buf=[];from=i;want="strval"}
+          else if(want!=="valread")bad();
+        }
+        inS=true;i++;continue;
+      }
+      if(ch===123||ch===91){                         // { [
+        if(d===1){
+          if(want!=="value")bad();
+          if(key==="cards"&&ch===91){arr=true;d=2;want="elem";i++;if(onCards)onCards();continue}
+          buf=[];from=i;want="valread";
+        }else if(arr&&d===2){
+          if(want!=="elem")bad();
+          buf=[];from=i;want="elread";
+        }
+        d++;i++;continue;
+      }
+      if(ch===125||ch===93){                         // } ]
+        if(arr&&d===2&&ch===93){                     // cards 数组结束
+          if(want==="elread")bad();
+          arr=false;d=1;want="after";i++;continue;
+        }
+        if(d===1&&ch===125){
+          if(want==="prim"){onTop(key,JSON.parse(cut(s,i)));want="after"}
+          if(want!=="after"&&want!=="key")bad();
+          d=0;ended=true;i++;continue;
+        }
+        d--;i++;
+        if(d===1&&want==="valread"){onTop(key,JSON.parse(cut(s,i)));want="after"}
+        else if(arr&&d===2&&want==="elread"){await onCard(JSON.parse(cut(s,i)));want="elemsep"}
+        continue;
+      }
+      if(ch===44){                                   // ,
+        if(d===1){
+          if(want==="prim"){onTop(key,JSON.parse(cut(s,i)));want="after"}
+          if(want!=="after")bad();
+          want="key";i++;continue;
+        }
+        if(arr&&d===2){if(want!=="elemsep")bad();want="elem";i++;continue}
+        i++;continue;
+      }
+      if(ch===58){                                   // :
+        if(d===1){if(want!=="colon")bad();want="value";i++;continue}
+        i++;continue;
+      }
+      // 其他字符：数字、true/false/null
+      if(d===1&&want==="value"){buf=[];from=i;want="prim";i++;continue}
+      if(arr&&d===2&&want==="elem")bad();          // cards 里只收对象
+      i++;
+    }
+    if(buf)buf.push(s.slice(from)),from=0;
+  }
+  if(!ended)bad();
+}
+const STREAM_MIN=48*1048576;
+async function readBoardFile(f,force){
+  if(!force&&f.size<STREAM_MIN)return JSON.parse(await f.text());
+  const rd=f.stream().getReader(),dec=new TextDecoder("utf-8");
+  let done=false;
+  const next=async()=>{
+    if(done)return null;
+    const r=await rd.read();
+    if(r.done){done=true;const tail=dec.decode();return tail||null}
+    return dec.decode(r.value,{stream:true});
+  };
+  const top={};let cards=null,n=0;
+  await streamBoardJSON(next,(k,v)=>{top[k]=v},async c=>{
+    if(c&&typeof c.src==="string"&&/^data:/.test(c.src)&&!c.ih){
+      try{const r=await putImg(c.src,{keep:false});c.ih=r.h;if(r.ok)delete c.src}catch(e){}
+    }
+    cards.push(c);
+    if(++n%200===0)toast(t("readingN")+" "+n);
+  },()=>{cards=[]});
+  if(cards)top.cards=cards;
+  return top;
+}
 function readJSON(f,merge){
-  const r=new FileReader();
-  r.onerror=()=>alert(t("badFile")+"\n"+t("errRead"));
-  r.onload=async()=>{
+  (async()=>{
     let d;
-    try{d=JSON.parse(r.result)}
-    catch(err){alert(t("badFile")+"\n"+t("errParse"));return}
+    try{d=await readBoardFile(f)}
+    catch(err){alert(t("badFile")+"\n"+(err&&err.name==="NotReadableError"?t("errRead"):t("errParse")));return}
     if(!d||!Array.isArray(d.cards)){alert(t("badFile")+"\n"+t("errShape"));return}
     let stage="snapshot",n=0;
     try{
@@ -9029,8 +9582,7 @@ function readJSON(f,merge){
       alert(t("errImport")+"\n["+stage+"] "+((err&&err.message)||err)+"\n\n"+frame);
       try{render()}catch(e){}
     }
-  };
-  r.readAsText(f);
+  })();
 }
 $("jsonfile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,false);e.target.value=""};
 $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.target.value=""};
@@ -9045,10 +9597,12 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
     S.linkDef={...DEFLINK,...(saved.linkDef||{})};S.textDef={...DEF,...(saved.textDef||{})}}
   LANG=S.lang||"en";
   await migrateInline(S.cards);
-  await loadImgs(S.cards);
+  // 从前这里把全部图片读进内存（loadImgs），图片多了标签页会被撑爆；现在画到哪张读哪张
   try{const h=await kvGet(FH);
     if(h){fileHandle=h;fileName=h.name;
       if(h.queryPermission){const p=await h.queryPermission({mode:"readwrite"});fileOK=(p==="granted")}}}catch(e){}
+  // 浏览器重启后多半会收回写权限：自动写回从这一刻起就不会发生，打开时就明说
+  if(fileHandle&&!fileOK){fileErr="perm";fileState();setTimeout(()=>toast(t("filePermStart")),1200)}
   await loadRecents();
   await loadGlobalTpl();
   await loadBackups();

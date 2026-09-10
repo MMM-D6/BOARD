@@ -1786,11 +1786,12 @@ group("image 图片导入", async (c) => {
     const file = new File([blob], "test.png", { type: "image/png" });
     await new Promise((z) => { addImages([file], { x: 0, y: 0 }); setTimeout(z, 700); });
     const cc = S.cards[0];
-    return cc ? { n: S.cards.length, ih: !!cc.ih, src: (srcOf(cc) || "").slice(0, 22),
+    // 图片仓库改成存 Blob 以后，画面上用的是 blob: 地址；存成什么格式要看仓库里的 Blob
+    return cc ? { n: S.cards.length, ih: !!cc.ih, type: ((await imgBlob(cc.ih)) || {}).type || "",
       ar: +(cc.ar || 0).toFixed(2) } : null;
   });
   c.ok("PNG 可以导入", !!r && r.n === 1 && r.ih);
-  c.ok("以 PNG 存储，保留透明通道", /^data:image\/png/.test(r.src));
+  c.ok("以 PNG 存储，保留透明通道", r.type === "image/png");
   c.ok("宽高比正确", Math.abs(r.ar - 0.6) < 0.02);
 
   const r2 = await c.run(async () => {
@@ -4444,6 +4445,363 @@ group("websnap 网页快照", async (c) => {
   c.ok("文件菜单里有导出网页快照", await c.run(() => fileItems(0, 0).some((z) => z && z.label === t("webSnap"))));
   c.ok("中英文案都齐了", await c.run(() => ["fmtWeb", "webSnap", "snapWork", "snapDone", "snapFail",
     "snapNeedCanvas", "snapRO", "snapHint", "snapNote"].every((k) => T.en[k] && T.zh[k])));
+});
+
+group("websnaplock 网页快照的密码保护", async (c) => {
+  // 要守的是：文件里一个字的原文都没有；密码错打不开；密码对了跟没加密的快照一模一样；
+  // 密码不落到任何存储里；导出面板与文件菜单都绕不过这道保护。
+  const PW = "correct horse 1";
+  const r = await c.run(async (PW) => {
+    const cv = document.createElement("canvas"); cv.width = 60; cv.height = 40;
+    const g = cv.getContext("2d"); g.fillStyle = "#7A2E8C"; g.fillRect(0, 0, 60, 40); g.fillStyle = "#fff"; g.fillRect(9, 9, 13, 7);
+    const { h } = await putImg(cv.toDataURL("image/png"));
+    S.cards = [
+      { id: "s1", x: 0, y: 0, w: 320, text: "SECRET-4711 只属于我的核心想法", s: { ...DEF } },
+      { id: "s2", x: 0, y: 160, w: 200, text: "", ih: h, ar: 40 / 60, s: { ...DEF } },
+    ];
+    S.links = []; S.frames = [{ id: "fx", x: -40, y: -40, w: 600, h: 400, title: "Chapter Zero 私密页面" }];
+    S.docs = []; S.sheets = [];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    await new Promise((z) => setTimeout(z, 300));
+    const plain = await buildWebSnap("26-09-10-Private PhD");
+    const imgB64 = (await imgDataURL(h)).split(",")[1];
+    const a = await sealWebSnap(plain, PW), b = await sealWebSnap(plain, PW);
+    const meta = JSON.parse(new DOMParser().parseFromString(a, "text/html").getElementById("snapmeta").textContent);
+    const doc = new DOMParser().parseFromString(a, "text/html");
+    return {
+      a, imgInPlain: plain.includes(imgB64.slice(0, 200)),
+      leak: ["SECRET-4711", "核心想法", "Chapter Zero", "私密页面", "Private PhD", imgB64.slice(40, 240)].filter((s) => a.includes(s)),
+      differ: a !== b && JSON.parse(new DOMParser().parseFromString(b, "text/html").getElementById("snapmeta").textContent).salt !== meta.salt,
+      meta, title: doc.title,
+      external: [...doc.querySelectorAll("link,img,iframe,[src]")].length,
+      scripts: [...doc.querySelectorAll("script")].map((s) => s.id).join(","),
+      robots: (doc.querySelector('meta[name="robots"]') || {}).content || "",
+    };
+  }, PW);
+  c.ok("前提：没加密的快照里原文与图片都在", r.imgInPlain);
+  c.ok("加密后文件里找不到任何原文、页面名、文件标题或图片数据" + (r.leak.length ? "（漏了：" + r.leak.join("、") + "）" : ""), r.leak.length === 0);
+  c.ok("解锁页的标题是通用的，不透露内容", r.title === "Protected snapshot");
+  c.ok("解锁前不向任何外部地址发请求（没有 link、img、src）", r.external === 0);
+  c.ok("只有参数、密文、解锁脚本三段", r.scripts === "snapmeta,snapdata,snapunlock");
+  c.ok("AES-256-GCM，PBKDF2-SHA256 迭代 200 万次", r.meta.cipher === "AES-256-GCM" && r.meta.kdf === "PBKDF2-SHA256" && r.meta.iter >= 2000000);
+  c.ok("解锁页要求搜索引擎与 AI 爬虫都不收录", /noindex/.test(r.robots) && /noai/.test(r.robots) && /noimageai/.test(r.robots) && /noarchive/.test(r.robots));
+  c.ok("盐 16 字节、IV 12 字节", atob(r.meta.salt).length === 16 && atob(r.meta.iv).length === 12);
+  c.ok("同一份内容两次导出，盐和密文都不同", r.differ);
+  c.ok("先压缩再加密", r.meta.gz === 1);
+
+  const fs2 = require("fs"), os = require("os"), path2 = require("path");
+  const file = path2.join(os.tmpdir(), "board-websnap-lock-test.html");
+  fs2.writeFileSync(file, r.a);
+  const pg = await c.page.browser().newPage();
+  const errs = [], reqs = [];
+  pg.on("pageerror", (e) => errs.push(e.message));
+  pg.on("request", (q) => { if (!q.url().startsWith("file:")) reqs.push(q.url()); });
+  await pg.goto("file://" + file);
+  await c.wait(400);
+  await pg.type("#pw", "wrong password 1");
+  await pg.keyboard.press("Enter");
+  await pg.waitForFunction(() => /Wrong/.test(document.getElementById("msg").textContent), { timeout: 20000 }).catch(() => {});
+  const wrong = await pg.evaluate(() => ({ msg: document.getElementById("msg").textContent, locked: !!document.getElementById("pw") && !document.getElementById("world") }));
+  c.ok("密码错：提示 Wrong password，页面仍是锁着的", /Wrong password/.test(wrong.msg) && wrong.locked);
+  c.ok("解锁前没有发出任何网络请求", reqs.length === 0);
+  await pg.click("#pw", { clickCount: 3 });
+  await pg.type("#pw", PW);
+  await pg.keyboard.press("Enter");
+  await pg.waitForSelector("#snapbar", { timeout: 30000 }).catch(() => {});
+  await c.wait(400);
+  const open = await pg.evaluate(() => ({
+    text: (document.querySelector('.card[data-id="s1"] .cap') || {}).textContent,
+    img: !!document.querySelector('.card[data-id="s2"] img[src^="data:image/png"]'),
+    title: document.title, frame: (document.querySelector(".frame .ttl") || {}).textContent,
+    ce: document.querySelectorAll("[contenteditable]").length,
+    tf: (document.getElementById("world") || { style: {} }).style.transform,
+    pwGone: !document.getElementById("pw"),
+  }));
+  c.ok("密码对：快照原样打开，文字和图片都在", open.text === "SECRET-4711 只属于我的核心想法" && open.img && open.frame === "Chapter Zero 私密页面");
+  c.ok("打开后跟没加密的快照一样：标题回来了、查看脚本在跑、仍然不可编辑",
+    open.title === "26-09-10-Private PhD" && /scale\(/.test(open.tf || "") && open.ce === 0 && open.pwGone);
+  c.ok("解锁后挂上了闲置自动上锁", await pg.evaluate(() => [...document.scripts].some((s) => /location\.reload\(\)/.test(s.textContent) && /visibilitychange/.test(s.textContent))));
+  const t0 = await pg.evaluate(() => document.getElementById("world").style.transform);
+  await pg.mouse.move(900, 700); await pg.mouse.down(); await pg.mouse.move(960, 740, { steps: 4 }); await pg.mouse.up();
+  c.ok("解锁后的快照可以平移", (await pg.evaluate(() => document.getElementById("world").style.transform)) !== t0);
+  c.ok("解锁页和快照都没有脚本错误" + (errs.length ? "：" + errs[0] : ""), errs.length === 0);
+  // 上锁就是重新载入这个文件：回到锁屏，内容不在页面上了
+  await pg.evaluate(() => location.reload());
+  await pg.waitForSelector("#pw", { timeout: 10000 }).catch(() => {});
+  c.ok("重新载入以后回到锁屏，页面上没有内容", await pg.evaluate(() => !!document.getElementById("pw") && !document.getElementById("world") && !/SECRET/.test(document.body.innerText)));
+  await pg.close();
+  try { fs2.unlinkSync(file); } catch (e) {}
+
+  // 导出面板：默认勾着密码保护；校验不过不导出；密码只在内存里；取消勾选就是普通快照
+  const panel = await c.run(async (PW) => {
+    const real = window.dl; const got = [];
+    window.dl = async (b, n) => { got.push({ n, text: await b.text() }); };
+    const tst = []; const realToast = window.toast; window.toast = (m) => { tst.push(m); realToast(m); };
+    const P = $("pop"), q = (s) => P.querySelector(s);
+    const go = async () => { q("#exgo").click(); await new Promise((z) => setTimeout(z, 200)); };
+    const until = async (n) => { for (let i = 0; i < 200 && got.length < n; i++) await new Promise((z) => setTimeout(z, 100)); };
+    snapPw = null; snapLockOn = true;
+    openExport(100, 100, "web");
+    const def = { web: q('#exf button[data-v="web"]').classList.contains("on"), lock: q("#exlock").checked,
+      pwShown: q("#expw").style.display !== "none" };
+    q("#expw1").value = "short"; q("#expw2").value = "short"; await go();
+    const afterShort = { dl: got.length, open: P.classList.contains("on"), toast: tst.includes(t("snapPwShort")) };
+    q("#expw1").value = PW; q("#expw2").value = PW + "x"; await go();
+    const afterMismatch = { dl: got.length, open: P.classList.contains("on"), toast: tst.includes(t("snapPwMismatch")) };
+    q("#expw1").value = "aaaaaaaaaaaaaa"; q("#expw2").value = "aaaaaaaaaaaaaa"; await go();
+    const afterWeak = { dl: got.length, open: P.classList.contains("on"), toast: tst.includes(t("snapPwWeakBlock")) };
+    q("#expwg").click(); await new Promise((z) => setTimeout(z, 100));
+    const gen = { v: q("#expw1").value, same: q("#expw1").value === q("#expw2").value, shown: q("#expw1").type === "text",
+      meter: q("#expwm").textContent === t("snapPwStrong"), bits: pwBits(q("#expw1").value) };
+    q("#expw1").value = PW; q("#expw2").value = PW; await go(); await until(1);
+    const sealed = got[0];
+    // 第二次打开面板：密码已经填好，不用再输
+    openExport(100, 100, "web");
+    const prefill = q("#expw1").value === PW && q("#expw2").value === PW;
+    // 取消勾选：普通快照
+    q("#exlock").click(); await go(); await until(2);
+    const plain = got[1];
+    const lockRemembered = snapLockOn === false;
+    snapLockOn = true;
+    // 文件菜单那一项走导出面板，不会直接导出一份没加密的
+    const before = got.length;
+    const it = fileItems(0, 0).find((z) => z && z.label === t("webSnap")); it.on();
+    await new Promise((z) => setTimeout(z, 300));
+    const menu = { dl: got.length - before, panel: P.classList.contains("on"), web: q('#exf button[data-v="web"]').classList.contains("on") };
+    P.classList.remove("on", "wide");
+    // 密码不在 S 里，也不在 IndexedDB、localStorage 里
+    save(); await new Promise((z) => setTimeout(z, 900));
+    const db = await idb(); const vals = await new Promise((res) => {
+      const out = []; const cur = db.transaction("kv").objectStore("kv").openCursor();
+      cur.onsuccess = (e) => { const k = e.target.result; if (!k) return res(out); try { out.push(JSON.stringify(k.value) || ""); } catch (err) {} k.continue(); };
+      cur.onerror = () => res(out);
+    });
+    let ls = ""; try { for (let i = 0; i < localStorage.length; i++) ls += localStorage.getItem(localStorage.key(i)); } catch (e) {}
+    window.dl = real; window.toast = realToast;
+    return { def, afterShort, afterMismatch, afterWeak, gen, sealedName: sealed && sealed.n,
+      sealedOk: !!sealed && sealed.text.includes('id="snapdata"') && !sealed.text.includes("SECRET-4711"),
+      prefill, plainOk: !!plain && plain.text.includes("SECRET-4711") && !plain.text.includes('id="snapdata"'),
+      lockRemembered, menu,
+      inS: JSON.stringify(S).includes(PW), inDB: vals.some((v) => v.includes(PW)), inLS: ls.includes(PW) };
+  }, PW);
+  c.ok("面板里选网页快照时，密码保护默认是勾着的", panel.def.web && panel.def.lock && panel.def.pwShown);
+  c.ok("密码太短：提示并留在面板里，不导出", panel.afterShort.dl === 0 && panel.afterShort.open && panel.afterShort.toast);
+  c.ok("两次输入不一致：提示并留在面板里，不导出", panel.afterMismatch.dl === 0 && panel.afterMismatch.open && panel.afterMismatch.toast);
+  c.ok("够长但一眼能猜（14 个 a）：挡下，不导出", panel.afterWeak.dl === 0 && panel.afterWeak.open && panel.afterWeak.toast);
+  c.ok("「生成」给出 20 位、五组、不含易混字符的强密码，两栏都填好并显示出来",
+    /^[a-hjkmnp-z2-9]{4}(-[a-hjkmnp-z2-9]{4}){4}$/.test(panel.gen.v) && panel.gen.same && panel.gen.shown && panel.gen.bits >= 80 && panel.gen.meter);
+  c.ok("密码正确：导出的是加密文件，里面没有原文", panel.sealedOk && /\.html$/.test(panel.sealedName || ""));
+  c.ok("这次打开程序期间再导出，密码已经填好", panel.prefill);
+  c.ok("取消勾选就是普通快照，并且这次期间记住这个选择", panel.plainOk && panel.lockRemembered);
+  c.ok("文件菜单里的导出网页快照会先打开面板，不会直接导出", panel.menu.dl === 0 && panel.menu.panel && panel.menu.web);
+  c.ok("密码不在画布数据里", !panel.inS);
+  c.ok("密码不在 IndexedDB 里", !panel.inDB);
+  c.ok("密码不在 localStorage 里", !panel.inLS);
+  c.ok("中英文案都齐了", await c.run(() => ["snapLock", "snapPw1", "snapPw2", "snapPwNote", "snapPwShort",
+    "snapPwMismatch", "snapNoCrypto", "snapSealing"].every((k) => T.en[k] && T.zh[k])));
+});
+
+group("filesafe 绑定文件写回失败要看得见", async (c) => {
+  // 从前写回失败完全静默：fileOK 悄悄变 false，之后自动写回一直停着。
+  // 这里用假的文件句柄把几种失败都走一遍：要有提示、原因要对、能恢复的点一下就恢复。
+  const r = await c.run(async () => {
+    const wait = (ms) => new Promise((z) => setTimeout(z, ms));
+    S.cards = [{ id: "a", x: 0, y: 0, w: 280, text: "写回测试", s: { ...DEF } }]; S.links = []; S.frames = []; S.docs = [];
+    invalidateIndex(); render();
+    let written = null, mode = "ok";
+    const fake = {
+      name: "thesis.json",
+      queryPermission: async () => (mode === "perm" ? "prompt" : "granted"),
+      requestPermission: async () => { if (mode === "perm") { const e = new Error("gesture"); e.name = "SecurityError"; throw e; } return "granted"; },
+      // 写回改成分段写：一次 createWritable 之后 write 多次，close 时才算写成
+      createWritable: async () => {
+        if (mode === "io") { const e = new Error("gone"); e.name = "NotFoundError"; throw e; }
+        let acc = "";
+        return { write: async (s) => { if (mode === "big") { throw new RangeError("Invalid string length"); } acc += s; },
+          close: async () => { written = acc; }, abort: async () => {} };
+      },
+    };
+    const vis = () => $("fwarn").classList.contains("on") && getComputedStyle($("fwarn")).display !== "none";
+    const snap = () => ({ vis: vis(), text: $("fwarnt").textContent, btn: $("fwarnb").style.display !== "none", toast: $("toast").textContent });
+    const out = {};
+    fileHandle = fake; fileName = fake.name; fileOK = true; fileErr = ""; statusBar();
+    out.okStart = snap();
+    mode = "ok"; out.okWrite = await writeFile(true); out.okAfter = snap();
+    toast("");
+    mode = "perm"; await writeFile(true); out.perm = { ...snap(), err: fileErr, fileOK };
+    toast(""); fileOK = true;
+    mode = "io"; await writeFile(true); out.io = { ...snap(), err: fileErr };
+    toast(""); fileOK = true;
+    mode = "big"; await writeFile(true); out.big = { ...snap(), err: fileErr };
+    // 失败以后继续编辑：自动写回不会发生，提示一直在
+    mode = "ok"; written = null; fileErr = "io"; fileState();
+    S.cards[0].text = "改了一个字"; save(); await wait(2200);
+    out.stillOff = { written, vis: vis() };
+    // 点「恢复」：就是手动保存，写成功以后提示消失，自动写回恢复
+    $("fwarnb").click(); await wait(300);
+    out.resumed = { vis: vis(), fileOK, wrote: !!written && written.includes("改了一个字") };
+    written = null; S.cards[0].text = "恢复以后再改"; save(); await wait(2200);
+    out.autoAgain = !!written && written.includes("恢复以后再改");
+    // 演示模式下不打扰；解除绑定后提示消失
+    fileOK = false; fileErr = "perm"; fileState();
+    document.body.classList.add("lock"); out.lockHidden = !vis(); document.body.classList.remove("lock");
+    await unbind(true); out.unbound = !vis();
+    // 浏览器内保存也失败（IndexedDB 与 localStorage 都写不进）：要提示，而且一分钟内只说一次
+    const kv = window.kvPut, ls = Storage.prototype.setItem, tst = [], rt = window.toast;
+    window.kvPut = async () => 0;
+    Storage.prototype.setItem = function () { throw new Error("quota"); };
+    window.toast = (m) => { tst.push(m); rt(m); };
+    storeWarnT = 0; save(); await wait(700); save(); await wait(700);
+    window.kvPut = kv; Storage.prototype.setItem = ls; window.toast = rt;
+    out.store = tst.filter((m) => m === t("storeFail")).length;
+    return out;
+  });
+  c.ok("写得好好的时候没有任何提示", !r.okStart.vis && r.okWrite && !r.okAfter.vis);
+  c.ok("权限被收回：左下角出现提示，写明要重新授权，带「恢复」按钮",
+    r.perm.vis && r.perm.err === "perm" && r.perm.text === "Not auto-saving to the file: permission is needed again." && r.perm.btn && r.perm.fileOK === false);
+  c.ok("从能写变成写不了的那一刻弹一次提示", /Writing to the file failed/.test(r.perm.toast));
+  c.ok("文件被挪走或占用：原因写成写入失败", r.io.vis && r.io.err === "io" && /last write failed/.test(r.io.text) && r.io.btn);
+  c.ok("超过单个文件上限：原因写成太大，不给无用的按钮", r.big.vis && r.big.err === "big" && /500 MB/.test(r.big.text) && !r.big.btn);
+  c.ok("失败以后继续编辑，提示一直挂着（此时确实没在写文件）", r.stillOff.written === null && r.stillOff.vis);
+  c.ok("点「恢复」写入成功，提示消失", r.resumed.wrote && r.resumed.fileOK && !r.resumed.vis);
+  c.ok("恢复以后自动写回照常进行", r.autoAgain);
+  c.ok("演示模式下不显示", r.lockHidden);
+  c.ok("解除绑定后提示消失", r.unbound);
+  c.ok("浏览器内保存彻底失败时会提示，并且一分钟内只提示一次（" + r.store + " 次）", r.store === 1);
+  c.ok("中英文案都齐了", await c.run(() => ["filePerm", "fileIO", "fileBig", "fileResume", "fileLost",
+    "filePermStart", "storeFail"].every((k) => T.en[k] && T.zh[k])));
+});
+
+group("gbscale 大容量：图片按需加载、分段写、流式读", async (c) => {
+  // GB 级改造要守的是：图片不再一次全读进内存；写出的文件与从前同一种格式、可以互相读；
+  // 大文件逐张卡片读进来；存档包在超过 4GB 时能用 ZIP64；快照里的图片按显示尺寸重采样。
+  const r = await c.run(async () => {
+    const wait = (ms) => new Promise((z) => setTimeout(z, ms));
+    const mk = async (w, h, col, type) => {
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      const g = cv.getContext("2d"); g.fillStyle = col; g.fillRect(0, 0, w, h);
+      g.fillStyle = "#fff"; g.fillRect(3, 3, Math.max(2, w / 5), Math.max(2, h / 5));
+      return cv.toDataURL(type || "image/png", 0.9);
+    };
+    const out = {};
+    // 1) 远处 60 张图、近处 2 张；清空内存里的地址，模拟重新打开程序
+    const urls = [], cards = [];
+    for (let i = 0; i < 62; i++) {
+      const u = await mk(40 + i, 30, "hsl(" + i * 6 + ",60%,45%)"); urls.push(u);
+      const { h } = await putImg(u);
+      cards.push({ id: "g" + i, x: i < 2 ? i * 260 : 20000 + i * 260, y: 0, w: 220, text: "", ih: h, ar: 30 / (40 + i), s: { ...DEF } });
+    }
+    IMG.forEach((u) => URL.revokeObjectURL(u)); IMG.clear(); IMGB.clear();
+    S.cards = cards; S.links = []; S.frames = []; S.docs = []; S.sheets = [];
+    invalidateIndex(); render(); camTo(-200, 0, 1, true);
+    await wait(600);
+    out.loadedAfterOpen = IMG.size;
+    out.nearPainted = [...document.querySelectorAll('.card[data-id="g0"] img,.card[data-id="g1"] img')].every((im) => /^blob:/.test(im.src) && im.complete && im.naturalWidth > 0);
+    const im0 = document.querySelector('.card[data-id="g0"] img');
+    out.boxBeforeLoadOk = !!im0 && im0.getBoundingClientRect().height > 100;
+    // 2) 旧数据：图片以字符串存在仓库里，读到时照样显示，并且顺手转存成 Blob
+    const oldURL = await mk(64, 48, "#246");
+    const oh = await hashStr(oldURL);
+    await kvPut("img:" + oh, oldURL);
+    S.cards.push({ id: "old", x: 520, y: 0, w: 220, text: "", ih: oh, ar: 0.75, s: { ...DEF } });
+    invalidateIndex(); render(); await wait(600);
+    const oldIm = document.querySelector('.card[data-id="old"] img');
+    out.oldShown = !!oldIm && /^blob:/.test(oldIm.src) && oldIm.naturalWidth === 64;
+    out.oldMigrated = (await kvGet("img:" + oh)) instanceof Blob;
+    // 3) 写出来的文件：与从前同一种格式，图片内联在 src 里，而且与原图逐字节一致
+    const blob = await bundleBlob(null);
+    const parsed = JSON.parse(await blob.text());
+    out.fmtOk = Array.isArray(parsed.cards) && parsed.cards.every((z) => !z.ih && /^data:image\//.test(z.src || ""));
+    out.sameBytes = parsed.cards.slice(0, 62).every((z, i) => z.src === urls[i]) && parsed.cards[62].src === oldURL;
+    out.structOk = parsed.v === SCHEMA && Array.isArray(parsed.links);
+    // 4) 流式读取：结果与整份 JSON.parse 相同；图片当场进仓库，只留哈希
+    const text = await blob.text();
+    const viaStream = await readBoardFile(new File(["\uFEFF" + text], "big.json"), true);
+    out.streamSame = viaStream.cards.length === parsed.cards.length &&
+      viaStream.cards.every((z, i) => z.id === parsed.cards[i].id && !z.src && z.ih === (i < 62 ? cards[i].ih : oh)) &&
+      JSON.stringify(viaStream.frames) === JSON.stringify(parsed.frames) && viaStream.v === parsed.v;
+    let badThrown = false;
+    try { await readBoardFile(new File(['{"cards":[{"id":"a"}'], "bad.json"), true); } catch (e) { badThrown = e instanceof SyntaxError; }
+    out.badThrown = badThrown;
+    // 读进来之后能照常吸收、显示
+    await absorb(viaStream, false); invalidateIndex(); render(); camTo(-200, 0, 1, true); await wait(700);
+    out.afterImport = [...document.querySelectorAll('.card[data-id="g0"] img')].every((im) => im.naturalWidth > 0);
+    // 5) 写文件排队：一次写的过程中再来两次自动写回，只多写一次
+    let opens = 0, gate;
+    fileHandle = { name: "q.json", queryPermission: async () => "granted", requestPermission: async () => "granted",
+      createWritable: async () => { opens++; await new Promise((z) => (gate = z)); return { write: async () => {}, close: async () => {}, abort: async () => {} }; } };
+    fileName = "q.json"; fileOK = true;
+    const p1 = writeFile(true); await wait(30);
+    const p2 = writeFile(true), p3 = writeFile(true);
+    gate(); await wait(50); gate(); await Promise.all([p1, p2, p3]);
+    out.opens = opens;
+    fileHandle = null; fileName = null; fileOK = false; fileState();
+    // 6) 存档包：JPEG 原件存成 .jpg，Markdown 里的链接也是 .jpg（从前一律写 .png，是断的）
+    const jpg = await mk(80, 60, "#a53", "image/jpeg");
+    const { h: jh } = await putImg(jpg);
+    S.cards = [{ id: "j", x: 0, y: 0, w: 220, text: "", ih: jh, ar: 0.75, s: { ...DEF } }, { id: "tx", x: 0, y: 300, w: 220, text: "说明", level: 1, s: { ...DEF } }];
+    S.frames = [{ id: "pf", x: -40, y: -40, w: 600, h: 500, title: "P" }];
+    invalidateIndex(); render();
+    let zipB = null; const realDl = window.dl; window.dl = (b) => { zipB = b; };
+    await exportArchive({ title: "A", img: true, tags: false, refs: false, table: false, scale: 1, shots: false });
+    window.dl = realDl;
+    const zb = new Uint8Array(await zipB.arrayBuffer()), dec = new TextDecoder();
+    const names = [];
+    for (let i = 0; i < zb.length - 4; i++) if (zb[i] === 0x50 && zb[i + 1] === 0x4b && zb[i + 2] === 1 && zb[i + 3] === 2) {
+      const dv = new DataView(zb.buffer, i); names.push(dec.decode(zb.slice(i + 46, i + 46 + dv.getUint16(28, true)))); }
+    const md = dec.decode(zb);
+    out.jpgAsset = names.includes("assets/" + jh + ".jpg");
+    out.jpgLink = md.includes("(assets/" + jh + ".jpg)") && !md.includes("(assets/" + jh + ".png)");
+    // 7) ZIP64：强制按 ZIP64 写一个小包，结构自己查一遍，再把字节交给外面用 Python 验
+    const z64 = await zipMakeAsync([{ name: "a.txt", data: "hello" }, { name: "b.bin", data: new Blob([new Uint8Array(300000).map((_, i) => i * 7)]) }, { name: "c/说明.md", data: "中文" }], true);
+    const zu = new Uint8Array(await z64.arrayBuffer());
+    const dv = new DataView(zu.buffer);
+    const eocd = zu.length - 22;
+    out.z64Sig = dv.getUint32(eocd, true) === 0x06054b50 && dv.getUint32(eocd - 20, true) === 0x07064b50 &&
+      dv.getUint32(eocd - 20 - 56, true) === 0x06064b50 && Number(dv.getBigUint64(eocd - 20 - 56 + 32, true)) === 3;
+    let bin = ""; for (let i = 0; i < zu.length; i += 32768) bin += String.fromCharCode.apply(null, zu.subarray(i, i + 32768));
+    out.z64 = btoa(bin);
+    // 同样的内容不强制：普通 zip，跟从前的 zipMake 逐字节相同（时间戳相同的前提下）
+    // 8) 快照里的图片按显示宽度重采样：1600px 的原图放在 300px 宽的卡片上，快照里是 600px
+    const bigU = await mk(1600, 1000, "#357", "image/jpeg");
+    const { h: bh } = await putImg(bigU);
+    S.cards = [{ id: "bg", x: 0, y: 0, w: 300, text: "", ih: bh, ar: 1000 / 1600, s: { ...DEF } }];
+    S.frames = []; invalidateIndex(); render(); camTo(0, 0, 1, true); await wait(300);
+    const html = await buildWebSnap("rs");
+    const dom = new DOMParser().parseFromString(html, "text/html");
+    const sim = dom.querySelector('.card[data-id="bg"] img');
+    const probe = new Image(); probe.src = sim.getAttribute("src"); await probe.decode();
+    out.snapW = probe.naturalWidth;
+    out.snapSmaller = sim.getAttribute("src").length < bigU.length;
+    out.noBlobInSnap = !/src="blob:/.test(html);
+    out.liveStillPainted = await (async () => { await wait(500); const im = document.querySelector('.card[data-id="bg"] img'); return !!im && im.naturalWidth === 1600; })();
+    return out;
+  });
+  c.ok("打开时不再把全部图片读进内存（只读了视野附近的 " + r.loadedAfterOpen + " 张，共 62 张）", r.loadedAfterOpen > 0 && r.loadedAfterOpen < 10);
+  c.ok("视野里的图片照常显示", r.nearPainted);
+  c.ok("图片还没读到时，按宽高比先占好位置，卡片不会跳", r.boxBeforeLoadOk);
+  c.ok("旧数据里以字符串存的图片照样显示", r.oldShown);
+  c.ok("旧图片读到时顺手转存成二进制", r.oldMigrated);
+  c.ok("写出的文件仍是同一种格式，图片内联在 src 里", r.fmtOk && r.structOk);
+  c.ok("写出的图片与原图逐字节一致", r.sameBytes);
+  c.ok("流式读取的结果与整份解析相同，图片只留哈希", r.streamSame);
+  c.ok("损坏的文件在流式读取时照样报格式错误", r.badThrown);
+  c.ok("流式读进来的画布照常显示图片", r.afterImport);
+  c.ok("写的过程中又来两次自动写回，只多写一次（共写 " + r.opens + " 次）", r.opens === 2);
+  c.ok("存档包里 JPEG 原件存成 .jpg", r.jpgAsset);
+  c.ok("存档包 Markdown 里的图片链接跟着用 .jpg", r.jpgLink);
+  c.ok("ZIP64 的结尾结构齐全", r.z64Sig);
+  const fs2 = require("fs"), os = require("os"), path2 = require("path"), cp = require("child_process");
+  const zf = path2.join(os.tmpdir(), "board-z64-test.zip");
+  fs2.writeFileSync(zf, Buffer.from(r.z64, "base64"));
+  const py = cp.spawnSync("python3", ["-c", "import zipfile,sys;z=zipfile.ZipFile(sys.argv[1]);bad=z.testzip();n=z.namelist();print('OK' if bad is None and n==['a.txt','b.bin','c/说明.md'] and z.read('a.txt')==b'hello' else 'BAD',n)", zf], { encoding: "utf8" });
+  if (py.error) console.log("  （本机没有 python3，跳过用标准库校验 ZIP64 这一步）");
+  else c.ok("ZIP64 包能被 Python 标准库完整读出、CRC 全对", /^OK/.test(py.stdout));
+  try { fs2.unlinkSync(zf); } catch (e) {}
+  c.ok("快照里的图片按显示宽度的两倍重采样（" + r.snapW + "px）", r.snapW === 600);
+  c.ok("重采样后比原图小", r.snapSmaller);
+  c.ok("快照里不留 blob 地址（离开本程序就失效）", r.noBlobInSnap);
+  c.ok("导出快照以后，画面上的原图照常显示", r.liveStillPainted);
 });
 
 group("static 静态检查", async (c) => {
