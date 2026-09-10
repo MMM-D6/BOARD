@@ -4060,7 +4060,8 @@ group("websnap 网页快照", async (c) => {
     const { h: ih } = await putImg(cv.toDataURL("image/png"));
     cards.push({ id: "im", x: 860, y: 120, w: 200, text: "", ih, ar: 50 / 80, s: { ...DEF } });
     for (let i = 0; i < 1100; i++)
-      cards.push({ id: "f" + i, x: 3000 + (i % 40) * 260, y: Math.floor(i / 40) * 180, w: 220, text: "远处卡片 " + i, s: { ...DEF } });
+      cards.push({ id: "f" + i, x: 3000 + (i % 40) * 260, y: Math.floor(i / 40) * 180, w: 220, text: "远处卡片 " + i, s: { ...DEF },
+        ...(i === 1000 ? { bib: "bib1" } : {}) });          // 一张远处的卡片也归在 bib1 名下：摘下来时强调也要跟上
     S.cards = cards;
     S.links = [{ id: "l1", a: "h1", b: "p1", st: true }, { id: "l2", a: "p1", b: "p2" }, { id: "l3", a: "p1", b: "f1099" }];
     S.frames = [{ id: "fr1", x: -60, y: -60, w: 1200, h: 640, title: "第一页" },
@@ -4115,6 +4116,7 @@ group("websnap 网页快照", async (c) => {
       frames: doc.querySelectorAll(".frame").length, docs: doc.querySelectorAll(".doc").length,
       scripts: [...doc.querySelectorAll("script")].map((s) => s.id).join(","),
       lang: doc.documentElement.lang,
+      order: [...doc.querySelectorAll("#cards .card")].map((e) => e.dataset.id).join(","),
       bar: [...doc.querySelectorAll("#snapbar button")].map((b) => b.textContent).join("|"),
       barTitleText: !!doc.querySelector("#snapbar .sbt,#snapbar .sbs"),
       hint: doc.getElementById("snaphint").textContent,
@@ -4247,6 +4249,39 @@ group("websnap 网页快照", async (c) => {
   await c.wait(1200);
   c.ok("按 0 回到 100%", Math.abs(sc(await tf()) - 1) < 0.001);
 
+  // 缩放过程中那些「不随缩放变大」的小符号每一帧都保持原大小（早先卡片多时会先跟着缩放、再弹回来，看起来在闪）
+  await pg.keyboard.press("f");
+  await c.wait(1300);
+  const allIds = await R(() => [...document.querySelectorAll("#cards .card")].map((e) => e.dataset.id));
+  c.ok("适应画面时所有卡片都挂着（" + allIds.length + "/" + info.total + "）", allIds.length === info.total);
+  c.ok("挂着的卡片保持原来的层叠次序", allIds.join(",") === st.order);
+  const d0 = await box('.card[data-id="bib1"] .bibdot');
+  const flick = await R(async ([x, y]) => {
+    const dot = () => document.querySelector('.card[data-id="bib1"] .bibdot');
+    const bar = () => document.querySelector('.card[data-id="h1"] .hbar');
+    const ws = [], hs = []; let run = true;
+    (function s() {
+      if (!run) return;
+      const a = dot(), b = bar();
+      if (a && a.isConnected) ws.push(a.getBoundingClientRect().width);
+      if (b && b.isConnected) hs.push(b.getBoundingClientRect().width);
+      requestAnimationFrame(s);
+    })();
+    const st = document.getElementById("stage");
+    for (let i = 0; i < 24; i++) {
+      st.dispatchEvent(new WheelEvent("wheel", { deltaY: -70, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      await new Promise((r) => setTimeout(r, 16));
+    }
+    await new Promise((r) => setTimeout(r, 300));
+    run = false;
+    return { n: ws.length, w0: Math.min(...ws), w1: Math.max(...ws), h0: Math.min(...hs), h1: Math.max(...hs),
+      attached: document.querySelectorAll("#cards .card").length };
+  }, [d0.x + d0.w / 2, d0.y + d0.h / 2]);
+  c.ok(`缩放过程中文献圆点一直是原大小（${flick.w0.toFixed(1)} 到 ${flick.w1.toFixed(1)}px，${flick.n} 帧）`,
+    flick.n > 10 && flick.w1 - flick.w0 < 1.5);
+  c.ok(`缩放过程中层级竖条一直是原大小（${flick.h0.toFixed(1)} 到 ${flick.h1.toFixed(1)}px）`, flick.h1 - flick.h0 < 1.5);
+  c.ok("放大以后视野外的卡片摘下来了（剩 " + flick.attached + " 张）", flick.attached < info.total / 4);
+
   // 右下角那条很短；地图按导出时的状态打开，小工具栏让到地图上方
   const lay = await R(() => {
     const b = document.getElementById("snapbar").getBoundingClientRect(), m = document.getElementById("map");
@@ -4325,7 +4360,7 @@ group("websnap 网页快照", async (c) => {
     act: document.querySelector('.card[data-id="bib1"] .bibdot').classList.contains("act"),
     dim: getComputedStyle(document.querySelector('.card[data-id="q2"]')).opacity,
   }));
-  c.ok("点文献圆点，点亮它和归在它名下的原文", bf.body && bf.on === "bib1,q1" && bf.act);
+  c.ok("点文献圆点，点亮它和归在它名下的原文", bf.body && bf.on === "bib1,f1000,q1" && bf.act);
   c.ok("没归档的卡片淡下去（opacity " + bf.dim + "）", +bf.dim < 0.5);
   c.ok("点圆点不会平移或放大画布", (await tf()) === tBib);
   await pg.keyboard.press("Escape");
@@ -4334,6 +4369,21 @@ group("websnap 网页快照", async (c) => {
   await pg.mouse.click(dot.x + dot.w / 2, dot.y + dot.h / 2);
   await pg.mouse.click(dot.x + dot.w / 2, dot.y + dot.h / 2);
   c.ok("再点一次也能取消", await R(() => !document.body.classList.contains("bibfocus")));
+
+  // 视野外的卡片不挂在 DOM 里；在它被摘下来的时候点亮文献，挂回来时强调照样在
+  const far = await pg.$('.card[data-id="f1000"]');
+  const q2c = await box('.card[data-id="q2"] .cap');
+  await pg.mouse.move(q2c.x + 4, q2c.y + q2c.h / 2);
+  await pg.keyboard.press("z");
+  await c.wait(1300);
+  c.ok("放大到近处以后，远处的卡片被摘下来了", !(await far.evaluate((e) => e.isConnected)));
+  const dot2 = await box('.card[data-id="bib1"] .bibdot');
+  await pg.mouse.click(dot2.x + dot2.w / 2, dot2.y + dot2.h / 2);
+  await pg.keyboard.press("f");
+  await c.wait(1300);
+  c.ok("挂回来的卡片带着文献强调", await far.evaluate((e) => e.isConnected && e.classList.contains("bibon")));
+  await pg.keyboard.press("Escape");
+  c.ok("取消强调也作用到每一张卡片", await far.evaluate((e) => !e.classList.contains("bibon")));
 
   c.ok("快照页面没有脚本错误" + (errs.length ? "：" + errs[0] : ""), errs.length === 0);
   await pg.close();

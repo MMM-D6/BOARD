@@ -5239,18 +5239,45 @@ function snapViewer(){
   var bar=document.getElementById("snapbar"),hint=document.getElementById("snaphint");
   var zb=bar&&bar.querySelector('[data-a="z100"]'),mb=bar&&bar.querySelector('[data-a="map"]');
   var cfg={};try{cfg=JSON.parse(document.getElementById("snapcfg").textContent)||{}}catch(e){}
-  // --iz 一改整棵子树重算样式（NOTES 第六节），卡片多时只在停下来之后补一次
-  var many=world.querySelectorAll(".card").length>400;
-  var cam={x:0,y:0,z:1},tgt={x:0,y:0,z:1},raf=0,izT=0,space=false,hid=false;
+  var cam={x:0,y:0,z:1},tgt={x:0,y:0,z:1},raf=0,space=false,hid=false;
   // 落在这些元素上的鼠标拖动交给浏览器划选文字，其余位置拖动是平移
   var TEXTY=".cap,td,.ref,.dbody,.dside,.dt,a,button",SCROLLY=".dbody,.dside";
   function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
-  function setIz(){world.style.setProperty("--iz",String(1/cam.z))}
+  // 卡片节点。快照打开时它们全在 DOM 里；先量一次尺寸存起来（地图、适应画面、剔除都用这份），
+  // 之后视野外的卡片会被摘下来，节点上就量不到了
+  var host=document.getElementById("cards");
+  var CE=host?Array.prototype.filter.call(host.children,function(el){return el.classList.contains("card")}):[];
+  var CR=CE.map(function(el){return rectOf(el)}),att=CE.map(function(){return true});
+  // --iz 必须跟 transform 在同一帧里一起改，否则那些"不随缩放变大"的小符号
+  // （层级竖条、编号、文献圆点、页面标题……）会先跟着画面一起缩放、过一会儿再弹回原大小，看起来就是闪。
+  // 早先卡片多时把 --iz 推迟到停下来才补，闪就是这么来的。
+  // 让它每帧都改得起的办法跟画布一样：视野外的卡片不挂在 DOM 里（见 cull），
+  // --iz 一改只重算挂着的那些。平移时缩放没变，就不去碰 --iz。
+  var izV="";
   function apply(){
     world.style.transform="translate("+cam.x+"px,"+cam.y+"px) scale("+cam.z+")";
-    if(many){clearTimeout(izT);izT=setTimeout(setIz,120)}else setIz();
+    var v=String(1/cam.z);if(v!==izV){izV=v;world.style.setProperty("--iz",v)}
+    cullSoon();
     if(zb)zb.textContent=Math.round(cam.z*100)+"%";
   }
+  // 剔除：只把视野附近的卡片挂在 DOM 里，跟画布的 syncCards 同一个道理。
+  // 只摘/挂状态真的变了的节点，挂回去时插在原来的次序上，卡片之间的上下层叠不变。
+  // 摘下来的节点和它身上的 class（比如文献强调）都还在，挂回去原样出现。
+  // 卡片不多时全部留着，浏览器的页内查找也就能搜到每一张。
+  var CULL_ON=CE.length>600,cullT=0;
+  function cull(){
+    cullT=0;if(!CULL_ON)return;
+    var W=innerWidth,H=innerHeight,z=cam.z,m=Math.max(W,H)*.6/z;
+    var x0=(-W/2-cam.x)/z-m,y0=(-H/2-cam.y)/z-m,x1=(W/2-cam.x)/z+m,y1=(H/2-cam.y)/z+m,next=null;
+    for(var i=CE.length-1;i>=0;i--){
+      var r=CR[i],want=!r||(r.x<x1&&r.x+r.w>x0&&r.y<y1&&r.y+r.h>y0);
+      if(want&&!att[i]){host.insertBefore(CE[i],next);att[i]=true}
+      else if(!want&&att[i]){host.removeChild(CE[i]);att[i]=false}
+      if(att[i])next=CE[i];
+    }
+  }
+  // 节流，不是防抖：连续缩放、平移期间最多每 90ms 跑一次，但一定会跑（NOTES 第六节）
+  function cullSoon(){if(!CULL_ON||cullT)return;cullT=setTimeout(cull,90)}
   function tick(){
     raf=0;var k=.24,dx=tgt.x-cam.x,dy=tgt.y-cam.y,dz=tgt.z-cam.z;
     if(Math.abs(dx)>.05||Math.abs(dy)>.05||Math.abs(dz)>.0004){
@@ -5280,10 +5307,9 @@ function snapViewer(){
   }
   function box(){
     var x=Infinity,y=Infinity,xe=-Infinity,ye=-Infinity;
-    world.querySelectorAll(".card,.doc,.frame,.sheet").forEach(function(el){
-      var r=rectOf(el);if(!r)return;
-      x=Math.min(x,r.x);y=Math.min(y,r.y);xe=Math.max(xe,r.x+r.w);ye=Math.max(ye,r.y+r.h);
-    });
+    function add(r){if(!r)return;x=Math.min(x,r.x);y=Math.min(y,r.y);xe=Math.max(xe,r.x+r.w);ye=Math.max(ye,r.y+r.h)}
+    CR.forEach(add);                                  // 卡片用存下来的尺寸：摘下来的也要算进去
+    world.querySelectorAll(".doc,.frame,.sheet").forEach(function(el){add(rectOf(el))});
     return isFinite(x)?{x:x,y:y,w:xe-x,h:ye-y}:null;
   }
   function fit(now){var b=box();if(!b)return go(0,0,1,now);boxTo(b,170,1.6,now)}
@@ -5305,16 +5331,16 @@ function snapViewer(){
   function bibFocus(id){
     bibOn=(bibOn===id)?null:id;
     document.body.classList.toggle("bibfocus",!!bibOn);
-    world.querySelectorAll(".card").forEach(function(el){
-      el.classList.toggle("bibon",!!bibOn&&(el.getAttribute("data-id")===bibOn||el.getAttribute("data-bib")===bibOn));
-    });
-    world.querySelectorAll(".bibdot").forEach(function(d){
-      var c=d.closest(".card");d.classList.toggle("act",!!bibOn&&!!c&&c.getAttribute("data-id")===bibOn);
+    CE.forEach(function(el){                          // 摘下来的卡片也一起改，挂回去时状态就是对的
+      var id=el.getAttribute("data-id");
+      el.classList.toggle("bibon",!!bibOn&&(id===bibOn||el.getAttribute("data-bib")===bibOn));
+      var d=el.querySelector(".bibdot");if(d)d.classList.toggle("act",!!bibOn&&id===bibOn);
     });
   }
 
   var c0=cfg.cam;
   if(c0&&isFinite(c0.x)&&isFinite(c0.y)&&c0.z>0)go(c0.x,c0.y,c0.z,true);else fit(true);
+  cull();
   world.querySelectorAll("[data-st]").forEach(function(el){el.scrollTop=+el.getAttribute("data-st")||0});
   setTimeout(gone,9000);
 
@@ -5405,8 +5431,8 @@ function snapViewer(){
   var mfit=document.getElementById("mapfit"),mz=document.getElementById("mapz"),mn=document.getElementById("mapn");
   var mcfg=cfg.map||{},frames=(cfg.frames||[]).slice().sort(function(a,b){return a.x-b.x||a.y-b.y});
   var mapOn=false,mapCam=null,mapHit=[],mapSel=null,mapHov=null,mapM=null,rects=null;
-  function cardRects(){       // 实测尺寸，只量一次；布局不随相机变
-    if(!rects){rects=[];world.querySelectorAll("#cards .card").forEach(function(el){var r=rectOf(el);if(r)rects.push(r)})}
+  function cardRects(){       // 打开时量好的那一份；布局不随相机变
+    if(!rects)rects=CR.filter(Boolean);
     return rects;
   }
   function mapBounds(){
