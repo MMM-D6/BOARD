@@ -4051,13 +4051,23 @@ group("websnap 网页快照", async (c) => {
         rich: '带 <b>加粗</b> 与 <a href="https://example.org">链接</a> 和 <a href="javascript:alert(1)">坏链接</a>', s: { ...DEF } },
       { id: "tb", x: 0, y: 360, w: 360, text: "", tb: { cols: [120, 120, 120], rows: [["A", "B", "C"], ["1", "2", "3"]], head: true } },
       { id: "emp", x: 860, y: 420, w: 200, text: "", s: { ...DEF } },
+      { id: "bib1", x: 1300, y: 0, w: 260, text: "Särmäkari (2021) Digital fashion", role: "bib", s: { ...DEF } },
+      { id: "q1", x: 1300, y: 120, w: 260, text: "归在这条文献下的原文", bib: "bib1", s: { ...DEF } },
+      { id: "q2", x: 1300, y: 240, w: 260, text: "没有归档的卡片", s: { ...DEF } },
     ];
+    const cv = document.createElement("canvas"); cv.width = 80; cv.height = 50;
+    const g2 = cv.getContext("2d"); g2.fillStyle = "#1B4F9C"; g2.fillRect(0, 0, 80, 50);
+    const { h: ih } = await putImg(cv.toDataURL("image/png"));
+    cards.push({ id: "im", x: 860, y: 120, w: 200, text: "", ih, ar: 50 / 80, s: { ...DEF } });
     for (let i = 0; i < 1100; i++)
       cards.push({ id: "f" + i, x: 3000 + (i % 40) * 260, y: Math.floor(i / 40) * 180, w: 220, text: "远处卡片 " + i, s: { ...DEF } });
     S.cards = cards;
     S.links = [{ id: "l1", a: "h1", b: "p1", st: true }, { id: "l2", a: "p1", b: "p2" }, { id: "l3", a: "p1", b: "f1099" }];
-    S.frames = [{ id: "fr1", x: -60, y: -60, w: 1200, h: 640, title: "第一页" }];
+    S.frames = [{ id: "fr1", x: -60, y: -60, w: 1200, h: 640, title: "第一页" },
+      { id: "fr2", x: 1260, y: -60, w: 360, h: 420, title: "" }];      // 没命名的页面：标题由程序按语言生成
     S.sheets = []; S.docs = [];
+    // 程序开在中文界面，快照的界面仍然要是英文。只改 LANG、不走 setLang，免得把语言存进下一组测试
+    LANG = "zh"; S.map = true; S.mapW = 360; S.mapH = 240;
     invalidateIndex(); render();
     const d = addDoc({ x: 0, y: 800 }, "论文草稿");
     const ids = [];
@@ -4076,11 +4086,13 @@ group("websnap 网页快照", async (c) => {
     const before = { nodes: nodes.size, dom: document.querySelectorAll("#cards .card").length };
     const t0 = performance.now();
     const html = await buildWebSnap("快照测试");
+    const zhFrame = document.querySelector('.frame[data-id="fr2"] .ttl').textContent;
+    LANG = "en"; S.map = false; render();
     return {
       html, ms: performance.now() - t0, before,
       after: { nodes: nodes.size, dom: document.querySelectorAll("#cards .card").length },
       cap: NODE_CAP, m: CULL.m, sel: [...sel],
-      total: S.cards.filter((z) => !docOnly(z)).length, links: S.links.length,
+      total: S.cards.filter((z) => !docOnly(z)).length, links: S.links.length, zhFrame,
       appP1: (() => { const r = nodes.get("p1").getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })(),
       appDoc: (() => { const r = document.querySelector("#docs .doc .dwrap").getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })(),
     };
@@ -4102,6 +4114,18 @@ group("websnap 网页快照", async (c) => {
       lines: doc.querySelectorAll("#links path.ln").length,
       frames: doc.querySelectorAll(".frame").length, docs: doc.querySelectorAll(".doc").length,
       scripts: [...doc.querySelectorAll("script")].map((s) => s.id).join(","),
+      lang: doc.documentElement.lang,
+      bar: [...doc.querySelectorAll("#snapbar button")].map((b) => b.textContent).join("|"),
+      barTitleText: !!doc.querySelector("#snapbar .sbt,#snapbar .sbs"),
+      hint: doc.getElementById("snaphint").textContent,
+      frame2: doc.querySelector('.frame[data-id="fr2"] .ttl').textContent,
+      frame1: doc.querySelector('.frame[data-id="fr1"] .ttl').textContent,
+      mapq: (doc.getElementById("mapq") || {}).placeholder,
+      bibTitle: (doc.querySelector('.card[data-id="bib1"] .bibdot') || {}).title,
+      q1bib: (doc.querySelector('.card[data-id="q1"]') || { dataset: {} }).dataset.bib,
+      q2bib: (doc.querySelector('.card[data-id="q2"]') || { dataset: {} }).dataset.bib,
+      hanUI: /[\u4e00-\u9fff]/.test(doc.getElementById("snapbar").outerHTML + doc.getElementById("snaphint").textContent +
+        doc.getElementById("map").outerHTML),
       storage: /indexedDB|localStorage|sessionStorage/.test(js),
       badHref: doc.querySelectorAll('a[href^="javascript"]').length,
       lnkA: !!doc.querySelector('a.lnk[href="https://example.com/paper"][target="_blank"]'),
@@ -4110,7 +4134,7 @@ group("websnap 网页快照", async (c) => {
     };
   }, info.html);
   c.ok(`视野外、超出节点上限的卡片也全在（${st.cards}/${info.total}）`, st.cards === info.total);
-  c.ok("连线、页面、稿子一样不少", st.lines === info.links && st.frames === 1 && st.docs === 1);
+  c.ok("连线、页面、稿子一样不少", st.lines === info.links && st.frames === 2 && st.docs === 1);
   c.ok("快照里没有任何可编辑的元素", st.ce === 0);
   c.ok("编辑用的零件都摘掉了", st.chrome === 0);
   c.ok("选中之类的临时痕迹不带进去", st.marks === 0);
@@ -4120,6 +4144,12 @@ group("websnap 网页快照", async (c) => {
   c.ok("来源链接变成真的链接，新标签打开", st.lnkA);
   c.ok("字体取不到时仍留着 Google Fonts 的链接", st.fontLink);
   c.ok("稿子当前的滚动位置记下来了", st.st === "300");
+  c.ok("程序是中文界面（前提）", info.zhFrame === "页面");
+  c.ok("快照的界面是英文", st.lang === "en-GB" && !st.hanUI && st.bar === "Page map|Fit to view|100%" && /^Drag to pan/.test(st.hint));
+  c.ok("右下角只剩三个按钮，不再有标题与时间那一长条", !st.barTitleText);
+  c.ok("没命名的页面显示英文默认名，用户写的标题不动", st.frame2 === "Page" && st.frame1 === "第一页");
+  c.ok("地图查找框与文献圆点的提示也是英文", st.mapq === "Find a page" && /^Show what is filed/.test(st.bibTitle || ""));
+  c.ok("文献归属写到卡片节点上带过去，没归档的不带", st.q1bib === "bib1" && !st.q2bib);
 
   // 打开快照本身，跟编辑页并排比
   const fs2 = require("fs"), os = require("os"), path2 = require("path");
@@ -4155,7 +4185,7 @@ group("websnap 网页快照", async (c) => {
 
   // 改不动：点进去打字，内容不变
   await pg.mouse.click(cap.x + 10, cap.y + cap.h / 2);
-  await pg.keyboard.type("XYZ");
+  await pg.keyboard.type("qwe");                 // 别用 f / m / z，那几个是快照的快捷键
   c.ok("点进文字打字，内容纹丝不动",
     await R(() => document.querySelector('.card[data-id="p2"] .cap').textContent) === "锁定的引文仍然可以划选复制");
 
@@ -4165,7 +4195,7 @@ group("websnap 网页快照", async (c) => {
   await pg.mouse.move(140, 120, { steps: 5 });
   await pg.mouse.up();
   const t1 = await tf();
-  c.ok("在空白处拖动是平移", t1 !== t0 && /translate\(-300px, -240px\)/.test(t1));
+  c.ok("在空白处拖动是平移（" + t1 + "）", t1 !== t0 && /translate\(-300px, -240px\)/.test(t1));
   c.ok("平移不会顺带划出一片选区", (await R(() => getSelection().toString())) === "");
 
   await pg.mouse.move(40, 60);
@@ -4216,6 +4246,95 @@ group("websnap 网页快照", async (c) => {
   await pg.keyboard.press("0");
   await c.wait(1200);
   c.ok("按 0 回到 100%", Math.abs(sc(await tf()) - 1) < 0.001);
+
+  // 右下角那条很短；地图按导出时的状态打开，小工具栏让到地图上方
+  const lay = await R(() => {
+    const b = document.getElementById("snapbar").getBoundingClientRect(), m = document.getElementById("map");
+    const mr = m.getBoundingClientRect(), cv = document.getElementById("mapc");
+    const px = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+    let ink = 0; for (let i = 3; i < px.length; i += 4) if (px[i]) ink++;
+    return { bw: b.width, barAbove: b.bottom <= mr.top + 1, on: m.classList.contains("on"), ink,
+      btnOn: document.querySelector('#snapbar [data-a="map"]').classList.contains("on") };
+  });
+  c.ok("右下角小工具栏不超过 300px 宽（" + Math.round(lay.bw) + "px）", lay.bw < 300);
+  c.ok("导出时地图开着，快照里也开着", lay.on && lay.btnOn);
+  c.ok("地图画出了页面与卡片", lay.ink > 200);
+  c.ok("小工具栏让到地图上方，不叠在一起", lay.barAbove);
+
+  // 地图：滚轮缩放的是地图本身，画布不动；点地图会把画布带过去
+  const tMap0 = await tf();
+  const mc = await box("#mapc");
+  await pg.mouse.move(mc.x + mc.w / 2, mc.y + mc.h / 2);
+  await pg.mouse.wheel({ deltaY: -300 });
+  await c.wait(150);
+  c.ok("在地图上滚轮是放大地图，画布不动", (await tf()) === tMap0 && /%$/.test(await R(() => document.getElementById("mapz").textContent)));
+  await pg.mouse.click(mc.x + mc.w / 2, mc.y + mc.h / 2, { clickCount: 2 });
+  await c.wait(100);
+  c.ok("双击地图回到全览", (await R(() => document.getElementById("mapz").textContent)) === "");
+  await pg.mouse.click(mc.x + 8, mc.y + 8);
+  await c.wait(900);
+  c.ok("点地图，画布跟着过去", (await tf()) !== tMap0);
+  // 在查找框里打字不许触发快捷键（f 是适应画面、m 是地图）
+  const tMap1 = await tf();
+  await pg.click("#mapq");
+  await pg.keyboard.type("fm");
+  await c.wait(600);
+  c.ok("在地图查找框里打字不会触发快捷键", (await tf()) === tMap1 &&
+    (await R(() => document.getElementById("map").classList.contains("on"))));
+  await R(() => { const q = document.getElementById("mapq"); q.value = ""; q.dispatchEvent(new Event("input")); q.blur(); });
+  await pg.click('#snapbar [data-a="map"]');
+  c.ok("点 Page map 关掉地图，小工具栏回到右下角", await R(() => !document.getElementById("map").classList.contains("on") &&
+    !document.getElementById("snapbar").style.bottom));
+  await pg.keyboard.press("m");
+  c.ok("按 M 再打开", await R(() => document.getElementById("map").classList.contains("on")));
+  await pg.keyboard.press("m");
+
+  // 放大：点图片（卡片上不是文字的地方）放大到这张卡片，再点一次退回；Z 同理
+  await pg.keyboard.press("f");
+  await c.wait(1200);
+  const tFit = await tf();
+  let im = await box('.card[data-id="im"]');
+  await pg.mouse.click(im.x + im.w / 2, im.y + im.h / 2);
+  await c.wait(1200);
+  im = await box('.card[data-id="im"]');
+  c.ok("点图片放大到这张卡片，并且居中", sc(await tf()) > sc(tFit) * 2 &&
+    Math.abs(im.x + im.w / 2 - 700) < 3 && Math.abs(im.y + im.h / 2 - 450) < 3);
+  await pg.mouse.click(im.x + im.w / 2, im.y + im.h / 2);
+  await c.wait(1200);
+  c.ok("再点一次退回原来的视角", (await tf()) === tFit);
+  const q2 = await box('.card[data-id="q2"] .cap');
+  await pg.mouse.move(q2.x + 4, q2.y + q2.h / 2);
+  await pg.keyboard.press("z");
+  await c.wait(1200);
+  const q2b = await box('.card[data-id="q2"]');
+  c.ok("指着卡片按 Z 放大到它", sc(await tf()) > sc(tFit) * 2 && Math.abs(q2b.x + q2b.w / 2 - 700) < 3);
+  await pg.mouse.move(q2b.x + 4, q2b.y + q2b.h / 2);
+  await pg.keyboard.press("z");
+  await c.wait(1200);
+  c.ok("再按 Z 退回", (await tf()) === tFit);
+
+  // 文献圆点：点亮这条文献和归在它名下的卡片，其余淡下去；再点或 Esc 取消
+  const dot = await box('.card[data-id="bib1"] .bibdot');
+  const tBib = await tf();
+  await pg.bringToFront();
+  await pg.mouse.click(dot.x + dot.w / 2, dot.y + dot.h / 2);
+  await c.wait(700);                               // 淡出有 0.18s 的过渡
+  const bf = await R(() => ({
+    body: document.body.classList.contains("bibfocus"),
+    on: [...document.querySelectorAll(".card.bibon")].map((e) => e.dataset.id).sort().join(","),
+    act: document.querySelector('.card[data-id="bib1"] .bibdot').classList.contains("act"),
+    dim: getComputedStyle(document.querySelector('.card[data-id="q2"]')).opacity,
+  }));
+  c.ok("点文献圆点，点亮它和归在它名下的原文", bf.body && bf.on === "bib1,q1" && bf.act);
+  c.ok("没归档的卡片淡下去（opacity " + bf.dim + "）", +bf.dim < 0.5);
+  c.ok("点圆点不会平移或放大画布", (await tf()) === tBib);
+  await pg.keyboard.press("Escape");
+  c.ok("按 Esc 取消强调", await R(() => !document.body.classList.contains("bibfocus") &&
+    !document.querySelector(".card.bibon")));
+  await pg.mouse.click(dot.x + dot.w / 2, dot.y + dot.h / 2);
+  await pg.mouse.click(dot.x + dot.w / 2, dot.y + dot.h / 2);
+  c.ok("再点一次也能取消", await R(() => !document.body.classList.contains("bibfocus")));
+
   c.ok("快照页面没有脚本错误" + (errs.length ? "：" + errs[0] : ""), errs.length === 0);
   await pg.close();
   try { fs2.unlinkSync(file); } catch (e) {}

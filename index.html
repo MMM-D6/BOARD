@@ -832,7 +832,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   needSel:"Select something first",manual:"Manual",
   expOpts:"Options",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
-  fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag empty space to pan, scroll or pinch to zoom, select any text to copy it",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
+  fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag to pan, scroll or pinch to zoom, press Z over a card to zoom in, M for the page map. Text can be selected and copied.",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
   scale:"Scale",expPrint:"The print dialog opens. Choose Save as PDF.",expShot:"Rendering the canvas…",
   expRender:"Rendering…",expImg:"Include images",expTags:"Include tags",
   errCDN:"The rendering library could not be loaded.",errShot:"Canvas export failed.",
@@ -1020,7 +1020,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   needSel:"请先选中内容",manual:"使用说明",
   expOpts:"包含内容",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
-  fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动空白处平移，滚轮或双指缩放，文字可以直接划选复制",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
+  fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动平移，滚轮或双指缩放，指着卡片按 Z 放大，M 打开页面地图。文字可以划选复制。",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
   scale:"倍率",expPrint:"打印窗口已打开，目标选择另存为 PDF 即可。",expShot:"正在渲染画布…",
   expRender:"正在渲染…",expImg:"包含图片",expTags:"包含标签",
   errCDN:"渲染库加载失败，请检查网络连接。",errShot:"画面导出未完成。",
@@ -5050,9 +5050,11 @@ const SNAP_CSS=`
     -webkit-user-select:text !important;user-select:text !important}
   body.snap .card .cap,body.snap .card td,body.snap .doc .cap,body.snap .doc .ref,
   body.snap .doc .dt{cursor:text}
-  body.snap .card img,body.snap .card .tg,body.snap .card .twin,body.snap .card .bibdot,
+  body.snap .card .tg,body.snap .card .twin,
   body.snap .frame .ttl,body.snap .sheet .ttl,body.snap .blk .gut .num,body.snap .blk .gut .vv{cursor:inherit}
-  body.snap .card .lnk{cursor:pointer}
+  body.snap .card .lnk,body.snap .card .bibdot{cursor:pointer}
+  /* 点卡片上不是文字的地方（图片、留白）就放大到这张卡片，跟编辑页图片上的放大镜同一个意思 */
+  body.snap .card img{cursor:zoom-in}
   /* 占位提示是写给编辑者的，快照里不出现 */
   body.snap .card .cap:empty:before,body.snap .blk .cap:empty:before{content:"" !important}
   body.snap .doc .dempty{visibility:hidden}
@@ -5062,15 +5064,15 @@ const SNAP_CSS=`
     backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
     color:var(--pfg,#111);font:400 12px/1.4 "IBM Plex Sans","PingFang SC","Microsoft YaHei",sans-serif;
     white-space:nowrap;-webkit-user-select:none;user-select:none;cursor:default}
-  #snapbar .sbt{font-weight:600;max-width:34vw;overflow:hidden;text-overflow:ellipsis}
-  #snapbar .sbs{margin-left:10px;opacity:.45;font-size:11px}
+  #snapbar{padding:4px 5px}
   #snapbar .wb{font-variant-numeric:tabular-nums}
+  #snapbar .wb[data-a="z100"]{min-width:44px}
   /* 提示放在顶上：底部居中那一带正好常是稿子正文，压在字上面不好读 */
   #snaphint{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:59;
     font:400 12px/1.5 "IBM Plex Sans","PingFang SC","Microsoft YaHei",sans-serif;color:var(--pfg,#111);
     opacity:.45;pointer-events:none;transition:opacity .6s;white-space:nowrap}
   #snaphint.gone{opacity:0}
-  @media (max-width:760px){#snapbar .sbs{display:none}#snaphint{white-space:normal;width:86vw;text-align:center}}
+  @media (max-width:760px){#snaphint{white-space:normal;width:86vw;text-align:center}}
 `;
 function snapAttr(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/"/g,"&quot;").replace(/</g,"&lt;")}
 // 链接照样能点，但只放行正常的地址
@@ -5086,7 +5088,25 @@ function snapClean(w){
   drop(".card",["sel","multi","hit","nomatch","bibon"]);drop(".frame",["sel"]);drop(".doc",["on"]);
   drop(".blk",["sel","armed"]);drop(".fb",["reorder"]);drop("td",["tsel"]);
   drop(".bibdot",["act"]);drop(".ref",["flash","lift"]);
-  w.querySelectorAll(".num[title],.bibdot[title]").forEach(el=>el.removeAttribute("title"));
+  w.querySelectorAll(".num[title]").forEach(el=>el.removeAttribute("title"));
+  // 文献条目的小圆点在快照里照样能点：点亮这条文献和归在它名下的卡片（查看脚本里的 bibFocus）。
+  // 归属关系是 c.bib 这份数据，不在 DOM 里，所以写到卡片节点上带过去；分身不计入，跟 bibKids 一致
+  w.querySelectorAll(".card[data-id]").forEach(el=>{
+    const c=card(el.dataset.id);if(c&&c.bib&&!c.ref)el.dataset.bib=c.bib;
+  });
+  w.querySelectorAll(".bibdot").forEach(el=>{el.title=T.en.bibShow});
+  // 快照的界面一律是英文。画布上几处由程序生成的字（没命名的页面、空的引用框、附录标记……）
+  // 是按当前语言写进去的，这里换成英文版；用户自己写的内容一个字都不碰
+  if(LANG!=="en"){
+    const swap=(q,key)=>w.querySelectorAll(q).forEach(el=>{if(el.textContent===t(key))el.textContent=T.en[key]});
+    w.querySelectorAll(".frame[data-id]").forEach(el=>{
+      const f=(S.frames||[]).find(z=>z.id===el.dataset.id),tt=el.querySelector(".ttl");
+      if(f&&!f.title&&tt)tt.textContent=T.en.pageDefault;
+    });
+    swap(".blk .rempty","wrRefsNone");swap(".wrempty","wrNoHead");swap(".wrnav .t","wrUntitled");
+    swap(".dempty","wrEmpty");swap(".card .lvl","apxLabel");
+  }
+  w.querySelectorAll("[data-ph]").forEach(el=>el.removeAttribute("data-ph"));
   w.querySelectorAll("a[href]").forEach(a=>{
     const u=snapUrl(a.getAttribute("href"));
     if(!u){a.removeAttribute("href");return}
@@ -5170,9 +5190,19 @@ async function buildWebSnap(title){
     .map(l=>l.outerHTML).join("\n");
   const d=new Date(),p2=n=>String(n).padStart(2,"0");
   const stamp=d.getFullYear()+"-"+p2(d.getMonth()+1)+"-"+p2(d.getDate())+" "+p2(d.getHours())+":"+p2(d.getMinutes());
-  const cfg={v:1,cam:{x:cam.x,y:cam.y,z:cam.z},made:d.toISOString()};
+  // 页面地图：面板本身照搬程序里的那一份（同样的 id，吃同样的 CSS），画法由查看脚本重做一遍
+  const mapEl=$("map").cloneNode(true);
+  mapEl.classList.remove("on");mapEl.removeAttribute("style");
+  mapEl.querySelectorAll("[style]").forEach(el=>{if(el.id!=="mapfit")el.removeAttribute("style")});
+  mapEl.querySelectorAll("#maptip").forEach(el=>{el.classList.remove("on");el.textContent=""});
+  mapEl.querySelectorAll("#mapz,#mapn").forEach(el=>{el.textContent=""});
+  const mq=mapEl.querySelector("#mapq");if(mq){mq.removeAttribute("value");mq.setAttribute("placeholder",T.en.mapFind)}
+  const cfg={v:1,cam:{x:cam.x,y:cam.y,z:cam.z},made:d.toISOString(),
+    map:{on:!!S.map,w:S.mapW||0,h:S.mapH||0,dark:isDark(S.bg)},
+    frames:(S.frames||[]).map(f=>({id:f.id,x:f.x,y:f.y,w:f.w,h:f.h,title:f.title||""})),
+    en:{page:T.en.pageDefault}};
   return `<!doctype html>
-<html lang="${LANG==="zh"?"zh-CN":"en-GB"}"><head><meta charset="utf-8">
+<html lang="en-GB"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="Board web snapshot">
 <title>${esc(title)}</title>
@@ -5182,9 +5212,9 @@ ${fontLinks}
 <style>${SNAP_CSS}</style>
 </head><body class="snap" style="${snapAttr(document.body.getAttribute("style"))}">
 <div id="stage">${inner}</div>
-<div id="snapbar"><span class="sbt">${esc(title)}</span><span class="sbs">${esc(t("snapRO"))}  ${esc(stamp)}</span>
-<span class="wsep"></span><button class="wb" data-a="fit">${esc(t("fitView"))}</button><button class="wb" data-a="z100" title="${snapAttr(t("zoom100"))}">100%</button></div>
-<div id="snaphint">${esc(t("snapHint"))}</div>
+${mapEl.outerHTML}
+<div id="snapbar" title="${snapAttr(T.en.snapRO+", "+stamp)}"><button class="wb" data-a="map" title="M">${esc(T.en.mapMenu)}</button><button class="wb" data-a="fit" title="F">${esc(T.en.fitView)}</button><button class="wb" data-a="z100" title="${snapAttr(T.en.zoom100)}">100%</button></div>
+<div id="snaphint">${esc(T.en.snapHint)}</div>
 <script type="application/json" id="snapcfg">${JSON.stringify(cfg).replace(/</g,"\\u003c")}<\/script>
 <script id="snapjs">(${snapViewer.toString()})();<\/script>
 </body></html>`;
@@ -5206,7 +5236,8 @@ async function exportWebSnap(o){
 // 滚轮与触控板的判断也照抄 stage 的 wheel 监听，手感跟编辑页一致。
 function snapViewer(){
   var stage=document.getElementById("stage"),world=document.getElementById("world");
-  var zb=document.querySelector('#snapbar [data-a="z100"]'),hint=document.getElementById("snaphint");
+  var bar=document.getElementById("snapbar"),hint=document.getElementById("snaphint");
+  var zb=bar&&bar.querySelector('[data-a="z100"]'),mb=bar&&bar.querySelector('[data-a="map"]');
   var cfg={};try{cfg=JSON.parse(document.getElementById("snapcfg").textContent)||{}}catch(e){}
   // --iz 一改整棵子树重算样式（NOTES 第六节），卡片多时只在停下来之后补一次
   var many=world.querySelectorAll(".card").length>400;
@@ -5235,34 +5266,66 @@ function snapViewer(){
     var nz=clamp(tgt.z*f,.06,6),ox=cx-innerWidth/2,oy=cy-innerHeight/2;
     go(ox-(ox-tgt.x)*(nz/tgt.z),oy-(oy-tgt.y)*(nz/tgt.z),nz,!smooth);
   }
+  // 跟画布的 boxTo 同一个公式
+  function boxTo(b,pad,maxZ,now){
+    if(!b)return;
+    var z=clamp(Math.min((innerWidth-pad)/Math.max(40,b.w),(innerHeight-pad)/Math.max(40,b.h)),.05,maxZ);
+    go(-(b.x+b.w/2)*z,-(b.y+b.h/2)*z,z,now);
+  }
+  function rectOf(el){
+    var l=parseFloat(el.style.left),tp=parseFloat(el.style.top);
+    if(!isFinite(l)||!isFinite(tp))return null;
+    var inner=el.classList.contains("doc")&&el.querySelector(".dwrap");
+    return {x:l,y:tp,w:el.offsetWidth,h:(inner||el).offsetHeight};
+  }
   function box(){
     var x=Infinity,y=Infinity,xe=-Infinity,ye=-Infinity;
     world.querySelectorAll(".card,.doc,.frame,.sheet").forEach(function(el){
-      var l=parseFloat(el.style.left),tp=parseFloat(el.style.top);
-      if(!isFinite(l)||!isFinite(tp))return;
-      x=Math.min(x,l);y=Math.min(y,tp);
-      xe=Math.max(xe,l+el.offsetWidth);ye=Math.max(ye,tp+el.offsetHeight);
+      var r=rectOf(el);if(!r)return;
+      x=Math.min(x,r.x);y=Math.min(y,r.y);xe=Math.max(xe,r.x+r.w);ye=Math.max(ye,r.y+r.h);
     });
     return isFinite(x)?{x:x,y:y,w:xe-x,h:ye-y}:null;
   }
-  function fit(now){
-    var b=box();if(!b)return go(0,0,1,now);
-    var z=clamp(Math.min((innerWidth-170)/Math.max(40,b.w),(innerHeight-170)/Math.max(40,b.h)),.05,1.6);
-    go(-(b.x+b.w/2)*z,-(b.y+b.h/2)*z,z,now);
-  }
+  function fit(now){var b=box();if(!b)return go(0,0,1,now);boxTo(b,170,1.6,now)}
   function gone(){if(hid||!hint)return;hid=true;hint.classList.add("gone")}
+
+  // 放大到一张卡片或一份稿子；对同一个目标再来一次就退回原来的视角（跟画布上的 Z 一样）
+  var camBack=null,focusEl=null;
+  function focus(el){
+    if(!el)return;
+    if(focusEl===el&&camBack){go(camBack.x,camBack.y,camBack.z);camBack=null;focusEl=null;return}
+    if(focusEl!==el)camBack={x:tgt.x,y:tgt.y,z:tgt.z};
+    focusEl=el;
+    var isDoc=el.classList.contains("doc");
+    boxTo(rectOf(el),isDoc?80:150,1.6);
+  }
+
+  // 文献条目的小圆点：点亮这条文献和归在它名下的卡片，再点一次或按 Esc 取消（跟编辑页一样）
+  var bibOn=null;
+  function bibFocus(id){
+    bibOn=(bibOn===id)?null:id;
+    document.body.classList.toggle("bibfocus",!!bibOn);
+    world.querySelectorAll(".card").forEach(function(el){
+      el.classList.toggle("bibon",!!bibOn&&(el.getAttribute("data-id")===bibOn||el.getAttribute("data-bib")===bibOn));
+    });
+    world.querySelectorAll(".bibdot").forEach(function(d){
+      var c=d.closest(".card");d.classList.toggle("act",!!bibOn&&!!c&&c.getAttribute("data-id")===bibOn);
+    });
+  }
+
   var c0=cfg.cam;
   if(c0&&isFinite(c0.x)&&isFinite(c0.y)&&c0.z>0)go(c0.x,c0.y,c0.z,true);else fit(true);
   world.querySelectorAll("[data-st]").forEach(function(el){el.scrollTop=+el.getAttribute("data-st")||0});
   setTimeout(gone,9000);
 
-  var pts=new Map(),pan=null,pinch=null;
+  var pts=new Map(),pan=null,pinch=null,down=null,lastX=innerWidth/2,lastY=innerHeight/2;
   function two(){var a=Array.from(pts.values());
     return {x:(a[0].x+a[1].x)/2,y:(a[0].y+a[1].y)/2,d:Math.hypot(a[0].x-a[1].x,a[0].y-a[1].y)}}
   function startPan(p){pan={x:p.x,y:p.y,cx:tgt.x,cy:tgt.y}}
   stage.addEventListener("pointerdown",function(e){
     gone();
     var el=e.target;
+    if(el.closest(".bibdot"))return;                 // 小圆点是按钮，点击交给 click
     if(e.pointerType==="touch"){
       if(!pts.size&&el.closest(SCROLLY))return;       // 稿子里的手指滑动交给它自己滚
     }else{
@@ -5274,12 +5337,17 @@ function snapViewer(){
     }
     pts.set(e.pointerId,{x:e.clientX,y:e.clientY});
     try{stage.setPointerCapture(e.pointerId)}catch(_){}
+    // 按在卡片本身（图片、留白，不是文字）上、没拖动就松开 = 放大到这张卡片
+    down=(pts.size===1&&!space&&e.button!==1&&el.classList&&el.classList.contains("card"))
+      ?{el:el,x:e.clientX,y:e.clientY}:null;
     if(pts.size===1){startPan(pts.get(e.pointerId));stage.classList.add("pan")}
-    else if(pts.size===2){pinch={m:two(),x:tgt.x,y:tgt.y,z:tgt.z};pan=null}
+    else if(pts.size===2){pinch={m:two(),x:tgt.x,y:tgt.y,z:tgt.z};pan=null;down=null}
   });
   stage.addEventListener("pointermove",function(e){
+    lastX=e.clientX;lastY=e.clientY;
     var p=pts.get(e.pointerId);if(!p)return;
     p.x=e.clientX;p.y=e.clientY;
+    if(down&&Math.abs(e.clientX-down.x)+Math.abs(e.clientY-down.y)>4)down=null;
     if(pinch&&pts.size>=2){
       var m=two(),z=clamp(pinch.z*m.d/Math.max(1,pinch.m.d),.06,6),cx=innerWidth/2,cy=innerHeight/2;
       var wx=(pinch.m.x-cx-pinch.x)/pinch.z,wy=(pinch.m.y-cy-pinch.y)/pinch.z;
@@ -5290,7 +5358,10 @@ function snapViewer(){
     if(!pts.delete(e.pointerId))return;
     if(pts.size<2)pinch=null;
     if(pts.size===1)startPan(pts.values().next().value);
-    if(!pts.size){pan=null;stage.classList.remove("pan")}
+    if(!pts.size){
+      pan=null;stage.classList.remove("pan");
+      if(down&&e.type==="pointerup"){var el=down.el;down=null;focus(el)}
+    }
   }
   stage.addEventListener("pointerup",up);stage.addEventListener("pointercancel",up);
   // pointerdown 的 preventDefault 挡不住所有浏览器起头划选，mousedown 这里再挡一次
@@ -5315,6 +5386,8 @@ function snapViewer(){
     stage.scrollLeft=0;stage.scrollTop=0;go(tgt.x-l,tgt.y-tp,tgt.z,true);
   });
   world.addEventListener("click",function(e){
+    var bd=e.target.closest(".bibdot");
+    if(bd){var bc=bd.closest(".card");if(bc){e.preventDefault();bibFocus(bc.getAttribute("data-id"))}return}
     var fh=e.target.closest(".fh");
     if(fh){var f=fh.closest(".fold");if(f)f.classList.toggle("on");return}
     var nav=e.target.closest(".wrnav");if(!nav)return;
@@ -5325,19 +5398,173 @@ function snapViewer(){
     var k=(body.offsetHeight&&br.height/body.offsetHeight)||1;   // 画布整体带缩放，换算回内容像素
     body.scrollTo({top:Math.max(0,body.scrollTop+(er.top-br.top)/k-12),behavior:"smooth"});
   });
-  var bar=document.getElementById("snapbar");
+
+  /* ---- 页面地图：跟程序里的 drawMap 同一套画法与手势，数据换成快照自己的 ---- */
+  var map=document.getElementById("map"),mc=document.getElementById("mapc");
+  var mq=document.getElementById("mapq"),mtip=document.getElementById("maptip");
+  var mfit=document.getElementById("mapfit"),mz=document.getElementById("mapz"),mn=document.getElementById("mapn");
+  var mcfg=cfg.map||{},frames=(cfg.frames||[]).slice().sort(function(a,b){return a.x-b.x||a.y-b.y});
+  var mapOn=false,mapCam=null,mapHit=[],mapSel=null,mapHov=null,mapM=null,rects=null;
+  function cardRects(){       // 实测尺寸，只量一次；布局不随相机变
+    if(!rects){rects=[];world.querySelectorAll("#cards .card").forEach(function(el){var r=rectOf(el);if(r)rects.push(r)})}
+    return rects;
+  }
+  function mapBounds(){
+    var x=Infinity,y=Infinity,x2=-Infinity,y2=-Infinity;
+    frames.forEach(function(f){x=Math.min(x,f.x);y=Math.min(y,f.y);x2=Math.max(x2,f.x+f.w);y2=Math.max(y2,f.y+f.h)});
+    cardRects().forEach(function(r){x=Math.min(x,r.x);y=Math.min(y,r.y);x2=Math.max(x2,r.x+r.w);y2=Math.max(y2,r.y+r.h)});
+    if(!isFinite(x))return {x:-500,y:-400,w:1000,h:800};
+    if(!frames.length)return {x:x,y:y,w:Math.max(1,x2-x),h:Math.max(1,y2-y)};
+    var p=Math.max(200,(x2-x)*.04);
+    return {x:x-p,y:y-p,w:x2-x+p*2,h:y2-y+p*2};
+  }
+  function fitMapCam(W,H){var b=mapBounds();return {cx:b.x+b.w/2,cy:b.y+b.h/2,z:Math.min(W/b.w,H/b.h)}}
+  function frameStroke(f,g,dark,q){
+    var hit=q&&(f.title||"").toLowerCase().indexOf(q)>=0,isSel=mapSel===f.id,isHov=mapHov===f.id;
+    if(q&&!hit)g.globalAlpha=.26;
+    g.strokeStyle=(isSel||hit)?(dark?"#EDEDEA":"#111")
+      :isHov?(dark?"rgba(235,235,230,.8)":"rgba(40,45,52,.7)")
+      :(dark?"rgba(200,200,195,.45)":"rgba(60,66,72,.4)");
+    g.lineWidth=isSel?2:(hit||isHov?1.6:1);
+    return {hit:hit,isSel:isSel,isHov:isHov};
+  }
+  function drawMap(){
+    if(!mapOn||!mc)return;
+    var box=mc.parentNode,W=box.clientWidth,H=box.clientHeight,dpr=Math.min(2,devicePixelRatio||1);
+    mc.width=W*dpr;mc.height=H*dpr;
+    var g=mc.getContext("2d");g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+    var base=fitMapCam(W,H),m=mapCam||base,k=m.z,ox=W/2-m.cx*k,oy=H/2-m.cy*k;
+    var dark=!!mcfg.dark,q=((mq&&mq.value)||"").trim().toLowerCase(),nHit=0;
+    mapHit=[];
+    frames.forEach(function(f){
+      var fx=f.x*k+ox,fy=f.y*k+oy,fw=f.w*k,fh=f.h*k,s=frameStroke(f,g,dark,q);
+      if(q&&s.hit)nHit++;
+      if(s.isSel){g.fillStyle=dark?"rgba(255,255,255,.14)":"rgba(30,34,40,.10)";g.fillRect(fx,fy,fw,fh)}
+      else if(s.isHov){g.fillStyle=dark?"rgba(255,255,255,.07)":"rgba(30,34,40,.05)";g.fillRect(fx,fy,fw,fh)}
+      else if(s.hit){g.fillStyle=dark?"rgba(255,255,255,.09)":"rgba(0,0,0,.055)";g.fillRect(fx,fy,fw,fh)}
+      g.strokeRect(fx,fy,fw,fh);g.globalAlpha=1;
+      mapHit.push({f:f,x:fx,y:fy,w:fw,h:fh});
+    });
+    g.fillStyle=dark?"rgba(235,235,230,.34)":"rgba(40,45,55,.26)";
+    var vx=-ox/k,vy=-oy/k,vx2=(W-ox)/k,vy2=(H-oy)/k,rs=cardRects(),step=rs.length>20000?Math.ceil(rs.length/20000):1;
+    for(var i=0;i<rs.length;i+=step){
+      var r=rs[i];if(r.x+r.w<vx||r.x>vx2||r.y+r.h<vy||r.y>vy2)continue;
+      g.fillRect(r.x*k+ox,r.y*k+oy,Math.max(1,r.w*k),Math.max(1,r.h*k));
+    }
+    frames.forEach(function(f){frameStroke(f,g,dark,q);g.strokeRect(f.x*k+ox,f.y*k+oy,f.w*k,f.h*k);g.globalAlpha=1});
+    if(mn)mn.textContent=q?(nHit+"/"+frames.length):(frames.length+"");
+    mapM={k:k,ox:ox,oy:oy};
+    if(mfit)mfit.style.display=(mapCam&&k>base.z*1.02)?"":"none";
+    if(mz)mz.textContent=k>base.z*1.02?Math.round(k/base.z*100)+"%":"";
+  }
+  function mapZoom(f,px,py){
+    var box=mc.parentNode,W=box.clientWidth,H=box.clientHeight,base=fitMapCam(W,H),m=mapCam||base;
+    var nz=clamp(m.z*f,base.z*.9,base.z*60),wx=(px-W/2)/m.z+m.cx,wy=(py-H/2)/m.z+m.cy;
+    mapCam={z:nz,cx:wx-(px-W/2)/nz,cy:wy-(py-H/2)/nz};
+    if(nz<=base.z*1.001)mapCam=null;
+    drawMap();
+  }
+  function mapAt(ev){
+    var r=mc.getBoundingClientRect(),lx=ev.clientX-r.left,ly=ev.clientY-r.top;
+    var hs=mapHit.filter(function(h){return lx>=h.x&&lx<=h.x+h.w&&ly>=h.y&&ly<=h.y+h.h});
+    return hs.length?hs.sort(function(a,b){return a.w*a.h-b.w*b.h})[0]:null;
+  }
+  // 地图打开时，底部那条小工具栏挪到地图上方，不叠在一起
+  function placeBar(){if(bar)bar.style.bottom=mapOn&&map?(map.offsetHeight+16+8)+"px":""}
+  function setMap(on){
+    if(!map||!mc)return;
+    mapOn=on;map.classList.toggle("on",on);if(mb)mb.classList.toggle("on",on);
+    if(on){
+      if(mcfg.w)map.style.width=mcfg.w+"px";
+      if(mcfg.h)mc.parentNode.style.height=mcfg.h+"px";
+      drawMap();
+    }else if(mq){mq.value=""}
+    placeBar();
+  }
+  if(map&&mc){
+    mc.addEventListener("wheel",function(e){
+      e.preventDefault();e.stopPropagation();
+      var r=mc.getBoundingClientRect();mapZoom(Math.exp(-e.deltaY*.0022),e.clientX-r.left,e.clientY-r.top);
+    },{passive:false});
+    mc.addEventListener("dblclick",function(e){e.stopPropagation();mapCam=null;drawMap()});
+    mc.addEventListener("pointerdown",function(e){
+      e.stopPropagation();
+      var hit=mapAt(e),box=mc.parentNode,W=box.clientWidth,H=box.clientHeight;
+      var sx=e.clientX,sy=e.clientY,m0=mapCam?{cx:mapCam.cx,cy:mapCam.cy,z:mapCam.z}:fitMapCam(W,H),moved=false;
+      function mv(ev){
+        var dx=ev.clientX-sx,dy=ev.clientY-sy;
+        if(!moved&&Math.abs(dx)+Math.abs(dy)<4)return;
+        moved=true;box.classList.add("drag");
+        mapCam={z:m0.z,cx:m0.cx-dx/m0.z,cy:m0.cy-dy/m0.z};drawMap();
+      }
+      function done(){
+        removeEventListener("pointermove",mv);removeEventListener("pointerup",done);
+        box.classList.remove("drag");
+        if(moved)return;                       // 拖过就只是平移地图，不跳转
+        if(hit){mapSel=hit.f.id;boxTo({x:hit.f.x,y:hit.f.y,w:hit.f.w,h:hit.f.h},120,1.4)}
+        else if(mapM){
+          var r=mc.getBoundingClientRect(),px=(e.clientX-r.left-mapM.ox)/mapM.k,py=(e.clientY-r.top-mapM.oy)/mapM.k;
+          mapSel=null;go(-px*tgt.z,-py*tgt.z,tgt.z);
+        }
+        drawMap();
+      }
+      addEventListener("pointermove",mv);addEventListener("pointerup",done);
+    });
+    mc.addEventListener("pointermove",function(e){
+      var hit=mapAt(e),id=hit?hit.f.id:null;
+      if(hit&&mtip){
+        mtip.textContent=hit.f.title||((cfg.en&&cfg.en.page)||"Page");mtip.classList.add("on");
+        var b=mc.parentNode.getBoundingClientRect(),lx=e.clientX-b.left+12,ly=e.clientY-b.top+14;
+        var tw=mtip.offsetWidth,th=mtip.offsetHeight;
+        if(lx+tw>b.width-4)lx=Math.max(4,b.width-tw-4);
+        if(ly+th>b.height-4)ly=e.clientY-b.top-th-8;
+        mtip.style.left=lx+"px";mtip.style.top=ly+"px";
+      }else if(mtip)mtip.classList.remove("on");
+      if(id!==mapHov){mapHov=id;drawMap()}
+    });
+    mc.addEventListener("pointerleave",function(){if(mtip)mtip.classList.remove("on");if(mapHov){mapHov=null;drawMap()}});
+    if(mq){mq.addEventListener("input",drawMap);
+      mq.addEventListener("keydown",function(e){if(e.key==="Escape"){mq.value="";drawMap();mq.blur()}})}
+    if(mfit)mfit.addEventListener("click",function(e){e.stopPropagation();mapCam=null;drawMap()});
+    var mx=document.getElementById("mapx");if(mx)mx.addEventListener("click",function(){setMap(false)});
+    var grip=document.getElementById("mapgrip");
+    if(grip)grip.addEventListener("pointerdown",function(e){
+      e.preventDefault();e.stopPropagation();
+      var r=map.getBoundingClientRect(),sx=e.clientX,sy=e.clientY,w0=r.width,h0=mc.parentNode.clientHeight;
+      function mv(ev){
+        mcfg.w=clamp(w0-(ev.clientX-sx),260,Math.min(900,innerWidth-40));
+        mcfg.h=clamp(h0-(ev.clientY-sy),180,Math.min(760,innerHeight-120));
+        map.style.width=mcfg.w+"px";mc.parentNode.style.height=mcfg.h+"px";drawMap();placeBar();
+      }
+      function done(){removeEventListener("pointermove",mv);removeEventListener("pointerup",done)}
+      addEventListener("pointermove",mv);addEventListener("pointerup",done);
+    });
+    addEventListener("resize",function(){if(mapOn)drawMap()});
+    if(mcfg.on)setMap(true);
+  }
+
   if(bar)bar.addEventListener("click",function(e){
     var b=e.target.closest("[data-a]");if(!b)return;gone();
-    if(b.getAttribute("data-a")==="fit")fit(false);else zoomAt(1/tgt.z,innerWidth/2,innerHeight/2,true);
+    var a=b.getAttribute("data-a");
+    if(a==="fit")fit(false);else if(a==="map")setMap(!mapOn);else zoomAt(1/tgt.z,innerWidth/2,innerHeight/2,true);
   });
   addEventListener("keydown",function(e){
     if(e.ctrlKey||e.metaKey||e.altKey)return;
+    if(e.target&&e.target.closest&&e.target.closest("input,textarea"))return;   // 地图的查找框里打字
     if(e.key===" "){if(!space){space=true;stage.classList.add("space")}e.preventDefault();return}
+    if(e.key==="Escape"){if(bibOn)bibFocus(bibOn);return}
     var k=(e.key||"").toLowerCase(),cx=innerWidth/2,cy=innerHeight/2;
     if(k==="f")fit(false);
     else if(k==="0")zoomAt(1/tgt.z,cx,cy,true);
     else if(k==="+"||k==="=")zoomAt(1.25,cx,cy,true);
     else if(k==="-"||k==="_")zoomAt(.8,cx,cy,true);
+    else if(k==="m")setMap(!mapOn);
+    else if(k==="z"){
+      // 快照里没有「选中」，Z 放大的是指针下面那张卡片或那份稿子；没指着东西就退回上一次的视角
+      var at=document.elementFromPoint(lastX,lastY),el=at&&at.closest&&at.closest("#world .card,#world .doc");
+      if(el)focus(el);
+      else if(camBack){go(camBack.x,camBack.y,camBack.z);camBack=null;focusEl=null}
+    }
     else return;
     gone();
   });
