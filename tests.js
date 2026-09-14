@@ -4354,7 +4354,10 @@ group("websnap 网页快照", async (c) => {
   const tBib = await tf();
   await pg.bringToFront();
   await pg.mouse.click(dot.x + dot.w / 2, dot.y + dot.h / 2);
-  await c.wait(700);                               // 淡出有 0.18s 的过渡
+  // 淡出有 0.18s 的过渡：等它真的到位再量（这一步偶尔比 700ms 更慢）
+  await pg.waitForFunction(() => +getComputedStyle(document.querySelector('.card[data-id="q2"]')).opacity < 0.5,
+    { timeout: 8000 }).catch(() => {});
+  await c.wait(150);
   const bf = await R(() => ({
     body: document.body.classList.contains("bibfocus"),
     on: [...document.querySelectorAll(".card.bibon")].map((e) => e.dataset.id).sort().join(","),
@@ -4821,6 +4824,37 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   }, fs0.readFileSync(vend("pdf.worker.min.js"), "utf8"));
   if (!ready) { c.ok("pdf.js 没能装起来（已跳过）", false); return; }
   const pdfB64 = fs0.readFileSync(path0.resolve(__dirname, "test.pdf")).toString("base64");
+
+  // 先走一遍真实入口：菜单 → 选文件 → 弹出面板 → 点导入。
+  // 上一版就是漏了这条路：能直接调 importPDF，但面板的函数被误删，用户点菜单什么都不会发生。
+  const flow = await c.run(async (b64) => {
+    const bin = atob(b64), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const f = new File([u], "flow.pdf", { type: "application/pdf" });
+    S.cards = []; S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render();
+    const inMenu = boardMenu(0, 0) || true;
+    const labels = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent);
+    closeMenus();
+    const types = ["askPDF", "importPDF", "loadPdfJs", "pdfItems", "parsePages", "buildPtx", "ptxText", "quoteToCard"]
+      .filter((k) => typeof window[k] !== "function");
+    if (typeof askPDF !== "function") return { missing: types, menu: labels.some((z) => z.includes(t("importPDF"))) };
+    askPDF(f, { x: 0, y: 0 });
+    await new Promise((z) => setTimeout(z, 200));
+    const P = $("pop");
+    const panel = { on: P.classList.contains("on"), go: !!P.querySelector("#pdgo"),
+      range: !!P.querySelector("#pdr"), widths: P.querySelectorAll("#pdw button").length };
+    P.querySelector("#pdr").value = "2";
+    P.querySelector("#pdgo").click();
+    for (let i = 0; i < 200 && !S.cards.length; i++) await new Promise((z) => setTimeout(z, 100));
+    await new Promise((z) => setTimeout(z, 300));
+    return { missing: types, menu: labels.some((z) => z.includes(t("importPDF"))), panel,
+      made: S.cards.length, page: (S.cards[0] || {}).pdf, closed: !P.classList.contains("on") };
+  }, pdfB64);
+  c.ok("PDF 的几个函数都在（面板、导入、取文字……）" + (flow.missing.length ? "，缺：" + flow.missing.join("、") : ""), flow.missing.length === 0);
+  c.ok("画布右键菜单里有导入 PDF 页面", flow.menu);
+  c.ok("选了文件会弹出面板：页码、宽度、清晰度、导入按钮都在",
+    flow.panel && flow.panel.on && flow.panel.go && flow.panel.range && flow.panel.widths === 4);
+  c.ok("在面板里填页码、点导入，页面真的进来了", flow.made === 1 && flow.page && flow.page.page === 2 && flow.closed);
 
   const r = await c.run(async (b64) => {
     const bin = atob(b64), u = new Uint8Array(bin.length);
