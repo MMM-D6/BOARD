@@ -643,10 +643,19 @@
   /* 只有"字"本身接收指针：行与行之间的空白、页边、插图上照样是拖动整页。
      没选中这一页时连字也不拦，点一下选中它（或锁定它）之后才开始划选 */
   .card.sel .pt span,.card.lkpos .pt span{pointer-events:auto;cursor:text}
-  /* 在页面上划选的时候，把别处一律设成不可选：
-     否则手一拖出这张卡片，浏览器就顺着把整个界面都选进去（满屏变蓝） */
+  /* 在页面上划选的时候，只有"正在划的这一页"可选，别处（包括另一页 PDF）一律不可选：
+     否则手一拖出这张卡片，浏览器就顺着把中间的东西全选进去，满屏变蓝 */
   body.ptdrag,body.ptdrag *{-webkit-user-select:none !important;user-select:none !important}
-  body.ptdrag .pt span{-webkit-user-select:text !important;user-select:text !important}
+  body.ptdrag .pt.ptactive,body.ptdrag .pt.ptactive span{-webkit-user-select:text !important;user-select:text !important}
+  /* 手扫过行与行之间的空白时，落点如果落到下面的图上，选区会缩回去再弹出来，看起来一直在跳闪。
+     跟 pdf.js 一样在文字层末尾垫一块透明的"接盘"元素：划的过程中它铺满整层、垫在字的下面，
+     空白处的落点就落在文字之后，选区只会往前长，不会回跳 */
+  .card .pt .pte{display:block;position:absolute;left:0;right:0;top:100%;bottom:0;z-index:-1;
+    pointer-events:none;-webkit-user-select:none;user-select:none}
+  body.ptdrag .pt.ptactive{pointer-events:auto;overflow:visible}
+  /* 划的时候这块"接盘"铺得比卡片还大：手甩到画布空白处，落点也还在这一层里，
+     选区只会停在原地或继续往前，不会一下子缩回去 */
+  body.ptdrag .pt.ptactive .pte{top:-6000px;left:-6000px;right:-6000px;bottom:-6000px;pointer-events:auto}
   .card .pt span{position:absolute;white-space:pre;transform-origin:0 0;color:transparent;
     background:none;line-height:1;font-family:"IBM Plex Sans",sans-serif}
   .card .pt span::selection{background:rgba(90,140,255,.35)}
@@ -656,13 +665,6 @@
     background:rgba(20,20,20,.5);color:#fff;font:400 10px/1.5 "IBM Plex Mono",monospace;
     pointer-events:none;opacity:0;transition:opacity .15s}
   .card:hover .pdfb{opacity:.75}
-  #ptbar{position:fixed;z-index:96;display:none;gap:1px;padding:3px;border-radius:8px;
-    background:var(--glass);border:1px solid var(--glassline);backdrop-filter:blur(10px) saturate(1.3);
-    -webkit-backdrop-filter:blur(10px) saturate(1.3);box-shadow:0 6px 20px rgba(0,0,0,.12)}
-  #ptbar.on{display:flex}
-  #ptbar button{height:24px;padding:0 9px;border:none;border-radius:6px;background:none;
-    color:var(--pfg);font:400 12px/1 "IBM Plex Sans",sans-serif;cursor:pointer;white-space:nowrap}
-  #ptbar button:hover{background:var(--pfg);color:var(--panel)}
   #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:95;
     background:rgba(20,20,20,.9);color:#fff;padding:8px 14px;border-radius:8px;font-size:12.5px;
     opacity:0;transition:opacity .2s;pointer-events:none}
@@ -876,7 +878,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   expOpts:"Options",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag to pan, scroll or pinch to zoom, press Z over a card to zoom in, M for the page map. Text can be selected and copied.",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
-  importPDF:"Import PDF pages…",pdfRange:"Pages",pdfRangePh:"All pages, or 1-3,7,12-",pdfWidth:"Card width",pdfDpi:"Sharpness",pdfDpi2:"Normal",pdfDpi3:"Sharper",pdfNote:"Each page becomes a card: the page as you see it, with the text selectable on top. Select any passage to copy it or turn it into its own card, linked back to the page.",pdfWork:"Importing the PDF…",pdfDone:"Pages imported:",pdfBad:"This PDF could not be read.",pdfNoPage:"No pages matched.",pdfNoLib:"The PDF library could not be loaded. Please check your connection and try again.",pdfToCard:"New card",pdfCopied:"Copied",pdfMade:"Card created from the selection",pdfRead:"Reading mode (locks the page in place)",pdfLockedHint:"This page is locked so you can select text. Unlock it to move it.",imgOrig:"Original size",imgOrigNote:"Images now come in at their own size, with no limit. Existing images are unchanged; use Fit selected or Fit all to apply it.",copy:"Copy",
+  importPDF:"Import PDF pages…",pdfRange:"Pages",pdfRangePh:"All pages, or 1-3,7,12-",pdfWidth:"Card width",pdfDpi:"Sharpness",pdfDpi2:"Normal",pdfDpi3:"Sharper",pdfNote:"Each page becomes a card: the page as you see it, with the text selectable on top. Select any passage and copy it as usual.",pdfWork:"Importing the PDF…",pdfDone:"Pages imported:",pdfBad:"This PDF could not be read.",pdfNoPage:"No pages matched.",pdfNoLib:"The PDF library could not be loaded. Please check your connection and try again.",pdfRead:"Reading mode (locks the page in place)",pdfLockedHint:"This page is locked so you can select text. Unlock it to move it.",imgOrig:"Original size",imgOrigNote:"Images now come in at their own size, with no limit. Existing images are unchanged; use Fit selected or Fit all to apply it.",copy:"Copy",
   snapPwShow:"Show",snapPwHide:"Hide",snapPwGen:"Generate",snapPwCopied:"A strong password was generated and copied. Keep it in your password manager.",snapPwWeak:"Too easy to guess",snapPwOk:"Acceptable",snapPwStrong:"Strong",snapPwWeakBlock:"This password is too easy to guess. Make it longer, or use Generate.",
   readingN:"Reading the file, cards so far:",
   filePerm:"Not auto-saving to the file: permission is needed again.",fileIO:"Not auto-saving to the file: the last write failed. It may have been moved, deleted or locked by another app.",fileBig:"Not auto-saving to the file: it is past the limit of roughly 500 MB for a single file.",fileResume:"Resume",fileLost:"Writing to the file failed, so auto-save to the file has stopped. See the note at the bottom left.",filePermStart:"The linked file needs your permission again. Click Resume at the bottom left.",storeFail:"Saving inside the browser failed. Please save to a file now.",
@@ -1069,7 +1071,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   expOpts:"包含内容",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动平移，滚轮或双指缩放，指着卡片按 Z 放大，M 打开页面地图。文字可以划选复制。",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
-  importPDF:"导入 PDF 页面…",pdfRange:"页码",pdfRangePh:"留空表示全部，或 1-3,7,12-",pdfWidth:"卡片宽度",pdfDpi:"清晰度",pdfDpi2:"普通",pdfDpi3:"更清晰",pdfNote:"每一页变成一张卡片：版面跟原文一样，文字可以直接划选。划选之后可以复制，也可以就地变成一张卡片，并自动连回这一页。",pdfWork:"正在导入 PDF…",pdfDone:"已导入页数：",pdfBad:"这个 PDF 读不出来。",pdfNoPage:"没有匹配的页码。",pdfNoLib:"PDF 解析库加载失败，请检查网络后重试。",pdfToCard:"新建卡片",pdfCopied:"已复制",pdfMade:"已根据划选新建卡片",pdfRead:"阅读模式（锁住位置，可划选）",pdfLockedHint:"这一页锁着，所以能划选文字；要搬动它请先解锁。",imgOrig:"原尺寸",imgOrigNote:"之后导入的图片按原始尺寸插入，不再压缩。已有的图片不变，可用「适应选中」或「适应全部」套用。",copy:"复制",
+  importPDF:"导入 PDF 页面…",pdfRange:"页码",pdfRangePh:"留空表示全部，或 1-3,7,12-",pdfWidth:"卡片宽度",pdfDpi:"清晰度",pdfDpi2:"普通",pdfDpi3:"更清晰",pdfNote:"每一页变成一张卡片：版面跟原文一样，文字可以直接划选，选中之后照常复制即可。",pdfWork:"正在导入 PDF…",pdfDone:"已导入页数：",pdfBad:"这个 PDF 读不出来。",pdfNoPage:"没有匹配的页码。",pdfNoLib:"PDF 解析库加载失败，请检查网络后重试。",pdfRead:"阅读模式（锁住位置，可划选）",pdfLockedHint:"这一页锁着，所以能划选文字；要搬动它请先解锁。",imgOrig:"原尺寸",imgOrigNote:"之后导入的图片按原始尺寸插入，不再压缩。已有的图片不变，可用「适应选中」或「适应全部」套用。",copy:"复制",
   snapPwShow:"显示",snapPwHide:"隐藏",snapPwGen:"生成",snapPwCopied:"已生成强密码并复制到剪贴板，请存进密码管理器。",snapPwWeak:"太容易猜",snapPwOk:"可以",snapPwStrong:"强",snapPwWeakBlock:"这个密码太容易猜，请再长一些，或者点「生成」。",
   readingN:"正在读取文件，已读卡片：",
   filePerm:"文件没有在自动保存：需要重新授权。",fileIO:"文件没有在自动保存：上次写入失败，文件可能被移动、删除或被别的程序占用。",fileBig:"文件没有在自动保存：已超过单个文件约 500MB 的上限。",fileResume:"恢复",fileLost:"写入文件失败，自动保存到文件已经停止，见左下角的提示。",filePermStart:"上次绑定的文件需要重新授权，请点左下角的「恢复」。",storeFail:"浏览器内的保存失败了，请立刻保存到文件。",
@@ -4111,7 +4113,7 @@ const MANUAL=[
 
  ["导入 PDF 页面","DAORUPDF",`
   <p>画布右键 <b>导入 PDF 页面…</b>，可以只导某几页（<code>1-3,7,12-</code>，留空是全部）。每一页变成一张卡片：版面跟原文一样，但上面的文字可以直接用鼠标划选。</p>
-  <p>划选之后会浮出两个按钮：<b>新建卡片</b> 把这段话变成一张卡片，放在这一页右边并自动连回来；<b>复制</b> 就是复制。跨行的句子会拼成连贯的一段，英文里被连字号断开的词也会接回去。</p>
+  <p>划选之后按 <kbd>⌘C</kbd> 复制即可：跨行的句子会拼成连贯的一段，英文里被连字号断开的词也会接回去。要把它变成卡片，在画布上新建一张文字卡片粘进去就行。</p>
   <p><b>什么时候能划选：</b>先点一下这一页把它选中，之后在字上拖动就是划选；没选中时怎么拖都是搬动整页。选中之后，行与行之间的空白、页边、插图上照样能拖走整页。</p>
   <p>要长时间读一页，可以在卡片右键里打开<b>阅读模式</b>（就是锁定）：位置钉住不动，不必先选中也能随时划选。</p>
   <p class="tip">导入需要联网取一次解析库；把 vendor/pdf.min.js 与 vendor/pdf.worker.min.js 放进程序所在目录，离线也能导入。已经导入的页面不受影响，离线照常看、照常划选。</p>`],
@@ -5536,34 +5538,6 @@ async function importPDF(file,p,opt){
   toast(t("pdfDone")+" "+made.length);
   return made;
 }
-// 划选之后浮出来的小按钮：把选中的文字变成一张卡片，并连回这一页
-function pdfQuoteBar(){
-  let bar=$("ptbar");
-  if(!bar){
-    bar=document.createElement("div");bar.id="ptbar";
-    bar.innerHTML=`<button data-a="card"></button><button data-a="copy"></button>`;
-    document.body.appendChild(bar);
-    bar.addEventListener("pointerdown",e=>e.stopPropagation());
-    bar.addEventListener("click",e=>{
-      const b=e.target.closest("[data-a]");if(!b)return;
-      const info=bar._info;if(!info)return;
-      if(b.dataset.a==="copy"){try{navigator.clipboard.writeText(info.text);toast(t("pdfCopied"))}catch(_){};hideQuoteBar();return}
-      quoteToCard(info);
-    });
-  }
-  return bar;
-}
-function hideQuoteBar(){const b=$("ptbar");if(b){b.classList.remove("on");b._info=null}}
-function showQuoteBar(cardId,text,rect){
-  const bar=pdfQuoteBar();
-  bar.querySelector('[data-a="card"]').textContent=t("pdfToCard");
-  bar.querySelector('[data-a="copy"]').textContent=t("copy");
-  bar._info={cardId,text};
-  bar.classList.add("on");
-  const w=bar.offsetWidth||150,h=bar.offsetHeight||28;
-  bar.style.left=Math.round(Math.min(Math.max(8,rect.left+rect.width/2-w/2),innerWidth-w-8))+"px";
-  bar.style.top=Math.round(Math.max(8,rect.top-h-8))+"px";
-}
 // 文字层是真节点，密排的一页可能上千个。视野里同时铺着的总量设个上限，
 // 免得几十页锁定的 PDF 同时在画面上时拖动变卡；超出上限的页面这一刻不铺文字，
 // 滚开一些、别的页面撤下去以后自然会补上（卡片进出视野本来就会重建）
@@ -5585,6 +5559,7 @@ function buildPtx(wrap,oc,im){
     sp.dataset.w=it.w;sp.dataset.y=it.y;sp.dataset.x=it.x;sp.dataset.h=it.h;
     f.appendChild(sp);
   });
+  const pad=document.createElement("div");pad.className="pte";f.appendChild(pad);
   L.appendChild(f);wrap.appendChild(L);
   L._ar=oc.ar||1.414;
   requestAnimationFrame(()=>fitPtx(L,im));
@@ -5628,39 +5603,33 @@ function ptxAscent(){
   }catch(e){}
   return ptxAsc=ptxAsc||.8;
 }
-// 划选：拖的过程中什么都不弹（早先每动一下就重排一次小按钮，看起来一直在跳），
-// 松手之后才把它浮出来。整个拖动期间别处不可选，手拖出卡片也不会把界面选成一片蓝。
+// 划选 PDF 页面时的两条保护：
+//   1) 从按下到松手，只有"正在划的这一页"可选，别处一律不可选。
+//      没有这一层，手一拖出卡片，浏览器就顺着把中间的东西全选进去，满屏变蓝。
+//   2) 复制时按几何关系重新拼一遍（同一行补空格、换行接断词），否则得到的是一堆挨在一起的碎片。
 let ptDragging=false;
 function ptxWatch(){
   addEventListener("pointerdown",e=>{
-    if(!(e.target.closest&&e.target.closest(".pt span")))return;
-    ptDragging=true;document.body.classList.add("ptdrag");hideQuoteBar();
+    const sp=e.target.closest&&e.target.closest(".pt span");
+    if(!sp)return;
+    document.querySelectorAll(".pt.ptactive").forEach(z=>z.classList.remove("ptactive"));
+    const layer=sp.closest(".pt");if(layer)layer.classList.add("ptactive");
+    ptDragging=true;document.body.classList.add("ptdrag");
   },true);
   const end=()=>{
     if(!ptDragging)return;
     ptDragging=false;document.body.classList.remove("ptdrag");
-    setTimeout(ptxBar,0);                    // 等这一轮 selectionchange 落定
   };
   addEventListener("pointerup",end,true);
   addEventListener("pointercancel",end,true);
   addEventListener("blur",end);              // 手松在窗口外面也要收尾
-  document.addEventListener("selectionchange",()=>{
-    if(ptDragging)return;                    // 拖动中不动小按钮
-    ptxBar();
-  });
-  addEventListener("scroll",hideQuoteBar,true);
-}
-function ptxBar(){
-  const s=getSelection();
-  if(!s||s.isCollapsed){hideQuoteBar();return}
-  const layer=ptxLayerOf(s);
-  if(!layer){hideQuoteBar();return}
-  const cd=layer.closest(".card");if(!cd){hideQuoteBar();return}
-  const txt=ptxText(s);
-  if(!txt){hideQuoteBar();return}
-  const r=s.getRangeAt(0).getBoundingClientRect();
-  if(!r.width&&!r.height){hideQuoteBar();return}
-  showQuoteBar(cd.dataset.id,txt,r);
+  addEventListener("copy",e=>{
+    const sl=getSelection();if(!sl||sl.isCollapsed)return;
+    if(!ptxLayerOf(sl))return;
+    const txt=ptxText(sl);if(!txt)return;
+    const dt=e.clipboardData;if(!dt)return;
+    e.preventDefault();dt.setData("text/plain",txt);
+  },true);
 }
 // 取划选到的文字：按 DOM 顺序（就是 PDF 里的内容顺序）走一遍，
 // 同一行之间按间隙决定要不要补空格，换行时西文断词接回去、中文直接相连
@@ -5700,24 +5669,6 @@ function ptxLayerOf(s){
   const n=s.anchorNode,el=n&&(n.nodeType===1?n:n.parentElement);
   return el&&el.closest?el.closest(".card .pt"):null;
 }
-function quoteToCard(info){
-  const src=card(info.cardId);if(!src||lock)return;
-  hideQuoteBar();
-  const sl=getSelection();if(sl)sl.removeAllRanges();
-  snap();
-  const w=Math.max(240,Math.min(420,Math.round(src.w*.8)));
-  const c={id:uid(),x:Math.round(src.x+src.w+60),y:Math.round(src.y),w,
-    text:info.text,s:newStyle()};
-  // 同一页引出的卡片依次往下排，不叠在一起
-  const sib=S.cards.filter(z=>z.from===src.id);
-  c.y=Math.round(src.y+sib.length*120);
-  c.from=src.id;
-  S.cards.push(c);
-  S.links.push({id:uid(),a:src.id,b:c.id,...S.linkDef});
-  invalidateIndex();sel=[c.id];selLink=null;render();save();
-  toast(t("pdfMade"));
-}
-
 /* ================= 网页快照 ================= */
 // 把画布此刻的样子原样存成一个只读网页：永久留住某个空间状态，也方便发给导师看进度。
 // 做法不是另写一套排版去"模仿"画布，而是直接拿画布自己的 DOM 和自己的 CSS：

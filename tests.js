@@ -4835,7 +4835,7 @@ group("pdfimport 导入 PDF 页面", async (c) => {
     const inMenu = boardMenu(0, 0) || true;
     const labels = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent);
     closeMenus();
-    const types = ["askPDF", "importPDF", "loadPdfJs", "pdfItems", "parsePages", "buildPtx", "ptxText", "quoteToCard"]
+    const types = ["askPDF", "importPDF", "loadPdfJs", "pdfItems", "parsePages", "buildPtx", "ptxText", "ptxLayerOf", "ptxWatch"]
       .filter((k) => typeof window[k] !== "function");
     if (typeof askPDF !== "function") return { missing: types, menu: labels.some((z) => z.includes(t("importPDF"))) };
     askPDF(f, { x: 0, y: 0 });
@@ -4948,61 +4948,59 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   await c.page.mouse.move(box[2], box[3], { steps: 8 });
   await c.page.mouse.up();
   await c.wait(400);
-  const s1 = await c.run(() => ({
-    bar: $("ptbar").classList.contains("on"), text: ($("ptbar")._info || {}).text || "",
-    moved: S.cards[0].x !== 0, cam: cam.x + "," + cam.y,
-  }));
-  c.ok("在页面上拖动是划选，卡片没有被拖走，画布也没动", !s1.moved && s1.cam === before.cam);
-  c.ok("划选之后浮出小按钮", s1.bar);
+  const s1 = await c.run((id) => ({
+    moved: card(id).x !== 0, cam: cam.x + "," + cam.y,
+    txt: ptxText(getSelection()),
+    inPage: !!ptxLayerOf(getSelection()),
+    len: getSelection().toString().length,
+  }), r.id);
+  c.ok("在页面上拖动是划选，卡片没有被拖走，画布也没动", !s1.moved && s1.cam === before.cam && s1.len > 0);
   c.ok("跨行的句子拼成连贯的一段，断开的词接了回去",
-    /a garment of data\. Sarmakari/.test(s1.text) && /digital-only fashion reframes/.test(s1.text));
-  await c.page.click('#ptbar [data-a="card"]');
-  await c.wait(400);
-  const q = await c.run(() => {
-    const z = S.cards[S.cards.length - 1];
-    return { text: z.text, from: z.from, n: S.cards.length, links: S.links.length,
-      linked: S.links.some((l) => l.b === z.id), sel: sel.join(","), id: z.id,
-      bar: $("ptbar").classList.contains("on"), stillSel: getSelection().toString() };
-  });
-  c.ok("点「新建卡片」，划选的文字变成一张新卡片", q.n === before.cards + 1 && /a garment of data/.test(q.text));
-  c.ok("新卡片连回这一页，并记下出处", q.links === before.links + 1 && q.linked && q.from === r.id);
-  c.ok("新卡片被选中，小按钮收起，选区也清掉", q.sel === q.id && !q.bar && !q.stillSel);
+    /a garment of data\. Sarmakari/.test(s1.txt) && /digital-only fashion reframes/.test(s1.txt));
+  c.ok("选区只落在这一页里", s1.inPage);
 
-  // 划选不会跑出这张卡片，拖动期间也不弹小按钮（早先手一拖出卡片，整个界面就被选成一片蓝）
+  // 复制：按几何关系重新拼过，而不是一堆碎片挨在一起
+  const copied = await c.run(() => {
+    let out = null;
+    const ev = new ClipboardEvent("copy", { bubbles: true, cancelable: true,
+      clipboardData: new DataTransfer() });
+    document.dispatchEvent(ev);
+    out = ev.clipboardData.getData("text/plain");
+    return { out, prevented: ev.defaultPrevented };
+  });
+  c.ok("按复制拿到的是拼好的整段文字", copied.prevented && /a garment of data\. Sarmakari/.test(copied.out));
+
+  // 划选不会跑出这一页；拖到空白处也不会让选区一缩一放（早先看起来就是一直在跳闪）
   const runaway = await c.run((id) => {
-    sel = [id]; paintSel();                       // 先选中这一页，才谈得上划选
+    sel = [id]; paintSel();
     const sp = [...document.querySelectorAll('.card[data-id="' + id + '"] .pt span')][1].getBoundingClientRect();
     S.cards.push({ id: "outside", x: -900, y: 0, w: 300, text: "另一张卡片的正文", s: { ...DEF } });
     invalidateIndex(); render();
-    window.__flips = 0;
-    const bar = pdfQuoteBar();
-    new MutationObserver(() => { if (bar.classList.contains("on")) window.__flips++; }).observe(bar, { attributes: true });
-    return { x: sp.x + 3, y: sp.y + sp.height / 2, w: sp.width, h: sp.height,
-      inView: sp.x > 0 && sp.x < innerWidth && sp.y > 0 && sp.y < innerHeight,
-      pe: getComputedStyle(document.querySelector('.card[data-id="' + id + '"] .pt span')).pointerEvents };
+    return { x: sp.x + 3, y: sp.y + sp.height / 2 };
   }, r.id);
   await c.page.mouse.move(runaway.x, runaway.y);
   await c.page.mouse.down();
-  // 一路拖到卡片外面很远的地方（最后停在起点的右下方，选区才不会退成空）
-  for (const [x, y] of [[runaway.x + 200, runaway.y + 90], [60, 880], [1380, 900]])
+  const lens = [];
+  for (const [x, y] of [[runaway.x + 160, runaway.y + 40], [runaway.x + 200, runaway.y + 120],
+    [60, 840], [1360, 860]]) {          // 一路甩到画布空白处，但别甩出窗口
     await c.page.mouse.move(x, y, { steps: 5 });
+    lens.push(await c.run(() => getSelection().toString().length));
+  }
   const during = await c.run(() => ({
     dragging: document.body.classList.contains("ptdrag"),
-    bar: !!document.querySelector("#ptbar.on"),
+    active: document.querySelectorAll(".pt.ptactive").length,
     other: getSelection().containsNode(document.querySelector('.card[data-id="outside"] .cap'), true),
     ui: getSelection().containsNode($("status"), true),
     len: getSelection().toString().length,
   }));
   await c.page.mouse.up();
-  await c.wait(300);
-  const afterUp = await c.run(() => ({ dragging: document.body.classList.contains("ptdrag"),
-    bar: !!document.querySelector("#ptbar.on"), flips: window.__flips,
-    other: getSelection().containsNode(document.querySelector('.card[data-id="outside"] .cap'), true) }));
+  await c.wait(200);
+  const afterUp = await c.run(() => ({ dragging: document.body.classList.contains("ptdrag") }));
   await c.run(() => { S.cards = S.cards.filter((z) => z.id !== "outside"); invalidateIndex(); render(); });
-  c.ok("手拖出卡片也不会把别的卡片和界面选进去", !during.other && !during.ui && !afterUp.other && during.len > 0);
-  c.ok("拖动过程中小按钮不出现，松手才浮出来（不再一路闪）", !during.bar && during.dragging && afterUp.bar && afterUp.flips === 1);
+  c.ok("手拖出卡片也不会把别的卡片和界面选进去", !during.other && !during.ui && during.len > 0);
+  c.ok("划的过程中只有这一页在被选（另一页 PDF 也不会跟着变蓝）", during.dragging && during.active === 1);
+  c.ok("拖过空白处时选区不回缩（" + lens.join("→") + "）", lens.every((v, i) => i === 0 || v >= lens[i - 1]));
   c.ok("松手之后临时的不可选状态已收回", !afterUp.dragging);
-
 
   // 与锁定结合：锁上＝钉住不动，不必先选中也能划选
   const off = await c.run(async (id) => {
@@ -5087,11 +5085,11 @@ group("pdfimport 导入 PDF 页面", async (c) => {
     const back = S.cards.find((z) => z.pdf);
     return { inFile: !!pc && pc.pt.length, inlineImg: /^data:/.test(pc.src || ""),
       back: !!back && back.pt.length, spans: document.querySelectorAll('.card[data-id="' + back.id + '"] .pt span').length,
-      quote: S.cards.some((z) => z.from === back.id) };
+      pdfInfo: back && back.pdf && back.pdf.page };
   });
   c.ok("文字层跟着存进文件", round.inFile >= 4 && round.inlineImg);
   c.ok("读回来以后文字层还在，照样能划选", round.back === round.inFile && round.spans === round.back);
-  c.ok("引出的卡片与出处关系也还在", round.quote);
+  c.ok("来源文件名与页码也一起存了回来", round.pdfInfo === 1);
 
   // 网页快照里也保留可划选的文字
   const snap = await c.run(async () => {
@@ -5125,7 +5123,7 @@ group("pdfimport 导入 PDF 页面", async (c) => {
     await c.run(() => getComputedStyle(document.querySelector(".card.pdfcard .cap"), "::before").content === '""'));
 
   c.ok("中英文案都齐了", await c.run(() => ["importPDF", "pdfRange", "pdfRangePh", "pdfWidth", "pdfDpi",
-    "pdfNote", "pdfWork", "pdfDone", "pdfBad", "pdfNoPage", "pdfNoLib", "pdfToCard", "pdfMade",
+    "pdfNote", "pdfWork", "pdfDone", "pdfBad", "pdfNoPage", "pdfNoLib",
     "pdfRead", "imgOrig", "imgOrigNote"].every((k) => T.en[k] && T.zh[k])));
 });
 
