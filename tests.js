@@ -4870,7 +4870,8 @@ group("pdfimport 导入 PDF 页面", async (c) => {
       n: made.length, pages: made.map((z) => z.pdf.page), name: a.pdf.name, of: a.pdf.of,
       lines: a.pt.length, first: a.pt[0].s, marker: a.pt.some((l) => /DFX007/.test(l.s)),
       frac: a.pt.every((l) => l.x >= 0 && l.x <= 1 && l.y >= 0 && l.y <= 1 && l.w > 0 && l.h > 0),
-      spans: spans.length, hasImg: !!a.ih, w: a.w, ar: a.ar,
+      spans: spans.length, hasImg: !!a.ih, w: a.w, ar: a.ar, locked: !!a.lock,
+      inWrap: !!el().querySelector(".pw .pt") && el().querySelector(".pw img") === el().querySelector("img"),
       inside: sr.top > ir.top && sr.bottom < ir.bottom && sr.left >= ir.left - 1 && sr.right <= ir.right + 1,
       transparent: getComputedStyle(spans[1]).color.replace(/\s/g, "") === "rgba(0,0,0,0)",
       selectable: getComputedStyle(el().querySelector(".pt")).userSelect === "text",
@@ -4895,6 +4896,8 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   c.ok("按页码导入，两页两张卡片", r.n === 2 && r.pages.join(",") === "1,2");
   c.ok("记下了来源文件名与页码", r.name === "thesis" && r.of === 3);
   c.ok("页面图进了图片仓库，卡片宽度与纸张比例都对", r.hasImg && r.w === 520 && Math.abs(r.ar - 1.414) < 0.02);
+  c.ok("导入的页面不锁定", !r.locked);
+  c.ok("文字层贴在页面图那一块上，而不是整张卡片（卡片下面还有说明文字那一格）", r.inWrap);
   c.ok("两页并排，不叠在一起", r.secondX >= 520);
   c.ok("抓到了这一页的文字（" + r.lines + " 行）", r.lines >= 4 && /Chapter 1/.test(r.first) && r.marker);
   c.ok("文字坐标按页面比例存，卡片多宽都对得上", r.frac);
@@ -4907,6 +4910,33 @@ group("pdfimport 导入 PDF 页面", async (c) => {
     r.rng === "12345|1235|345|0|245");
 
   // 真鼠标划选：跨行拼成连贯的句子，浮出小按钮，点一下变成卡片并连回这一页
+  const gate = await c.run((id) => {
+    const el = document.querySelector('.card[data-id="' + id + '"]');
+    sel = []; paintSel();
+    const pe = () => getComputedStyle(el.querySelector(".pt span")).pointerEvents;
+    const off = pe();
+    sel = [id]; paintSel();
+    return { off, on: pe(), gap: getComputedStyle(el.querySelector(".pt")).pointerEvents };
+  }, r.id);
+  c.ok("没选中这一页时整页随便拖（文字层不挡）", gate.off === "none");
+  c.ok("选中之后就能在页面上划选文字", gate.on === "auto");
+  c.ok("行与行之间的空白、页边不拦指针，选中时也能从空白处拖走整页", gate.gap === "none");
+  // 没选中时，即使按在字上，拖动也是搬动整页
+  const drag0 = await c.run((id) => {
+    sel = []; paintSel();
+    const sp = document.querySelector('.card[data-id="' + id + '"] .pt span').getBoundingClientRect();
+    return { x: sp.x + 4, y: sp.y + sp.height / 2, x0: card(id).x, z: cam.z };
+  }, r.id);
+  await c.page.mouse.move(drag0.x, drag0.y);
+  await c.page.mouse.down();
+  await c.page.mouse.move(drag0.x + 90, drag0.y + 25, { steps: 5 });
+  await c.page.mouse.up();
+  await c.wait(200);
+  const after0 = await c.run((id) => { const v = card(id).x; card(id).x = 0; render(); return v; }, r.id);
+  c.ok("没选中时按在字上拖，也是搬动整页", Math.abs(after0 - drag0.x0 - 90 / drag0.z) < 6);
+  await c.run((id) => { sel = [id]; paintSel(); }, r.id);
+  await c.wait(150);
+
   const box = await c.run((id) => {
     const sp = [...document.querySelectorAll('.card[data-id="' + id + '"] .pt span')];
     const a = sp[1].getBoundingClientRect(), b = sp[3].getBoundingClientRect();
@@ -4938,19 +4968,22 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   c.ok("新卡片连回这一页，并记下出处", q.links === before.links + 1 && q.linked && q.from === r.id);
   c.ok("新卡片被选中，小按钮收起，选区也清掉", q.sel === q.id && !q.bar && !q.stillSel);
 
-  // 与锁定结合：锁着＝能划选、位置不动；解锁＝没有文字层，整页随便拖
+  // 与锁定结合：锁上＝钉住不动，不必先选中也能划选
   const off = await c.run(async (id) => {
     const el = () => document.querySelector('.card[data-id="' + id + '"]');
-    const locked = { pinned: isPinned(id), layer: !!el().querySelector(".pt") };
-    setCardLock([id], null); await new Promise((z) => setTimeout(z, 250));
-    const free = { pinned: isPinned(id), layer: !!el().querySelector(".pt") };
+    setCardLock([id], "all"); sel = []; paintSel();
+    await new Promise((z) => setTimeout(z, 250));
+    const locked = { pinned: isPinned(id), pe: getComputedStyle(el().querySelector(".pt span")).pointerEvents };
+    setCardLock([id], null); sel = []; paintSel();
+    await new Promise((z) => setTimeout(z, 250));
+    const free = { pinned: isPinned(id), pe: getComputedStyle(el().querySelector(".pt span")).pointerEvents };
     // 解锁以后在页面正中按下拖动：卡片跟着走
     const c0 = card(id), x0 = c0.x;
     const r0 = el().getBoundingClientRect();
     return { locked, free, x0, cx: r0.x + r0.width / 2, cy: r0.y + r0.height / 2 };
   }, r.id);
-  c.ok("导入的页面默认锁定，所以能划选、位置不会被碰乱", off.locked.pinned && off.locked.layer);
-  c.ok("解锁以后文字层撤掉（页面上不再堆着几千个看不见的字）", !off.free.pinned && !off.free.layer);
+  c.ok("锁上以后不用先选中也能划选，位置也不会被碰乱", off.locked.pinned && off.locked.pe === "auto");
+  c.ok("解锁并取消选中，整页又随便拖", !off.free.pinned && off.free.pe === "none");
   // 拖之前先把这一页摆到画面中央（前面的组可能把相机留在别处），再量一次位置
   await c.run((id) => { const z = card(id); camTo(-(z.x + z.w / 2), -(z.y + 200), 1, true); }, r.id);
   await c.wait(400);
@@ -4971,11 +5004,42 @@ group("pdfimport 导入 PDF 页面", async (c) => {
 
   c.ok("解锁后在页面正中拖动就能搬走它", Math.abs(moved.x - at.x0 - 120 / at.z) < 6);
   const relock = await c.run(async (id) => {
-    setCardLock([id], "all"); await new Promise((z) => setTimeout(z, 250));
+    sel = [id]; paintSel(); await new Promise((z) => setTimeout(z, 250));
     const sp = document.querySelectorAll('.card[data-id="' + id + '"] .pt span');
-    return { n: sp.length, pinned: isPinned(id) };
+    return { n: sp.length };
   }, r.id);
-  c.ok("锁回去，文字层原样回来", relock.pinned && relock.n === r.spans);
+  c.ok("重新选中，文字层原样可用", relock.n === r.spans);
+
+  // 对齐：把页面图画到 canvas 上，量每个片段框里"墨迹"的垂直中心，与片段框的中心比
+  const align = await c.run(async (id) => {
+    sel = [id]; paintSel(); camTo(0, 0, 1, true);
+    await new Promise((z) => setTimeout(z, 700));
+    const el = document.querySelector('.card[data-id="' + id + '"]');
+    const im = el.querySelector("img"), ir = im.getBoundingClientRect();
+    const cv = document.createElement("canvas"); cv.width = im.naturalWidth; cv.height = im.naturalHeight;
+    cv.getContext("2d").drawImage(im, 0, 0);
+    const px = cv.getContext("2d").getImageData(0, 0, cv.width, cv.height).data;
+    const k = cv.width / ir.width;
+    const ds = [];
+    [...el.querySelectorAll(".pt span")].forEach((sp) => {
+      const b = sp.getBoundingClientRect();
+      const x0 = Math.max(0, Math.round((b.left - ir.left) * k)), x1 = Math.min(cv.width, Math.round((b.right - ir.left) * k));
+      const y0 = Math.max(0, Math.round((b.top - ir.top) * k - b.height * k * 0.25));
+      const y1 = Math.min(cv.height, Math.round((b.bottom - ir.top) * k + b.height * k * 0.25));
+      let top = -1, bot = -1;
+      for (let y = y0; y < y1; y++) {
+        let ink = 0;
+        for (let x = x0; x < x1; x++) { const i = (y * cv.width + x) * 4; if (px[i] < 170 || px[i + 1] < 170 || px[i + 2] < 170) ink++; }
+        if (ink > 0) { if (top < 0) top = y; bot = y; }
+      }
+      if (top < 0) return;
+      ds.push(Math.abs(((b.top + b.bottom) / 2 - ir.top) * k - (top + bot) / 2) / (b.height * k));
+    });
+    ds.sort((a, b2) => a - b2);
+    return { n: ds.length, worst: +ds[ds.length - 1].toFixed(3), median: +ds[Math.floor(ds.length / 2)].toFixed(3) };
+  }, r.id);
+  c.ok(`每个片段都压在它那行字上（最差偏差 ${align.worst} 字高，中位 ${align.median}）`,
+    align.n >= 4 && align.worst < 0.25);
 
   // 存进文件、再读回来：文字层一起带着走
   const round = await c.run(async () => {
@@ -4999,9 +5063,11 @@ group("pdfimport 导入 PDF 页面", async (c) => {
     const dom = new DOMParser().parseFromString(html, "text/html");
     const sp = dom.querySelectorAll(".card .pt span");
     return { n: sp.length, txt: [...sp].some((z) => /DFX007/.test(z.textContent)),
-      editable: dom.querySelectorAll("[contenteditable]").length };
+      editable: dom.querySelectorAll("[contenteditable]").length,
+      css: /body\.snap \.card \.pt span\{pointer-events:auto/.test(html) };
   });
-  c.ok("网页快照里的 PDF 页面照样能划选文字", snap.n >= 4 && snap.txt && snap.editable === 0);
+  c.ok("网页快照里的 PDF 页面照样能划选文字（快照里没有选中一说，一律放开）",
+    snap.n >= 4 && snap.txt && snap.editable === 0 && snap.css);
 
   // 视野里同时铺着的文字层有总量上限，免得几十页锁定的 PDF 一起在画面上时拖动变卡
   const budget = await c.run(async () => {
@@ -5009,7 +5075,7 @@ group("pdfimport 导入 PDF 页面", async (c) => {
     const keep = S.cards.slice();
     const ih = keep.find((z) => z.ih).ih;      // 借一张已有的页面图：文字层只铺在有图的 PDF 卡片上
     S.cards = []; for (let k = 0; k < 8; k++) S.cards.push({ id: "b" + k, x: k * 560, y: 0, w: 520, text: "",
-      ih, ar: 1.4, pt, pdf: { name: "x", page: k + 1, of: 8 }, lock: "all", s: { ...DEF } });
+      ih, ar: 1.4, pt, pdf: { name: "x", page: k + 1, of: 8 }, s: { ...DEF } });
     S.links = []; S.frames = []; invalidateIndex(); render(); fit(true);
     await new Promise((z) => setTimeout(z, 500));
     const spans = document.querySelectorAll(".pt span").length;
