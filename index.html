@@ -634,6 +634,25 @@
     color:inherit;font:inherit;cursor:pointer;flex:none}
   #fwarn button:hover{background:var(--pfg);color:var(--panel)}
   body.lock #fwarn{display:none !important}
+  /* PDF 页面卡片的透明文字层：看不见，但能划选、能复制、浏览器查找也找得到 */
+  .card .pt{position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden;
+    -webkit-user-select:text;user-select:text;cursor:text;z-index:2}
+  .card .pt span{position:absolute;white-space:pre;transform-origin:0 0;color:transparent;
+    background:none;line-height:1;font-family:"IBM Plex Sans",sans-serif}
+  .card .pt span::selection{background:rgba(90,140,255,.35)}
+  .card.ptoff .pt{pointer-events:none;-webkit-user-select:none;user-select:none}
+  body.lock .card .pt{pointer-events:none}
+  .card .pdfb{position:absolute;right:6px;top:6px;z-index:3;padding:1px 6px;border-radius:5px;
+    background:rgba(20,20,20,.5);color:#fff;font:400 10px/1.5 "IBM Plex Mono",monospace;
+    pointer-events:none;opacity:0;transition:opacity .15s}
+  .card:hover .pdfb{opacity:.75}
+  #ptbar{position:fixed;z-index:96;display:none;gap:1px;padding:3px;border-radius:8px;
+    background:var(--glass);border:1px solid var(--glassline);backdrop-filter:blur(10px) saturate(1.3);
+    -webkit-backdrop-filter:blur(10px) saturate(1.3);box-shadow:0 6px 20px rgba(0,0,0,.12)}
+  #ptbar.on{display:flex}
+  #ptbar button{height:24px;padding:0 9px;border:none;border-radius:6px;background:none;
+    color:var(--pfg);font:400 12px/1 "IBM Plex Sans",sans-serif;cursor:pointer;white-space:nowrap}
+  #ptbar button:hover{background:var(--pfg);color:var(--panel)}
   #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:95;
     background:rgba(20,20,20,.9);color:#fff;padding:8px 14px;border-radius:8px;font-size:12.5px;
     opacity:0;transition:opacity .2s;pointer-events:none}
@@ -677,6 +696,7 @@
 <div class="menu" id="submenu"></div>
 <div class="pop" id="pop"></div>
 <input type="file" id="imgfile" accept="image/*" multiple hidden>
+<input type="file" id="pdffile" accept="application/pdf,.pdf" hidden>
 <input type="file" id="jsonfile" accept="application/json" hidden>
 <input type="file" id="mergefile" accept="application/json" hidden>
 
@@ -846,6 +866,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   expOpts:"Options",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag to pan, scroll or pinch to zoom, press Z over a card to zoom in, M for the page map. Text can be selected and copied.",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
+  importPDF:"Import PDF pages…",pdfRange:"Pages",pdfRangePh:"All pages, or 1-3,7,12-",pdfWidth:"Card width",pdfDpi:"Sharpness",pdfDpi2:"Normal",pdfDpi3:"Sharper",pdfNote:"Each page becomes a card: the page as you see it, with the text selectable on top. Select any passage to copy it or turn it into its own card, linked back to the page.",pdfWork:"Importing the PDF…",pdfDone:"Pages imported:",pdfBad:"This PDF could not be read.",pdfNoPage:"No pages matched.",pdfNoLib:"The PDF library could not be loaded. Please check your connection and try again.",pdfToCard:"New card",pdfCopied:"Copied",pdfMade:"Card created from the selection",pdfSelectable:"Select text on this page",imgOrig:"Original size",imgOrigNote:"Images now come in at their own size, with no limit. Existing images are unchanged; use Fit selected or Fit all to apply it.",copy:"Copy",
   snapPwShow:"Show",snapPwHide:"Hide",snapPwGen:"Generate",snapPwCopied:"A strong password was generated and copied. Keep it in your password manager.",snapPwWeak:"Too easy to guess",snapPwOk:"Acceptable",snapPwStrong:"Strong",snapPwWeakBlock:"This password is too easy to guess. Make it longer, or use Generate.",
   readingN:"Reading the file, cards so far:",
   filePerm:"Not auto-saving to the file: permission is needed again.",fileIO:"Not auto-saving to the file: the last write failed. It may have been moved, deleted or locked by another app.",fileBig:"Not auto-saving to the file: it is past the limit of roughly 500 MB for a single file.",fileResume:"Resume",fileLost:"Writing to the file failed, so auto-save to the file has stopped. See the note at the bottom left.",filePermStart:"The linked file needs your permission again. Click Resume at the bottom left.",storeFail:"Saving inside the browser failed. Please save to a file now.",
@@ -1038,6 +1059,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   expOpts:"包含内容",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动平移，滚轮或双指缩放，指着卡片按 Z 放大，M 打开页面地图。文字可以划选复制。",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
+  importPDF:"导入 PDF 页面…",pdfRange:"页码",pdfRangePh:"留空表示全部，或 1-3,7,12-",pdfWidth:"卡片宽度",pdfDpi:"清晰度",pdfDpi2:"普通",pdfDpi3:"更清晰",pdfNote:"每一页变成一张卡片：版面跟原文一样，文字可以直接划选。划选之后可以复制，也可以就地变成一张卡片，并自动连回这一页。",pdfWork:"正在导入 PDF…",pdfDone:"已导入页数：",pdfBad:"这个 PDF 读不出来。",pdfNoPage:"没有匹配的页码。",pdfNoLib:"PDF 解析库加载失败，请检查网络后重试。",pdfToCard:"新建卡片",pdfCopied:"已复制",pdfMade:"已根据划选新建卡片",pdfSelectable:"在这一页上划选文字",imgOrig:"原尺寸",imgOrigNote:"之后导入的图片按原始尺寸插入，不再压缩。已有的图片不变，可用「适应选中」或「适应全部」套用。",copy:"复制",
   snapPwShow:"显示",snapPwHide:"隐藏",snapPwGen:"生成",snapPwCopied:"已生成强密码并复制到剪贴板，请存进密码管理器。",snapPwWeak:"太容易猜",snapPwOk:"可以",snapPwStrong:"强",snapPwWeakBlock:"这个密码太容易猜，请再长一些，或者点「生成」。",
   readingN:"正在读取文件，已读卡片：",
   filePerm:"文件没有在自动保存：需要重新授权。",fileIO:"文件没有在自动保存：上次写入失败，文件可能被移动、删除或被别的程序占用。",fileBig:"文件没有在自动保存：已超过单个文件约 500MB 的上限。",fileResume:"恢复",fileLost:"写入文件失败，自动保存到文件已经停止，见左下角的提示。",filePermStart:"上次绑定的文件需要重新授权，请点左下角的「恢复」。",storeFail:"浏览器内的保存失败了，请立刻保存到文件。",
@@ -2566,6 +2588,24 @@ function makeCard(c){
     if(oc.ar)im.style.aspectRatio=`1 / ${oc.ar}`;
     im.onload=()=>{if(!oc.ar){oc.ar=im.naturalHeight/im.naturalWidth;measure();drawLinks()}};
     el.appendChild(im);
+    // PDF 页面：图上覆一层透明文字，位置按页面比例算，所以卡片多宽都对得上
+    if(oc.pt&&oc.pt.length){
+      if(oc.ptoff)el.classList.add("ptoff");
+      const L=document.createElement("div");L.className="pt";
+      const H=(oc.ar||1.414)*c.w;
+      oc.pt.forEach(ln=>{
+        const sp=document.createElement("span");
+        sp.textContent=ln.s;
+        sp.style.left=(ln.x*100)+"%";sp.style.top=(ln.y*100)+"%";
+        sp.style.fontSize=Math.max(1,ln.h*H)+"px";
+        sp.dataset.w=ln.w;
+        L.appendChild(sp);
+      });
+      el.appendChild(L);
+      if(oc.pdf){const b=document.createElement("div");b.className="pdfb";
+        b.textContent=oc.pdf.name?(oc.pdf.name.slice(0,18)+" · "+oc.pdf.page):("p."+oc.pdf.page);el.appendChild(b)}
+      requestAnimationFrame(()=>fitPtx(L,c.w));
+    }
   }
   const cap=document.createElement("div");cap.className="cap";
   if(oc.rich)cap.innerHTML=oc.rich;else cap.textContent=oc.text||"";
@@ -2684,6 +2724,13 @@ function finishCard(el,c,s){
     const capNow=el.querySelector(".cap");
     if(editing&&((capNow&&capNow.isContentEditable)||
       (e.target.closest&&e.target.closest("td[contenteditable=true]"))))return;
+    if(e.target.closest&&e.target.closest(".pt")&&!el.classList.contains("ptoff")){
+      // PDF 的文字层上拖动＝划选原文（跟钉住的卡片一个道理）；要拦下事件免得画布当成框选，
+      // 但不能 preventDefault，否则选不了字
+      e.stopPropagation();
+      if(!sel.includes(c.id)){sel=[c.id];selLink=null;paintSel()}
+      return;
+    }
     if(isPinned(c.id)&&e.target.closest&&
        (e.target.closest(".cap")||e.target.closest("td"))){
       // 钉住的卡片本来就挪不动，此时把拖动让给浏览器用于划选文字。
@@ -3451,22 +3498,23 @@ function startResize(e,c,dir){
 }
 
 /* ================= images ================= */
+// 存进来的像素上限。选了"原尺寸"就一点不缩，原图多少像素存多少；否则仍压到 1600px 省地方
 function shrink(file,cb){
   const fr=new FileReader();
   fr.onload=()=>{const im=new Image();
-    im.onload=()=>{const max=1600,k=Math.min(1,max/Math.max(im.width,im.height));
+    im.onload=()=>{const max=S.imgMax===0?Infinity:1600,k=Math.min(1,max/Math.max(im.width,im.height));
       const cv=document.createElement("canvas");cv.width=Math.round(im.width*k);cv.height=Math.round(im.height*k);
       cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);
       const png=/png/i.test(file.type);
-      cb(cv.toDataURL(png?"image/png":"image/jpeg",.88),cv.width,cv.height)};
+      cb(cv.toDataURL(png?"image/png":"image/jpeg",S.imgMax===0?.95:.88),cv.width,cv.height)};
     im.src=fr.result};
   fr.readAsDataURL(file);
 }
 async function addImage(d,w,h,p,quiet){
-  const cap=S.imgMax||360;
-  const W=Math.round(w*Math.min(1,cap/Math.max(w,h)));
+  const cap=S.imgMax===0?0:(S.imgMax||360);
+  const W=cap?Math.round(w*Math.min(1,cap/Math.max(w,h))):w;   // 原尺寸：像素多宽，卡片就多宽
   const r=await putImg(d);
-  const c={id:uid(),ih:r.h,...(r.ok?{}:{src:d}),ar:h/w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
+  const c={id:uid(),ih:r.h,...(r.ok?{}:{src:d}),ar:h/w,iw:w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
   invalidateIndex();S.cards.push(c);if(!quiet){sel=[c.id];selLink=null}render();save();return c;
 }
 function addImages(files,p){
@@ -3481,6 +3529,7 @@ function addText(p){
   setTimeout(()=>editText(c),30);
 }
 $("imgfile").onchange=e=>{addImages(e.target.files,toW(mouse.x,mouse.y));e.target.value=""};
+$("pdffile").onchange=e=>{const f=e.target.files[0];if(f)askPDF(f,toW(mouse.x,mouse.y));e.target.value=""};
 addEventListener("dragover",e=>e.preventDefault());
 addEventListener("drop",e=>{e.preventDefault();addImages(e.dataTransfer.files,toW(e.clientX,e.clientY))});
 addEventListener("copy",e=>{
@@ -3733,12 +3782,13 @@ function align(mode){
   render();save();
 }
 function sizeImages(all){
-  const cap=S.imgMax||360;
+  const cap=S.imgMax===0?0:(S.imgMax||360);
   const list=(all?S.cards:movableSel().map(card).filter(Boolean)).filter(c=>hasImg(c));
   if(!list.length)return;
   snap();
   list.forEach(c=>{if(isPinned(c.id))return;
     const ar=c.ar||1;
+    if(!cap){const n=c.iw||0;if(n)c.w=n;return}    // 原尺寸：用图片自己的像素宽度
     c.w=Math.round(ar>=1?cap/ar:cap);
   });
   render();save();
@@ -4050,6 +4100,12 @@ const MANUAL=[
   <p>它是单个文件，图片已经内嵌，发给导师双击就能看，不需要安装本程序，也不会读写任何浏览器存储。</p>
   <p>导出面板里「密码保护」默认勾着：整份快照用你设的密码加密，没有密码既打不开，也读不出里面的字和图。密码至少 12 位，点「生成」可以得到一个强密码并复制到剪贴板。密码和文件请分开发给对方。解锁后闲置 15 分钟会自动回到锁屏。</p>
   <p class="tip">快照只负责"看"，不能导回来继续编辑。要能还原的，仍然是 json 或存档包。</p>`],
+
+ ["导入 PDF 页面","DAORUPDF",`
+  <p>画布右键 <b>导入 PDF 页面…</b>，可以只导某几页（<code>1-3,7,12-</code>，留空是全部）。每一页变成一张卡片：版面跟原文一样，但上面的文字可以直接用鼠标划选。</p>
+  <p>划选之后会浮出两个按钮：<b>新建卡片</b> 把这段话变成一张卡片，放在这一页右边并自动连回来；<b>复制</b> 就是复制。跨行的句子会拼成连贯的一段，英文里被连字号断开的词也会接回去。</p>
+  <p>要整页拖动时，可以在卡片右键里关掉<b>在这一页上划选文字</b>，关掉以后整页随便拖；行与行之间的空白本来也能拖。</p>
+  <p class="tip">导入需要联网（PDF 解析库从网上取）。已经导入的页面不受影响，离线照常看、照常划选。</p>`],
 
  ["自动快照","ZIDONGKUAIZHAO",`
   <p>程序每十分钟自动在浏览器本地存一份结构快照，保留最近十二份，并按天各保留一份共七天。</p>
@@ -5306,6 +5362,251 @@ function docHTML(o,tree,forPrint){
 function dl(blob,name){
   const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
+}
+
+/* ================= 导入 PDF 页面 =================
+   一页 PDF 进来变成一张卡片：底下是这一页的图，上面覆一层透明的文字层（pt），
+   所以看到的排版跟原文一模一样，同时又能划选、复制、搜索。
+   文字层的坐标按页面比例存（0 到 1），卡片缩放、改宽度都不用重新排。
+   卡片本身仍是普通卡片：能连线、能放进页面、能投影，导出与快照照旧。
+   pdf.js 从 CDN 按需加载，只在真的导入 PDF 时才去取；取不到就明说，不影响其他功能。 */
+const PDFJS_SRC="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+const PDFJS_WORKER="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+function loadPdfJs(){
+  if(window.pdfjsLib){try{pdfjsLib.GlobalWorkerOptions.workerSrc=pdfjsLib.GlobalWorkerOptions.workerSrc||PDFJS_WORKER}catch(e){}
+    return Promise.resolve(window.pdfjsLib)}
+  return new Promise((res,rej)=>{
+    const el=document.createElement("script");el.src=PDFJS_SRC;
+    const done=()=>{if(!window.pdfjsLib)return rej(new Error("cdn"));
+      try{pdfjsLib.GlobalWorkerOptions.workerSrc=PDFJS_WORKER}catch(e){}
+      res(window.pdfjsLib)};
+    el.onload=done;el.onerror=()=>rej(new Error("cdn"));
+    document.head.appendChild(el);
+    setTimeout(()=>{window.pdfjsLib?done():rej(new Error("cdn"))},12000);
+  });
+}
+// "1-3,7,12-" 这样的页码写法；留空表示全部
+function parsePages(s,n){
+  s=(s||"").trim();
+  if(!s)return Array.from({length:n},(_,i)=>i+1);
+  const out=new Set();
+  s.split(/[,，、\s]+/).filter(Boolean).forEach(part=>{
+    const m=/^(\d*)\s*[-–~到]\s*(\d*)$/.exec(part);
+    if(m){
+      const a=Math.max(1,parseInt(m[1]||"1",10)),b=Math.min(n,parseInt(m[2]||String(n),10));
+      for(let i=a;i<=b;i++)out.add(i);
+    }else{const v=parseInt(part,10);if(v>=1&&v<=n)out.add(v)}
+  });
+  return [...out].sort((a,b)=>a-b);
+}
+// 一行行地把文字项归拢：pdf.js 给的是一个个片段，按基线聚成行，划选出来才是连贯的句子
+function pdfLines(items,vp){
+  const rows=[];
+  items.forEach(it=>{
+    const s=it.str;if(!s||!s.trim())return;
+    const tr=pdfjsLib.Util.transform(vp.transform,it.transform);
+    const h=Math.hypot(tr[2],tr[3])||Math.abs(tr[3])||10;
+    const x=tr[4],y=tr[5]-h*.86,w=it.width*(vp.scale||1);
+    const row=rows.find(r=>Math.abs(r.y-y)<h*.55&&Math.abs(r.h-h)<h*.5);
+    if(row){row.items.push({x,y,w,h,s});row.y=(row.y*row.items.length+y)/(row.items.length+1)}
+    else rows.push({y,h,items:[{x,y,w,h,s}]});
+  });
+  return rows.map(r=>{
+    const its=r.items.sort((a,b)=>a.x-b.x);
+    let str="";
+    its.forEach((it,i)=>{
+      const prev=its[i-1];
+      if(prev){
+        const gap=it.x-(prev.x+prev.w);
+        if(gap>it.h*.22&&!/\s$/.test(str)&&!/^\s/.test(it.s))str+=" ";
+      }
+      str+=it.s;
+    });
+    const x0=its[0].x,x1=Math.max(...its.map(z=>z.x+z.w));
+    return {x:x0/vp.width,y:r.y/vp.height,w:Math.max(1,x1-x0)/vp.width,h:r.h/vp.height,s:str};
+  }).sort((a,b)=>a.y-b.y||a.x-b.x);
+}
+// 导入前问一句：要哪几页、卡片多宽、多清晰
+function askPDF(file,p){
+  if(lock)return;
+  const P=$("pop");P.classList.remove("wide");
+  P.innerHTML=`
+    <div class="hd"><b>${t("importPDF")}</b><button id="pcx">\u00D7</button></div>
+    <div class="note2" style="opacity:.6;font-size:11px;padding:2px 2px 6px">${esc(file.name)}</div>
+    <div class="sec">${t("pdfRange")}</div>
+    <input class="ti" id="pdr" placeholder="${esc(t("pdfRangePh"))}" spellcheck="false">
+    <div class="sec">${t("pdfWidth")}</div>
+    <div class="grid" id="pdw">
+      ${[380,520,700,900].map(v=>`<button data-v="${v}" class="${(S.pdfW||520)===v?"on":""}">${v} ${t("px")}</button>`).join("")}
+    </div>
+    <div class="sec">${t("pdfDpi")}</div>
+    <div class="pair" id="pdd">
+      ${[[2,t("pdfDpi2")],[3,t("pdfDpi3")]].map(([v,l],i)=>`<button data-v="${v}" class="${i===0?"on":""}">${l}</button>`).join("")}
+    </div>
+    <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("pdfNote")}</div>
+    <button class="go" id="pdgo">${t("importPDF")}</button>`;
+  place(P,Math.min(innerWidth/2-130,innerWidth-280),Math.min(innerHeight/2-180,innerHeight-420));
+  P.classList.add("on");
+  let width=S.pdfW||520,dpi=2;
+  const pick=(id,set)=>P.querySelector(id).onclick=e=>{
+    const b=e.target.closest("button[data-v]");if(!b)return;
+    [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");set(+b.dataset.v)};
+  pick("#pdw",v=>{width=v});pick("#pdd",v=>{dpi=v});
+  const inp=P.querySelector("#pdr");
+  inp.addEventListener("keydown",e=>{e.stopPropagation();if(e.key==="Enter")P.querySelector("#pdgo").click()});
+  P.querySelector("#pcx").onclick=()=>P.classList.remove("on");
+  P.querySelector("#pdgo").onclick=()=>{
+    const range=inp.value;P.classList.remove("on");
+    S.pdfW=width;save();
+    toast(t("pdfWork"));
+    setTimeout(()=>importPDF(file,p,{range,width,dpi}),50);
+  };
+  setTimeout(()=>inp.focus(),30);
+}
+async function importPDF(file,p,opt){
+  if(lock)return;
+  opt=opt||{};
+  let lib;
+  try{lib=await loadPdfJs()}catch(e){toast(t("pdfNoLib"));return}
+  let doc;
+  try{
+    const buf=await file.arrayBuffer();
+    doc=await lib.getDocument({data:new Uint8Array(buf),isEvalSupported:false}).promise;
+  }catch(e){toast(t("pdfBad"));return}
+  const pages=parsePages(opt.range,doc.numPages);
+  if(!pages.length){toast(t("pdfNoPage"));return}
+  const name=(file.name||"PDF").replace(/\.pdf$/i,"");
+  const wide=opt.width||S.pdfW||520;          // 卡片在画布上的宽度
+  const dpi=Math.max(1,Math.min(4,opt.dpi||2)); // 页面图的清晰度，2 倍够放大看
+  snap();
+  const made=[];
+  for(let i=0;i<pages.length;i++){
+    const n=pages[i];
+    let cv,lines=[],vp;
+    try{
+      const pg=await doc.getPage(n);
+      vp=pg.getViewport({scale:1});
+      const k=Math.min(dpi*wide/vp.width,3000/Math.max(vp.width,vp.height));
+      const v2=pg.getViewport({scale:k});
+      cv=document.createElement("canvas");cv.width=Math.round(v2.width);cv.height=Math.round(v2.height);
+      const ctx=cv.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);
+      await pg.render({canvasContext:ctx,viewport:v2}).promise;
+      try{const tc=await pg.getTextContent();lines=pdfLines(tc.items,v2)}catch(e){lines=[]}
+      if(pg.cleanup)pg.cleanup();
+    }catch(e){continue}
+    const dataURL=cv.toDataURL("image/jpeg",.88);
+    const r=await putImg(dataURL);
+    const ar=cv.height/cv.width;
+    const c={id:uid(),ih:r.h,...(r.ok?{}:{src:dataURL}),ar,
+      x:Math.round(p.x+i*(wide+40)),y:Math.round(p.y),w:wide,text:"",
+      pdf:{name,page:n,of:doc.numPages},...(lines.length?{pt:lines}:{}),
+      s:newStyle()};
+    S.cards.push(c);made.push(c);
+    invalidateIndex();render();
+    toast(t("pdfWork")+" "+(i+1)+"/"+pages.length);
+  }
+  try{doc.destroy()}catch(e){}
+  if(!made.length){toast(t("pdfBad"));return}
+  sel=made.map(c=>c.id);selLink=null;render();save();
+  toast(t("pdfDone")+" "+made.length);
+  return made;
+}
+// 划选之后浮出来的小按钮：把选中的文字变成一张卡片，并连回这一页
+function pdfQuoteBar(){
+  let bar=$("ptbar");
+  if(!bar){
+    bar=document.createElement("div");bar.id="ptbar";
+    bar.innerHTML=`<button data-a="card"></button><button data-a="copy"></button>`;
+    document.body.appendChild(bar);
+    bar.addEventListener("pointerdown",e=>e.stopPropagation());
+    bar.addEventListener("click",e=>{
+      const b=e.target.closest("[data-a]");if(!b)return;
+      const info=bar._info;if(!info)return;
+      if(b.dataset.a==="copy"){try{navigator.clipboard.writeText(info.text);toast(t("pdfCopied"))}catch(_){};hideQuoteBar();return}
+      quoteToCard(info);
+    });
+  }
+  return bar;
+}
+function hideQuoteBar(){const b=$("ptbar");if(b){b.classList.remove("on");b._info=null}}
+function showQuoteBar(cardId,text,rect){
+  const bar=pdfQuoteBar();
+  bar.querySelector('[data-a="card"]').textContent=t("pdfToCard");
+  bar.querySelector('[data-a="copy"]').textContent=t("copy");
+  bar._info={cardId,text};
+  bar.classList.add("on");
+  const w=bar.offsetWidth||150,h=bar.offsetHeight||28;
+  bar.style.left=Math.round(Math.min(Math.max(8,rect.left+rect.width/2-w/2),innerWidth-w-8))+"px";
+  bar.style.top=Math.round(Math.max(8,rect.top-h-8))+"px";
+}
+// 每行的字宽跟原文对齐：量一次实际宽度，用横向缩放拉到该有的宽度
+function fitPtx(layer,cardW){
+  const W=cardW||layer.offsetWidth||1;
+  layer.querySelectorAll("span").forEach(sp=>{
+    const want=parseFloat(sp.dataset.w||0)*W;
+    if(!want)return;
+    const have=sp.offsetWidth;
+    if(have>0)sp.style.transform="scaleX("+(want/have)+")";
+  });
+}
+// 划选完成就把小按钮浮出来
+function ptxWatch(){
+  document.addEventListener("selectionchange",()=>{
+    const s=getSelection();
+    if(!s||s.isCollapsed){hideQuoteBar();return}
+    const node=s.anchorNode,el=node&&(node.nodeType===1?node:node.parentElement);
+    const layer=el&&el.closest&&el.closest(".card .pt");
+    if(!layer){hideQuoteBar();return}
+    const cd=layer.closest(".card");if(!cd)return;
+    const txt=ptxText(s);
+    if(!txt){hideQuoteBar();return}
+    const r=s.getRangeAt(0).getBoundingClientRect();
+    if(!r.width&&!r.height){hideQuoteBar();return}
+    showQuoteBar(cd.dataset.id,txt,r);
+  });
+  addEventListener("scroll",hideQuoteBar,true);
+}
+// 选中的文字：一行一行拼，行与行之间按需要断行还是接上（西文用连字号断开的词接回去）
+function ptxText(s){
+  const spans=[...(s.anchorNode?.ownerDocument||document).querySelectorAll(".card .pt span")]
+    .filter(sp=>s.containsNode(sp,true));
+  if(!spans.length)return s.toString().trim();
+  const parts=spans.map((sp,i)=>{
+    let str=sp.textContent;
+    if(i===0||i===spans.length-1){                 // 首尾两行按实际选中的范围裁一下
+      const r=document.createRange();r.selectNodeContents(sp);
+      const sr=s.getRangeAt(0);
+      const a=(i===0&&sr.startContainer.parentElement===sp)?sr.startOffset:0;
+      const b=(i===spans.length-1&&sr.endContainer.parentElement===sp)?sr.endOffset:str.length;
+      str=str.slice(a,b);
+    }
+    return str;
+  });
+  let out="";
+  parts.forEach((p,i)=>{
+    if(!i){out=p;return}
+    if(/[-\u2010]$/.test(out)&&/^[a-z]/i.test(p))out=out.replace(/[-\u2010]$/,"")+p;   // 断词接回去
+    else if(/[\u4e00-\u9fff]$/.test(out)&&/^[\u4e00-\u9fff]/.test(p))out+=p;           // 中文不加空格
+    else out+=(/\s$/.test(out)?"":" ")+p;
+  });
+  return out.replace(/\s+/g," ").trim();
+}
+function quoteToCard(info){
+  const src=card(info.cardId);if(!src||lock)return;
+  hideQuoteBar();
+  const sl=getSelection();if(sl)sl.removeAllRanges();
+  snap();
+  const w=Math.max(240,Math.min(420,Math.round(src.w*.8)));
+  const c={id:uid(),x:Math.round(src.x+src.w+60),y:Math.round(src.y),w,
+    text:info.text,s:newStyle()};
+  // 同一页引出的卡片依次往下排，不叠在一起
+  const sib=S.cards.filter(z=>z.from===src.id);
+  c.y=Math.round(src.y+sib.length*120);
+  c.from=src.id;
+  S.cards.push(c);
+  S.links.push({id:uid(),a:src.id,b:c.id,...S.linkDef});
+  invalidateIndex();sel=[c.id];selLink=null;render();save();
+  toast(t("pdfMade"));
 }
 
 /* ================= 网页快照 ================= */
@@ -9214,6 +9515,8 @@ function viewItems(x,y){
       {head:t("imgSize")},
       ...[280,360,460,600].map(v=>({label:v+" "+t("px"),check:(S.imgMax||360)===v,
         on:()=>{S.imgMax=v;save()}})),
+      // 原尺寸：不缩、也不再压到 1600px，图有多大就多大（S.imgMax===0）
+      {label:t("imgOrig"),check:S.imgMax===0,on:()=>{S.imgMax=0;save();toast(t("imgOrigNote"))}},
       "-",
       {label:t("fitSel"),on:()=>sizeImages(false)},
       {label:t("fitAllImg"),on:()=>sizeImages(true)}
@@ -9266,6 +9569,7 @@ function boardMenu(x,y){
   menuAt(x,y,[
     {label:t("insertImage"),on:()=>$("imgfile").click()},
     {label:t("cutoutTool"),on:openCutout},
+    {label:t("importPDF"),on:()=>$("pdffile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("insertTable"),sub:[{head:t("tbSize")},
       ...[[3,2],[3,3],[5,3],[3,4]].map(([r,cc])=>({
@@ -9321,6 +9625,8 @@ function cardItems(x,y){
     "-",
     {label:t("linkFromHere"),on:()=>{linkFrom=sel[0];stage.style.cursor="crosshair";toast(t("clickTarget"))}}
   ];
+  if(one&&one.pt&&one.pt.length)items.push({label:t("pdfSelectable"),check:!one.ptoff,
+    on:()=>{snap();if(one.ptoff)delete one.ptoff;else one.ptoff=1;render();save()}});
   if(one&&hasImg(one))items.push({label:t("replaceImage"),on:()=>{
     const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
     inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,async(d,w,h)=>{snap();
@@ -9611,7 +9917,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
   applyCam();render();
   if(S.work&&!lock)$("find").classList.add("on");
   if(S.map){mapOn=true;$("map").classList.add("on");applyMapSize();setTimeout(drawMap,300)}
-  syncFindMode();refreshTagList();
+  syncFindMode();refreshTagList();ptxWatch();
   if(S.cards.length)fit(true);
   if(document.fonts&&document.fonts.ready)document.fonts.ready.then(()=>{measure();drawLinks()});
   setTimeout(()=>{measure();drawLinks()},800);

@@ -4804,6 +4804,166 @@ group("gbscale 大容量：图片按需加载、分段写、流式读", async (c
   c.ok("导出快照以后，画面上的原图照常显示", r.liveStillPainted);
 });
 
+group("pdfimport 导入 PDF 页面", async (c) => {
+  // 一页 PDF 进来是一张普通卡片：页面的图 + 一层透明的文字，能划选、能变成卡片。
+  // 测试里用本地的 pdf.js 顶替 CDN（没网也能跑），其余走真实代码。
+  const fs0 = require("fs"), path0 = require("path");
+  const vend = (n) => path0.resolve(__dirname, "vendor", n);
+  if (!fs0.existsSync(vend("pdf.min.js")) || !fs0.existsSync(path0.resolve(__dirname, "test.pdf"))) {
+    c.ok("需要 vendor/pdf.min.js 与 test.pdf 才能测 PDF 导入（已跳过）", false); return;
+  }
+  await c.page.addScriptTag({ content: fs0.readFileSync(vend("pdf.min.js"), "utf8") });
+  const ready = await c.run((w) => {
+    if (!window.pdfjsLib) return false;
+    // 本地跑在 file:// 上，worker 用 blob 地址装起来
+    pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(new Blob([w], { type: "text/javascript" }));
+    return true;
+  }, fs0.readFileSync(vend("pdf.worker.min.js"), "utf8"));
+  if (!ready) { c.ok("pdf.js 没能装起来（已跳过）", false); return; }
+  const pdfB64 = fs0.readFileSync(path0.resolve(__dirname, "test.pdf")).toString("base64");
+
+  const r = await c.run(async (b64) => {
+    const bin = atob(b64), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const f = new File([u], "thesis.pdf", { type: "application/pdf" });
+    S.cards = []; S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render();
+    const made = await importPDF(f, { x: 0, y: 0 }, { range: "1-2", width: 520, dpi: 2 });
+    await new Promise((z) => setTimeout(z, 500));
+    const a = made[0], el = () => document.querySelector('.card[data-id="' + a.id + '"]');
+    const spans = [...el().querySelectorAll(".pt span")];
+    const ir = el().querySelector("img").getBoundingClientRect(), sr = spans[1].getBoundingClientRect();
+    return {
+      n: made.length, pages: made.map((z) => z.pdf.page), name: a.pdf.name, of: a.pdf.of,
+      lines: a.pt.length, first: a.pt[0].s, marker: a.pt.some((l) => /DFX007/.test(l.s)),
+      frac: a.pt.every((l) => l.x >= 0 && l.x <= 1 && l.y >= 0 && l.y <= 1 && l.w > 0 && l.h > 0),
+      spans: spans.length, hasImg: !!a.ih, w: a.w, ar: a.ar,
+      inside: sr.top > ir.top && sr.bottom < ir.bottom && sr.left >= ir.left - 1 && sr.right <= ir.right + 1,
+      transparent: getComputedStyle(spans[1]).color.replace(/\s/g, "") === "rgba(0,0,0,0)",
+      selectable: getComputedStyle(el().querySelector(".pt")).userSelect === "text",
+      // 页码写法
+      rng: [parsePages("", 5).join(""), parsePages("1-3,5", 9).join(""), parsePages("3-", 5).join(""),
+        parsePages("9", 5).length, parsePages("2，4、5", 9).join("")].join("|"),
+      id: a.id, secondX: made[1].x,
+    };
+  }, pdfB64);
+  c.ok("按页码导入，两页两张卡片", r.n === 2 && r.pages.join(",") === "1,2");
+  c.ok("记下了来源文件名与页码", r.name === "thesis" && r.of === 3);
+  c.ok("页面图进了图片仓库，卡片宽度与纸张比例都对", r.hasImg && r.w === 520 && Math.abs(r.ar - 1.414) < 0.02);
+  c.ok("两页并排，不叠在一起", r.secondX >= 520);
+  c.ok("抓到了这一页的文字（" + r.lines + " 行）", r.lines >= 4 && /Chapter 1/.test(r.first) && r.marker);
+  c.ok("文字坐标按页面比例存，卡片多宽都对得上", r.frac);
+  c.ok("文字层铺在页面图上，位置落在图里", r.spans === r.lines && r.inside);
+  c.ok("文字是透明的，看到的仍是原版面", r.transparent);
+  c.ok("文字层可以划选", r.selectable);
+  c.ok("页码写法：留空全部、区间、逗号、开区间、越界都对",
+    r.rng === "12345|1235|345|0|245");
+
+  // 真鼠标划选：跨行拼成连贯的句子，浮出小按钮，点一下变成卡片并连回这一页
+  const box = await c.run((id) => {
+    const sp = [...document.querySelectorAll('.card[data-id="' + id + '"] .pt span')];
+    const a = sp[1].getBoundingClientRect(), b = sp[3].getBoundingClientRect();
+    return [a.x + 2, a.y + a.height / 2, b.right - 2, b.y + b.height / 2];
+  }, r.id);
+  const before = await c.run(() => ({ cards: S.cards.length, links: S.links.length, cam: cam.x + "," + cam.y }));
+  await c.page.mouse.move(box[0], box[1]);
+  await c.page.mouse.down();
+  await c.page.mouse.move(box[2], box[3], { steps: 8 });
+  await c.page.mouse.up();
+  await c.wait(400);
+  const s1 = await c.run(() => ({
+    bar: $("ptbar").classList.contains("on"), text: ($("ptbar")._info || {}).text || "",
+    moved: S.cards[0].x !== 0, cam: cam.x + "," + cam.y,
+  }));
+  c.ok("在页面上拖动是划选，卡片没有被拖走，画布也没动", !s1.moved && s1.cam === before.cam);
+  c.ok("划选之后浮出小按钮", s1.bar);
+  c.ok("跨行的句子拼成连贯的一段，断开的词接了回去",
+    /a garment of data\. Sarmakari/.test(s1.text) && /digital-only fashion reframes/.test(s1.text));
+  await c.page.click('#ptbar [data-a="card"]');
+  await c.wait(400);
+  const q = await c.run(() => {
+    const z = S.cards[S.cards.length - 1];
+    return { text: z.text, from: z.from, n: S.cards.length, links: S.links.length,
+      linked: S.links.some((l) => l.b === z.id), sel: sel.join(","), id: z.id,
+      bar: $("ptbar").classList.contains("on"), stillSel: getSelection().toString() };
+  });
+  c.ok("点「新建卡片」，划选的文字变成一张新卡片", q.n === before.cards + 1 && /a garment of data/.test(q.text));
+  c.ok("新卡片连回这一页，并记下出处", q.links === before.links + 1 && q.linked && q.from === r.id);
+  c.ok("新卡片被选中，小按钮收起，选区也清掉", q.sel === q.id && !q.bar && !q.stillSel);
+
+  // 关掉划选：整页可以随便拖动
+  const off = await c.run(async (id) => {
+    const one = card(id); one.ptoff = 1; render(); await new Promise((z) => setTimeout(z, 200));
+    const el = document.querySelector('.card[data-id="' + id + '"]');
+    const v = getComputedStyle(el.querySelector(".pt")).pointerEvents;
+    delete one.ptoff; render();
+    return v;
+  }, r.id);
+  c.ok("关掉「划选文字」以后整页可以随便拖", off === "none");
+
+  // 存进文件、再读回来：文字层一起带着走
+  const round = await c.run(async () => {
+    const b = await bundleBlob(null);
+    const d = JSON.parse(await b.text());
+    const pc = d.cards.find((z) => z.pdf);
+    await absorb(await readBoardFile(new File([await b.text()], "x.json"), true), false);
+    invalidateIndex(); render(); await new Promise((z) => setTimeout(z, 400));
+    const back = S.cards.find((z) => z.pdf);
+    return { inFile: !!pc && pc.pt.length, inlineImg: /^data:/.test(pc.src || ""),
+      back: !!back && back.pt.length, spans: document.querySelectorAll('.card[data-id="' + back.id + '"] .pt span').length,
+      quote: S.cards.some((z) => z.from === back.id) };
+  });
+  c.ok("文字层跟着存进文件", round.inFile >= 4 && round.inlineImg);
+  c.ok("读回来以后文字层还在，照样能划选", round.back === round.inFile && round.spans === round.back);
+  c.ok("引出的卡片与出处关系也还在", round.quote);
+
+  // 网页快照里也保留可划选的文字
+  const snap = await c.run(async () => {
+    const html = await buildWebSnap("pdf");
+    const dom = new DOMParser().parseFromString(html, "text/html");
+    const sp = dom.querySelectorAll(".card .pt span");
+    return { n: sp.length, txt: [...sp].some((z) => /DFX007/.test(z.textContent)),
+      editable: dom.querySelectorAll("[contenteditable]").length };
+  });
+  c.ok("网页快照里的 PDF 页面照样能划选文字", snap.n >= 4 && snap.txt && snap.editable === 0);
+
+  c.ok("中英文案都齐了", await c.run(() => ["importPDF", "pdfRange", "pdfRangePh", "pdfWidth", "pdfDpi",
+    "pdfNote", "pdfWork", "pdfDone", "pdfBad", "pdfNoPage", "pdfNoLib", "pdfToCard", "pdfMade",
+    "pdfSelectable", "imgOrig", "imgOrigNote"].every((k) => T.en[k] && T.zh[k])));
+});
+
+group("imgorig 图片原尺寸", async (c) => {
+  // 从前导入图片一律压到 1600px、卡片一律缩到 imgMax，撤不掉。现在多一个「原尺寸」。
+  const r = await c.run(async () => {
+    const mk = (w, h) => new Promise((res) => {
+      const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      const g = cv.getContext("2d"); g.fillStyle = "#39c"; g.fillRect(0, 0, w, h);
+      cv.toBlob((b) => res(new File([b], "big.jpg", { type: "image/jpeg" })), "image/jpeg", 0.9);
+    });
+    const add = (f) => new Promise((res) => shrink(f, async (d, w, h) => { const z = await addImage(d, w, h, { x: 0, y: 0 }, true); res({ z, w, h }); }));
+    S.cards = []; S.links = []; invalidateIndex(); render();
+    const out = {};
+    S.imgMax = 360;
+    const a = await add(await mk(2400, 1200));
+    out.cap = { stored: a.w, cardW: a.z.w };
+    S.imgMax = 0;
+    const b = await add(await mk(2400, 1200));
+    out.orig = { stored: b.w, cardW: b.z.w, iw: b.z.iw };
+    // 已有的图片用「适应全部」套用原尺寸
+    sizeImages(true);
+    out.afterFitAll = S.cards.map((z) => z.w);
+    S.imgMax = 360; sizeImages(true);
+    out.backToCap = S.cards.map((z) => z.w);
+    S.imgMax = 360;
+    return out;
+  });
+  c.ok("默认仍压到 1600px，卡片按上限缩（存 " + r.cap.stored + "px，卡片 " + r.cap.cardW + "px）",
+    r.cap.stored === 1600 && r.cap.cardW === 360);
+  c.ok("选「原尺寸」后按原始像素存，卡片也是原始宽度（" + r.orig.stored + "px）",
+    r.orig.stored === 2400 && r.orig.cardW === 2400 && r.orig.iw === 2400);
+  c.ok("「适应全部」把已有图片也还原成各自的原始宽度", r.afterFitAll.join(",") === "1600,2400");
+  c.ok("改回 360px 上限，「适应全部」照旧按上限缩", r.backToCap.join(",") === "360,360");
+});
+
 group("static 静态检查", async (c) => {
   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");
   const js = src.split("<script>").pop().split("</script>")[0];
