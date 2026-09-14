@@ -4968,6 +4968,42 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   c.ok("新卡片连回这一页，并记下出处", q.links === before.links + 1 && q.linked && q.from === r.id);
   c.ok("新卡片被选中，小按钮收起，选区也清掉", q.sel === q.id && !q.bar && !q.stillSel);
 
+  // 划选不会跑出这张卡片，拖动期间也不弹小按钮（早先手一拖出卡片，整个界面就被选成一片蓝）
+  const runaway = await c.run((id) => {
+    sel = [id]; paintSel();                       // 先选中这一页，才谈得上划选
+    const sp = [...document.querySelectorAll('.card[data-id="' + id + '"] .pt span')][1].getBoundingClientRect();
+    S.cards.push({ id: "outside", x: -900, y: 0, w: 300, text: "另一张卡片的正文", s: { ...DEF } });
+    invalidateIndex(); render();
+    window.__flips = 0;
+    const bar = pdfQuoteBar();
+    new MutationObserver(() => { if (bar.classList.contains("on")) window.__flips++; }).observe(bar, { attributes: true });
+    return { x: sp.x + 3, y: sp.y + sp.height / 2, w: sp.width, h: sp.height,
+      inView: sp.x > 0 && sp.x < innerWidth && sp.y > 0 && sp.y < innerHeight,
+      pe: getComputedStyle(document.querySelector('.card[data-id="' + id + '"] .pt span')).pointerEvents };
+  }, r.id);
+  await c.page.mouse.move(runaway.x, runaway.y);
+  await c.page.mouse.down();
+  // 一路拖到卡片外面很远的地方（最后停在起点的右下方，选区才不会退成空）
+  for (const [x, y] of [[runaway.x + 200, runaway.y + 90], [60, 880], [1380, 900]])
+    await c.page.mouse.move(x, y, { steps: 5 });
+  const during = await c.run(() => ({
+    dragging: document.body.classList.contains("ptdrag"),
+    bar: !!document.querySelector("#ptbar.on"),
+    other: getSelection().containsNode(document.querySelector('.card[data-id="outside"] .cap'), true),
+    ui: getSelection().containsNode($("status"), true),
+    len: getSelection().toString().length,
+  }));
+  await c.page.mouse.up();
+  await c.wait(300);
+  const afterUp = await c.run(() => ({ dragging: document.body.classList.contains("ptdrag"),
+    bar: !!document.querySelector("#ptbar.on"), flips: window.__flips,
+    other: getSelection().containsNode(document.querySelector('.card[data-id="outside"] .cap'), true) }));
+  await c.run(() => { S.cards = S.cards.filter((z) => z.id !== "outside"); invalidateIndex(); render(); });
+  c.ok("手拖出卡片也不会把别的卡片和界面选进去", !during.other && !during.ui && !afterUp.other && during.len > 0);
+  c.ok("拖动过程中小按钮不出现，松手才浮出来（不再一路闪）", !during.bar && during.dragging && afterUp.bar && afterUp.flips === 1);
+  c.ok("松手之后临时的不可选状态已收回", !afterUp.dragging);
+
+
   // 与锁定结合：锁上＝钉住不动，不必先选中也能划选
   const off = await c.run(async (id) => {
     const el = () => document.querySelector('.card[data-id="' + id + '"]');

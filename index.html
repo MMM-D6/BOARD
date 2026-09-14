@@ -643,6 +643,10 @@
   /* 只有"字"本身接收指针：行与行之间的空白、页边、插图上照样是拖动整页。
      没选中这一页时连字也不拦，点一下选中它（或锁定它）之后才开始划选 */
   .card.sel .pt span,.card.lkpos .pt span{pointer-events:auto;cursor:text}
+  /* 在页面上划选的时候，把别处一律设成不可选：
+     否则手一拖出这张卡片，浏览器就顺着把整个界面都选进去（满屏变蓝） */
+  body.ptdrag,body.ptdrag *{-webkit-user-select:none !important;user-select:none !important}
+  body.ptdrag .pt span{-webkit-user-select:text !important;user-select:text !important}
   .card .pt span{position:absolute;white-space:pre;transform-origin:0 0;color:transparent;
     background:none;line-height:1;font-family:"IBM Plex Sans",sans-serif}
   .card .pt span::selection{background:rgba(90,140,255,.35)}
@@ -5624,21 +5628,39 @@ function ptxAscent(){
   }catch(e){}
   return ptxAsc=ptxAsc||.8;
 }
-// 划选完成就把小按钮浮出来
+// 划选：拖的过程中什么都不弹（早先每动一下就重排一次小按钮，看起来一直在跳），
+// 松手之后才把它浮出来。整个拖动期间别处不可选，手拖出卡片也不会把界面选成一片蓝。
+let ptDragging=false;
 function ptxWatch(){
+  addEventListener("pointerdown",e=>{
+    if(!(e.target.closest&&e.target.closest(".pt span")))return;
+    ptDragging=true;document.body.classList.add("ptdrag");hideQuoteBar();
+  },true);
+  const end=()=>{
+    if(!ptDragging)return;
+    ptDragging=false;document.body.classList.remove("ptdrag");
+    setTimeout(ptxBar,0);                    // 等这一轮 selectionchange 落定
+  };
+  addEventListener("pointerup",end,true);
+  addEventListener("pointercancel",end,true);
+  addEventListener("blur",end);              // 手松在窗口外面也要收尾
   document.addEventListener("selectionchange",()=>{
-    const s=getSelection();
-    if(!s||s.isCollapsed){hideQuoteBar();return}
-    const layer=ptxLayerOf(s);
-    if(!layer){hideQuoteBar();return}
-    const cd=layer.closest(".card");if(!cd)return;
-    const txt=ptxText(s);
-    if(!txt){hideQuoteBar();return}
-    const r=s.getRangeAt(0).getBoundingClientRect();
-    if(!r.width&&!r.height){hideQuoteBar();return}
-    showQuoteBar(cd.dataset.id,txt,r);
+    if(ptDragging)return;                    // 拖动中不动小按钮
+    ptxBar();
   });
   addEventListener("scroll",hideQuoteBar,true);
+}
+function ptxBar(){
+  const s=getSelection();
+  if(!s||s.isCollapsed){hideQuoteBar();return}
+  const layer=ptxLayerOf(s);
+  if(!layer){hideQuoteBar();return}
+  const cd=layer.closest(".card");if(!cd){hideQuoteBar();return}
+  const txt=ptxText(s);
+  if(!txt){hideQuoteBar();return}
+  const r=s.getRangeAt(0).getBoundingClientRect();
+  if(!r.width&&!r.height){hideQuoteBar();return}
+  showQuoteBar(cd.dataset.id,txt,r);
 }
 // 取划选到的文字：按 DOM 顺序（就是 PDF 里的内容顺序）走一遍，
 // 同一行之间按间隙决定要不要补空格，换行时西文断词接回去、中文直接相连
