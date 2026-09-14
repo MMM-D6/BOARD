@@ -4843,6 +4843,18 @@ group("pdfimport 导入 PDF 页面", async (c) => {
       // 页码写法
       rng: [parsePages("", 5).join(""), parsePages("1-3,5", 9).join(""), parsePages("3-", 5).join(""),
         parsePages("9", 5).length, parsePages("2，4、5", 9).join("")].join("|"),
+      // 不合并：同一行里离得远的片段各自成块，宽度不会横跨整页
+      oneLine: a.pt.every((z) => z.w < 0.98),
+      // 文字层与页面图对不对得上：把 span 的中线跟同一行其他 span 的中线比，偏差应当很小
+      drift: (() => {
+        const sp = [...el().querySelectorAll(".pt span")].map((z) => z.getBoundingClientRect());
+        let d = 0;
+        sp.forEach((a2) => sp.forEach((b2) => {
+          if (Math.abs(a2.top - b2.top) < a2.height * 0.6)
+            d = Math.max(d, Math.abs((a2.top + a2.height / 2) - (b2.top + b2.height / 2)));
+        }));
+        return +d.toFixed(2);
+      })(),
       id: a.id, secondX: made[1].x,
     };
   }, pdfB64);
@@ -4853,6 +4865,8 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   c.ok("抓到了这一页的文字（" + r.lines + " 行）", r.lines >= 4 && /Chapter 1/.test(r.first) && r.marker);
   c.ok("文字坐标按页面比例存，卡片多宽都对得上", r.frac);
   c.ok("文字层铺在页面图上，位置落在图里", r.spans === r.lines && r.inside);
+  c.ok("一个文字片段一个 span，不再把离得远的片段并成一行", r.oneLine);
+  c.ok("每个 span 的框与它那行字对得上（最大偏差 " + r.drift + "px）", r.drift < 3);
   c.ok("文字是透明的，看到的仍是原版面", r.transparent);
   c.ok("文字层可以划选", r.selectable);
   c.ok("页码写法：留空全部、区间、逗号、开区间、越界都对",
@@ -4890,15 +4904,44 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   c.ok("新卡片连回这一页，并记下出处", q.links === before.links + 1 && q.linked && q.from === r.id);
   c.ok("新卡片被选中，小按钮收起，选区也清掉", q.sel === q.id && !q.bar && !q.stillSel);
 
-  // 关掉划选：整页可以随便拖动
+  // 与锁定结合：锁着＝能划选、位置不动；解锁＝没有文字层，整页随便拖
   const off = await c.run(async (id) => {
-    const one = card(id); one.ptoff = 1; render(); await new Promise((z) => setTimeout(z, 200));
-    const el = document.querySelector('.card[data-id="' + id + '"]');
-    const v = getComputedStyle(el.querySelector(".pt")).pointerEvents;
-    delete one.ptoff; render();
-    return v;
+    const el = () => document.querySelector('.card[data-id="' + id + '"]');
+    const locked = { pinned: isPinned(id), layer: !!el().querySelector(".pt") };
+    setCardLock([id], null); await new Promise((z) => setTimeout(z, 250));
+    const free = { pinned: isPinned(id), layer: !!el().querySelector(".pt") };
+    // 解锁以后在页面正中按下拖动：卡片跟着走
+    const c0 = card(id), x0 = c0.x;
+    const r0 = el().getBoundingClientRect();
+    return { locked, free, x0, cx: r0.x + r0.width / 2, cy: r0.y + r0.height / 2 };
   }, r.id);
-  c.ok("关掉「划选文字」以后整页可以随便拖", off === "none");
+  c.ok("导入的页面默认锁定，所以能划选、位置不会被碰乱", off.locked.pinned && off.locked.layer);
+  c.ok("解锁以后文字层撤掉（页面上不再堆着几千个看不见的字）", !off.free.pinned && !off.free.layer);
+  // 拖之前先把这一页摆到画面中央（前面的组可能把相机留在别处），再量一次位置
+  await c.run((id) => { const z = card(id); camTo(-(z.x + z.w / 2), -(z.y + 200), 1, true); }, r.id);
+  await c.wait(400);
+  const at = await c.run((id) => {
+    const r = document.querySelector('.card[data-id="' + id + '"]').getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: Math.min(r.y + r.height / 2, innerHeight - 120),
+      x0: card(id).x, z: cam.z };                                   // 画布缩放要算进去，落点也别跑出视口
+  }, r.id);
+  await c.page.mouse.move(at.x, at.y);
+  await c.wait(60);
+  await c.page.mouse.down();
+  await c.page.mouse.move(at.x + 40, at.y + 20, { steps: 3 });
+  await c.page.mouse.move(at.x + 120, at.y + 60, { steps: 6 });
+  await c.page.mouse.up();
+  await c.wait(300);
+  const moved = await c.run((id) => ({ x: card(id).x, layer: !!document.querySelector('.card[data-id="' + id + '"] .pt'),
+    pinned: isPinned(id), lk: lock, sel: sel.join(",") }), r.id);
+
+  c.ok("解锁后在页面正中拖动就能搬走它", Math.abs(moved.x - at.x0 - 120 / at.z) < 6);
+  const relock = await c.run(async (id) => {
+    setCardLock([id], "all"); await new Promise((z) => setTimeout(z, 250));
+    const sp = document.querySelectorAll('.card[data-id="' + id + '"] .pt span');
+    return { n: sp.length, pinned: isPinned(id) };
+  }, r.id);
+  c.ok("锁回去，文字层原样回来", relock.pinned && relock.n === r.spans);
 
   // 存进文件、再读回来：文字层一起带着走
   const round = await c.run(async () => {
@@ -4926,9 +4969,28 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   });
   c.ok("网页快照里的 PDF 页面照样能划选文字", snap.n >= 4 && snap.txt && snap.editable === 0);
 
+  // 视野里同时铺着的文字层有总量上限，免得几十页锁定的 PDF 一起在画面上时拖动变卡
+  const budget = await c.run(async () => {
+    const pt = []; for (let i = 0; i < 2000; i++) pt.push({ x: .05, y: i * .0004 + .02, w: .3, h: .01, s: "w" + i });
+    const keep = S.cards.slice();
+    const ih = keep.find((z) => z.ih).ih;      // 借一张已有的页面图：文字层只铺在有图的 PDF 卡片上
+    S.cards = []; for (let k = 0; k < 8; k++) S.cards.push({ id: "b" + k, x: k * 560, y: 0, w: 520, text: "",
+      ih, ar: 1.4, pt, pdf: { name: "x", page: k + 1, of: 8 }, lock: "all", s: { ...DEF } });
+    S.links = []; S.frames = []; invalidateIndex(); render(); fit(true);
+    await new Promise((z) => setTimeout(z, 500));
+    const spans = document.querySelectorAll(".pt span").length;
+    const withLayer = [...document.querySelectorAll(".card.pdfcard")].filter((e) => e.querySelector(".pt")).length;
+    S.cards = keep; invalidateIndex(); render();
+    return { spans, withLayer, budget: PT_BUDGET };
+  });
+  c.ok("八页同时在画面上时，文字层总量压在上限之内（" + budget.spans + " ≤ " + budget.budget + "）",
+    budget.spans <= budget.budget && budget.withLayer >= 1 && budget.withLayer < 8);
+  c.ok("空白的 PDF 卡片不显示「添加文字」的占位提示",
+    await c.run(() => getComputedStyle(document.querySelector(".card.pdfcard .cap"), "::before").content === '""'));
+
   c.ok("中英文案都齐了", await c.run(() => ["importPDF", "pdfRange", "pdfRangePh", "pdfWidth", "pdfDpi",
     "pdfNote", "pdfWork", "pdfDone", "pdfBad", "pdfNoPage", "pdfNoLib", "pdfToCard", "pdfMade",
-    "pdfSelectable", "imgOrig", "imgOrigNote"].every((k) => T.en[k] && T.zh[k])));
+    "pdfRead", "imgOrig", "imgOrigNote"].every((k) => T.en[k] && T.zh[k])));
 });
 
 group("imgorig 图片原尺寸", async (c) => {
@@ -4962,6 +5024,55 @@ group("imgorig 图片原尺寸", async (c) => {
     r.orig.stored === 2400 && r.orig.cardW === 2400 && r.orig.iw === 2400);
   c.ok("「适应全部」把已有图片也还原成各自的原始宽度", r.afterFitAll.join(",") === "1600,2400");
   c.ok("改回 360px 上限，「适应全部」照旧按上限缩", r.backToCap.join(",") === "360,360");
+});
+
+group("safety 注入与越权排查", async (c) => {
+  // 画布文件可能来自别人（导师、同学发来的 .json / 存档包）。里面的标签、页面标题、模板名
+  // 都会出现在界面上，所以一律当成不可信文本：转义后再进 HTML，绝不当代码执行。
+  const r = await c.run(async () => {
+    window.__x = 0;
+    const bad = '"><img src=x onerror="window.__x=1">';
+    const keep = JSON.parse(JSON.stringify({ c: S.cards, f: S.frames, l: S.links }));
+    S.cards = [{ id: "a", x: 0, y: 0, w: 300, text: "hi", tags: [bad], s: { ...DEF } }];
+    S.frames = [{ id: "f", x: -50, y: -50, w: 600, h: 400, title: bad }];
+    S.links = []; S.docs = []; invalidateIndex(); render(); refreshTagList();
+    const out = {};
+    out.taglist = !/onerror="window/.test($("taglist").innerHTML);
+    menuAt(40, 40, [{ label: bad, on: () => {} }, { label: "ok", key: bad }]);
+    out.menu = !/<img/i.test($("menu").innerHTML) && $("menu").textContent.includes("<img");
+    closeMenus();
+    sel = ["a"]; cardMenu(60, 60); closeMenus();
+    await new Promise((z) => setTimeout(z, 300));
+    out.fired = window.__x;
+    out.frameTitle = document.querySelector('.frame[data-id="f"] .ttl').textContent === bad;
+    // 页面标题也不能变成节点
+    out.frameNoNode = !document.querySelector('.frame[data-id="f"] .ttl img');
+    S.cards = keep.c; S.frames = keep.f; S.links = keep.l; invalidateIndex(); render();
+    return out;
+  });
+  c.ok("标签里的 HTML 不会被当成代码（datalist）", r.taglist);
+  c.ok("菜单项的文字按纯文本放，不走 HTML", r.menu);
+  c.ok("页面标题里的 HTML 原样显示，不变成节点", r.frameTitle && r.frameNoNode);
+  c.ok("整个过程中没有脚本被执行", r.fired === 0);
+
+  const pdfsec = await c.run(() => {
+    const src = importPDF.toString() + loadPdfJs.toString();
+    return { noEval: /isEvalSupported:\s*false/.test(src), https: !/http:\/\//.test(loadPdfJs.toString()) };
+  });
+  c.ok("解析 PDF 时禁用 eval（PDF 里的代码不会被执行）", pdfsec.noEval);
+  c.ok("解析库只从 https 取", pdfsec.https);
+
+  const snap = await c.run(async () => {
+    const keep = S.cards.slice();
+    S.cards = [{ id: "s", x: 0, y: 0, w: 300, text: "x", tags: ['"><script>alert(1)<\/script>'], s: { ...DEF } }];
+    S.frames = []; S.links = []; invalidateIndex(); render();
+    const html = await buildWebSnap("t");
+    S.cards = keep; invalidateIndex(); render();
+    const d = new DOMParser().parseFromString(html, "text/html");
+    return { scripts: [...d.querySelectorAll("script")].map((z) => z.id).join(","),
+      handlers: /\son\w+=/i.test(html.replace(/on\w+=/g, (m, i) => (/<[^>]*$/.test(html.slice(0, i)) ? m : ""))) };
+  });
+  c.ok("快照里只有自己那两段脚本，卡片内容不会带出可执行的东西", snap.scripts === "snapcfg,snapjs");
 });
 
 group("static 静态检查", async (c) => {
