@@ -4970,25 +4970,40 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   });
   c.ok("按复制拿到的是拼好的整段文字", copied.prevented && /a garment of data\. Sarmakari/.test(copied.out));
 
-  // 划选不会跑出这一页；拖到空白处也不会让选区一缩一放（早先看起来就是一直在跳闪）
+  // 划选不会跑出这一页；扫过行间空白时也不会突然把整页选进去（那就是"跳闪、满屏变蓝"）
   const runaway = await c.run((id) => {
     sel = [id]; paintSel();
-    const sp = [...document.querySelectorAll('.card[data-id="' + id + '"] .pt span')][1].getBoundingClientRect();
+    const sps = [...document.querySelectorAll('.card[data-id="' + id + '"] .pt span')];
+    const a = sps[1].getBoundingClientRect(), b = sps[2].getBoundingClientRect();
     S.cards.push({ id: "outside", x: -900, y: 0, w: 300, text: "另一张卡片的正文", s: { ...DEF } });
     invalidateIndex(); render();
-    return { x: sp.x + 3, y: sp.y + sp.height / 2 };
+    return {
+      x: a.x + 3, y: a.y + a.height / 2,
+      line2: [a.right - 3, a.y + a.height / 2],
+      gap: [a.right - 3, (a.bottom + b.top) / 2],          // 两行之间的空白
+      line3: [b.right - 3, b.y + b.height / 2],
+      total: card(id).pt.reduce((n, z) => n + z.s.length, 0),
+    };
   }, r.id);
   await c.page.mouse.move(runaway.x, runaway.y);
   await c.page.mouse.down();
-  const lens = [];
-  for (const [x, y] of [[runaway.x + 160, runaway.y + 40], [runaway.x + 200, runaway.y + 120],
-    [60, 840], [1360, 860]]) {          // 一路甩到画布空白处，但别甩出窗口
-    await c.page.mouse.move(x, y, { steps: 5 });
-    lens.push(await c.run(() => getSelection().toString().length));
+  const lens = {};
+  for (const k of ["line2", "gap", "line3"]) {
+    await c.page.mouse.move(runaway[k][0], runaway[k][1], { steps: 4 });
+    lens[k] = await c.run(() => getSelection().toString().length);
   }
+  for (const [x, y] of [[60, 840], [1360, 860]]) await c.page.mouse.move(x, y, { steps: 5 });
   const during = await c.run(() => ({
     dragging: document.body.classList.contains("ptdrag"),
     active: document.querySelectorAll(".pt.ptactive").length,
+    layerSel: getComputedStyle(document.querySelector(".pt.ptactive")).userSelect,
+    spanSel: getComputedStyle(document.querySelector(".pt.ptactive span")).userSelect,
+    // 选区画出来的范围不该超过这一页本身
+    fits: (() => {
+      const r = getSelection().getRangeAt(0).getBoundingClientRect();
+      const i = document.querySelector(".card.sel img").getBoundingClientRect();
+      return r.width <= i.width + 2 && r.height <= i.height + 2;
+    })(),
     other: getSelection().containsNode(document.querySelector('.card[data-id="outside"] .cap'), true),
     ui: getSelection().containsNode($("status"), true),
     len: getSelection().toString().length,
@@ -4999,8 +5014,26 @@ group("pdfimport 导入 PDF 页面", async (c) => {
   await c.run(() => { S.cards = S.cards.filter((z) => z.id !== "outside"); invalidateIndex(); render(); });
   c.ok("手拖出卡片也不会把别的卡片和界面选进去", !during.other && !during.ui && during.len > 0);
   c.ok("划的过程中只有这一页在被选（另一页 PDF 也不会跟着变蓝）", during.dragging && during.active === 1);
-  c.ok("拖过空白处时选区不回缩（" + lens.join("→") + "）", lens.every((v, i) => i === 0 || v >= lens[i - 1]));
-  c.ok("松手之后临时的不可选状态已收回", !afterUp.dragging);
+  c.ok("只有字本身可选，文字层那个大空块不可选（否则整块涂蓝）",
+    during.spanSel === "text" && during.layerSel === "none");
+  c.ok("选区画出来的范围不超过这一页", during.fits);
+  c.ok(`扫过行间空白时选区就近停住，不会一下子把整页选进去（${lens.line2}→${lens.gap}→${lens.line3}，整页 ${runaway.total}）`,
+    lens.gap >= lens.line2 && lens.gap <= lens.line3 && lens.gap < runaway.total * 0.9);
+  c.ok("松手之后临时状态已收回", !afterUp.dragging);
+
+  // 双击选到一个词，而不是整行
+  const dbl = await c.run((id) => {
+    const sp = [...document.querySelectorAll('.card[data-id="' + id + '"] .pt span')][1];
+    const b = sp.getBoundingClientRect();
+    return { x: b.x + b.width * 0.25, y: b.y + b.height / 2, whole: sp.textContent };
+  }, r.id);
+  await c.page.mouse.move(dbl.x, dbl.y);
+  await c.page.mouse.down(); await c.page.mouse.up();
+  await c.wait(80);
+  await c.page.mouse.down(); await c.page.mouse.up();
+  await c.wait(200);
+  const word = await c.run(() => getSelection().toString());
+  c.ok("双击选到一个词（选到「" + word + "」）", word.length > 0 && !/\s/.test(word) && word.length < dbl.whole.length);
 
   // 与锁定结合：锁上＝钉住不动，不必先选中也能划选
   const off = await c.run(async (id) => {
@@ -5242,8 +5275,9 @@ group("static 静态检查", async (c) => {
    抠图工具（cutout.html）
    ===================================================================== */
 
-group("cutoutlink 抠图工具的入口", async (c) => {
-  // 两个文件仍然各自独立、互不依赖，index 这边只是多一个"在新标签里打开它"的入口。
+group("cutoutlink 外部工具的入口", async (c) => {
+  // 抠图与拼版都是各自独立的单文件，board 这边只是多一个"在新标签里打开它"的入口：
+  // 以后单独更新这两个文件传上去，board 一行都不用改，刷新就是新的。
   await c.board([], []);
   const r = await c.run(() => {
     const real = window.open;
@@ -5255,15 +5289,41 @@ group("cutoutlink 抠图工具的入口", async (c) => {
     if (hit) hit.click();
     window.open = real;
     closeMenus();
-    return { labels, url, imgAt: labels.findIndex((z) => z.includes(t("insertImage"))),
-      cutAt: labels.findIndex((z) => z.includes(t("cutoutTool"))) };
+    let url2 = null;
+    window.open = (u) => { url2 = u; return { closed: false }; };
+    boardMenu(60, 60);
+    const hit2 = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("tilerTool")));
+    if (hit2) hit2.click();
+    window.open = real;
+    closeMenus();
+    return { labels, url, url2, imgAt: labels.findIndex((z) => z.includes(t("insertImage"))),
+      cutAt: labels.findIndex((z) => z.includes(t("cutoutTool"))),
+      tileAt: labels.findIndex((z) => z.includes(t("tilerTool"))),
+      // board 自己不许把这两个工具搬进来：既没有它们的界面，也没有 iframe 之类的嵌入
+      inline: !!document.querySelector("iframe,embed,object") ||
+        /id="(ndx|nudge|libs)"/.test(document.documentElement.innerHTML) };
   });
   c.ok("画布右键菜单里有抠图工具", r.cutAt >= 0);
+  c.ok("board 只是链接过去，没有把这两个工具的代码搬进来", !r.inline);
   c.ok("就放在插入图片旁边", r.cutAt === r.imgAt + 1);
-  c.ok("指向同目录的 cutout.html", !!r.url && /\/cutout\.html$/.test(r.url));
-  c.ok("是绝对地址，子目录部署也找得到", !!r.url && r.url.startsWith("file://"));
-  c.ok("中英文案都齐了", await c.run(() => !!(T.en.cutoutTool && T.zh.cutoutTool &&
-    T.en.cutoutHint && T.zh.cutoutHint && T.en.cutoutBlocked && T.zh.cutoutBlocked)));
+  c.ok("指向同目录的 cutout.html", !!r.url && /\/cutout\.html(\?|$)/.test(r.url));
+  c.ok("菜单里有拼版工具，就跟在抠图后面", r.tileAt === r.cutAt + 1);
+  c.ok("指向同目录的 Tiler.html", !!r.url2 && /\/Tiler\.html(\?|$)/.test(r.url2));
+  c.ok("都是绝对地址，子目录部署也找得到", r.url.startsWith("file://") && r.url2.startsWith("file://"));
+  c.ok("中英文案都齐了", await c.run(() => ["cutoutTool", "cutoutHint", "cutoutBlocked",
+    "tilerTool", "tilerHint", "tilerBlocked"].every((k) => T.en[k] && T.zh[k])));
+  // 部署在网上时给地址带个时间戳，刚传上去的新版本刷新就能看到；本地 file:// 不加，免得多此一举
+  const bust = await c.run(() => {
+    const real = window.open; let u = null;
+    window.open = (x) => { u = x; return { closed: false }; };
+    openTiler();
+    const local = u;
+    const src = openSideTool.toString();
+    window.open = real;
+    return { local, stamps: /searchParams\.set\("v"/.test(src) && /location\.protocol!=="file:"/.test(src) };
+  });
+  c.ok("本地打开时地址干干净净", /Tiler\.html$/.test(bust.local));
+  c.ok("部署到网上时带时间戳，避开缓存", bust.stamps);
   c.ok("index 挂着 manifest", await c.run(() =>
     !!document.querySelector('link[rel="manifest"]')));
 
@@ -5271,11 +5331,35 @@ group("cutoutlink 抠图工具的入口", async (c) => {
   // manifest 在 file:// 上 fetch 不到，直接把这一页打开读文本即可。
   await c.page.goto("file://" + require("path").resolve(__dirname, "manifest.json"));
   const mf = JSON.parse(await c.run(() => document.body.innerText));
-  c.ok("manifest 里有抠图快捷方式",
-    Array.isArray(mf.shortcuts) && mf.shortcuts.some((z) => /cutout\.html$/.test(z.url || "")));
+  c.ok("manifest 里有抠图与拼版两条快捷方式",
+    Array.isArray(mf.shortcuts) && mf.shortcuts.some((z) => /cutout\.html$/.test(z.url || "")) &&
+    mf.shortcuts.some((z) => /Tiler\.html$/.test(z.url || "")));
   c.ok("快捷方式落在 scope 之内", mf.scope === "./" && /^\.\//.test(mf.shortcuts[0].url));
   c.ok("图标与主应用共用，不必再多两个文件",
-    mf.shortcuts[0].icons.every((z) => mf.icons.some((m) => m.src === z.src)));
+    mf.shortcuts.every((s) => s.icons.every((z) => mf.icons.some((m) => m.src === z.src))));
+});
+
+group("tiler 拼版工具", async (c) => {
+  // 拼版是另一份完全独立的单文件。这里只确认它能独立打开、自己跑起来，
+  // 不与 board 共享任何代码——所以以后单独替换这个文件不会影响画布。
+  const fs2 = require("fs"), path2 = require("path");
+  if (!fs2.existsSync(path2.resolve(__dirname, "Tiler.html"))) {
+    c.ok("需要同目录下的 Tiler.html（已跳过）", false); return;
+  }
+  const errs = [];
+  c.page.on("pageerror", (e) => errs.push(e.message));
+  await c.page.goto("file://" + path2.resolve(__dirname, "Tiler.html"));
+  await c.wait(800);
+  const r = await c.run(() => ({
+    title: document.title,
+    stage: !!document.getElementById("stage"),
+    file: !!document.getElementById("file"),
+    canvas: !!document.getElementById("cv"),
+    boardGlobals: ["S", "render", "makeCard", "importPDF"].filter((k) => k in window),
+  }));
+  c.ok("Tiler.html 能独立打开", /tiler/i.test(r.title) && r.stage && r.file && r.canvas);
+  c.ok("它不依赖 board 的任何东西（两边真的是各跑各的）", r.boardGlobals.length === 0);
+  c.ok("打开时没有脚本错误" + (errs.length ? "：" + errs[0] : ""), errs.length === 0);
 });
 
 group("cutout 抠图工具", async (c) => {

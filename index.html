@@ -646,16 +646,12 @@
   /* 在页面上划选的时候，只有"正在划的这一页"可选，别处（包括另一页 PDF）一律不可选：
      否则手一拖出这张卡片，浏览器就顺着把中间的东西全选进去，满屏变蓝 */
   body.ptdrag,body.ptdrag *{-webkit-user-select:none !important;user-select:none !important}
-  body.ptdrag .pt.ptactive,body.ptdrag .pt.ptactive span{-webkit-user-select:text !important;user-select:text !important}
-  /* 手扫过行与行之间的空白时，落点如果落到下面的图上，选区会缩回去再弹出来，看起来一直在跳闪。
-     跟 pdf.js 一样在文字层末尾垫一块透明的"接盘"元素：划的过程中它铺满整层、垫在字的下面，
-     空白处的落点就落在文字之后，选区只会往前长，不会回跳 */
-  .card .pt .pte{display:block;position:absolute;left:0;right:0;top:100%;bottom:0;z-index:-1;
-    pointer-events:none;-webkit-user-select:none;user-select:none}
-  body.ptdrag .pt.ptactive{pointer-events:auto;overflow:visible}
-  /* 划的时候这块"接盘"铺得比卡片还大：手甩到画布空白处，落点也还在这一层里，
-     选区只会停在原地或继续往前，不会一下子缩回去 */
-  body.ptdrag .pt.ptactive .pte{top:-6000px;left:-6000px;right:-6000px;bottom:-6000px;pointer-events:auto}
+  /* 只有"字"本身可选。这一层和那块接盘元素都不能可选：
+     它们是很大的空块，一旦被选进去，浏览器会把整块涂蓝——就是"选中时满屏变蓝" */
+  body.ptdrag .pt.ptactive span{-webkit-user-select:text !important;user-select:text !important}
+  body.ptdrag .pt.ptactive,body.ptdrag .pt.ptactive .pte{
+    -webkit-user-select:none !important;user-select:none !important}
+  body.ptdrag{cursor:text}
   .card .pt span{position:absolute;white-space:pre;transform-origin:0 0;color:transparent;
     background:none;line-height:1;font-family:"IBM Plex Sans",sans-serif}
   .card .pt span::selection{background:rgba(90,140,255,.35)}
@@ -741,6 +737,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   newWindow:"New window",agoNow:"just now",agoMin:"m ago",agoHour:"h ago",agoDay:"d ago",
   cutoutTool:"Cutout tool",cutoutHint:"Cut it out, hit Copy, then paste it back here",
   cutoutBlocked:"The browser blocked the new tab. Open cutout.html by hand.",
+  tilerTool:"Tiling tool",tilerHint:"Split a large image or PDF into A4 sheets, then print them",
+  tilerBlocked:"The browser blocked the new tab. Open Tiler.html by hand.",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   bibShow:"Show what is filed under this entry",
@@ -933,6 +931,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   newWindow:"新建窗口",agoNow:"刚刚",agoMin:" 分钟前",agoHour:" 小时前",agoDay:" 天前",
   cutoutTool:"抠图工具",cutoutHint:"抠完点复制，回到画布 Ctrl/⌘+V 粘上",
   cutoutBlocked:"新标签被浏览器拦住了，请手动打开 cutout.html",
+  tilerTool:"拼版工具",tilerHint:"把大图或 PDF 切成 A4 分页，拼好直接打印",
+  tilerBlocked:"新标签被浏览器拦住了，请手动打开 Tiler.html",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   bibShow:"显示归在这条文献下的原文",
@@ -1903,10 +1903,18 @@ function newWindow(){window.open(location.pathname+"?w="+uid(),"_blank")}
 // 用 new URL(...,location.href) 解析相对路径，部署在子目录、或者本地双击打开都能找对位置。
 // index.html 仍然可以脱离 cutout.html 独立运行：拿不到就只是打不开那个标签页，
 // 画布本身一切照旧，所以这里不做任何存在性检查（file:// 上也检查不了）。
-function openCutout(){
-  const w=window.open(new URL("cutout.html",location.href).href,"_blank");
-  if(!w){toast(t("cutoutBlocked"));return}
-  toast(t("cutoutHint"));
+function openCutout(){openSideTool("cutout.html","cutoutHint","cutoutBlocked")}
+// 拼版工具（Tiler.html）同理：也是独立的一份单文件，board 只留一个入口。
+// 两个工具都只是"链接过去"，不是把代码搬进来：以后单独更新 Tiler.html 或 cutout.html
+// 传上 GitHub，board 这边一行都不用动，刷新就是新的。
+function openTiler(){openSideTool("Tiler.html","tilerHint","tilerBlocked")}
+// 每次都带一个时间戳参数，避开浏览器缓存，刚传上去的新版本刷新就能看到
+function openSideTool(file,hintKey,blockKey){
+  const u=new URL(file,location.href);
+  if(location.protocol!=="file:")u.searchParams.set("v",Date.now().toString(36));
+  const w=window.open(u.href,"_blank");
+  if(!w){toast(t(blockKey));return}
+  toast(t(hintKey));
 }
 async function unbind(quiet){
   fileHandle=null;fileName=null;fileOK=false;fileErr="";fileState();
@@ -4111,6 +4119,10 @@ const MANUAL=[
   <p>导出面板里「密码保护」默认勾着：整份快照用你设的密码加密，没有密码既打不开，也读不出里面的字和图。密码至少 12 位，点「生成」可以得到一个强密码并复制到剪贴板。密码和文件请分开发给对方。解锁后闲置 15 分钟会自动回到锁屏。</p>
   <p class="tip">快照只负责"看"，不能导回来继续编辑。要能还原的，仍然是 json 或存档包。</p>`],
 
+ ["两个小工具","LIANGGEXIAOGONGJU",`
+  <p>画布右键里的 <b>抠图工具</b> 和 <b>拼版工具</b> 是两个独立的小网页（cutout.html、Tiler.html），点一下在新标签里打开。抠图用来把图里的主体抠出来，复制回画布粘上；拼版用来把大图或 PDF 切成 A4 分页，拼好直接打印。</p>
+  <p class="tip">它们只是链接过去，代码没有并进画布。以后单独更新这两个文件传上去，画布这边一行都不用改，刷新就是新的版本。</p>`],
+
  ["导入 PDF 页面","DAORUPDF",`
   <p>画布右键 <b>导入 PDF 页面…</b>，可以只导某几页（<code>1-3,7,12-</code>，留空是全部）。每一页变成一张卡片：版面跟原文一样，但上面的文字可以直接用鼠标划选。</p>
   <p>划选之后按 <kbd>⌘C</kbd> 复制即可：跨行的句子会拼成连贯的一段，英文里被连字号断开的词也会接回去。要把它变成卡片，在画布上新建一张文字卡片粘进去就行。</p>
@@ -5559,7 +5571,6 @@ function buildPtx(wrap,oc,im){
     sp.dataset.w=it.w;sp.dataset.y=it.y;sp.dataset.x=it.x;sp.dataset.h=it.h;
     f.appendChild(sp);
   });
-  const pad=document.createElement("div");pad.className="pte";f.appendChild(pad);
   L.appendChild(f);wrap.appendChild(L);
   L._ar=oc.ar||1.414;
   requestAnimationFrame(()=>fitPtx(L,im));
@@ -5603,26 +5614,64 @@ function ptxAscent(){
   }catch(e){}
   return ptxAsc=ptxAsc||.8;
 }
-// 划选 PDF 页面时的两条保护：
-//   1) 从按下到松手，只有"正在划的这一页"可选，别处一律不可选。
-//      没有这一层，手一拖出卡片，浏览器就顺着把中间的东西全选进去，满屏变蓝。
-//   2) 复制时按几何关系重新拼一遍（同一行补空格、换行接断词），否则得到的是一堆挨在一起的碎片。
-let ptDragging=false;
+// PDF 页面上的划选由我们自己算，不交给浏览器自由发挥。
+// 交给浏览器时有两个治不好的毛病：手扫过行与行之间的空白，选区会缩回去再弹出来（跳闪）；
+// 手一拖出这一页，它就顺着把中间的东西全选进去（满屏变蓝）。
+// 现在的做法：按下时记住起点，拖动时把终点"收"到这一页最近的那个字上，
+// 再直接把选区设成"起点到终点"。选区因此永远落在这一页里，也永远跟着指针走。
+let ptDrag=null,ptLast=null;               // ptDrag:{layer,x,y,id,rects}；ptLast 用来认双击
+// 双击选词：把落点所在的那个词整个选上
+function ptWord(layer,sp,x,y){
+  const tn=sp.firstChild;if(!tn)return;
+  const p=ptPoint(layer,x,y);
+  const at=(p&&p.node===tn)?p.off:0;
+  const txt=sp.textContent;
+  const stop=/[\s.,;:!?()\[\]{}"'\u3000-\u303F\uFF00-\uFFEF]/;
+  let a=Math.min(at,txt.length),b=a;
+  while(a>0&&!stop.test(txt[a-1]))a--;
+  while(b<txt.length&&!stop.test(txt[b]))b++;
+  if(a===b){a=Math.max(0,at-1);b=Math.min(txt.length,at+1)}
+  const sl=getSelection();if(!sl)return;
+  try{sl.setBaseAndExtent(tn,a,tn,b)}catch(_){}
+}
 function ptxWatch(){
   addEventListener("pointerdown",e=>{
+    if(e.button!==0&&e.pointerType==="mouse")return;
     const sp=e.target.closest&&e.target.closest(".pt span");
     if(!sp)return;
+    const layer=sp.closest(".pt");if(!layer)return;
     document.querySelectorAll(".pt.ptactive").forEach(z=>z.classList.remove("ptactive"));
-    const layer=sp.closest(".pt");if(layer)layer.classList.add("ptactive");
-    ptDragging=true;document.body.classList.add("ptdrag");
+    layer.classList.add("ptactive");
+    document.body.classList.add("ptdrag");
+    // 连着两下点在同一处＝双击选词。自己判，不依赖浏览器的 dblclick
+    // （起头划选时挡掉了默认行为，dblclick 未必还会派发）
+    const now=Date.now();
+    if(ptLast&&now-ptLast.t<420&&Math.abs(e.clientX-ptLast.x)<5&&Math.abs(e.clientY-ptLast.y)<5){
+      ptLast=null;ptWord(layer,sp,e.clientX,e.clientY);return;
+    }
+    ptLast={t:now,x:e.clientX,y:e.clientY};
+    ptDrag={layer,x:e.clientX,y:e.clientY,id:e.pointerId,rects:null};
+    try{layer.setPointerCapture(e.pointerId)}catch(_){}
+    ptApply(e.clientX,e.clientY);
   },true);
-  const end=()=>{
-    if(!ptDragging)return;
-    ptDragging=false;document.body.classList.remove("ptdrag");
+  // 拦在 mousedown 上（而不是 pointerdown）：既挡住浏览器自己起头划选，
+  // 又保留 click / dblclick，双击选词才还在
+  addEventListener("mousedown",e=>{
+    if(e.target.closest&&e.target.closest(".pt span"))e.preventDefault();
+  },true);
+  addEventListener("pointermove",e=>{
+    if(!ptDrag||e.pointerId!==ptDrag.id)return;
+    e.preventDefault();
+    ptApply(e.clientX,e.clientY);
+  },true);
+  const end=e=>{
+    if(!ptDrag)return;
+    try{ptDrag.layer.releasePointerCapture(ptDrag.id)}catch(_){}
+    ptDrag=null;document.body.classList.remove("ptdrag");
   };
   addEventListener("pointerup",end,true);
   addEventListener("pointercancel",end,true);
-  addEventListener("blur",end);              // 手松在窗口外面也要收尾
+  addEventListener("blur",end);
   addEventListener("copy",e=>{
     const sl=getSelection();if(!sl||sl.isCollapsed)return;
     if(!ptxLayerOf(sl))return;
@@ -5630,6 +5679,52 @@ function ptxWatch(){
     const dt=e.clipboardData;if(!dt)return;
     e.preventDefault();dt.setData("text/plain",txt);
   },true);
+}
+// 把屏幕上的一个点，换成这一页文字里的一个位置。
+// 点正好落在字上就用它；落在空白或页外，就收到最近的那个字上（同一行优先）。
+function ptPoint(layer,x,y){
+  const inLayer=n=>{const el=n&&(n.nodeType===1?n:n.parentElement);return !!(el&&el.closest&&el.closest(".pt")===layer)};
+  let r=null;
+  if(document.caretRangeFromPoint)r=document.caretRangeFromPoint(x,y);
+  else if(document.caretPositionFromPoint){
+    const p=document.caretPositionFromPoint(x,y);
+    if(p){r=document.createRange();try{r.setStart(p.offsetNode,p.offset)}catch(_){r=null}}
+  }
+  if(r&&inLayer(r.startContainer))return {node:r.startContainer,off:r.startOffset};
+  // 收到最近的字上：先挑同一行（垂直方向落在它高度范围内）的，再按水平距离挑
+  if(!ptDrag||ptDrag.layer!==layer||!ptDrag.rects){
+    const list=[...layer.querySelectorAll("span")].map(sp=>({sp,b:sp.getBoundingClientRect()}));
+    if(ptDrag&&ptDrag.layer===layer)ptDrag.rects=list;
+    layer._rects=list;
+  }
+  const list=(ptDrag&&ptDrag.layer===layer&&ptDrag.rects)||layer._rects||[];
+  if(!list.length)return null;
+  let best=null,bestD=Infinity;
+  for(const it of list){
+    const b=it.b;
+    const dy=y<b.top?b.top-y:(y>b.bottom?y-b.bottom:0);
+    const dx=x<b.left?b.left-x:(x>b.right?x-b.right:0);
+    const d=dy*4+dx;                       // 同一行优先：纵向距离算得重一些
+    if(d<bestD){bestD=d;best=it}
+  }
+  if(!best)return null;
+  const b=best.b,tn=best.sp.firstChild;
+  if(!tn)return null;
+  if(x<=b.left)return {node:tn,off:0};
+  if(x>=b.right)return {node:tn,off:tn.length};
+  const mid=(b.top+b.bottom)/2;
+  let r2=null;
+  if(document.caretRangeFromPoint)r2=document.caretRangeFromPoint(Math.min(Math.max(x,b.left+1),b.right-1),mid);
+  if(r2&&r2.startContainer===tn)return {node:tn,off:r2.startOffset};
+  const k=(x-b.left)/Math.max(1,b.width);
+  return {node:tn,off:Math.round(k*tn.length)};
+}
+function ptApply(x,y){
+  if(!ptDrag)return;
+  const a=ptPoint(ptDrag.layer,ptDrag.x,ptDrag.y),b=ptPoint(ptDrag.layer,x,y);
+  if(!a||!b)return;
+  const s=getSelection();if(!s)return;
+  try{s.setBaseAndExtent(a.node,a.off,b.node,b.off)}catch(_){}
 }
 // 取划选到的文字：按 DOM 顺序（就是 PDF 里的内容顺序）走一遍，
 // 同一行之间按间隙决定要不要补空格，换行时西文断词接回去、中文直接相连
@@ -9637,6 +9732,7 @@ function boardMenu(x,y){
   menuAt(x,y,[
     {label:t("insertImage"),on:()=>$("imgfile").click()},
     {label:t("cutoutTool"),on:openCutout},
+    {label:t("tilerTool"),on:openTiler},
     {label:t("importPDF"),on:()=>$("pdffile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("insertTable"),sub:[{head:t("tbSize")},

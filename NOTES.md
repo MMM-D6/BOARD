@@ -4,7 +4,7 @@
 读完这一份就能安全地改动，不必逐行摸索。
 
 当前规模：272 KB，5474 行，291 个函数，330 条双语文案，46 条说明书词条，
-数据结构版本 SCHEMA = 8，测试 59 组 777 条断言（含 cutout.html 那一组）。
+数据结构版本 SCHEMA = 8，测试 60 组 788 条断言（含 cutout.html 那一组）。
 
 ---
 
@@ -84,7 +84,7 @@ CHROME=/path/to/chrome node tests.js   # 用已有的 Chrome，免下载
 测试组一览：connectors 连线、text 文字格式、colors 颜色、twins 分身、
 wrorder 写作页里的顺序、wrback 定位只留给引文分身、fmtbar 写作页工具栏、
 wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrmarq 稿子里不许拉出画布的框选、wrwc 写作页字数统计、
-frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行、zotero 引注小尾巴、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 抠图工具的入口、
+frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行、zotero 引注小尾巴、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 外部工具的入口、tiler 拼版工具、
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
@@ -1234,16 +1234,19 @@ PBKDF2-SHA256 迭代 60 万次（`SNAP_KDF_ITER`，OWASP 2023 的建议值）派
   快照里没有"选中"，`SNAP_CSS` 把 `.pt span` 一律放开。
 - **文字层有总量上限** `PT_BUDGET=8000`（`ptRoom`）：视野里同时铺着的片段超过这个数就先不铺，
   别的页面滚出视野后自然补上。实测 20 页密排、每页 3000 片段：不设限时拖动约 32fps，设限后回到 60fps。
-- **划选时的三层保护**（"满屏变蓝、一直跳闪"改了三版才稳住）：
-  1. 按下那一刻给 `body` 加 `ptdrag`，`body.ptdrag *{user-select:none !important}`，
-     只留**正在划的那一层**（`.pt.ptactive`）可选。否则手一拖出卡片，浏览器顺着把界面全选进去。
-     标记的是"这一层"而不是"所有文字层"，所以另一页 PDF 也不会跟着变蓝。
-  2. 文字层末尾垫一块透明的接盘元素 `.pte`（跟 pdf.js 的 `endOfContent` 同一个办法）：
-     平时收在内容下方，划的时候铺开并且比卡片还大、接收指针。
-     手扫过行间空白或甩到画布上时，落点仍在这一层里，选区停在原地或继续往前，不会缩回去再弹出来
-     ——那个一缩一放就是用户看到的"跳闪"。
-  3. 复制走 `copy` 事件：用 `ptxText` 按几何关系重新拼（同一行补空格、换行接断词、中文不加空格），
-     否则拿到的是一堆碎片挨在一起。
+- **划选自己算，不交给浏览器**（"满屏变蓝、一直跳闪"改了四版才稳住）。
+  交给浏览器时有两个治不好的毛病：手扫过行与行之间的空白，落点掉到下面的图上，选区缩回去再弹出来；
+  手一拖出这一页，它顺着把中间的东西全选进去。中间试过 pdf.js 的 `endOfContent` 垫片，
+  结果变成"一进空白就整页全选"，同样是满屏蓝。现在的做法：
+  1. `mousedown` 上 `preventDefault`（不是 `pointerdown`，否则 click 系列事件不再派发），
+     浏览器不再自己起头划选。
+  2. `pointerdown` 记住起点并 `setPointerCapture`，`pointermove` 时 `ptApply` 把起点和终点
+     都经 `ptPoint` **收到这一页最近的那个字上**（`caretRangeFromPoint` 命中就用；落在空白或页外，
+     就按几何距离挑最近的片段，纵向距离权重更高＝同一行优先），再 `setBaseAndExtent`。
+     选区因此永远落在这一页里，也永远跟着指针走，不会一缩一放。
+  3. 双击选词自己判（`ptLast`，420ms 内两次落在同一处），因为挡掉默认行为后 `dblclick` 未必派发。
+  4. 兜底仍在：`body.ptdrag` 期间只有 `.pt.ptactive` 里的字可选，别处（包括另一页 PDF）一律不可选。
+  5. 复制走 `copy` 事件，用 `ptxText` 按几何关系重新拼（同一行补空格、换行接断词、中文不加空格）。
 - **没有浮动按钮。** 早先划选后会浮出「新建卡片 / 复制」两个按钮，位置每帧重算，看起来一直在跳；
   用户要求去掉，相关代码（`#ptbar`、`showQuoteBar`、`quoteToCard` 与三条文案）已整体删除。
   要把引文变成卡片，复制后在画布上新建一张文字卡片粘进去。
@@ -1274,6 +1277,19 @@ PBKDF2-SHA256 迭代 60 万次（`SNAP_KDF_ITER`，OWASP 2023 的建议值）派
 修法：新增 `escA`（在 `esc` 的基础上再转义引号）用于属性；菜单项改成 `textContent` 放文字。
 `safety` 组守着这几条，并顺带守：PDF 解析禁用 eval（`isEvalSupported:false`，PDF 里的脚本不会被执行，
 也不渲染注释层）、解析库只从 https 取、快照里只有自己那两段脚本。
+
+## 十点九、两个外部小工具：抠图与拼版
+
+`cutout.html` 与 `Tiler.html` 各自是**完整独立的单文件**，与 board 不共享任何代码，只共用视觉语言。
+board 这边只有一个入口：`openCutout` / `openTiler` → `openSideTool(file,hintKey,blockKey)`，
+用 `new URL(file,location.href)` 解析相对路径，在新标签里打开。**不是 iframe、不是内联**，
+所以以后单独改这两个文件、传上 GitHub，board 一行都不用动，刷新就是新的版本。
+部署在 http(s) 上时地址会带一个时间戳参数 `?v=…` 避开缓存；`file://` 上不加（本地打开没必要，
+而且有些浏览器对带参数的本地地址更挑剔）。
+两个工具都不存在时 board 照常运行，只是那个标签页打不开——所以这里不做任何存在性检查（`file://` 上也检查不了）。
+`manifest.json` 的 shortcuts 里各有一条，装成桌面应用后图标右键就能直接进。
+`tiler` 组只确认它能独立打开、自己跑起来、并且不引用 board 的任何全局变量；
+`cutoutlink` 组确认菜单入口、地址、文案、manifest，以及 board 里确实没有它们的界面或 iframe。
 
 ## 十一、已知的取舍与限制
 
