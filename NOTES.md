@@ -4,7 +4,7 @@
 读完这一份就能安全地改动，不必逐行摸索。
 
 当前规模：272 KB，5474 行，291 个函数，330 条双语文案，46 条说明书词条，
-数据结构版本 SCHEMA = 8，测试 60 组 788 条断言（含 cutout.html 那一组）。
+数据结构版本 SCHEMA = 8，测试 61 组 806 条断言（含 cutout.html 那一组）。
 
 ---
 
@@ -84,7 +84,7 @@ CHROME=/path/to/chrome node tests.js   # 用已有的 Chrome，免下载
 测试组一览：connectors 连线、text 文字格式、colors 颜色、twins 分身、
 wrorder 写作页里的顺序、wrback 定位只留给引文分身、fmtbar 写作页工具栏、
 wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrmarq 稿子里不许拉出画布的框选、wrwc 写作页字数统计、
-frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行、zotero 引注小尾巴、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 外部工具的入口、tiler 拼版工具、
+frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行、zotero 引注小尾巴、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 外部工具的入口、tiler 拼版工具、mac 平台差异、
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
@@ -1290,6 +1290,24 @@ board 这边只有一个入口：`openCutout` / `openTiler` → `openSideTool(fi
 `manifest.json` 的 shortcuts 里各有一条，装成桌面应用后图标右键就能直接进。
 `tiler` 组只确认它能独立打开、自己跑起来、并且不引用 board 的任何全局变量；
 `cutoutlink` 组确认菜单入口、地址、文案、manifest，以及 board 里确实没有它们的界面或 iframe。
+
+## 十点十、Mac 与 Windows 的操作统一
+
+程序是在 Windows 上做的，有几处到了 Mac 手感完全不同。下面所有改动都**只在 Mac 上生效**
+（`IS_MAC`，取 `userAgentData.platform`，退回 `navigator.platform`），Windows 的逻辑一行都没动，
+测试里专门守着这一条（测试跑在 Linux 上，等同于 Windows 那一侧）。
+
+- **滚轮 / 触控板**（最主要的一处）。原来的判断是"看 delta 像鼠标还是像触控板"：
+  Windows 的鼠标滚轮 → 缩放，Mac 的触控板双指 → 平移。于是同一份画布两种手感。
+  现在抽成 `wheelMode()`：`auto`（原样）/ `zoom`（一律当鼠标滚轮）/ `pan`（一律当触控板），
+  **Mac 默认 `zoom`，其余平台默认 `auto`**。`wheelPad(e)` 是唯一的判断口，画布的 wheel 监听只改了这一行。
+  捏合（`ctrlKey`）和 `Shift`+滚动两边一直一致，没动。设置存在 `S.wheel` 里，跟着文件走；
+  视图菜单 →「滚轮 / 触控板」可以随时改回 Mac 原生的双指平移。
+  导出的网页快照把当时的设置写进 `cfg.wheel`，在哪台机器上打开手感都一样。
+- **全屏**：Windows 是 F11（浏览器自己管），Mac 没这个键，加 `⌃⌘F`；菜单里的提示按平台显示（`FS_KEY`）。
+- **Ctrl+点**：Mac 上它就是右键，原来会顺手起一个框选，现在在 stage 的 pointerdown 里直接跳过。
+- **删除**：菜单提示在 Mac 上写 `⌫`，Windows 仍写 `Del`（两边的按键本来就都能用）。
+- 菜单里其余的 `⌘S`、`⌘D` 这类提示一直是这样写的，没动——改它就等于动了 Windows 那边的界面。
 
 ## 十一、已知的取舍与限制
 

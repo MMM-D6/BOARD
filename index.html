@@ -877,6 +877,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag to pan, scroll or pinch to zoom, press Z over a card to zoom in, M for the page map. Text can be selected and copied.",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
   importPDF:"Import PDF pages…",pdfRange:"Pages",pdfRangePh:"All pages, or 1-3,7,12-",pdfWidth:"Card width",pdfDpi:"Sharpness",pdfDpi2:"Normal",pdfDpi3:"Sharper",pdfNote:"Each page becomes a card: the page as you see it, with the text selectable on top. Select any passage and copy it as usual.",pdfWork:"Importing the PDF…",pdfDone:"Pages imported:",pdfBad:"This PDF could not be read.",pdfNoPage:"No pages matched.",pdfNoLib:"The PDF library could not be loaded. Please check your connection and try again.",pdfRead:"Reading mode (locks the page in place)",pdfLockedHint:"This page is locked so you can select text. Unlock it to move it.",imgOrig:"Original size",imgOrigNote:"Images now come in at their own size, with no limit. Existing images are unchanged; use Fit selected or Fit all to apply it.",copy:"Copy",
+  wheelMenu:"Scroll wheel / trackpad",whAuto:"Decide automatically",whZoom:"Scrolling zooms (same as Windows)",whPan:"Scrolling pans (Mac style)",
   snapPwShow:"Show",snapPwHide:"Hide",snapPwGen:"Generate",snapPwCopied:"A strong password was generated and copied. Keep it in your password manager.",snapPwWeak:"Too easy to guess",snapPwOk:"Acceptable",snapPwStrong:"Strong",snapPwWeakBlock:"This password is too easy to guess. Make it longer, or use Generate.",
   readingN:"Reading the file, cards so far:",
   filePerm:"Not auto-saving to the file: permission is needed again.",fileIO:"Not auto-saving to the file: the last write failed. It may have been moved, deleted or locked by another app.",fileBig:"Not auto-saving to the file: it is past the limit of roughly 500 MB for a single file.",fileResume:"Resume",fileLost:"Writing to the file failed, so auto-save to the file has stopped. See the note at the bottom left.",filePermStart:"The linked file needs your permission again. Click Resume at the bottom left.",storeFail:"Saving inside the browser failed. Please save to a file now.",
@@ -900,7 +901,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   alignRow:"Align",colourRow:"Colour",applyAll:"Apply to every card",appliedAll:"Applied to every card",
   clickTarget:"Click another card to connect. Esc to cancel.",
   placeholder:"Add text",newText:"Text",
-  hint:"Empty canvas<br>Press Ctrl / Cmd + V to paste an image, or drop one in<br>Right click anywhere for the menu<br>Drag to select, hold Space or Alt to pan",
+  hint:"Empty canvas<br>Press Ctrl / Cmd + V to paste an image, or drop one in<br>Right click anywhere for the menu<br>Drag to select, hold Space or Alt / Option to pan",
   lockOn:"Presentation lock is on. Click a card to zoom in.",
   savedTo:"Saved to",saveNamePrompt:"File name",
   bg:["Off white","Light grey","Mid grey","White","Warm sand","Deep green","Black"]
@@ -1072,6 +1073,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动平移，滚轮或双指缩放，指着卡片按 Z 放大，M 打开页面地图。文字可以划选复制。",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
   importPDF:"导入 PDF 页面…",pdfRange:"页码",pdfRangePh:"留空表示全部，或 1-3,7,12-",pdfWidth:"卡片宽度",pdfDpi:"清晰度",pdfDpi2:"普通",pdfDpi3:"更清晰",pdfNote:"每一页变成一张卡片：版面跟原文一样，文字可以直接划选，选中之后照常复制即可。",pdfWork:"正在导入 PDF…",pdfDone:"已导入页数：",pdfBad:"这个 PDF 读不出来。",pdfNoPage:"没有匹配的页码。",pdfNoLib:"PDF 解析库加载失败，请检查网络后重试。",pdfRead:"阅读模式（锁住位置，可划选）",pdfLockedHint:"这一页锁着，所以能划选文字；要搬动它请先解锁。",imgOrig:"原尺寸",imgOrigNote:"之后导入的图片按原始尺寸插入，不再压缩。已有的图片不变，可用「适应选中」或「适应全部」套用。",copy:"复制",
+  wheelMenu:"滚轮 / 触控板",whAuto:"自动判断",whZoom:"滚动＝缩放（与 Windows 一致）",whPan:"滚动＝平移（Mac 原生）",
   snapPwShow:"显示",snapPwHide:"隐藏",snapPwGen:"生成",snapPwCopied:"已生成强密码并复制到剪贴板，请存进密码管理器。",snapPwWeak:"太容易猜",snapPwOk:"可以",snapPwStrong:"强",snapPwWeakBlock:"这个密码太容易猜，请再长一些，或者点「生成」。",
   readingN:"正在读取文件，已读卡片：",
   filePerm:"文件没有在自动保存：需要重新授权。",fileIO:"文件没有在自动保存：上次写入失败，文件可能被移动、删除或被别的程序占用。",fileBig:"文件没有在自动保存：已超过单个文件约 500MB 的上限。",fileResume:"恢复",fileLost:"写入文件失败，自动保存到文件已经停止，见左下角的提示。",filePermStart:"上次绑定的文件需要重新授权，请点左下角的「恢复」。",storeFail:"浏览器内的保存失败了，请立刻保存到文件。",
@@ -1095,7 +1097,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   alignRow:"对齐",colourRow:"颜色",applyAll:"应用到全部卡片",appliedAll:"已应用到全部卡片",
   clickTarget:"点击另一张卡片完成连线，Esc 取消",
   placeholder:"添加文字",newText:"文字",
-  hint:"空白画布<br>Ctrl / Cmd + V 粘贴图片，或直接拖入图片<br>右键任意位置打开菜单<br>空白处拖动为框选，按住空格或 Alt 拖动为平移",
+  hint:"空白画布<br>Ctrl / Cmd + V 粘贴图片，或直接拖入图片<br>右键任意位置打开菜单<br>空白处拖动为框选，按住空格或 Alt / Option 拖动为平移",
   lockOn:"已进入演示锁定，点击卡片可放大聚焦",
   savedTo:"已保存到",saveNamePrompt:"文件名",
   bg:["米白","浅灰","中灰","纯白","暖沙","深绿","深黑"]
@@ -3610,6 +3612,7 @@ stage.addEventListener("pointerdown",e=>{
   closeMenus();
   if(linkFrom){linkFrom=null;stage.style.cursor="";toast("")}
   if(e.button===2)return;
+  if(IS_MAC&&e.ctrlKey)return;             // Mac 上 Ctrl+点 就是右键，别顺手起一个框选
   if(selFrame){selFrame=null;renderFrames()}
   clearTbSel();
   if(lock&&e.detail===2){fit();return}
@@ -3661,7 +3664,7 @@ stage.addEventListener("scroll",()=>{
 },{passive:true});
 stage.addEventListener("wheel",e=>{
   e.preventDefault();
-  const pad=e.deltaX!==0||(e.deltaMode===0&&Math.abs(e.deltaY)<16);
+  const pad=wheelPad(e);
   if(e.ctrlKey||e.metaKey||(!pad&&!e.shiftKey)){zoomAt(Math.exp(-e.deltaY*.0022),e.clientX,e.clientY)}
   else camTo(tgt.x-e.deltaX,tgt.y-e.deltaY,tgt.z,true);
 },{passive:false});
@@ -3675,6 +3678,8 @@ addEventListener("keydown",e=>{
   const k=e.key.toLowerCase();
   if(e.key==="Escape"&&$("man").classList.contains("on")){$("man").classList.remove("on");return}
   if(e.key===" "&&!editing&&!e.target.isContentEditable&&!lock){spaceDown=true;stage.classList.add("space")}
+  // Mac 的 ⌃⌘F 全屏；Windows 的 F11 由浏览器自己管，这里不碰
+  if(IS_MAC&&e.metaKey&&e.ctrlKey&&k==="f"){e.preventDefault();toggleFS();return}
   if((e.metaKey||e.ctrlKey)&&k==="s"){e.preventDefault();saveNow();return}
   if((e.metaKey||e.ctrlKey)&&k==="f"&&!lock){e.preventDefault();showFind(true);return}
   if(editing||e.target.isContentEditable){
@@ -5960,7 +5965,7 @@ async function buildWebSnap(title){
   mapEl.querySelectorAll("#maptip").forEach(el=>{el.classList.remove("on");el.textContent=""});
   mapEl.querySelectorAll("#mapz,#mapn").forEach(el=>{el.textContent=""});
   const mq=mapEl.querySelector("#mapq");if(mq){mq.removeAttribute("value");mq.setAttribute("placeholder",T.en.mapFind)}
-  const cfg={v:1,cam:{x:cam.x,y:cam.y,z:cam.z},made:d.toISOString(),
+  const cfg={v:1,cam:{x:cam.x,y:cam.y,z:cam.z},made:d.toISOString(),wheel:wheelMode(),
     map:{on:!!S.map,w:S.mapW||0,h:S.mapH||0,dark:isDark(S.bg)},
     frames:(S.frames||[]).map(f=>({id:f.id,x:f.x,y:f.y,w:f.w,h:f.h,title:f.title||""})),
     en:{page:T.en.pageDefault}};
@@ -6307,7 +6312,9 @@ function snapViewer(){
       if(sc&&sc.scrollHeight>sc.clientHeight+1)return;
     }
     e.preventDefault();
-    var pad=e.deltaX!==0||(e.deltaMode===0&&Math.abs(e.deltaY)<16);
+    // 滚轮/触控板的判断跟导出时画布上的设置一致，快照在两台机器上手感一样
+    var pad=cfg.wheel==="zoom"?false:cfg.wheel==="pan"?true:
+      (e.deltaX!==0||(e.deltaMode===0&&Math.abs(e.deltaY)<16));
     if(e.ctrlKey||e.metaKey||(!pad&&!e.shiftKey))zoomAt(Math.exp(-e.deltaY*.0022),e.clientX,e.clientY);
     else go(tgt.x-e.deltaX,tgt.y-e.deltaY,tgt.z,true);
   },{passive:false});
@@ -9524,6 +9531,21 @@ async function goFS(){try{const e=document.documentElement;
   await (e.requestFullscreen?e.requestFullscreen({navigationUI:"hide"}):e.webkitRequestFullscreen())}catch(e){}}
 async function exitFS(){try{await (document.exitFullscreen?document.exitFullscreen():document.webkitExitFullscreen())}catch(e){}}
 function toggleFS(){isFS()?exitFS():goFS()}
+// Mac 上的操作统一：这个程序是在 Windows 上做的，有几处在 Mac 上手感完全不同。
+// 下面所有改动都只在 Mac 上生效，Windows 的逻辑一行都没动。
+const IS_MAC=/Mac|iPhone|iPad/i.test((navigator.userAgentData&&navigator.userAgentData.platform)||navigator.platform||navigator.userAgent);
+// 全屏：Windows 是 F11，Mac 没有这个键（系统占着），用 ⌃⌘F，菜单里的提示也跟着换
+const FS_KEY=IS_MAC?"\u2303\u2318F":"F11";
+// 滚轮/触控板：Windows 的鼠标滚轮是缩放，Mac 的触控板双指是平移，同一份画布两种手感。
+// 默认在 Mac 上跟 Windows 一致（滚动＝缩放），想要 Mac 原生的双指平移可以在视图菜单里改回来。
+// Windows 上默认仍是原来的自动判断，行为完全没变。
+function wheelMode(){return S.wheel||(IS_MAC?"zoom":"auto")}
+function wheelPad(e){
+  const m=wheelMode();
+  if(m==="zoom")return false;              // 一律当成鼠标滚轮：滚动＝缩放
+  if(m==="pan")return true;                // 一律当成触控板：滚动＝平移
+  return e.deltaX!==0||(e.deltaMode===0&&Math.abs(e.deltaY)<16);
+}
 let idleT;
 function idle(){
   clearTimeout(idleT);document.body.classList.remove("hidecur");
@@ -9648,6 +9670,9 @@ function viewItems(x,y){
     {label:t("readOrder"),sub:[{head:t("readOrder")},
       ...[["auto","roAuto"],["col","roCol"],["row","roRow"]].map(([v,k])=>({label:t(k),
         check:(S.readOrder||"auto")===v,on:()=>{S.readOrder=v;render();save()}}))]},
+    {label:t("wheelMenu"),sub:[{head:t("wheelMenu")},
+      ...[["auto","whAuto"],["zoom","whZoom"],["pan","whPan"]].map(([v,k])=>({label:t(k),
+        check:wheelMode()===v,on:()=>{S.wheel=v;save()}}))]},
     {head:t("vwContent")},
     {label:t("linkView"),sub:[
       {head:t("linkView")},
@@ -9757,7 +9782,7 @@ function boardMenu(x,y){
     {label:t("viewMenu"),sub:viewItems(x,y)},
     "-",
     {label:t("presentation"),on:()=>setLock(true)},
-    {label:isFS()?t("exitFullscreen"):t("fullscreen"),key:"F11",on:toggleFS},
+    {label:isFS()?t("exitFullscreen"):t("fullscreen"),key:FS_KEY,on:toggleFS},
     {label:t("language"),sub:langItems()},
     ...(LANG==="zh"?[{label:t("manual"),on:openManual}]:[])
   ]);
@@ -9767,7 +9792,7 @@ function lockMenu(x,y){
     {label:t("fitView"),key:"F",on:()=>{fit()}},
     {label:t("next"),key:"→",on:()=>step(1)},
     {label:t("prev"),key:"←",on:()=>step(-1)},
-    {label:isFS()?t("exitFullscreen"):t("fullscreen"),key:"F11",on:toggleFS},
+    {label:isFS()?t("exitFullscreen"):t("fullscreen"),key:FS_KEY,on:toggleFS},
     {label:t("language"),sub:langItems()},
     "-",
     {label:t("exitPresentation"),key:"Esc",on:()=>setLock(false)}
@@ -9833,7 +9858,7 @@ function cardItems(x,y){
     {label:t("duplicate"),key:"⌘D",on:dupe},
     {label:t("toFront"),on:()=>order(1)},
     {label:t("toBack"),on:()=>order(-1)},
-    {label:t("del"),key:"Del",danger:true,on:del});
+    {label:t("del"),key:IS_MAC?"\u232B":"Del",danger:true,on:del});
   return items;
 }
 function linkStyleItems(target,after){

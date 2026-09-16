@@ -5242,6 +5242,131 @@ group("safety 注入与越权排查", async (c) => {
   c.ok("快照里只有自己那两段脚本，卡片内容不会带出可执行的东西", snap.scripts === "snapcfg,snapjs");
 });
 
+group("mac Mac 与 Windows 的操作统一", async (c) => {
+  // 这个程序是在 Windows 上做的：鼠标滚轮＝缩放。Mac 的触控板双指是平移，同一份画布两种手感。
+  // 这里守两件事：Mac 上默认跟 Windows 一致；Windows 上一切照旧、一行都没变。
+  await c.board([["a", 0, 0, "卡片"]], []);
+  const modes = await c.run(() => {
+    const out = {};
+    const fake = (opt) => Object.assign({ deltaX: 0, deltaY: 0, deltaMode: 0, ctrlKey: false,
+      metaKey: false, shiftKey: false }, opt);
+    const mouse = fake({ deltaY: 100 });          // Windows 鼠标滚轮
+    const pad = fake({ deltaY: 6 });              // 触控板双指
+    const padX = fake({ deltaX: 8 });
+    const keep = S.wheel;
+    const probe = (v) => { S.wheel = v; return { mouse: wheelPad(mouse), pad: wheelPad(pad), padX: wheelPad(padX) }; };
+    out.auto = probe("auto"); out.zoom = probe("zoom"); out.pan = probe("pan");
+    S.wheel = keep;
+    out.defAuto = (() => { const k = S.wheel; S.wheel = null; const m = wheelMode(); S.wheel = k; return m; })();
+    out.isMac = IS_MAC;
+    return out;
+  });
+  // 测试跑在 Linux 的 Chrome 上，等同于 Windows 那一侧
+  c.ok("非 Mac 上默认仍是原来的自动判断（Windows 行为没变）", !modes.isMac && modes.defAuto === "auto");
+  c.ok("自动判断：鼠标滚轮当缩放，触控板当平移", !modes.auto.mouse && modes.auto.pad && modes.auto.padX);
+  c.ok("选「滚动＝缩放」时一律按鼠标滚轮算（Mac 的默认）",
+    !modes.zoom.mouse && !modes.zoom.pad && !modes.zoom.padX);
+  c.ok("选「滚动＝平移」时一律按触控板算", modes.pan.mouse && modes.pan.pad && modes.pan.padX);
+
+  // 真的滚一下：三种模式下画面该缩放的缩放、该平移的平移
+  const act = await c.run(async (v) => {
+    S.wheel = v; camTo(0, 0, 1, true);
+    await new Promise((z) => setTimeout(z, 200));
+    $("stage").dispatchEvent(new WheelEvent("wheel", { deltaY: 6, clientX: 700, clientY: 450,
+      bubbles: true, cancelable: true }));
+    await new Promise((z) => setTimeout(z, 400));
+    const out = { z: +tgt.z.toFixed(3), y: Math.round(tgt.y) };
+    S.wheel = null;
+    return out;
+  }, "zoom");
+  c.ok("「滚动＝缩放」时，触控板那种小幅滚动也会缩放", act.z !== 1 && act.y === 0);
+  const act2 = await c.run(async (v) => {
+    S.wheel = v; camTo(0, 0, 1, true);
+    await new Promise((z) => setTimeout(z, 200));
+    $("stage").dispatchEvent(new WheelEvent("wheel", { deltaY: 100, clientX: 700, clientY: 450,
+      bubbles: true, cancelable: true }));
+    await new Promise((z) => setTimeout(z, 400));
+    const out = { z: +tgt.z.toFixed(3), y: Math.round(tgt.y) };
+    S.wheel = null;
+    return out;
+  }, "pan");
+  c.ok("「滚动＝平移」时，鼠标滚轮也变成平移", act2.z === 1 && act2.y === -100);
+
+  const ui = await c.run(() => {
+    boardMenu(60, 60);
+    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent);
+    closeMenus();
+    return { fsKey: FS_KEY, hasFS: items.some((z) => z.includes(FS_KEY)),
+      menuText: JSON.stringify(viewItems(0, 0)).includes(t("wheelMenu")),
+      zh: !!(T.zh.wheelMenu && T.zh.whAuto && T.zh.whZoom && T.zh.whPan),
+      en: !!(T.en.wheelMenu && T.en.whAuto && T.en.whZoom && T.en.whPan) };
+  });
+  c.ok("视图菜单里能改滚轮/触控板的行为", ui.menuText);
+  c.ok("非 Mac 上全屏提示仍写 F11", ui.fsKey === "F11" && ui.hasFS);
+  c.ok("中英文案都齐了", ui.zh && ui.en);
+
+  // 设置会跟着文件存下来，换机器打开还是同一个手感
+  const saved = await c.run(async () => {
+    S.wheel = "pan"; save();
+    await new Promise((z) => setTimeout(z, 900));
+    const j = JSON.parse(await (await bundleBlob(null)).text());
+    S.wheel = null; save();
+    return j.wheel;
+  });
+  c.ok("这个选择会存进文件", saved === "pan");
+
+  // 导出的网页快照沿用导出时的设置，在哪台机器上打开手感都一样
+  const snap = await c.run(async () => {
+    S.wheel = "zoom";
+    const html = await buildWebSnap("m");
+    S.wheel = null;
+    const d = new DOMParser().parseFromString(html, "text/html");
+    const cfg = JSON.parse(d.getElementById("snapcfg").textContent);
+    return { wheel: cfg.wheel, used: /cfg\.wheel==="zoom"/.test(html) };
+  });
+  c.ok("快照记下当时的滚轮设置并照着用", snap.wheel === "zoom" && snap.used);
+
+  // 换一页装成 Mac 打开，看默认到底对不对
+  const pg = await c.page.browser().newPage();
+  await pg.evaluateOnNewDocument(() => {
+    Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
+    Object.defineProperty(navigator, "userAgentData", { get: () => ({ platform: "macOS" }) });
+  });
+  await pg.goto("file://" + require("path").resolve(__dirname, "index.html"));
+  await c.wait(1300);
+  const mac = await pg.evaluate(async () => {
+    delete S.wheel;                    // 没有任何设置时看默认；前面几步可能在本机存过
+    S.cards = [{ id: "a", x: 0, y: 0, w: 300, text: "hi", s: { ...DEF } }];
+    invalidateIndex(); render(); camTo(0, 0, 1, true);
+    const fire = async (opt) => {
+      camTo(0, 0, 1, true); await new Promise((z) => setTimeout(z, 200));
+      $("stage").dispatchEvent(new WheelEvent("wheel", Object.assign({ clientX: 650, clientY: 400,
+        bubbles: true, cancelable: true }, opt)));
+      await new Promise((z) => setTimeout(z, 400));
+      return { z: +tgt.z.toFixed(3), y: Math.round(tgt.y) };
+    };
+    const pad = await fire({ deltaY: 6 });            // 触控板双指
+    const pinch = await fire({ deltaY: -20, ctrlKey: true });
+    const shift = await fire({ deltaY: 60, shiftKey: true });
+    // Ctrl+点＝右键，不该起框选
+    const before = sel.slice();
+    $("stage").dispatchEvent(new PointerEvent("pointerdown", { button: 0, ctrlKey: true,
+      clientX: 400, clientY: 300, bubbles: true }));
+    const marq = getComputedStyle($("marq")).display;
+    return { isMac: IS_MAC, mode: wheelMode(), sWheel: S.wheel, fs: FS_KEY, pad, pinch, shift, marq,
+      del: cardItems(0, 0).some((i) => i && i.key === "\u232B") };
+  });
+  await pg.close();
+  c.ok("Mac 上认出来了，默认就是「滚动＝缩放」，跟 Windows 一致", mac.isMac && mac.mode === "zoom");
+  c.ok(`Mac 触控板双指滚动＝缩放（和 Windows 的滚轮一样，z=${mac.pad.z} y=${mac.pad.y}）`,
+    mac.pad.z !== 1 && Math.abs(mac.pad.y) < 8);   // 缩放会把光标那一点钉住，位移只有一两像素
+  c.ok("Mac 的捏合照样缩放", mac.pinch.z > 1);
+  c.ok("Shift + 滚动仍然是平移，两边一致", mac.shift.z === 1 && mac.shift.y === -60);
+  c.ok("Mac 上全屏提示写 ⌃⌘F（那边没有 F11）", mac.fs === "\u2303\u2318F");
+  c.ok("Mac 上删除提示写 ⌫", mac.del);
+  c.ok("Mac 上 Ctrl+点 只当右键，不会顺手起一个框选", mac.marq === "none");
+});
+
 group("static 静态检查", async (c) => {
   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");
   const js = src.split("<script>").pop().split("</script>")[0];
