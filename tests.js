@@ -1266,7 +1266,9 @@ group("map 页面地图", async (c) => {
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
   });
   await c.page.mouse.move(ctr.x, ctr.y);
-  for (let i = 0; i < 10; i++) await c.page.mouse.wheel({ deltaY: -120 });
+  // "往前推"这个手势：Mac（自然滚动）报出来的是反号，按 wheelFlip 折算回去
+  const F0 = await c.run(() => wheelFlip());
+  for (let i = 0; i < 10; i++) await c.page.mouse.wheel({ deltaY: -120 * F0 });
   await c.wait(400);
   const z2 = await c.run(() => (mapCam ? mapCam.z : 0));
   c.ok("滚轮可放大地图", z2 > baseZ * 2);
@@ -4201,8 +4203,10 @@ group("websnap 网页快照", async (c) => {
   c.ok("在空白处拖动是平移（" + t1 + "）", t1 !== t0 && /translate\(-300px, -240px\)/.test(t1));
   c.ok("平移不会顺带划出一片选区", (await R(() => getSelection().toString())) === "");
 
+  // 同一个"往前推"的手势：快照沿用导出时的方向设置（Mac 上是反号）
+  const SF = await R(() => { try { return JSON.parse(document.getElementById("snapcfg").textContent).flip || 1; } catch (e) { return 1; } });
   await pg.mouse.move(40, 60);
-  await pg.mouse.wheel({ deltaY: -240 });
+  await pg.mouse.wheel({ deltaY: -240 * SF });
   await c.wait(100);
   const sc = (s) => +((s.match(/scale\(([\d.]+)\)/) || [])[1] || 0);
   c.ok("空白处滚轮是缩放", sc(await tf()) > 0.85);
@@ -4257,7 +4261,7 @@ group("websnap 网页快照", async (c) => {
   c.ok("适应画面时所有卡片都挂着（" + allIds.length + "/" + info.total + "）", allIds.length === info.total);
   c.ok("挂着的卡片保持原来的层叠次序", allIds.join(",") === st.order);
   const d0 = await box('.card[data-id="bib1"] .bibdot');
-  const flick = await R(async ([x, y]) => {
+  const flick = await R(async ([x, y, f]) => {
     const dot = () => document.querySelector('.card[data-id="bib1"] .bibdot');
     const bar = () => document.querySelector('.card[data-id="h1"] .hbar');
     const ws = [], hs = []; let run = true;
@@ -4270,14 +4274,14 @@ group("websnap 网页快照", async (c) => {
     })();
     const st = document.getElementById("stage");
     for (let i = 0; i < 24; i++) {
-      st.dispatchEvent(new WheelEvent("wheel", { deltaY: -70, clientX: x, clientY: y, bubbles: true, cancelable: true }));
+      st.dispatchEvent(new WheelEvent("wheel", { deltaY: -70 * f, clientX: x, clientY: y, bubbles: true, cancelable: true }));
       await new Promise((r) => setTimeout(r, 16));
     }
     await new Promise((r) => setTimeout(r, 300));
     run = false;
     return { n: ws.length, w0: Math.min(...ws), w1: Math.max(...ws), h0: Math.min(...hs), h1: Math.max(...hs),
       attached: document.querySelectorAll("#cards .card").length };
-  }, [d0.x + d0.w / 2, d0.y + d0.h / 2]);
+  }, [d0.x + d0.w / 2, d0.y + d0.h / 2, SF]);
   c.ok(`缩放过程中文献圆点一直是原大小（${flick.w0.toFixed(1)} 到 ${flick.w1.toFixed(1)}px，${flick.n} 帧）`,
     flick.n > 10 && flick.w1 - flick.w0 < 1.5);
   c.ok(`缩放过程中层级竖条一直是原大小（${flick.h0.toFixed(1)} 到 ${flick.h1.toFixed(1)}px）`, flick.h1 - flick.h0 < 1.5);
@@ -4301,7 +4305,7 @@ group("websnap 网页快照", async (c) => {
   const tMap0 = await tf();
   const mc = await box("#mapc");
   await pg.mouse.move(mc.x + mc.w / 2, mc.y + mc.h / 2);
-  await pg.mouse.wheel({ deltaY: -300 });
+  await pg.mouse.wheel({ deltaY: -300 * SF });
   await c.wait(150);
   c.ok("在地图上滚轮是放大地图，画布不动", (await tf()) === tMap0 && /%$/.test(await R(() => document.getElementById("mapz").textContent)));
   await pg.mouse.click(mc.x + mc.w / 2, mc.y + mc.h / 2, { clickCount: 2 });
@@ -5413,6 +5417,195 @@ group("mac Mac 与 Windows 的操作统一", async (c) => {
     .every((k) => T.en[k] && T.zh[k])));
 });
 
+group("folder 文件夹模式（GB 级画布）", async (c) => {
+  // 文件夹模式：board.json 只有结构，图片在 assets/ 里一张一个文件、只写一次。
+  // 测试里用一个内存里的假文件夹（file:// 上用不了真的），接口与浏览器的文件夹句柄一致。
+  const r = await c.run(async () => {
+    const wait = (ms) => new Promise((z) => setTimeout(z, ms));
+    // ---- 假的文件夹句柄 ----
+    const writes = [];
+    const mkFile = (name, store, dirName) => ({
+      kind: "file", name,
+      getFile: async () => { const b = store.get(name); if (!b) throw new Error("NotFound"); return new File([b], name, { type: b.type }); },
+      createWritable: async () => { const parts = [];
+        return { write: async (x) => { parts.push(x); }, close: async () => { store.set(name, new Blob(parts, { type: parts[0] && parts[0].type || "" })); writes.push(dirName + "/" + name); },
+          abort: async () => {} }; },
+    });
+    const mkDir = (name) => {
+      const files = new Map(), dirs = new Map();
+      const d = {
+        kind: "directory", name,
+        queryPermission: async () => "granted", requestPermission: async () => "granted",
+        getFileHandle: async (n, o) => { if (!files.has(n) && !(o && o.create)) throw new Error("NotFound"); if (!files.has(n)) files.set(n, new Blob([])); return mkFile(n, files, name); },
+        getDirectoryHandle: async (n, o) => { if (!dirs.has(n)) { if (!(o && o.create)) throw new Error("NotFound"); dirs.set(n, mkDir(n)); } return dirs.get(n); },
+        entries: async function* () { for (const k of files.keys()) yield [k, mkFile(k, files, name)]; for (const [k, v] of dirs) yield [k, v]; },
+        isSameEntry: async (o) => o === d, _files: files, _dirs: dirs,
+      };
+      return d;
+    };
+    const mk = (col) => { const cv = document.createElement("canvas"); cv.width = 40; cv.height = 30;
+      const g = cv.getContext("2d"); g.fillStyle = col; g.fillRect(0, 0, 40, 30); return cv.toDataURL("image/png"); };
+    const out = {};
+    const h1 = (await putImg(mk("#c33"))).h, h2 = (await putImg(mk("#3c3"))).h;
+    S.cards = [{ id: "a", x: 0, y: 0, w: 200, text: "", ih: h1, ar: .75, s: { ...DEF } },
+      { id: "b", x: 300, y: 0, w: 200, text: "", ih: h2, ar: .75, s: { ...DEF } },
+      { id: "c", x: 0, y: 300, w: 200, text: "正文", s: { ...DEF } }];
+    S.links = []; S.frames = []; invalidateIndex(); render();
+    const dir = mkDir("我的画布");
+    fileHandle = dir; fileName = dir.name; fileOK = true; fileErr = ""; folderHas = null;
+    // 第一次写：两张图 + board.json，先图后结构
+    writes.length = 0;
+    out.first = await writeFile(true);
+    out.firstOrder = writes.slice();
+    const bj = JSON.parse(await dir._files.get("board.json").text());
+    out.jsonHasNoImages = !/data:image/.test(JSON.stringify(bj)) && bj.cards.filter((z) => z.ih).length === 2;
+    out.assets = [...(await dir.getDirectoryHandle("assets"))._files.keys()].sort();
+    // 第二次写（只改了字）：只写 board.json，图片一张都不重写
+    S.cards[2].text = "改了一个字"; writes.length = 0;
+    await writeFile(true);
+    out.second = writes.slice();
+    // 新加一张图：只多写这一张
+    const h3 = (await putImg(mk("#33c"))).h;
+    S.cards.push({ id: "d", x: 600, y: 0, w: 200, text: "", ih: h3, ar: .75, s: { ...DEF } });
+    writes.length = 0; await writeFile(true);
+    out.third = writes.slice();
+    out.h = [h1, h2, h3];
+    // 自动写回照样走（停手之后自己写）
+    writes.length = 0; S.cards[2].text = "自动写回"; save(); await wait(2400);
+    out.auto = writes.includes("我的画布/board.json");
+    // 换一台电脑打开：仓库里没有图，打开文件夹以后照样显示（从 assets 里取，并存进仓库）
+    const db = await idb();
+    await new Promise((res) => { const tx = db.transaction("kv", "readwrite"); const st = tx.objectStore("kv");
+      [h1, h2, h3].forEach((h) => st.delete("img:" + h)); tx.oncomplete = res; });
+    IMG.clear(); IMGB.clear();
+    fileHandle = null; fileOK = false;
+    await openFolder(dir);
+    camTo(-(300), -150, 1, true);
+    await wait(900);
+    const ims = [...document.querySelectorAll("#cards img[data-ih]")];
+    out.reopened = { cards: S.cards.length, bound: fileHandle === dir, name: fileName,
+      shown: ims.length >= 2 && ims.every((im) => im.complete && im.naturalWidth === 40) };
+    await wait(600);
+    out.warmed = !!(await kvGet("img:" + h1)) && !!(await kvGet("img:" + h3));
+    // 单文件模式完全不受影响：imgBlob 在非文件夹时不会去碰文件夹
+    fileHandle = null; fileOK = false; fileState();
+    out.noFolder = (await folderImg("nope")) === null;
+    return out;
+  });
+  c.ok("第一次存到文件夹成功", r.first === true);
+  c.ok("先写图片、后写 board.json（中途断电也不会缺图）",
+    r.firstOrder.length === 3 && r.firstOrder[2] === "我的画布/board.json" && r.firstOrder.slice(0, 2).every((z) => /^assets\//.test(z)));
+  c.ok("board.json 里只有结构，图片用哈希引用", r.jsonHasNoImages);
+  c.ok("assets 里一张图一个文件，按格式取扩展名", r.assets.length === 2 && r.assets.every((z) => /\.png$/.test(z)));
+  c.ok("只改文字时，只写 board.json（图片一张都不重写）", r.second.length === 1 && r.second[0] === "我的画布/board.json");
+  c.ok("新加一张图，只多写这一张", r.third.length === 2 && r.third[0] === "assets/" + r.h[2] + ".png");
+  c.ok("停手之后自动写回照样走", r.auto);
+  c.ok("打开文件夹：画布回来了，仍然绑着这个文件夹", r.reopened.cards === 4 && r.reopened.bound && r.reopened.name === "我的画布");
+  c.ok("浏览器里没有这些图时，照样从文件夹里取来显示", r.reopened.shown);
+  c.ok("打开之后在后台把图片搬进浏览器仓库（文件夹暂时拿不到时也不缺图）", r.warmed);
+  c.ok("没绑文件夹时不会去碰文件夹（单文件模式不受影响）", r.noFolder);
+
+  const ui = await c.run(() => {
+    const has = !!window.showDirectoryPicker;
+    const labels = fileItems(0, 0).filter((z) => z && z.label).map((z) => z.label);
+    return { has, save: labels.includes(t("saveFolder")), open: labels.includes(t("openFolder")),
+      strings: ["saveFolder", "openFolder", "folderNoSupport", "folderOverwrite", "folderNotEmpty",
+        "folderWorking", "folderSaved", "folderNoBoard"].every((k) => T.en[k] && T.zh[k]) };
+  });
+  c.ok("支持的浏览器里，文件菜单有「另存为文件夹」与「打开画布文件夹」", !ui.has || (ui.save && ui.open));
+  c.ok("中英文案都齐了", ui.strings);
+
+  // 撤销栈按总量封顶：卡片很多时不会把几十份完整快照都留在内存里
+  const u = await c.run(() => {
+    const keep = S.cards;
+    S.cards = []; for (let i = 0; i < 30000; i++) S.cards.push({ id: "u" + i, x: i, y: 0, w: 200, text: "一段挺长的正文用来撑大快照 " + i, s: { ...DEF } });
+    invalidateIndex();
+    undo.length = 0;
+    for (let i = 0; i < 40; i++) snap();
+    let tot = 0; for (const x of undo) tot += x.length;
+    const res = { steps: undo.length, tot, budget: UNDO_BUDGET, one: undo[0].length };
+    undo.length = 0; S.cards = keep; invalidateIndex(); render();
+    return res;
+  });
+  c.ok(`撤销栈按总量封顶（${u.steps} 步，共 ${(u.tot / 1e6).toFixed(1)}M 字符 ≤ ${u.budget / 1e6}M）`,
+    u.tot <= u.budget && u.steps >= 1 && u.steps < 40);
+});
+
+group("snapgb 大画布的网页快照", async (c) => {
+  // 快照再大也要打得开、发得出去：可以只导出选中的内容；图片总量超了就整体缩小；
+  // 真到了上限就停下来明说，不导出一个打不开的文件。画布本身的原图一张不动。
+  const r = await c.run(async () => {
+    const mk = (w, h, col) => { const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
+      const g = cv.getContext("2d"); const id = g.createImageData(w, h);
+      for (let i = 0; i < id.data.length; i++) id.data[i] = (Math.random() * 255) | 0;
+      g.putImageData(id, 0, 0); g.fillStyle = col; g.fillRect(0, 0, 20, 20); return cv.toDataURL("image/jpeg", .9); };
+    const hs = [];
+    for (let i = 0; i < 6; i++) hs.push((await putImg(mk(1200, 800, "#" + (i * 2) + "3c"))).h);
+    S.cards = hs.map((h, i) => ({ id: "g" + i, x: (i % 3) * 500, y: Math.floor(i / 3) * 400, w: 420, text: "", ih: h, ar: 800 / 1200, s: { ...DEF } }));
+    S.cards.push({ id: "t1", x: 0, y: 900, w: 300, text: "页面一的文字", s: { ...DEF } });
+    S.cards.push({ id: "t2", x: 3000, y: 900, w: 300, text: "页面二的文字", s: { ...DEF } });
+    S.frames = [{ id: "fa", x: -50, y: -50, w: 1600, h: 1100, title: "页面一" }, { id: "fb", x: 2900, y: 800, w: 600, h: 400, title: "页面二" }];
+    S.links = [{ id: "L1", a: "g0", b: "g1" }, { id: "L2", a: "g0", b: "t2" }];
+    S.docs = []; S.sheets = []; invalidateIndex(); render();
+    const out = {};
+    const imgBytes = (html) => (html.match(/src="data:image\/[^"]+"/g) || []).reduce((n, z) => n + z.length, 0);
+    // 1) 不超预算：跟从前完全一样，不缩
+    const full = await buildWebSnap("a");
+    out.normal = { shrunk: snapInfo.shrunk, bytes: imgBytes(full) };
+    // 2) 预算调小：自动整体缩小，最终总量落在预算附近，原图不动
+    const keepBudget = SNAP_IMG_BUDGET;
+    SNAP_IMG_BUDGET = Math.round(out.normal.bytes / 4);
+    const small = await buildWebSnap("b");
+    out.small = { shrunk: snapInfo.shrunk, bytes: imgBytes(small), budget: SNAP_IMG_BUDGET };
+    SNAP_IMG_BUDGET = keepBudget;
+    out.origUntouched = (await imgBlob(hs[0])).size > 50000;
+    // 3) 缩到最小仍然装不下：停下，不给文件
+    const keepMax = SNAP_MAX; SNAP_MAX = 1000;
+    let thrown = null; try { await buildWebSnap("c"); } catch (e) { thrown = e.message; }
+    let got = 0; const realDl = window.dl; window.dl = () => { got++; };
+    const tst = []; const rt = window.toast; window.toast = (m) => { tst.push(m); rt(m); };
+    await exportWebSnap({ title: "c" });
+    window.dl = realDl; window.toast = rt; SNAP_MAX = keepMax;
+    out.tooBig = { thrown, got, told: tst.includes(t("snapTooBig")) };
+    // 4) 范围：只导出选中的两张卡片
+    const sc = await buildWebSnap("d", { keep: new Set(["g0", "g1"]) });
+    const d = new DOMParser().parseFromString(sc, "text/html");
+    const cfg = JSON.parse(d.getElementById("snapcfg").textContent);
+    out.scope = {
+      cards: [...d.querySelectorAll("#cards .card")].map((z) => z.dataset.id).sort().join(","),
+      frames: [...d.querySelectorAll(".frame")].map((z) => z.dataset.id).join(","),
+      links: d.querySelectorAll("#links path.ln").length,
+      linkIds: [...d.querySelectorAll("#links path.ln")].map((z) => z.dataset.link).join(","),
+      cam: cfg.cam, mapFrames: cfg.frames.map((f) => f.id).join(","),
+      liveLinks: S.links.length, liveNodes: document.querySelectorAll("#cards .card").length > 0,
+    };
+    return out;
+  });
+  c.ok("图片总量不大时照旧，不缩", !r.normal.shrunk);
+  c.ok(`图片总量超了就整体缩小（${(r.small.bytes / 1e6).toFixed(2)}MB，预算 ${(r.small.budget / 1e6).toFixed(2)}MB）`,
+    r.small.shrunk > 0 && r.small.bytes <= r.small.budget * 1.15 && r.small.bytes < r.normal.bytes);
+  c.ok("缩的只是快照里的副本，画布里的原图一张没动", r.origUntouched);
+  c.ok("缩到最小仍装不下：停下来明说，不导出一个打不开的文件",
+    r.tooBig.thrown === "toolarge" && r.tooBig.got === 0 && r.tooBig.told);
+  c.ok("只导出选中的卡片", r.scope.cards === "g0,g1");
+  c.ok("连同它们所在的页面，别的页面不带", r.scope.frames === "fa" && r.scope.mapFrames === "fa");
+  c.ok("连线只留两头都在范围里的", r.scope.links === 1 && r.scope.linkIds === "L1");
+  c.ok("只导出一部分时，打开就适应画面框住它们", r.scope.cam === null);
+  c.ok("导出完画布上的连线原样都在", r.scope.liveLinks === 2 && r.scope.liveNodes);
+
+  const panel = await c.run(() => {
+    sel = ["g0"]; paintSel();
+    openExport(100, 100, "web");
+    const P = $("pop");
+    const out = { def: P.querySelector("#exwsc .on").dataset.v, selEnabled: !P.querySelector('#exwsc [data-v="sel"]').disabled };
+    P.classList.remove("on", "wide"); sel = []; paintSel();
+    return out;
+  });
+  c.ok("面板里快照有自己的范围，默认仍是整块画布（跟从前一样）", panel.def === "all" && panel.selEnabled);
+  c.ok("中英文案都齐了", await c.run(() => ["snapScopeSel", "snapShrinking", "snapShrunk", "snapTooBig"]
+    .every((k) => T.en[k] && T.zh[k])));
+});
+
 group("static 静态检查", async (c) => {
   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");
   const js = src.split("<script>").pop().split("</script>")[0];
@@ -5646,6 +5839,11 @@ group("cutout 抠图工具", async (c) => {
 
   for (const g of list) {
     const page = await browser.newPage();
+    // MAC=1 时把每一页都装成 Mac 打开，用来在 Linux / Windows 上跑一遍"Mac 那一侧"的回归
+    if (process.env.MAC === "1") await page.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
+      Object.defineProperty(navigator, "userAgentData", { get: () => ({ platform: "macOS" }) });
+    });
     const errs = [];
     page.on("pageerror", (e) => errs.push(e.message));
     page.on("dialog", async (d) => { await d.accept("报告正文"); });

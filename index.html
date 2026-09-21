@@ -877,6 +877,9 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag to pan, scroll or pinch to zoom, press Z over a card to zoom in, M for the page map. Text can be selected and copied.",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
   importPDF:"Import PDF pages…",pdfRange:"Pages",pdfRangePh:"All pages, or 1-3,7,12-",pdfWidth:"Card width",pdfDpi:"Sharpness",pdfDpi2:"Normal",pdfDpi3:"Sharper",pdfNote:"Each page becomes a card: the page as you see it, with the text selectable on top. Select any passage and copy it as usual.",pdfWork:"Importing the PDF…",pdfDone:"Pages imported:",pdfBad:"This PDF could not be read.",pdfNoPage:"No pages matched.",pdfNoLib:"The PDF library could not be loaded. Please check your connection and try again.",pdfRead:"Reading mode (locks the page in place)",pdfLockedHint:"This page is locked so you can select text. Unlock it to move it.",imgOrig:"Original size",imgOrigNote:"Images now come in at their own size, with no limit. Existing images are unchanged; use Fit selected or Fit all to apply it.",copy:"Copy",
+  link:"Link",
+  snapScopeSel:"Selected cards and their pages",snapShrinking:"The images add up to a lot, so the snapshot copies are being scaled down to fit…",snapShrunk:"images scaled down to keep the file openable",snapTooBig:"Even scaled down this is too large for one web page. Select fewer pages and export again.",
+  saveFolder:"Save as folder (for very large boards)…",openFolder:"Open board folder…",folderNoSupport:"This browser cannot save to a folder. Use Chrome or Edge.",folderOverwrite:"This folder already holds a board. Replace it with the current one?",folderNotEmpty:"This folder has other files in it. Save the board here anyway?",folderWorking:"Writing to the folder… the first save copies every image once.",folderSaved:"Saved to folder",folderNoBoard:"There is no board.json in this folder.",
   wheelMenu:"Scroll wheel / trackpad",whAuto:"Decide automatically",whZoom:"Scrolling zooms (same as Windows)",whPan:"Scrolling pans (Mac style)",wheelDir:"Scroll direction",wdWin:"Same as Windows",wdNative:"macOS natural",
   snapPwShow:"Show",snapPwHide:"Hide",snapPwGen:"Generate",snapPwCopied:"A strong password was generated and copied. Keep it in your password manager.",snapPwWeak:"Too easy to guess",snapPwOk:"Acceptable",snapPwStrong:"Strong",snapPwWeakBlock:"This password is too easy to guess. Make it longer, or use Generate.",
   readingN:"Reading the file, cards so far:",
@@ -1073,6 +1076,9 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动平移，滚轮或双指缩放，指着卡片按 Z 放大，M 打开页面地图。文字可以划选复制。",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
   importPDF:"导入 PDF 页面…",pdfRange:"页码",pdfRangePh:"留空表示全部，或 1-3,7,12-",pdfWidth:"卡片宽度",pdfDpi:"清晰度",pdfDpi2:"普通",pdfDpi3:"更清晰",pdfNote:"每一页变成一张卡片：版面跟原文一样，文字可以直接划选，选中之后照常复制即可。",pdfWork:"正在导入 PDF…",pdfDone:"已导入页数：",pdfBad:"这个 PDF 读不出来。",pdfNoPage:"没有匹配的页码。",pdfNoLib:"PDF 解析库加载失败，请检查网络后重试。",pdfRead:"阅读模式（锁住位置，可划选）",pdfLockedHint:"这一页锁着，所以能划选文字；要搬动它请先解锁。",imgOrig:"原尺寸",imgOrigNote:"之后导入的图片按原始尺寸插入，不再压缩。已有的图片不变，可用「适应选中」或「适应全部」套用。",copy:"复制",
+  link:"链接",
+  snapScopeSel:"选中的卡片及所在页面",snapShrinking:"图片总量太大，正在把快照里的副本整体缩小……",snapShrunk:"图片已整体缩小，保证文件打得开",snapTooBig:"缩到最小仍然超过一个网页能装下的上限，请少选几页再导出。",
+  saveFolder:"另存为文件夹（适合特别大的画布）…",openFolder:"打开画布文件夹…",folderNoSupport:"这个浏览器不能存到文件夹，请用 Chrome 或 Edge。",folderOverwrite:"这个文件夹里已经有一份画布了，用现在这份替换它吗？",folderNotEmpty:"这个文件夹里还有别的文件，仍然存到这里吗？",folderWorking:"正在写入文件夹……第一次会把每张图都复制过去一次。",folderSaved:"已存到文件夹",folderNoBoard:"这个文件夹里没有 board.json。",
   wheelMenu:"滚轮 / 触控板",whAuto:"自动判断",whZoom:"滚动＝缩放（与 Windows 一致）",whPan:"滚动＝平移（Mac 原生）",wheelDir:"滚动方向",wdWin:"与 Windows 一致",wdNative:"macOS 自然方向",
   snapPwShow:"显示",snapPwHide:"隐藏",snapPwGen:"生成",snapPwCopied:"已生成强密码并复制到剪贴板，请存进密码管理器。",snapPwWeak:"太容易猜",snapPwOk:"可以",snapPwStrong:"强",snapPwWeakBlock:"这个密码太容易猜，请再长一些，或者点「生成」。",
   readingN:"正在读取文件，已读卡片：",
@@ -1366,8 +1372,8 @@ async function putImg(dataURL,opt){
 async function imgBlob(h){
   if(!h)return null;
   if(IMGB.has(h))return IMGB.get(h);
-  const v=await kvGet("img:"+h);
-  if(!v)return null;
+  let v=await kvGet("img:"+h);
+  if(!v){const fb=await folderImg(h);if(fb){IMGB.set(h,fb);return fb}return null}
   let b=v;
   if(typeof v==="string"){               // 旧数据：顺手转存成 Blob，下次读就不再经过字符串
     b=dataURLBlob(v);
@@ -1502,8 +1508,13 @@ let lazySnap=null;
 function pushSnap(){
   undo.push(packState());
   if(undo.length>40)undo.shift();
+  // 撤销栈存的是整份结构的快照。卡片多到几万张时一份就有好几 MB，四十份能吃掉几百 MB 内存。
+  // 按总量再卡一道：超过 UNDO_BUDGET 个字符就从最老的扔起（至少留一步）
+  let tot=0;for(const x of undo)tot+=x.length;
+  while(tot>UNDO_BUDGET&&undo.length>1)tot-=undo.shift().length;
   redo=[];
 }
+const UNDO_BUDGET=60e6;                   // 约 60M 字符（中文按两字节算约 120MB）
 function snap(){lazySnap=null;pushSnap()}
 function snapLazy(items){
   // items: [{o,x,y}]，o 是卡片对象，x/y 是它此刻的位置
@@ -1820,10 +1831,13 @@ async function writeFileNow(quiet){
       if(p!=="granted"){p=await fileHandle.requestPermission({mode:"readwrite"});
         if(p!=="granted"){fileOK=false;fileErr="perm";fileState();return false}}
     }
-    const w=await fileHandle.createWritable();
-    // 浏览器先写进一份临时文件，close 时才替换原文件；中途出错就 abort，原文件原封不动
-    try{await writeBundle(null,x=>w.write(x));await w.close()}
-    catch(e){try{await w.abort()}catch(_){};throw e}
+    if(fileHandle.kind==="directory")await writeFolder(fileHandle);
+    else{
+      const w=await fileHandle.createWritable();
+      // 浏览器先写进一份临时文件，close 时才替换原文件；中途出错就 abort，原文件原封不动
+      try{await writeBundle(null,x=>w.write(x));await w.close()}
+      catch(e){try{await w.abort()}catch(_){};throw e}
+    }
     lastWriteMs=performance.now()-t0;
     fileOK=true;fileErr="";fileState();
     if(!quiet){toast(t("savedTo")+" "+fileName);pushRecent(fileHandle,fileName)}
@@ -1886,6 +1900,7 @@ async function openRecent(id,newWin){
       const p=await h.requestPermission({mode:"readwrite"});
       if(p!=="granted"){toast(t("noPerm"));return}
     }
+    if(h.kind==="directory"){await openFolder(h);return}
     const f=await h.getFile();
     const d=await readBoardFile(f);
     if(!d||!Array.isArray(d.cards))throw new Error(t("errShape"));
@@ -1930,6 +1945,112 @@ async function newBoard(){
   invalidateIndex();S.cards=[];S.links=[];sel=[];selLink=null;
   await unbind(true);
   camTo(0,0,1,true);render();save();
+}
+/* ---------------- 文件夹模式（GB 级画布用） ----------------
+   单文件模式每次自动写回都要把全部图片重新 base64 一遍写进去：图片到了 GB 级，
+   一次要写几十秒，而且越大越慢。文件夹模式把两样东西分开：
+     board.json    只有结构（卡片里是图片的哈希），几 MB，每次自动写回只写它，零点几秒；
+     assets/       每张图一个文件（<哈希>.png / .jpg），只在第一次出现时写一次，之后再也不动。
+   写的顺序是先图后结构：board.json 里提到的图，一定已经在 assets 里了，中途断电也不会缺图。
+   绑定用的仍是 fileHandle——它此时是一个文件夹句柄（kind==="directory"）。
+   这样自动写回的排队、失败提示、重启后重新授权、最近打开、解除绑定，全部原样沿用。
+   已经不用的图片不会从 assets 里删掉：多占一点地方，换来的是任何时候都不会误删。 */
+const FOLDER_JSON="board.json",FOLDER_ASSETS="assets";
+let folderHas=null,folderOf=null;         // 这个文件夹里已经有的图片哈希（只列一次目录）
+async function folderAssets(dir){
+  const a=await dir.getDirectoryHandle(FOLDER_ASSETS,{create:true});
+  if(folderOf!==dir||!folderHas){
+    folderHas=new Set();folderOf=dir;
+    try{for await(const [name] of a.entries())folderHas.add(name.replace(/\.[^.]+$/,""))}catch(e){}
+  }
+  return a;
+}
+async function writeFolder(dir){
+  const assets=await folderAssets(dir);
+  const need=new Set();
+  S.cards.forEach(c=>{const o=orig(c);if(o.ih&&!folderHas.has(o.ih))need.add(o.ih)});
+  for(const h of need){
+    const b=await imgBlob(h);if(!b)continue;
+    const fh=await assets.getFileHandle(h+"."+(/png/i.test(b.type)?"png":"jpg"),{create:true});
+    const w=await fh.createWritable();
+    try{await w.write(b);await w.close()}catch(e){try{await w.abort()}catch(_){};throw e}
+    folderHas.add(h);
+  }
+  const data=bundle(null);data.assets=FOLDER_ASSETS;
+  const fh=await dir.getFileHandle(FOLDER_JSON,{create:true});
+  const w=await fh.createWritable();
+  try{await w.write(JSON.stringify(data,null,1));await w.close()}
+  catch(e){try{await w.abort()}catch(_){};throw e}
+}
+// 图片仓库里没有、但绑定的文件夹里有：从文件夹读出来，顺手存进仓库（之后就不用再去文件夹取）
+async function folderImg(h){
+  const dir=fileHandle;if(!dir||dir.kind!=="directory"||!fileOK)return null;
+  try{
+    const a=await dir.getDirectoryHandle(FOLDER_ASSETS);
+    for(const ext of ["jpg","png","jpeg","webp"]){
+      try{
+        const f=await (await a.getFileHandle(h+"."+ext)).getFile();
+        const b=new Blob([f],{type:f.type||("image/"+(ext==="jpg"?"jpeg":ext))});
+        try{await kvPut("img:"+h,b)}catch(e){}
+        return b;
+      }catch(e){}
+    }
+  }catch(e){}
+  return null;
+}
+// 另存为文件夹：选一个（最好是空的）文件夹，之后自动写回都写到这里
+async function pickFolder(){
+  if(!window.showDirectoryPicker){toast(t("folderNoSupport"));return}
+  let dir;
+  try{dir=await showDirectoryPicker({mode:"readwrite",id:"board-folder"})}catch(e){return}
+  try{
+    // 别把画布写进一个装着别的东西的文件夹里：有东西、又不是画布文件夹时先问一句
+    let other=false,isBoard=false;
+    for await(const [name] of dir.entries()){if(name===FOLDER_JSON)isBoard=true;else if(name!==FOLDER_ASSETS)other=true}
+    if(isBoard&&!confirm(t("folderOverwrite")))return;
+    if(other&&!isBoard&&!confirm(t("folderNotEmpty")))return;
+  }catch(e){}
+  fileHandle=dir;fileName=dir.name;fileOK=true;fileErr="";folderHas=null;
+  await kvPut(FH,dir);pushRecent(dir,dir.name);
+  toast(t("folderWorking"));
+  const ok=await writeFile();
+  if(ok)toast(t("folderSaved")+" "+dir.name);
+  statusBar();fileState();
+}
+// 打开一个画布文件夹
+async function openFolder(dir){
+  if(!dir){
+    if(!window.showDirectoryPicker){toast(t("folderNoSupport"));return}
+    try{dir=await showDirectoryPicker({mode:"readwrite",id:"board-folder"})}catch(e){return}
+  }
+  let f;
+  try{f=await (await dir.getFileHandle(FOLDER_JSON)).getFile()}
+  catch(e){alert(t("folderNoBoard"));return}
+  try{
+    const d=await readBoardFile(f);
+    if(!d||!Array.isArray(d.cards))throw new Error(t("errShape"));
+    snap();
+    fileHandle=dir;fileName=dir.name;fileOK=true;fileErr="";folderHas=null;   // 先绑上，缺的图才能从文件夹里取
+    await absorb(d,false);
+    LANG=S.lang||LANG;sel=[];selLink=null;
+    await kvPut(FH,dir);
+    render();fit(true);save();
+    pushRecent(dir,dir.name);fileState();
+    folderWarm(dir);
+  }catch(e){alert(t("errImport")+"\n"+((e&&e.message)||e))}
+}
+// 打开文件夹之后，在后台把仓库里还没有的图片一张张搬进来：
+// 以后就算文件夹暂时拿不到（换了电脑、没授权），画布上的图照样都在
+async function folderWarm(dir){
+  const hs=[...new Set(S.cards.map(c=>orig(c).ih).filter(Boolean))];
+  let n=0;
+  for(const h of hs){
+    if(fileHandle!==dir)return;             // 中途换了文件，停
+    try{
+      if(!(await kvGet("img:"+h))){await folderImg(h);n++}
+    }catch(e){}
+    if(n&&n%20===0)await new Promise(r=>setTimeout(r,30));   // 让出主线程
+  }
 }
 async function saveNow(){
   if(fileHandle){const ok=await writeFile();if(ok)return}
@@ -4125,7 +4246,14 @@ const MANUAL=[
   <p>打开之后：拖动空白处平移，滚轮或双指缩放，<kbd>F</kbd> 适应画面，<kbd>0</kbd> 回到 100%。写作页照样在固定高度里往下翻，点左侧目录跳到对应标题，折叠的引用可以展开。所有文字都能划选复制，链接可以点开。</p>
   <p>它是单个文件，图片已经内嵌，发给导师双击就能看，不需要安装本程序，也不会读写任何浏览器存储。</p>
   <p>导出面板里「密码保护」默认勾着：整份快照用你设的密码加密，没有密码既打不开，也读不出里面的字和图。密码至少 12 位，点「生成」可以得到一个强密码并复制到剪贴板。密码和文件请分开发给对方。解锁后闲置 15 分钟会自动回到锁屏。</p>
+  <p><b>画布很大时：</b>导出面板里可以选「选中的卡片及所在页面」，只把要给人看的那几页导出去。整块导出时，如果图片加起来太多，快照里的图片会自动整体缩小，保证文件打得开；画布里的原图一张不动。导出完会提示文件有多大。</p>
   <p class="tip">快照只负责"看"，不能导回来继续编辑。要能还原的，仍然是 json 或存档包。</p>`],
+
+ ["文件夹模式（很大的画布）","WENJIANJIAMOSHI",`
+  <p>画布里的图多到几百 MB、上 GB 时，用 <b>文件 → 另存为文件夹</b>。文件夹里有两样东西：<code>board.json</code> 只存结构（几 MB），<code>assets/</code> 里每张图一个文件。</p>
+  <p>之后的自动保存只写那个几 MB 的 <code>board.json</code>，一眨眼就完；图片只在第一次出现时写一次，以后不再重写。单个 .json 文件每次都得把全部图片重写一遍，图一多就要几十秒。</p>
+  <p>换电脑或清了浏览器数据，用 <b>文件 → 打开画布文件夹</b> 就能原样打开，图片按需从文件夹里取。</p>
+  <p class="tip">需要 Chrome 或 Edge。存档包、网页快照、各种导出照常可用。不再用到的旧图不会自动从 assets 里删掉，多占一点地方，换来的是永远不会误删。</p>`],
 
  ["两个小工具","LIANGGEXIAOGONGJU",`
   <p>画布右键里的 <b>抠图工具</b> 和 <b>拼版工具</b> 是两个独立的小网页（cutout.html、Tiler.html），点一下在新标签里打开。抠图用来把图里的主体抠出来，复制回画布粘上；拼版用来把大图或 PDF 切成 A4 分页，拼好直接打印。</p>
@@ -4741,6 +4869,11 @@ function openExport(x,y,pre){
     </div>
     <div id="exweb" style="display:none">
       <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("snapNote")}</div>
+      <div class="sec">${t("scope")}</div>
+      <div class="pair" id="exwsc">
+        <button data-v="all" class="on">${t("scopeAll")}</button>
+        <button data-v="sel" ${sel.length?"":"disabled"}>${t("snapScopeSel")}</button>
+      </div>
       <label class="opt"><input type="checkbox" id="exlock" ${snapLockOn?"checked":""}> ${t("snapLock")}</label>
       <div id="expw" style="${snapLockOn?"":"display:none"}">
         <input class="ti" id="expw1" type="password" autocomplete="new-password" placeholder="${esc(t("snapPw1"))}">
@@ -4772,6 +4905,10 @@ function openExport(x,y,pre){
   p.querySelector("#exn").addEventListener("keydown",e=>e.stopPropagation());
   // 网页快照的密码：只在内存里记着（snapPw），方便这次打开程序期间连续导出，不写进任何存储
   const pw1=p.querySelector("#expw1"),pw2=p.querySelector("#expw2"),lk=p.querySelector("#exlock");
+  // 网页快照自己的范围：默认整块画布（跟从前一样），想只发几页时选"选中的内容"
+  let webScope="all";
+  p.querySelector("#exwsc").onclick=e=>{const b=e.target.closest("button[data-v]");if(!b||b.disabled)return;
+    [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");webScope=b.dataset.v};
   pw1.value=pw2.value=snapPw||"";
   [pw1,pw2].forEach(el=>el.addEventListener("keydown",e=>{e.stopPropagation();if(e.key==="Enter")p.querySelector("#exgo").click()}));
   lk.onchange=()=>{snapLockOn=lk.checked;p.querySelector("#expw").style.display=lk.checked?"":"none"};
@@ -4813,7 +4950,7 @@ function openExport(x,y,pre){
       if(pw1.value!==pw2.value){toast(t("snapPwMismatch"));pw2.focus();return}
       pw=snapPw=pw1.value;
     }
-    const o={fmt,scale,scope,pw,byPage:!!p.querySelector("#exbp")?.checked,
+    const o={fmt,scale,scope,pw,webScope,byPage:!!p.querySelector("#exbp")?.checked,
       shots:!!p.querySelector("#exshot")?.checked,
       title:stampName(p.querySelector("#exn").value.trim()||"Board"),
       img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
@@ -5910,7 +6047,7 @@ async function snapFonts(html){
 // 快照里的图片：原图最长边可到 1600px，卡片上一般只显示三四百像素宽。
 // 按卡片显示宽度的两倍重新采样，放大看仍然清楚，体积通常只有原图的几分之一；图片多的画布，快照才不会大到打不开。
 // PNG 仍出 PNG（保留透明），其余出 JPEG。原图本来就不大的，原样放进去。
-async function snapImgData(h,cssW){
+async function snapImgData(h,cssW,q){
   const b=await imgBlob(h);if(!b)return "";
   const tw=Math.max(64,Math.ceil((cssW||360)*2));
   try{
@@ -5918,10 +6055,34 @@ async function snapImgData(h,cssW){
     if(bm.width<=tw*1.15){if(bm.close)bm.close();return await blobDataURL(b)}
     const cv=document.createElement("canvas");cv.width=tw;cv.height=Math.max(1,Math.round(bm.height*tw/bm.width));
     cv.getContext("2d").drawImage(bm,0,0,cv.width,cv.height);if(bm.close)bm.close();
-    return cv.toDataURL(/png/i.test(b.type)?"image/png":"image/jpeg",.86);
+    return cv.toDataURL(/png/i.test(b.type)?"image/png":"image/jpeg",q||.86);
   }catch(e){return await blobDataURL(b)}
 }
-async function buildWebSnap(title){
+// 快照再大也要打得开、发得出去：
+//   1) 范围：可以只导出选中的卡片（以及它们所在的页面），发给导师的往往只是其中几页；
+//   2) 图片总量封顶 SNAP_IMG_BUDGET：超了就按同一个比例整体缩小重来，快照总体积稳在几百 MB 以内，
+//      远离浏览器单个字符串约 512MB 的上限，也还是一个能打开、能发送的文件；
+//   3) 真到了上限（几万张图都缩到最小还是装不下），停下来明说，请缩小范围，不会导出一个打不开的文件。
+// 画布本身不受这些影响：原图一张没动，缩的只是快照里的副本。
+let SNAP_IMG_BUDGET=200e6,SNAP_MAX=480e6;          // let：测试里要临时调小
+let snapInfo=null;                         // 最近一次快照的体积与是否缩过图，导出后报给用户
+// 只留范围里的卡片，以及它们所在的页面、标准页；稿子只在它本身被选中时才留
+function snapPrune(w,keep){
+  w.querySelectorAll("#cards .card").forEach(el=>{if(!keep.has(el.dataset.id))el.remove()});
+  const cs=S.cards.filter(c=>keep.has(c.id));
+  const inside=(r)=>cs.some(c=>{const cx=c.x+c.w/2,cy=c.y+hOf(c)/2;return cx>=r.x&&cx<=r.x+r.w&&cy>=r.y&&cy<=r.y+r.h});
+  const fr=new Map((S.frames||[]).map(f=>[f.id,f]));
+  w.querySelectorAll(".frame[data-id]").forEach(el=>{const f=fr.get(el.dataset.id);if(!f||!inside(f))el.remove()});
+  const sh=new Map((S.sheets||[]).map(f=>[f.id,f]));
+  w.querySelectorAll(".sheet[data-id]").forEach(el=>{const f=sh.get(el.dataset.id);if(!f||!inside(f))el.remove()});
+  w.querySelectorAll(".doc[data-id]").forEach(el=>{if(el.dataset.id!==selDoc)el.remove()});
+}
+function snapScopeSet(){
+  const ids=new Set(expand(sel));
+  return ids.size?ids:null;
+}
+async function buildWebSnap(title,opt){
+  const keep=opt&&opt.keep||null;              // 只导出这些卡片（null＝整块画布）
   const live=$("world");
   const prev={m:CULL.m,cap:NODE_CAP,hover:hoverId,sel,selLink};
   let w;
@@ -5929,13 +6090,17 @@ async function buildWebSnap(title){
   // 不是视野中心的九百张
   CULL.m=1e9;NODE_CAP=Infinity;hoverId=null;sel=[];selLink=null;
   IMG_QUIET=true;             // 临时画出来的几千张卡片不去逐张读图，快照里的图片下面单独处理
+  const links0=S.links;
   try{
+    // 只导出一部分时，连线只画两头都在范围里的那些（只在这一小段同步代码里换，马上换回来）
+    if(keep)S.links=links0.filter(l=>keep.has(l.a)&&keep.has(l.b));
     syncCards();measure();drawLinks();
     w=live.cloneNode(true);
     // 稿子的滚动位置不会随 cloneNode 带过去，记下来交给查看脚本在打开时补回
     const a=live.querySelectorAll(".dbody,.dside"),b=w.querySelectorAll(".dbody,.dside");
     a.forEach((el,i)=>{if(b[i]&&el.scrollTop)b[i].dataset.st=Math.round(el.scrollTop)});
   }finally{
+    S.links=links0;
     CULL.m=prev.m;NODE_CAP=prev.cap;hoverId=prev.hover;sel=prev.sel;selLink=prev.selLink;
     IMG_QUIET=false;
     syncCards();measure();drawLinks();
@@ -5943,16 +6108,40 @@ async function buildWebSnap(title){
     live.querySelectorAll("img[data-ih]:not([src])").forEach(im=>needImg(im.dataset.ih));
   }
   snapClean(w);
+  if(keep)snapPrune(w,keep);
   // 图片：同一张图（分身）按最宽的那处算一次
   const ims=[...w.querySelectorAll("img[data-ih]")],widest=new Map();
   ims.forEach(im=>{const c=im.closest(".card"),cw=c?parseFloat(c.style.width)||360:360;
     widest.set(im.dataset.ih,Math.max(widest.get(im.dataset.ih)||0,cw))});
-  const done=new Map();let k=0;
-  for(const [h,cw] of widest){
-    try{done.set(h,await snapImgData(h,cw))}catch(e){done.set(h,"")}
-    if(++k%40===0)toast(t("snapWork")+" "+k+"/"+widest.size);
+  const pass=async(f,q,only)=>{
+    const done=new Map();let k=0,tot=0;
+    for(const [h,cw] of (only||widest)){
+      let u="";try{u=await snapImgData(h,cw*f,q)}catch(e){}
+      done.set(h,u);tot+=u.length;
+      if(!only&&++k%40===0)toast(t("snapWork")+" "+k+"/"+widest.size);
+    }
+    return {done,tot};
+  };
+  // 图多时先抽样估一下总量：明显会超预算，就直接按缩小后的尺寸做，省掉整整一遍
+  let f0=1,q0;
+  const all=[...widest];
+  if(all.length>60){
+    const n=40,pick=[];for(let i=0;i<n;i++)pick.push(all[Math.floor(i*all.length/n)]);
+    const est=(await pass(1,undefined,pick)).tot/n*all.length;
+    if(est>SNAP_IMG_BUDGET){f0=Math.max(.2,Math.sqrt(SNAP_IMG_BUDGET/est)*.9);q0=.8;toast(t("snapShrinking"))}
   }
-  ims.forEach(im=>{const u=done.get(im.dataset.ih);if(u)im.src=u;else im.removeAttribute("src");im.removeAttribute("data-ih")});
+  let res=await pass(f0,q0);
+  let shrunk=f0<1?f0:0;
+  if(res.tot>SNAP_IMG_BUDGET){
+    // 仍然超了：按面积比例再整体缩小（边长开平方），质量也略降一点，重来一遍
+    const f=Math.max(.2,f0*Math.sqrt(SNAP_IMG_BUDGET/res.tot)*.9);
+    shrunk=f;res=null;
+    toast(t("snapShrinking"));
+    res=await pass(f,.8);
+  }
+  const done=res.done;
+  ims.forEach(im=>{const u=done.get(im.dataset.ih);if(u)im.src=u;else im.removeAttribute("src");
+    im.removeAttribute("data-ih");im.setAttribute("decoding","async")});
   w.querySelectorAll('img[src^="blob:"]').forEach(im=>im.removeAttribute("src"));   // blob 地址离开本程序就失效
   const inner=w.outerHTML;
   const fontCSS=await snapFonts(inner);
@@ -5968,11 +6157,14 @@ async function buildWebSnap(title){
   mapEl.querySelectorAll("#maptip").forEach(el=>{el.classList.remove("on");el.textContent=""});
   mapEl.querySelectorAll("#mapz,#mapn").forEach(el=>{el.textContent=""});
   const mq=mapEl.querySelector("#mapq");if(mq){mq.removeAttribute("value");mq.setAttribute("placeholder",T.en.mapFind)}
-  const cfg={v:1,cam:{x:cam.x,y:cam.y,z:cam.z},made:d.toISOString(),wheel:wheelMode(),flip:wheelFlip(),
+  // 只导出一部分时不沿用画布的镜头：打开时直接"适应画面"，正好框住导出的那些
+  const cfg={v:1,cam:keep?null:{x:cam.x,y:cam.y,z:cam.z},made:d.toISOString(),wheel:wheelMode(),flip:wheelFlip(),
     map:{on:!!S.map,w:S.mapW||0,h:S.mapH||0,dark:isDark(S.bg)},
-    frames:(S.frames||[]).map(f=>({id:f.id,x:f.x,y:f.y,w:f.w,h:f.h,title:f.title||""})),
+    frames:(S.frames||[]).filter(f=>!keep||w.querySelector('.frame[data-id="'+f.id+'"]'))
+      .map(f=>({id:f.id,x:f.x,y:f.y,w:f.w,h:f.h,title:f.title||""})),
     en:{page:T.en.pageDefault}};
-  return `<!doctype html>
+  let html;
+  try{html=`<!doctype html>
 <html lang="en-GB"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="generator" content="Board web snapshot">
@@ -5988,7 +6180,11 @@ ${mapEl.outerHTML}
 <div id="snaphint">${esc(T.en.snapHint)}</div>
 <script type="application/json" id="snapcfg">${JSON.stringify(cfg).replace(/</g,"\\u003c")}<\/script>
 <script id="snapjs">(${snapViewer.toString()})();<\/script>
-</body></html>`;
+</body></html>`}
+  catch(e){throw new Error("toolarge")}          // 超过单个字符串的上限
+  if(html.length>SNAP_MAX)throw new Error("toolarge");
+  snapInfo={shrunk,bytes:html.length,cards:w.querySelectorAll("#cards .card").length};
+  return html;
 }
 async function exportWebSnap(o){
   // 专注模式下画布是 display:none，量不到任何高度，快照会是一堆叠在一起的卡片
@@ -5996,11 +6192,17 @@ async function exportWebSnap(o){
   const title=(o&&o.title)||stampName(fileName||"Board");
   toast(t("snapWork"));
   try{
-    let html=await buildWebSnap(title);
+    const keep=(o&&o.webScope==="sel")?snapScopeSet():null;
+    let html=await buildWebSnap(title,{keep});
+    const info=snapInfo||{};
     if(o&&o.pw){toast(t("snapSealing"));html=await sealWebSnap(html,o.pw)}
     dl(new Blob([html],{type:"text/html;charset=utf-8"}),title+".html");
-    toast(t("snapDone"));
-  }catch(e){console.error(e);toast(e&&e.message==="nocrypto"?t("snapNoCrypto"):t("snapFail"))}
+    // 报一下体积；缩过图的话说一声（原图没动，缩的只是快照里的副本）
+    const mb=(html.length/1048576).toFixed(html.length>1e7?0:1);
+    setTimeout(()=>toast(t("snapDone")+" · "+mb+" MB"+(info.shrunk?" · "+t("snapShrunk"):"")),600);
+    html=null;
+  }catch(e){console.error(e);
+    toast(e&&e.message==="nocrypto"?t("snapNoCrypto"):e&&e.message==="toolarge"?t("snapTooBig"):t("snapFail"))}
 }
 /* ---------------- 网页快照的密码保护 ----------------
    快照里是整个 PhD 期间的想法和笔记，文件会经过邮件、网盘、导师的电脑。
@@ -9755,6 +9957,8 @@ function fileItems(x,y){
     {head:(fileName?t("boundTo")+"  "+fileName:t("noBound"))},
     {label:t("save"),key:"⌘S",on:saveNow},
     {label:t("saveAs"),on:pickFile},
+    ...(window.showDirectoryPicker?[{label:t("saveFolder"),on:pickFolder},
+      {label:t("openFolder"),on:()=>openFolder()}]:[]),
     ...(fileHandle?[{label:t("unbind"),on:()=>unbind()}]:[]),
     "-",
     {label:t("recent"),sub:recentItems()},
