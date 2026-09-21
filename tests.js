@@ -5361,10 +5361,56 @@ group("mac Mac 与 Windows 的操作统一", async (c) => {
   c.ok(`Mac 触控板双指滚动＝缩放（和 Windows 的滚轮一样，z=${mac.pad.z} y=${mac.pad.y}）`,
     mac.pad.z !== 1 && Math.abs(mac.pad.y) < 8);   // 缩放会把光标那一点钉住，位移只有一两像素
   c.ok("Mac 的捏合照样缩放", mac.pinch.z > 1);
-  c.ok("Shift + 滚动仍然是平移，两边一致", mac.shift.z === 1 && mac.shift.y === -60);
+  c.ok("Shift + 滚动仍然是平移", mac.shift.z === 1 && Math.abs(mac.shift.y) === 60);
   c.ok("Mac 上全屏提示写 ⌃⌘F（那边没有 F11）", mac.fs === "\u2303\u2318F");
   c.ok("Mac 上删除提示写 ⌫", mac.del);
   c.ok("Mac 上 Ctrl+点 只当右键，不会顺手起一个框选", mac.marq === "none");
+
+  // 方向：macOS 默认开着"自然滚动"，同一个手势报出来的 delta 与 Windows 反号。
+  // 两边各跑一遍同一个"手势"，看结果是不是一致。
+  const gesture = async (isMac) => {
+    const pg2 = await c.page.browser().newPage();
+    if (isMac) await pg2.evaluateOnNewDocument(() => {
+      Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
+      Object.defineProperty(navigator, "userAgentData", { get: () => ({ platform: "macOS" }) });
+    });
+    await pg2.goto("file://" + require("path").resolve(__dirname, "index.html"));
+    await c.wait(1200);
+    const out = await pg2.evaluate(async (isMac) => {
+      delete S.wheel; delete S.wheelDir;
+      S.cards = [{ id: "a", x: 0, y: 0, w: 300, text: "hi", s: { ...DEF } }];
+      invalidateIndex(); render();
+      const fire = async (o) => {
+        camTo(0, 0, 1, true); await new Promise((z) => setTimeout(z, 150));
+        $("stage").dispatchEvent(new WheelEvent("wheel", Object.assign({ clientX: 650, clientY: 400,
+          bubbles: true, cancelable: true }, o)));
+        await new Promise((z) => setTimeout(z, 350));
+        return { z: +tgt.z.toFixed(2), x: Math.round(tgt.x), y: Math.round(tgt.y) };
+      };
+      const sign = isMac ? -1 : 1;          // 同一个手势，Mac（自然滚动）报出来的是反号
+      return {
+        flip: wheelFlip(),
+        away: await fire({ deltaY: -100 * sign }),                 // 滚轮往前推 / 双指往上推
+        toward: await fire({ deltaY: 100 * sign }),                // 反过来
+        shift: await fire({ deltaY: 100 * sign, shiftKey: true }), // Shift+滚动＝平移
+        pinch: await fire({ deltaY: -20, ctrlKey: true }),         // 捏合：两边本来就一致，不该翻
+      };
+    }, isMac);
+    await pg2.close();
+    return out;
+  };
+  const win = await gesture(false), mc = await gesture(true);
+  c.ok("Windows 上不翻方向（一点没动）", win.flip === 1);
+  c.ok("Mac 上默认按 Windows 的方向来", mc.flip === -1);
+  c.ok(`同一个手势，两边都是放大（Win ${win.away.z} / Mac ${mc.away.z}）`,
+    win.away.z > 1 && mc.away.z === win.away.z);
+  c.ok(`反过来的手势，两边都是缩小（Win ${win.toward.z} / Mac ${mc.toward.z}）`,
+    win.toward.z < 1 && mc.toward.z === win.toward.z);
+  c.ok(`Shift + 滚动的平移方向两边一致（${win.shift.y} / ${mc.shift.y}）`,
+    win.shift.y !== 0 && mc.shift.y === win.shift.y);
+  c.ok("捏合不受方向设置影响，两边都是张开＝放大", win.pinch.z > 1 && mc.pinch.z === win.pinch.z);
+  c.ok("中英文案都齐了（方向）", await c.run(() => ["wheelDir", "wdWin", "wdNative"]
+    .every((k) => T.en[k] && T.zh[k])));
 });
 
 group("static 静态检查", async (c) => {
