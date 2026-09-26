@@ -5281,94 +5281,93 @@ group("pdfbook 翻页本", async (c) => {
   c.ok(`翻到第 2 页后文字层无越界（最大 ${align.maxErr2}px）`, align.p2ok);
 });
 group("docimport Word 文档导入为写作页", async (c) => {
-  // 导入 .docx → 写作页（S.docs）。每个 Word 段落成为写作页里的一张 wrIn 卡片。
-  // 不需要真实的 .docx——直接用合成 XML 测解析器，再测卡片/写作页结构。
-  const r = await c.run(() => {
-    const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const xml = '<?xml version="1.0"?><w:document xmlns:w="' + W +
-      '" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>' +
-      // Heading1
-      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>第一章</w:t></w:r></w:p>' +
-      // bold + plain mix
-      '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">重点 </w:t></w:r><w:r><w:t>正文</w:t></w:r></w:p>' +
-      // Heading2
-      '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>第一节</w:t></w:r></w:p>' +
-      // list
-      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/></w:numPr></w:pPr><w:r><w:t>列表项</w:t></w:r></w:p>' +
-      // hyperlink
-      '<w:p><w:hyperlink r:id="rId1"><w:r><w:t>链接</w:t></w:r></w:hyperlink></w:p>' +
-      // plain
-      '<w:p><w:r><w:t>普通段落</w:t></w:r></w:p>' +
-      '</w:body></w:document>';
-    const paras = docxParagraphs(xml, { rId1: "https://example.com" });
-    // 验证解析结果
-    return {
-      n: paras.length,
-      h1: paras[0] && paras[0].level === 1 && /第一章/.test(paras[0].rich),
-      bold: paras[1] && /<b>[^<]*重点/.test(paras[1].rich) && /正文/.test(paras[1].rich),
-      h2: paras[2] && paras[2].level === 2,
-      bullet: paras[3] && /• 列表项/.test(paras[3].rich),
-      link: paras[4] && /<a href="https:\/\/example\.com">链接<\/a>/.test(paras[4].rich),
-      plain: paras[5] && paras[5].level === 0,
-    };
-  });
-  c.ok("解析出 6 个段落", r.n === 6);
-  c.ok("Heading1 → level=1，含标题文字", r.h1);
-  c.ok("粗体格式保留为 <b>", r.bold);
-  c.ok("Heading2 → level=2", r.h2);
-  c.ok("列表项有 • 前缀", r.bullet);
-  c.ok("超链接保留为 <a href>", r.link);
-  c.ok("普通段落 level=0", r.plain);
+  const W="http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+  const R="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  const A="http://schemas.openxmlformats.org/drawingml/2006/main";
+  const WP="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing";
 
-  // 完整导入：生成写作页，每段 → wrIn 卡片
-  const doc = await c.run(() => {
-    S.cards = []; S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render();
-    const paras = [
-      { rich: "第一章", level: 1 },
-      { rich: "<b>重点</b> 正文", level: 0 },
-      { rich: "第一节", level: 2 },
-      { rich: "• 列表项", level: 0 },
-      { rich: "普通段落", level: 0 },
-    ];
-    const d = addDoc({ x: 0, y: 0 }, "TestDoc");
-    for (const pg of paras) {
-      const card0 = { id: uid(), x: d.x, y: d.y, w: DOCW || 520, text: "", rich: pg.rich, wrIn: d.id, s: newStyle() };
-      if (pg.level) card0.level = pg.level;
-      S.cards.push(card0); d.ids.push(card0.id);
+  const r = await c.run(([W,R,A,WP]) => {
+    // ── 1. 标题识别：英文 + 中文 + Title ──────────────────────────────
+    function mkXml(paras){
+      return `<?xml version="1.0"?><w:document xmlns:w="${W}" xmlns:r="${R}"><w:body>${
+        paras.map(([st,tx])=>`<w:p>${st?`<w:pPr><w:pStyle w:val="${st}"/></w:pPr>`:''}<w:r><w:t>${tx}</w:t></w:r></w:p>`).join('')
+      }</w:body></w:document>`;
     }
-    invalidateIndex(); render(); save();
-    const docCards = d.ids.map((id) => S.cards.find((c) => c.id === id)).filter(Boolean);
-    const canvasCards = S.cards.filter((c) => !docOnly(c));
-    return {
-      docInDocs: docs().some((dd) => dd.id === d.id),
-      title: d.title,
-      cardCount: d.ids.length,
-      allWrIn: docCards.every((c) => c.wrIn === d.id),
-      h1Level: docCards[0] && docCards[0].level === 1,
-      notOnCanvas: canvasCards.length === 0,
-    };
-  });
-  c.ok("写作页出现在 S.docs", doc.docInDocs);
-  c.ok("写作页标题等于文件名", doc.title === "TestDoc");
-  c.ok("每个段落成为一张卡片（5张）", doc.cardCount === 5);
-  c.ok("所有卡片都有 wrIn 指向这份写作页", doc.allWrIn);
-  c.ok("H1 段落卡片 level=1", doc.h1Level);
-  c.ok("这些卡片不出现在画布上（docOnly）", doc.notOnCanvas);
+    const headItems = docxItems(mkXml([
+      ["Heading1","英文H1"],["Heading 2","英文H2"],["heading3","英文H3"],
+      ["标题1","中文H1"],["标题 2","中文H2"],["Title","文档标题"],["","普通段落"],
+    ]),{});
 
-  // 入口与文案
+    // ── 2. 图片提取 ───────────────────────────────────────────────────
+    const imgXml=`<?xml version="1.0"?><w:document xmlns:w="${W}" xmlns:r="${R}"
+      xmlns:a="${A}" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"
+      xmlns:wp="${WP}"><w:body>
+      <w:p><w:r><w:t>图前文字</w:t></w:r></w:p>
+      <w:p><w:r><w:drawing>
+        <wp:inline><wp:extent cx="914400" cy="685800"/>
+          <a:graphic><a:graphicData uri="...">
+            <pic:pic><pic:blipFill><a:blip r:embed="rId5"/></pic:blipFill>
+            <pic:spPr><a:xfrm><a:ext cx="914400" cy="685800"/></a:xfrm></pic:spPr>
+            </pic:pic></a:graphicData></a:graphic>
+        </wp:inline></w:drawing></w:r></w:p>
+      <w:p><w:r><w:t>图后文字</w:t></w:r></w:p>
+    </w:body></w:document>`;
+    const imgItems=docxItems(imgXml,{"rId5":"__img__"});
+
+    // ── 3. 写作页里图片卡片的渲染 ────────────────────────────────────
+    S.cards=[];S.links=[];S.frames=[];S.docs=[];invalidateIndex();render();
+    const d=addDoc({x:0,y:0},"ImgTest");
+    const ih="fakehash99";
+    const dataURL="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQ==";
+    IMG.set(ih,dataURL);
+    const cx={id:uid(),x:0,y:0,w:520,text:"文字A",wrIn:d.id,s:newStyle()};
+    const ci={id:uid(),x:0,y:0,w:520,text:"",ih,ar:0.75,wrIn:d.id,s:newStyle()};
+    const cy2={id:uid(),x:0,y:0,w:520,text:"文字B",wrIn:d.id,s:newStyle()};
+    S.cards.push(cx,ci,cy2);d.ids.push(cx.id,ci.id,cy2.id);
+    invalidateIndex();render();save();
+    const html=docBodyHTML(d);
+
+    return {
+      hLevels: headItems.map(i=>i.level),
+      hTexts: headItems.map(i=>i.rich.replace(/<[^>]+>/g,"")),
+      imgN: imgItems.length,
+      imgTypes: imgItems.map(i=>i.type),
+      imgRId: imgItems.find(i=>i.type==="img")?.rId,
+      imgAr: imgItems.find(i=>i.type==="img") ?
+        +(imgItems.find(i=>i.type==="img").cy/imgItems.find(i=>i.type==="img").cx).toFixed(2) : 0,
+      htmlHasImg: /<img.*data-ih/.test(html),
+      htmlImgSrc: /<img src="data:/.test(html),
+      htmlOrder: html.indexOf("文字A")<html.indexOf("data-ih")&&html.indexOf("data-ih")<html.indexOf("文字B"),
+    };
+  }, [W,R,A,WP]);
+
+  c.ok("英文 Heading1 → level 1", r.hLevels[0]===1);
+  c.ok("英文 Heading 2（有空格）→ level 2", r.hLevels[1]===2);
+  c.ok("英文 heading3（小写）→ level 3", r.hLevels[2]===3);
+  c.ok("中文 标题1 → level 1", r.hLevels[3]===1);
+  c.ok("中文 标题 2（有空格）→ level 2", r.hLevels[4]===2);
+  c.ok("Title → level 1", r.hLevels[5]===1);
+  c.ok("普通段落 → level 0", r.hLevels[6]===0);
+  c.ok("图片段落被识别为 {type:\"img\"}", r.imgTypes.includes("img"));
+  c.ok("段落顺序：文字→图片→文字", r.imgN===3&&r.imgTypes[0]==="text"&&r.imgTypes[2]==="text");
+  c.ok("图片 rId 正确提取", r.imgRId==="rId5");
+  c.ok(`图片宽高比正确（${r.imgAr}）`, Math.abs(r.imgAr-0.75)<0.01);
+  c.ok("docBodyHTML 渲染了 <img data-ih>", r.htmlHasImg);
+  c.ok("图片 src 填了 data URL", r.htmlImgSrc);
+  c.ok("文字→图→文字顺序正确", r.htmlOrder);
+
   const ui = await c.run(() => {
-    boardMenu(50, 50);
-    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent);
+    boardMenu(50,50);
+    const items=[...document.querySelectorAll("#menu .mi")].map(z=>z.textContent);
     closeMenus();
     return {
-      inMenu: items.some((z) => z.includes("Word") || z.includes(t("docxImport"))),
-      fns: typeof importDocx === "function" && typeof docxParagraphs === "function",
-      strings: ["docxImport", "docxWork", "docxDone", "docxBad", "docxNoLib", "docxEmpty"]
-        .every((k) => T.en[k] && T.zh[k]),
+      inMenu:items.some(z=>z.includes("Word")||z.includes(t("docxImport"))),
+      fns:typeof importDocx==="function"&&typeof docxItems==="function",
+      strings:["docxImport","docxWork","docxDone","docxBad","docxNoLib","docxEmpty"].every(k=>T.en[k]&&T.zh[k]),
     };
   });
-  c.ok("右键菜单里有导入 Word 的入口", ui.inMenu);
-  c.ok("importDocx / docxParagraphs 函数存在", ui.fns);
+  c.ok("右键菜单有导入 Word 的入口", ui.inMenu);
+  c.ok("importDocx / docxItems 函数存在", ui.fns);
   c.ok("中英文案都齐了", ui.strings);
 });
 
