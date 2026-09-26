@@ -661,6 +661,18 @@
     background:rgba(20,20,20,.5);color:#fff;font:400 10px/1.5 "IBM Plex Mono",monospace;
     pointer-events:none;opacity:0;transition:opacity .15s}
   .card:hover .pdfb{opacity:.75}
+  /* 翻页模式的导航条：悬停时在卡片底部浮出来 */
+  .card .pdfnav{position:absolute;left:0;right:0;bottom:0;z-index:4;display:flex;align-items:center;
+    justify-content:center;gap:6px;padding:6px 4px;opacity:0;transition:opacity .2s;pointer-events:none;
+    background:linear-gradient(transparent,rgba(0,0,0,.18));border-radius:0 0 4px 4px}
+  .card:hover .pdfnav,.card.sel .pdfnav{opacity:1;pointer-events:auto}
+  .card .pdfnav button{height:22px;min-width:22px;border:none;border-radius:5px;
+    background:rgba(30,34,32,.75);color:#fff;font-size:13px;line-height:1;cursor:pointer;
+    padding:0 5px;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+  .card .pdfnav button:disabled{opacity:.3;cursor:default}
+  .card .pdfnav .pdfpg{font:400 11px/1 "IBM Plex Mono",monospace;color:#fff;
+    background:rgba(30,34,32,.6);padding:2px 7px;border-radius:4px;user-select:none}
+  body.lock .card .pdfnav{display:none}
   #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%);z-index:95;
     background:rgba(20,20,20,.9);color:#fff;padding:8px 14px;border-radius:8px;font-size:12.5px;
     opacity:0;transition:opacity .2s;pointer-events:none}
@@ -876,7 +888,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   expOpts:"Options",
   fmt:"Format",fmtWord:"Word",fmtPdfDoc:"PDF text",fmtPdfView:"PDF image",fmtJpg:"JPG",
   fmtWeb:"Web snapshot",webSnap:"Export web snapshot",snapWork:"Building the web snapshot…",snapDone:"Web snapshot exported",snapFail:"The web snapshot could not be built.",snapNeedCanvas:"Return to the canvas to export a web snapshot.",snapRO:"Read-only snapshot",snapHint:"Drag to pan, scroll or pinch to zoom, press Z over a card to zoom in, M for the page map. Text can be selected and copied.",snapNote:"Saves the whole canvas as one read-only web page. The layout matches what you see now, writing pages scroll, and text can be selected and copied. Anyone can open it with a double click.",
-  importPDF:"Import PDF pages…",pdfRange:"Pages",pdfRangePh:"All pages, or 1-3,7,12-",pdfWidth:"Card width",pdfDpi:"Sharpness",pdfDpi2:"Normal",pdfDpi3:"Sharper",pdfNote:"Each page becomes a card: the page as you see it, with the text selectable on top. Select any passage and copy it as usual.",pdfWork:"Importing the PDF…",pdfDone:"Pages imported:",pdfBad:"This PDF could not be read.",pdfNoPage:"No pages matched.",pdfNoLib:"The PDF library could not be loaded. Please check your connection and try again.",pdfRead:"Reading mode (locks the page in place)",pdfLockedHint:"This page is locked so you can select text. Unlock it to move it.",imgOrig:"Original size",imgOrigNote:"Images now come in at their own size, with no limit. Existing images are unchanged; use Fit selected or Fit all to apply it.",copy:"Copy",
+  importPDF:"Import PDF pages…",pdfRange:"Pages",pdfRangePh:"All pages, or 1-3,7,12-",pdfWidth:"Card width",pdfDpi:"Sharpness",pdfDpi2:"Normal",pdfDpi3:"Sharper",pdfNote:"Each page becomes a card: the page as you see it, with the text selectable on top. Select any passage and copy it as usual.",pdfWork:"Importing the PDF…",pdfDone:"Pages imported:",pdfBad:"This PDF could not be read.",pdfNoPage:"No pages matched.",pdfNoLib:"The PDF library could not be loaded. Please check your connection and try again.",pdfRead:"Reading mode (locks the page in place)",pdfLockedHint:"This page is locked so you can select text. Unlock it to move it.",imgOrig:"Original size",imgOrigNote:"Images now come in at their own size, with no limit. Existing images are unchanged; use Fit selected or Fit all to apply it.",copy:"Copy",pdfMode:"Import as",pdfModeCards:"Separate cards",pdfModeBook:"Flipbook",pdfBookNote:"All selected pages go into one card. Use the arrows at the bottom to turn pages.",pdfBookDone:"Flipbook imported, pages:",pdfPrev:"Previous page",pdfNext:"Next page",
   link:"Link",
   snapScopeSel:"Selected cards and their pages",snapShrinking:"The images add up to a lot, so the snapshot copies are being scaled down to fit…",snapShrunk:"images scaled down to keep the file openable",snapTooBig:"Even scaled down this is too large for one web page. Select fewer pages and export again.",
   saveFolder:"Save as folder (for very large boards)…",openFolder:"Open board folder…",folderNoSupport:"This browser cannot save to a folder. Use Chrome or Edge.",folderOverwrite:"This folder already holds a board. Replace it with the current one?",folderNotEmpty:"This folder has other files in it. Save the board here anyway?",folderWorking:"Writing to the folder… the first save copies every image once.",folderSaved:"Saved to folder",folderNoBoard:"There is no board.json in this folder.",
@@ -1075,7 +1087,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   expOpts:"包含内容",
   fmt:"格式",fmtWord:"Word 文档",fmtPdfDoc:"PDF 文档",fmtPdfView:"PDF 画面",fmtJpg:"JPG 图片",
   fmtWeb:"网页快照",webSnap:"导出网页快照",snapWork:"正在生成网页快照…",snapDone:"网页快照已导出",snapFail:"网页快照未完成。",snapNeedCanvas:"请先回到画布，再导出网页快照。",snapRO:"只读快照",snapHint:"拖动平移，滚轮或双指缩放，指着卡片按 Z 放大，M 打开页面地图。文字可以划选复制。",snapNote:"把整块画布原样存成一个只读网页：布局与此刻所见一致，稿子可以往下翻，文字可以划选复制。单个文件，对方双击就能打开。",
-  importPDF:"导入 PDF 页面…",pdfRange:"页码",pdfRangePh:"留空表示全部，或 1-3,7,12-",pdfWidth:"卡片宽度",pdfDpi:"清晰度",pdfDpi2:"普通",pdfDpi3:"更清晰",pdfNote:"每一页变成一张卡片：版面跟原文一样，文字可以直接划选，选中之后照常复制即可。",pdfWork:"正在导入 PDF…",pdfDone:"已导入页数：",pdfBad:"这个 PDF 读不出来。",pdfNoPage:"没有匹配的页码。",pdfNoLib:"PDF 解析库加载失败，请检查网络后重试。",pdfRead:"阅读模式（锁住位置，可划选）",pdfLockedHint:"这一页锁着，所以能划选文字；要搬动它请先解锁。",imgOrig:"原尺寸",imgOrigNote:"之后导入的图片按原始尺寸插入，不再压缩。已有的图片不变，可用「适应选中」或「适应全部」套用。",copy:"复制",
+  importPDF:"导入 PDF 页面…",pdfRange:"页码",pdfRangePh:"留空表示全部，或 1-3,7,12-",pdfWidth:"卡片宽度",pdfDpi:"清晰度",pdfDpi2:"普通",pdfDpi3:"更清晰",pdfNote:"每一页变成一张卡片：版面跟原文一样，文字可以直接划选，选中之后照常复制即可。",pdfWork:"正在导入 PDF…",pdfDone:"已导入页数：",pdfBad:"这个 PDF 读不出来。",pdfNoPage:"没有匹配的页码。",pdfNoLib:"PDF 解析库加载失败，请检查网络后重试。",pdfRead:"阅读模式（锁住位置，可划选）",pdfLockedHint:"这一页锁着，所以能划选文字；要搬动它请先解锁。",imgOrig:"原尺寸",imgOrigNote:"之后导入的图片按原始尺寸插入，不再压缩。已有的图片不变，可用「适应选中」或「适应全部」套用。",copy:"复制",pdfMode:"导入方式",pdfModeCards:"每页一张卡片",pdfModeBook:"翻页",pdfBookNote:"所有选中的页面放进一张卡片，用底部的箭头翻页。",pdfBookDone:"翻页本已导入，共",pdfPrev:"上一页",pdfNext:"下一页",
   link:"链接",
   snapScopeSel:"选中的卡片及所在页面",snapShrinking:"图片总量太大，正在把快照里的副本整体缩小……",snapShrunk:"图片已整体缩小，保证文件打得开",snapTooBig:"缩到最小仍然超过一个网页能装下的上限，请少选几页再导出。",
   saveFolder:"另存为文件夹（适合特别大的画布）…",openFolder:"打开画布文件夹…",folderNoSupport:"这个浏览器不能存到文件夹，请用 Chrome 或 Edge。",folderOverwrite:"这个文件夹里已经有一份画布了，用现在这份替换它吗？",folderNotEmpty:"这个文件夹里还有别的文件，仍然存到这里吗？",folderWorking:"正在写入文件夹……第一次会把每张图都复制过去一次。",folderSaved:"已存到文件夹",folderNoBoard:"这个文件夹里没有 board.json。",
@@ -1422,6 +1434,14 @@ async function withImgData(cards,fn){
 }
 async function migrateInline(cards){
   for(const c of cards){
+    // 翻页本：把每页里的内联 data URL 迁进图片仓库
+    if(c.pdfbook&&c.pdfbook.pages){
+      for(const pg of c.pdfbook.pages){
+        if(pg.src&&!pg.ih){try{const {h,ok}=await putImg(pg.src);pg.ih=h;if(ok)delete pg.src}catch(e){}}
+      }
+      const cur=c.pdfbook.cur||0,p0=c.pdfbook.pages[cur];
+      if(p0&&p0.ih&&c.ih!==p0.ih){c.ih=p0.ih;if(p0.ar)c.ar=p0.ar}
+    }
     if(!c.src||c.ih)continue;
     try{
       const {h,ok}=await putImg(c.src);
@@ -1669,6 +1689,12 @@ async function writeBundle(list,put){
   let buf=[],bl=0;
   for(let i=0;i<cards.length;i++){
     const o=cards[i];
+    // 翻页本：把每页的图也内联成 data URL 输出
+    if(o.pdfbook&&o.pdfbook.pages){
+      const ps=await Promise.all(o.pdfbook.pages.map(async pg=>{
+        const q={...pg};if(q.ih){q.src=(await imgDataURL(q.ih))||q.src||"";delete q.ih}return q}));
+      o.pdfbook={...o.pdfbook,pages:ps};
+    }
     if(o.ih){o.src=(await imgDataURL(o.ih))||o.src||"";delete o.ih}
     const s=(i?",\n":"\n")+JSON.stringify(o,null,1);
     buf.push(s);bl+=s.length;
@@ -2747,6 +2773,8 @@ function makeCard(c){
       if(oc.pdf){const b=document.createElement("div");b.className="pdfb";
         b.textContent=oc.pdf.name?(oc.pdf.name.slice(0,18)+" \u00B7 "+oc.pdf.page):("p."+oc.pdf.page);el.appendChild(b)}
     }
+  // 翻页模式：单卡多页，底部有上一页 / 下一页按钮
+  if(oc.pdfbook)buildPdfNav(el,c,oc);
   }
   const cap=document.createElement("div");cap.className="cap";
   if(oc.rich)cap.innerHTML=oc.rich;else cap.textContent=oc.text||"";
@@ -5627,15 +5655,23 @@ function askPDF(file,p){
     <div class="pair" id="pdd">
       ${[[2,t("pdfDpi2")],[3,t("pdfDpi3")]].map(([v,l],i)=>`<button data-v="${v}" class="${i===0?"on":""}">${l}</button>`).join("")}
     </div>
-    <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("pdfNote")}</div>
+    <div class="sec">${t("pdfMode")}</div>
+    <div class="pair" id="pdm">
+      <button data-v="cards" class="on">${t("pdfModeCards")}</button>
+      <button data-v="book">${t("pdfModeBook")}</button>
+    </div>
+    <div class="note2" id="pdmn" style="opacity:.5;font-size:11px;padding:4px 2px">${t("pdfNote")}</div>
     <button class="go" id="pdgo">${t("importPDF")}</button>`;
   place(P,Math.min(innerWidth/2-130,innerWidth-280),Math.min(innerHeight/2-180,innerHeight-420));
   P.classList.add("on");
-  let width=S.pdfW||520,dpi=2;
+  let width=S.pdfW||520,dpi=2,mode="cards";
   const pick=(id,set)=>P.querySelector(id).onclick=e=>{
     const b=e.target.closest("button[data-v]");if(!b)return;
-    [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");set(+b.dataset.v)};
-  pick("#pdw",v=>{width=v});pick("#pdd",v=>{dpi=v});
+    [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");set(b.dataset.v||+b.dataset.v)};
+  pick("#pdw",v=>{width=+v});pick("#pdd",v=>{dpi=+v});
+  P.querySelector("#pdm").onclick=e=>{const b=e.target.closest("button[data-v]");if(!b)return;
+    [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");mode=b.dataset.v;
+    const mn=P.querySelector("#pdmn");if(mn)mn.textContent=t(mode==="book"?"pdfBookNote":"pdfNote")};
   const inp=P.querySelector("#pdr");
   inp.addEventListener("keydown",e=>{e.stopPropagation();if(e.key==="Enter")P.querySelector("#pdgo").click()});
   P.querySelector("#pcx").onclick=()=>P.classList.remove("on");
@@ -5643,7 +5679,8 @@ function askPDF(file,p){
     const range=inp.value;P.classList.remove("on");
     S.pdfW=width;save();
     toast(t("pdfWork"));
-    setTimeout(()=>importPDF(file,p,{range,width,dpi}),50);
+    if(mode==="book")setTimeout(()=>importPDFBook(file,p,{range,width,dpi}),50);
+    else setTimeout(()=>importPDF(file,p,{range,width,dpi}),50);
   };
   setTimeout(()=>inp.focus(),30);
 }
@@ -5695,7 +5732,60 @@ async function importPDF(file,p,opt){
   toast(t("pdfDone")+" "+made.length);
   return made;
 }
-// 文字层是真节点，密排的一页可能上千个。视野里同时铺着的总量设个上限，
+// 翻页模式：把整份 PDF 导进一张卡片，底部翻页按钮切换当前页
+// 每页仍然渲染成图片存进图片仓库，文字层按页存在 pdfbook.pages 里，
+// 切换时换图、换文字层，不创建新卡片，也不进撤销栈（只是 cur 变了）
+async function importPDFBook(file,p,opt){
+  if(lock)return;
+  opt=opt||{};
+  let lib;
+  try{lib=await loadPdfJs()}catch(e){toast(t("pdfNoLib"));return}
+  let doc;
+  try{
+    const buf=await file.arrayBuffer();
+    doc=await lib.getDocument({data:new Uint8Array(buf),isEvalSupported:false}).promise;
+  }catch(e){toast(t("pdfBad"));return}
+  const pages=parsePages(opt.range,doc.numPages);
+  if(!pages.length){toast(t("pdfNoPage"));return}
+  const name=(file.name||"PDF").replace(/\.pdf$/i,"");
+  const wide=opt.width||S.pdfW||520;
+  const dpi=Math.max(1,Math.min(4,opt.dpi||2));
+  snap();
+  const bookPages=[];
+  let firstAr=null;
+  for(let i=0;i<pages.length;i++){
+    const n=pages[i];
+    let cv,lines=[],ar;
+    try{
+      const pg=await doc.getPage(n);
+      const vp=pg.getViewport({scale:1});
+      const k=Math.min(dpi*wide/vp.width,3000/Math.max(vp.width,vp.height));
+      const v2=pg.getViewport({scale:k});
+      cv=document.createElement("canvas");cv.width=Math.round(v2.width);cv.height=Math.round(v2.height);
+      const ctx=cv.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,cv.width,cv.height);
+      await pg.render({canvasContext:ctx,viewport:v2}).promise;
+      ar=cv.height/cv.width;if(!firstAr)firstAr=ar;
+      try{const tc=await pg.getTextContent();lines=pdfItems(tc.items,v2)}catch(e){lines=[]}
+      if(pg.cleanup)pg.cleanup();
+    }catch(e){continue}
+    const dataURL=cv.toDataURL("image/jpeg",.88);
+    const r=await putImg(dataURL);
+    bookPages.push({ih:r.h,...(r.ok?{}:{src:dataURL}),ar,...(lines.length?{pt:lines}:{})});
+    toast(t("pdfWork")+" "+(i+1)+"/"+pages.length);
+  }
+  try{doc.destroy()}catch(e){}
+  if(!bookPages.length){toast(t("pdfBad"));return}
+  const c={id:uid(),x:Math.round(p.x),y:Math.round(p.y),w:wide,text:"",
+    ih:bookPages[0].ih,...(bookPages[0].src?{src:bookPages[0].src}:{}),
+    ar:firstAr||1.414,
+    pdfbook:{pages:bookPages,cur:0,name,of:doc.numPages},
+    s:newStyle()};
+  S.cards.push(c);invalidateIndex();render();
+  sel=[c.id];selLink=null;render();save();
+  toast(t("pdfBookDone")+" "+bookPages.length);
+  return c;
+}
+// 文字层是真节点，密排的一页可能上千个。// 文字层是真节点，密排的一页可能上千个。视野里同时铺着的总量设个上限，
 // 免得几十页锁定的 PDF 同时在画面上时拖动变卡；超出上限的页面这一刻不铺文字，
 // 滚开一些、别的页面撤下去以后自然会补上（卡片进出视野本来就会重建）
 const PT_BUDGET=8000;
@@ -10168,6 +10258,60 @@ addEventListener("pointerdown",e=>{
   else if(!e.target.closest("#szi"))endSizeEdit(false);
 },true);
 
+/* ================= 翻页模式 =================
+   pdfbook 对象：{pages:[{ih,ar,pt}], cur:0, name, of}
+   cards 里只有一张，pdfbook.cur 记住当前页，画面上随时只显示一页的图。
+   prev/next 按钮点击时 gotoPage 更新 cur、换图片、换文字层、更新进度标签并存档。
+   这样翻页完全不创建新卡片，undo/redo 也不受影响（只改 cur，不改 S.cards 数组）。 */
+function buildPdfNav(el,c,oc){
+  el.classList.add("pdfcard");
+  const nav=document.createElement("div");nav.className="pdfnav";
+  const prev=document.createElement("button");prev.textContent="\u25C0";   // ◀
+  const next=document.createElement("button");next.textContent="\u25B6";   // ▶
+  const pg=document.createElement("span");pg.className="pdfpg";
+  nav.append(prev,pg,next);
+  el.appendChild(nav);
+  const bk=oc.pdfbook;
+  function paint(){
+    const cur=bk.cur||0,tot=bk.pages.length;
+    prev.disabled=cur<=0;next.disabled=cur>=tot-1;
+    pg.textContent=(cur+1)+" / "+tot;
+    const p=bk.pages[cur];
+    const wrap=el.querySelector(".pw")||el.querySelector("img")?.parentNode;
+    const im=el.querySelector("img");
+    if(!im)return;
+    // 换图片：先把当前 data-ih 指向新的哈希
+    if(p.ih!==im.dataset.ih){
+      const u=IMG.get(p.ih)||"";
+      im.dataset.ih=p.ih;
+      if(u){im.src=u}else{im.src="";needImg(p.ih)}
+      if(p.ar)im.style.aspectRatio="1 / "+p.ar;
+    }
+    // 换文字层：撤掉旧的，铺上新的
+    el.querySelectorAll(".pt").forEach(z=>z.remove());
+    if(p.pt&&p.pt.length&&!lock&&ptRoom(p.pt.length)&&wrap){
+      const fake={pt:p.pt,ar:p.ar};
+      requestAnimationFrame(()=>buildPtx(wrap,fake,im));
+    }
+    // 更新角标
+    const b=el.querySelector(".pdfb");
+    if(b){const name=bk.name||"";b.textContent=name?(name.slice(0,18)+" \u00B7 "+(cur+1)):("p."+(cur+1));}
+  }
+  prev.addEventListener("click",e=>{e.stopPropagation();gotoPage(c.id,-1)});
+  next.addEventListener("click",e=>{e.stopPropagation();gotoPage(c.id,+1)});
+  paint();
+  nav._paint=paint;      // syncCards 用来刷新进度
+}
+function gotoPage(cid,delta){
+  const c=card(cid);if(!c||!c.pdfbook)return;
+  const bk=c.pdfbook;const tot=bk.pages.length;
+  const nxt=Math.max(0,Math.min(tot-1,(bk.cur||0)+delta));
+  if(nxt===(bk.cur||0))return;
+  bk.cur=nxt;
+  // 更新画面上的那个卡片元素（不整张重建，只换图文）
+  const el=nodes.get(cid);if(el){const nav=el.querySelector(".pdfnav");if(nav&&nav._paint)nav._paint();}
+  save();
+}
 /* ================= import ================= */
 // 读画布文件。小文件照旧整份 JSON.parse；超过 STREAM_MIN 的走流式读取：
 // 从前整份读成一个字符串，超过约 512MB 根本读不进来，而且全部图片会同时留在内存里。

@@ -5164,6 +5164,89 @@ group("pdfimport 导入 PDF 页面", async (c) => {
     "pdfRead", "imgOrig", "imgOrigNote"].every((k) => T.en[k] && T.zh[k])));
 });
 
+group("pdfbook 翻页本", async (c) => {
+  // 翻页模式：整份 PDF 进一张卡片，底部箭头翻页。普通多卡片模式完全不受影响。
+  const fs2 = require("fs"), path2 = require("path");
+  const pdfPath = path2.resolve(__dirname, "test.pdf");
+  if (!fs2.existsSync(pdfPath)) { c.ok("需要 test.pdf（已跳过）", false); return; }
+  const vendPath = path2.resolve(__dirname, "vendor/pdf.min.js");
+  if (!fs2.existsSync(vendPath)) { c.ok("需要 vendor/pdf.min.js（已跳过）", false); return; }
+  // 注入本地 pdf.js（无网环境也能跑）
+  await c.page.addScriptTag({ content: fs2.readFileSync(vendPath, "utf8") });
+  await c.run((w) => { pdfjsLib.GlobalWorkerOptions.workerSrc =
+    URL.createObjectURL(new Blob([w], { type: "text/javascript" })); },
+    fs2.readFileSync(path2.resolve(__dirname, "vendor/pdf.worker.min.js"), "utf8"));
+  const pdfB64 = fs2.readFileSync(pdfPath).toString("base64");
+
+  const r = await c.run(async (b64) => {
+    const wait = (ms) => new Promise((z) => setTimeout(z, ms));
+    const bin = atob(b64), u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    const f = new File([u], "paper.pdf", { type: "application/pdf" });
+    S.cards = []; S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render();
+    // 1) 翻页本导入
+    const c0 = await importPDFBook(f, { x: 0, y: 0 }, { range: "1-3", width: 520, dpi: 2 });
+    await wait(700);
+    const el = () => document.querySelector('.card[data-id="' + c0.id + '"]');
+    const nav = () => el() && el().querySelector(".pdfnav");
+    const pg = () => el() && el().querySelector(".pdfpg").textContent;
+    const out = {};
+    out.bookCard = { n: S.cards.length, pages: c0.pdfbook.pages.length, cur: c0.pdfbook.cur,
+      hasNav: !!nav(), pgText: pg(), ih0: c0.ih, ar: c0.ar };
+    // 2) 普通导入仍然正常（不受影响）
+    const m = await importPDF(f, { x: 700, y: 0 }, { range: "1-2", width: 380, dpi: 2 });
+    await wait(400);
+    out.separate = { n: m.length, noPdfbook: m.every((z) => !z.pdfbook) };
+    // 3) 翻页：点 next 按钮
+    nav().querySelector("button:last-child").click();
+    await wait(300);
+    out.afterNext = { cur: c0.pdfbook.cur, pg: pg(), imgChanged: el().querySelector("img").dataset.ih !== c0.ih };
+    // 4) 边界：翻到最末，next 灰掉；翻回首，prev 灰掉
+    gotoPage(c0.id, 99); await wait(200);
+    out.atEnd = { cur: c0.pdfbook.cur, nextOff: nav().querySelector("button:last-child").disabled };
+    gotoPage(c0.id, -99); await wait(200);
+    out.atStart = { cur: c0.pdfbook.cur, prevOff: nav().querySelector("button:first-child").disabled, pg: pg() };
+    // 5) 文字层在选中时铺上、切页时更新
+    sel = [c0.id]; paintSel(); await wait(400);
+    const ptOn = !!el().querySelector(".pt");
+    gotoPage(c0.id, +1); await wait(300);
+    const ptPg2 = !!el().querySelector(".pt");
+    out.textLayer = { ptOn, ptPg2 };
+    // 6) 存入文件 → 再读出来，结构完整、图片有内容
+    const blob = await bundleBlob(null); const d = JSON.parse(await blob.text());
+    const pc = d.cards.find((z) => z.pdfbook);
+    out.roundTrip = { found: !!pc, pagesN: pc && pc.pdfbook.pages.length,
+      cur: pc && pc.pdfbook.cur,
+      srcOk: pc && pc.pdfbook.pages.every((pg) => pg.src && pg.src.startsWith("data:image")),
+      totalCards: d.cards.length };
+    // 7) absorb 后翻页还能用
+    IMG.clear(); IMGB.clear();
+    await absorb(d, false); invalidateIndex(); render(); await wait(600);
+    const c2 = S.cards.find((z) => z.pdfbook);
+    gotoPage(c2.id, +1); await wait(300);
+    const el2 = () => document.querySelector('.card[data-id="' + c2.id + '"]');
+    out.afterAbsorb = { cur: c2.pdfbook.cur, hasNav: !!el2().querySelector(".pdfnav"),
+      pg: el2().querySelector(".pdfpg").textContent };
+    return out;
+  }, pdfB64);
+
+  c.ok("翻页本只生成一张卡片，包含所有页", r.bookCard.n === 1 && r.bookCard.pages === 3 && r.bookCard.cur === 0);
+  c.ok("卡片主 ih 指向第 0 页，宽高比对", r.bookCard.ih0 && r.bookCard.ar > 0);
+  c.ok("底部导航栏存在，显示「1 / 3」", r.bookCard.hasNav && r.bookCard.pgText === "1 / 3");
+  c.ok("普通多卡片导入完全不受影响", r.separate.n === 2 && r.separate.noPdfbook);
+  c.ok("点 ▶ 跳到第 2 页，进度更新，图片哈希切换", r.afterNext.cur === 1 && r.afterNext.pg === "2 / 3" && r.afterNext.imgChanged);
+  c.ok("翻到最末 ▶ 灰掉，翻回首 ◀ 灰掉，显示「1 / 3」",
+    r.atEnd.cur === 2 && r.atEnd.nextOff && r.atStart.cur === 0 && r.atStart.prevOff && r.atStart.pg === "1 / 3");
+  c.ok("选中后文字层铺上，切页时切换到对应页的文字", r.textLayer.ptOn && r.textLayer.ptPg2);
+  c.ok("存入文件：每页都有内联图片，其余结构完整",
+    r.roundTrip.found && r.roundTrip.pagesN === 3 && r.roundTrip.cur === 0 && r.roundTrip.srcOk);
+  c.ok("存入文件：总卡片数（翻页本 1 + 普通 2）正确", r.roundTrip.totalCards === 3);
+  // 注：bundle 时 cur=1（刚翻过一次），absorb 还原到 cur=1，再 gotoPage(+1) => cur=2 => "3 / 3"
+  c.ok("重新吸收后导航照常工作，cur 也还原到了当时存档的位置",
+    r.afterAbsorb.cur === 2 && r.afterAbsorb.hasNav && r.afterAbsorb.pg === "3 / 3");
+  c.ok("中英文案都齐了", await c.run(() => ["pdfMode", "pdfModeCards", "pdfModeBook", "pdfBookNote",
+    "pdfBookDone"].every((k) => T.en[k] && T.zh[k])));
+});
 group("imgorig 图片原尺寸", async (c) => {
   // 从前导入图片一律压到 1600px、卡片一律缩到 imgMax，撤不掉。现在多一个「原尺寸」。
   const r = await c.run(async () => {
