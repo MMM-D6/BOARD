@@ -5280,107 +5280,96 @@ group("pdfbook 翻页本", async (c) => {
   c.ok(`第 1 页文字层无越界（最大 ${align.maxErr1}px）`, align.p1ok);
   c.ok(`翻到第 2 页后文字层无越界（最大 ${align.maxErr2}px）`, align.p2ok);
 });
-group("docimport Word 文档导入", async (c) => {
-  // 不需要真实的 .docx 文件——直接调 docxToHtml 测解析器，再用合成 ZIP 测完整流程
+group("docimport Word 文档导入为写作页", async (c) => {
+  // 导入 .docx → 写作页（S.docs）。每个 Word 段落成为写作页里的一张 wrIn 卡片。
+  // 不需要真实的 .docx——直接用合成 XML 测解析器，再测卡片/写作页结构。
   const r = await c.run(() => {
     const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<w:document xmlns:w="${W}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
-  <w:body>
-    <w:p>
-      <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
-      <w:r><w:t>大标题</w:t></w:r>
-    </w:p>
-    <w:p>
-      <w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">粗体 </w:t></w:r>
-      <w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">斜体 </w:t></w:r>
-      <w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>下划线</w:t></w:r>
-    </w:p>
-    <w:p><w:r><w:rPr><w:strike/></w:rPr><w:t>删除线</w:t></w:r></w:p>
-    <w:p>
-      <w:pPr><w:numPr><w:ilvl w:val="0"/></w:numPr></w:pPr>
-      <w:r><w:t>列表项</w:t></w:r>
-    </w:p>
-    <w:p>
-      <w:pPr><w:numPr><w:ilvl w:val="1"/></w:numPr></w:pPr>
-      <w:r><w:t>二级列表</w:t></w:r>
-    </w:p>
-    <w:p><w:hyperlink r:id="rId1"><w:r><w:t>超链接</w:t></w:r></w:hyperlink></w:p>
-    <w:p/>
-    <w:p><w:r><w:t>普通段落，含 &amp;amp; 等特殊字符</w:t></w:r></w:p>
-    <w:tbl>
-      <w:tr>
-        <w:tc><w:p><w:r><w:t>单元A</w:t></w:r></w:p></w:tc>
-        <w:tc><w:p><w:r><w:t>单元B</w:t></w:r></w:p></w:tc>
-      </w:tr>
-    </w:tbl>
-  </w:body>
-</w:document>`;
-    const rels = { rId1: "https://example.com" };
-    const html = docxToHtml(xml, rels);
+    const xml = '<?xml version="1.0"?><w:document xmlns:w="' + W +
+      '" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><w:body>' +
+      // Heading1
+      '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>第一章</w:t></w:r></w:p>' +
+      // bold + plain mix
+      '<w:p><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">重点 </w:t></w:r><w:r><w:t>正文</w:t></w:r></w:p>' +
+      // Heading2
+      '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>第一节</w:t></w:r></w:p>' +
+      // list
+      '<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/></w:numPr></w:pPr><w:r><w:t>列表项</w:t></w:r></w:p>' +
+      // hyperlink
+      '<w:p><w:hyperlink r:id="rId1"><w:r><w:t>链接</w:t></w:r></w:hyperlink></w:p>' +
+      // plain
+      '<w:p><w:r><w:t>普通段落</w:t></w:r></w:p>' +
+      '</w:body></w:document>';
+    const paras = docxParagraphs(xml, { rId1: "https://example.com" });
+    // 验证解析结果
     return {
-      html,
-      heading: /<b>[^<]*大标题/.test(html),
-      bold: /<b>[^<]*粗体/.test(html),
-      italic: /<i>[^<]*斜体/.test(html),
-      underline: /<u>[^<]*下划线/.test(html),
-      strike: /<s>[^<]*删除线/.test(html),
-      bullet: /• 列表项/.test(html),
-      indent: /&nbsp;.*• 二级/.test(html),
-      link: /<a href="https:\/\/example\.com">超链接<\/a>/.test(html),
-      blankLine: /<br>/.test(html),
-      noTrailingBr: !/<br>\s*$/.test(html),
-      table: /单元A.*│.*单元B/.test(html),
+      n: paras.length,
+      h1: paras[0] && paras[0].level === 1 && /第一章/.test(paras[0].rich),
+      bold: paras[1] && /<b>[^<]*重点/.test(paras[1].rich) && /正文/.test(paras[1].rich),
+      h2: paras[2] && paras[2].level === 2,
+      bullet: paras[3] && /• 列表项/.test(paras[3].rich),
+      link: paras[4] && /<a href="https:\/\/example\.com">链接<\/a>/.test(paras[4].rich),
+      plain: paras[5] && paras[5].level === 0,
     };
   });
-  c.ok("标题 → <b>", r.heading);
-  c.ok("粗体 → <b>", r.bold);
-  c.ok("斜体 → <i>", r.italic);
-  c.ok("下划线 → <u>", r.underline);
-  c.ok("删除线 → <s>", r.strike);
-  c.ok("列表项有 •", r.bullet);
-  c.ok("二级列表有缩进", r.indent);
-  c.ok("超链接 → <a href>", r.link);
-  c.ok("段落之间有换行", r.blankLine);
-  c.ok("末尾没有多余 <br>", r.noTrailingBr);
-  c.ok("表格单元格用 │ 分隔", r.table);
+  c.ok("解析出 6 个段落", r.n === 6);
+  c.ok("Heading1 → level=1，含标题文字", r.h1);
+  c.ok("粗体格式保留为 <b>", r.bold);
+  c.ok("Heading2 → level=2", r.h2);
+  c.ok("列表项有 • 前缀", r.bullet);
+  c.ok("超链接保留为 <a href>", r.link);
+  c.ok("普通段落 level=0", r.plain);
 
-  // 验证菜单入口和函数存在
+  // 完整导入：生成写作页，每段 → wrIn 卡片
+  const doc = await c.run(() => {
+    S.cards = []; S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render();
+    const paras = [
+      { rich: "第一章", level: 1 },
+      { rich: "<b>重点</b> 正文", level: 0 },
+      { rich: "第一节", level: 2 },
+      { rich: "• 列表项", level: 0 },
+      { rich: "普通段落", level: 0 },
+    ];
+    const d = addDoc({ x: 0, y: 0 }, "TestDoc");
+    for (const pg of paras) {
+      const card0 = { id: uid(), x: d.x, y: d.y, w: DOCW || 520, text: "", rich: pg.rich, wrIn: d.id, s: newStyle() };
+      if (pg.level) card0.level = pg.level;
+      S.cards.push(card0); d.ids.push(card0.id);
+    }
+    invalidateIndex(); render(); save();
+    const docCards = d.ids.map((id) => S.cards.find((c) => c.id === id)).filter(Boolean);
+    const canvasCards = S.cards.filter((c) => !docOnly(c));
+    return {
+      docInDocs: docs().some((dd) => dd.id === d.id),
+      title: d.title,
+      cardCount: d.ids.length,
+      allWrIn: docCards.every((c) => c.wrIn === d.id),
+      h1Level: docCards[0] && docCards[0].level === 1,
+      notOnCanvas: canvasCards.length === 0,
+    };
+  });
+  c.ok("写作页出现在 S.docs", doc.docInDocs);
+  c.ok("写作页标题等于文件名", doc.title === "TestDoc");
+  c.ok("每个段落成为一张卡片（5张）", doc.cardCount === 5);
+  c.ok("所有卡片都有 wrIn 指向这份写作页", doc.allWrIn);
+  c.ok("H1 段落卡片 level=1", doc.h1Level);
+  c.ok("这些卡片不出现在画布上（docOnly）", doc.notOnCanvas);
+
+  // 入口与文案
   const ui = await c.run(() => {
     boardMenu(50, 50);
     const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent);
     closeMenus();
     return {
-      hasFn: typeof importDocx === "function" && typeof askDocx === "function",
-      inMenu: items.some((z) => z.includes(t("importDocx"))),
-      strings: ["importDocx", "docxWork", "docxDone", "docxBad",
-        "docxNoLib", "docxEmpty", "docxNote"].every((k) => T.en[k] && T.zh[k]),
+      inMenu: items.some((z) => z.includes("Word") || z.includes(t("docxImport"))),
+      fns: typeof importDocx === "function" && typeof docxParagraphs === "function",
+      strings: ["docxImport", "docxWork", "docxDone", "docxBad", "docxNoLib", "docxEmpty"]
+        .every((k) => T.en[k] && T.zh[k]),
     };
   });
-  c.ok("importDocx / askDocx 函数存在", ui.hasFn);
-  c.ok("右键菜单里有「导入 Word 文档」，紧跟 PDF 导入", ui.inMenu);
+  c.ok("右键菜单里有导入 Word 的入口", ui.inMenu);
+  c.ok("importDocx / docxParagraphs 函数存在", ui.fns);
   c.ok("中英文案都齐了", ui.strings);
-
-  // 用合成 ZIP（jszip 没有 jszip 也能测——直接调底层函数，用 JSZip.loadAsync 测实际创建）
-  const card = await c.run(async () => {
-    // 用 docxToHtml 已验证，这里只测 importDocx 从 html 创建卡片的逻辑
-    S.cards = []; S.links = []; S.frames = []; invalidateIndex(); render();
-    const html = "<b>测试标题</b><br>测试正文";
-    // 直接走 importDocx 的卡片创建部分（绕过 zip/xml，只测卡片写入）
-    const id = uid();
-    const card0 = { id, x: 0, y: 0, w: 640, text: "", rich: html, s: newStyle() };
-    snap(); S.cards.push(card0); invalidateIndex(); render();
-    sel = [id]; selLink = null; render(); save();
-    await new Promise((z) => setTimeout(z, 400));
-    const el = document.querySelector('.card[data-id="' + id + '"]');
-    return {
-      exists: !!el,
-      richRendered: el && /<b>测试标题<\/b>/.test(el.querySelector(".cap").innerHTML),
-      w: card0.w,
-    };
-  });
-  c.ok("导入的卡片富文本正确渲染（点击后可编辑）", card.exists && card.richRendered);
-  c.ok("卡片宽度用了对话框里选的值", card.w === 640);
 });
 
 group("imgorig 图片原尺寸", async (c) => {

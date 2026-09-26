@@ -799,7 +799,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   tbToText:"Turn into plain text",cardMenuMore:"Card options",
   wrTitle:"Outline",wrBack:"Back to canvas",
   wrIter:"Iterate",wrCtx:"Context",
-  wrDocAdd:"New writing page",wrDocNew:"Draft",wrDocOpen:"Open",wrDocRename:"Rename this draft",
+  wrDocAdd:"New writing page",docxImport:"Import Word document (.docx)…",docxWork:"Reading Word document…",docxDone:"Imported as a writing page:",docxBad:"Cannot read this file. Make sure it is a .docx Word document.",docxNoLib:"Could not load the zip library. Check your connection and try again.",docxEmpty:"The document appears to have no text.",wrDocNew:"Draft",wrDocOpen:"Open",wrDocRename:"Rename this draft",
   wrFocus:"Focus",wrDocExport:"Export this draft…",wrDocDel:"Delete this draft",wrNoDoc:"No writing page yet",
   wrDocMeta:"{n} cards · {w} characters",
   wrAdded:"{n} cards added to {d}",wrPickFirst:"Select some cards first",
@@ -997,7 +997,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   tbToText:"转为纯文字",cardMenuMore:"卡片操作",
   wrTitle:"目录",wrBack:"返回画布",
   wrIter:"迭代",wrCtx:"Context",
-  wrDocAdd:"新建写作页",wrDocNew:"稿子",wrDocOpen:"打开",wrDocRename:"重命名",
+  wrDocAdd:"新建写作页",docxImport:"导入 Word 文档（.docx）…",docxWork:"正在读取 Word 文档……",docxDone:"已导入为写作页：",docxBad:"无法读取此文件，请确认是 .docx 格式。",docxNoLib:"无法加载解压库，请检查网络连接后重试。",docxEmpty:"文档内容为空。",wrDocNew:"稿子",wrDocOpen:"打开",wrDocRename:"重命名",
   wrFocus:"专注",wrDocExport:"导出这份稿子…",wrDocDel:"删除这份稿子",wrNoDoc:"还没有写作页",
   wrDocMeta:"{n} 张卡片 · {w} 字",
   wrAdded:"已加入 {d}，共 {n} 张",wrPickFirst:"请先选中一些卡片",
@@ -3701,7 +3701,7 @@ function addText(p){
 }
 $("imgfile").onchange=e=>{addImages(e.target.files,toW(mouse.x,mouse.y));e.target.value=""};
 $("pdffile").onchange=e=>{const f=e.target.files[0];if(f)askPDF(f,toW(mouse.x,mouse.y));e.target.value=""};
-$("docxfile").onchange=e=>{const f=e.target.files[0];if(f)askDocx(f,toW(mouse.x,mouse.y));e.target.value=""};
+$("docxfile").onchange=e=>{const f=e.target.files[0];if(f)importDocx(f,toW(mouse.x,mouse.y));e.target.value=""};
 addEventListener("dragover",e=>e.preventDefault());
 addEventListener("drop",e=>{e.preventDefault();addImages(e.dataTransfer.files,toW(e.clientX,e.clientY))});
 addEventListener("copy",e=>{
@@ -10073,7 +10073,6 @@ function boardMenu(x,y){
     {label:t("cutoutTool"),on:openCutout},
     {label:t("tilerTool"),on:openTiler},
     {label:t("importPDF"),on:()=>$("pdffile").click()},
-    {label:t("importDocx"),on:()=>$("docxfile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("insertTable"),sub:[{head:t("tbSize")},
       ...[[3,2],[3,3],[5,3],[3,4]].map(([r,cc])=>({
@@ -10082,6 +10081,7 @@ function boardMenu(x,y){
       on:()=>pasteClip(toW(x,y))}]:[]),
     {label:t("pageAdd"),on:addFrame},
     {label:t("wrDocAdd"),on:()=>addDoc(toW(x,y))},
+    {label:t("docxImport"),on:()=>$("docxfile").click()},
     {head:t("shHead")},
     ...Object.keys(PAPER).map(k=>({label:t("shAdd")+" "+PAPER[k].label,
       on:()=>addSheet(k,toW(x,y))})),
@@ -10327,68 +10327,64 @@ function gotoPage(cid,delta){
   const el=nodes.get(cid);if(el){const nav=el.querySelector(".pdfnav");if(nav&&nav._paint)nav._paint();}
   save();
 }
-/* ================= Word 文档导入 =================
-   .docx 是一个 ZIP 文件，里面的 word/document.xml 存着正文。
-   用 JSZip 解压（按需从 CDN 取，只在真正导入时加载），然后用 DOMParser 解析 XML，
-   把段落、格式（粗体/斜体/下划线/删除线）、列表项、超链接逐一翻译成 Board 的富文本 HTML。
-   最终生成一张可直接编辑的文字卡片——版面完全按 Board 的标准，用户可以像写卡片一样继续编辑。
-   JSZip 和 pdf.js 一样走多个 CDN 依次尝试，本地有 vendor/jszip.min.js 就完全离线。 */
+
+/* ================= Word 文档导入为写作页 =================
+   .docx 是 ZIP 文件。解压后解析 word/document.xml，把段落与格式翻译成写作页里的段落卡片。
+   每一个 Word 段落 → 一张 wrIn 卡片；格式（粗体/斜体/下划线/删除线）保留为富文本 rich；
+   标题段落 → 对应层级的卡片（level 1-3），列表 → 有缩进前缀的普通段落，表格按行合并为文本。
+   JSZip 按需从 CDN 取（先试 vendor/，再试 cdnjs / jsdelivr），只在真正导入时加载一次。
+   生成的稿子和手建的写作页完全一样，可以在专注模式里继续编辑、大纲、导出。 */
 const JSZIP_SRCS=[
   "vendor/jszip.min.js",
   "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js",
   "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"
 ];
-function loadOneZip(src){
-  return new Promise((res,rej)=>{
-    const el=document.createElement("script");el.src=src;let done=false;
-    const ok=()=>{if(done)return;done=true;window.JSZip?res(window.JSZip):(el.remove(),rej(new Error("jszip")))};
-    el.onload=ok;el.onerror=()=>{if(!done){done=true;el.remove();rej(new Error("net"))}};
-    document.head.appendChild(el);
-    setTimeout(()=>{if(!done){if(window.JSZip)ok();else{done=true;rej(new Error("timeout"))}}},12000);
-  });
-}
 async function loadJSZip(){
   if(window.JSZip)return window.JSZip;
   let last;
-  for(const src of JSZIP_SRCS){try{return await loadOneZip(src)}catch(e){last=e}}
+  for(const src of JSZIP_SRCS){
+    try{
+      await new Promise((res,rej)=>{
+        const el=document.createElement("script");el.src=src;let done=false;
+        const ok=()=>{if(done)return;done=true;window.JSZip?res():( el.remove(),rej(new Error("jszip")))};
+        el.onload=ok;el.onerror=()=>{if(!done){done=true;el.remove();rej(new Error("net"))}};
+        document.head.appendChild(el);
+        setTimeout(()=>{if(!done){window.JSZip?ok():rej(new Error("timeout"))}},12000);
+      });
+      return window.JSZip;
+    }catch(e){last=e}
+  }
   throw last||new Error("jszip");
 }
 
-// 把 document.xml 解析成 Board 富文本 HTML
-function docxToHtml(xmlStr,rels){
+// Word XML → 写作页段落列表 [{text, rich, level, listPrefix}]
+// level 0 = 普通段落；level 1-3 = 对应 Heading；level -1 = 列表项（有 •）
+function docxParagraphs(xmlStr,rels){
   rels=rels||{};
   const W="http://schemas.openxmlformats.org/wordprocessingml/2006/main";
   const R="http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-  // 属性取值：先用命名空间 API，再退回前缀写法
-  const attr=(el,name)=>{
-    if(!el||!el.getAttribute)return"";
-    return el.getAttributeNS(W,name)||el.getAttribute("w:"+name)||el.getAttribute(name)||"";
-  };
-  const attrR=(el,name)=>(el&&el.getAttributeNS&&el.getAttributeNS(R,name))||el&&el.getAttribute("r:"+name)||"";
-  // 判断某个格式属性是否开着（要排除 w:val="0"/"none"/"false" 的显式关闭）
-  const hasProp=(rPr,name)=>{
-    if(!rPr)return false;
+  const at=(el,n)=>el&&(el.getAttributeNS(W,n)||el.getAttribute("w:"+n)||el.getAttribute(n)||"");
+  const atR=(el,n)=>el&&(el.getAttributeNS(R,n)||el.getAttribute("r:"+n)||"");
+  const hasProp=(rPr,name)=>{if(!rPr)return false;
     const el=rPr.getElementsByTagNameNS(W,name)[0];if(!el)return false;
-    const v=attr(el,"val");return v!=="0"&&v!=="false"&&v!=="none"&&v!=="off";
-  };
+    const v=at(el,"val");return v!=="0"&&v!=="false"&&v!=="none"&&v!=="off"};
   const xml=new DOMParser().parseFromString(xmlStr,"text/xml");
   const body=xml.getElementsByTagNameNS(W,"body")[0];
-  if(!body)return"";
-  let out="";
+  if(!body)return[];
+  const out=[];
 
-  function run(r){
+  function processRun(r){
     const rPr=r.getElementsByTagNameNS(W,"rPr")[0];
     let text="";
     for(const c of r.childNodes){
       if(c.nodeType!==1)continue;
       const ln=c.localName;
       if(ln==="t")text+=esc(c.textContent);
-      else if(ln==="br"){const v=attr(c,"type");if(v!=="page")text+="<br>"}
+      else if(ln==="br"){const v=at(c,"type");if(v!=="page")text+="<br>"}
       else if(ln==="tab")text+="&nbsp;&nbsp;&nbsp;&nbsp;";
     }
     if(!text)return"";
     if(rPr){
-      // 粗体：w:b 存在且未被显式关为 0
       if(hasProp(rPr,"b"))text="<b>"+text+"</b>";
       if(hasProp(rPr,"i"))text="<i>"+text+"</i>";
       if(hasProp(rPr,"u"))text="<u>"+text+"</u>";
@@ -10396,89 +10392,92 @@ function docxToHtml(xmlStr,rels){
     }
     return text;
   }
-  function hyperlink(hl){
-    const rId=attrR(hl,"id");
-    const url=rId&&rels[rId]||"";
+
+  function processHyperlink(hl){
+    const url=(rId=>rId&&rels[rId]||"")(atR(hl,"id"));
     let inner="";
-    for(const c of hl.childNodes){if(c.nodeType===1&&c.localName==="r")inner+=run(c)}
+    for(const c of hl.childNodes)if(c.nodeType===1&&c.localName==="r")inner+=processRun(c);
     if(!inner)return"";
     return url?`<a href="${escA(url)}">${inner}</a>`:"<u>"+inner+"</u>";
   }
-  function para(p){
+
+  function processPara(p){
     const pPr=p.getElementsByTagNameNS(W,"pPr")[0];
     const styleEl=pPr&&pPr.getElementsByTagNameNS(W,"pStyle")[0];
-    const styleName=styleEl?attr(styleEl,"val"):"";
+    const styleName=styleEl?at(styleEl,"val"):"";
     const numPr=pPr&&pPr.getElementsByTagNameNS(W,"numPr")[0];
-    const isHead=/^[Hh]eading\s*[1-6]$/.test(styleName)||/^[Tt]itle$/.test(styleName);
-    let content="";
+    // 标题等级：Heading1→level 1，Heading2→level 2，Heading3→level 3，Title→level 1
+    const hlm=styleName.match(/[Hh]eading\s*([1-6])/)||(/^[Tt]itle$/.test(styleName)&&[null,"1"]);
+    const headLevel=hlm?Math.min(3,+hlm[1]):0;
+
+    let richContent="";
     for(const c of p.childNodes){
       if(c.nodeType!==1)continue;
       const ln=c.localName;
-      if(ln==="r")content+=run(c);
-      else if(ln==="hyperlink")content+=hyperlink(c);
-      else if(ln==="ins"||ln==="del"||ln==="smartTag"||ln==="sdt"){
-        for(const r of c.getElementsByTagNameNS(W,"r"))content+=run(r);
+      if(ln==="r")richContent+=processRun(c);
+      else if(ln==="hyperlink")richContent+=processHyperlink(c);
+      else if(ln==="ins"||ln==="del"||ln==="smartTag"){
+        for(const r of c.getElementsByTagNameNS(W,"r"))richContent+=processRun(r);
+      }else if(ln==="sdt"){
+        const cnt=c.getElementsByTagNameNS(W,"sdtContent")[0];
+        if(cnt)for(const r of cnt.getElementsByTagNameNS(W,"r"))richContent+=processRun(r);
       }
     }
-    if(!content&&!numPr){out+="<br>";return}
+
+    // 剥掉最外层只有一种格式标签的包裹（如标题行常常全粗体）
+    // → 更干净，标题靠 level 控制样式
+    const plainText=richContent.replace(/<[^>]+>/g,"").replace(/&[a-z]+;/g,c=>({
+      "&amp;":"&","&lt;":"<","&gt;":">","&quot;":'"',"&nbsp;":" "}[c]||c));
+    if(!plainText.trim()&&!numPr)return;
+
     if(numPr){
       const iLvlEl=numPr.getElementsByTagNameNS(W,"ilvl")[0];
-      const lv=iLvlEl?parseInt(attr(iLvlEl,"val"))||0:0;
-      out+="&nbsp;".repeat(lv*4)+"• "+content+"<br>";
-    }else if(isHead){
-      out+="<b>"+content+"</b><br>";
+      const lv=iLvlEl?parseInt(at(iLvlEl,"val"))||0:0;
+      const prefix="&nbsp;".repeat(lv*4)+"• ";
+      // 列表项：层级用缩进模拟，文本级别 0
+      out.push({rich:prefix+richContent,level:0});
+    }else if(headLevel){
+      // 标题：去掉全粗包裹（标题行 Word 常见），用 level 字段表达层级
+      const cleaned=richContent.replace(/^<b>([\s\S]*)<\/b>$/,"$1");
+      out.push({rich:cleaned,level:headLevel});
     }else{
-      out+=content+"<br>";
+      out.push({rich:richContent,level:0});
     }
   }
-  function block(el){
+
+  function processBlock(el){
     const ln=el.localName;
-    if(ln==="p"){para(el)}
+    if(ln==="p"){processPara(el)}
     else if(ln==="tbl"){
-      // 表格：一行一行，单元格之间用竖线隔开
+      // 表格：每行合并单元格文字，输出为一张段落卡片
       for(const tr of el.getElementsByTagNameNS(W,"tr")){
         const cells=[];
         for(const tc of tr.getElementsByTagNameNS(W,"tc")){
           let cell="";
           for(const cp of tc.getElementsByTagNameNS(W,"p")){
-            let t2="";for(const c of cp.childNodes){if(c.nodeType===1&&c.localName==="r")t2+=run(c)}cell+=t2}
+            let t2="";
+            for(const c of cp.childNodes)if(c.nodeType===1&&c.localName==="r")t2+=processRun(c);
+            cell+=t2;
+          }
           cells.push(cell);
         }
-        if(cells.some(Boolean))out+=cells.join(" &nbsp;│&nbsp; ")+"<br>";
+        if(cells.some(Boolean))out.push({rich:cells.join(" │ "),level:0});
       }
     }else if(ln==="sdt"){
-      const sdtC=el.getElementsByTagNameNS(W,"sdtContent")[0];
-      if(sdtC)for(const c of sdtC.childNodes)if(c.nodeType===1)block(c);
+      const cnt=el.getElementsByTagNameNS(W,"sdtContent")[0];
+      if(cnt)for(const c of cnt.childNodes)if(c.nodeType===1)processBlock(c);
     }
   }
-  for(const c of body.childNodes)if(c.nodeType===1)block(c);
-  return out.replace(/(<br>\s*){3,}/g,"<br><br>").replace(/(<br>\s*)+$/,"");
+
+  for(const c of body.childNodes)if(c.nodeType===1)processBlock(c);
+  // 删掉末尾连续空段
+  while(out.length&&!out[out.length-1].rich.replace(/<[^>]+>/g,"").trim())out.pop();
+  return out;
 }
 
-function askDocx(file,p){
+async function importDocx(file,pos){
   if(lock)return;
-  const P=$("pop");P.classList.remove("wide");
-  P.innerHTML=`
-    <div class="hd"><b>${t("importDocx")}</b><button id="dcx">\u00D7</button></div>
-    <div class="note2" style="opacity:.6;font-size:11px;padding:2px 2px 6px">${esc(file.name)}</div>
-    <div class="sec">${t("pdfWidth")}</div>
-    <div class="grid" id="dww">
-      ${[480,640,800].map(v=>`<button data-v="${v}" class="${((S.docW||640)===v)?"on":""}">${v} ${t("px")}</button>`).join("")}
-    </div>
-    <div class="note2" style="opacity:.5;font-size:11px;padding:4px 2px">${t("docxNote")}</div>
-    <button class="go" id="dcgo">${t("importDocx")}</button>`;
-  place(P,Math.min(innerWidth/2-130,innerWidth-280),Math.min(innerHeight/2-130,innerHeight-280));
-  P.classList.add("on");
-  let width=S.docW||640;
-  P.querySelector("#dww").onclick=e=>{const b=e.target.closest("button[data-v]");if(!b)return;
-    [...b.parentNode.children].forEach(z=>z.classList.remove("on"));b.classList.add("on");width=+b.dataset.v};
-  P.querySelector("#dcx").onclick=()=>P.classList.remove("on");
-  P.querySelector("#dcgo").onclick=()=>{P.classList.remove("on");S.docW=width;save();
-    toast(t("docxWork"));setTimeout(()=>importDocx(file,p,{width}),50)};
-}
-
-async function importDocx(file,pos,opt){
-  if(lock)return;
+  toast(t("docxWork"));
   let JSZip;
   try{JSZip=await loadJSZip()}catch(e){toast(t("docxNoLib"));return}
   let zip;
@@ -10489,7 +10488,7 @@ async function importDocx(file,pos,opt){
     if(!f)throw new Error("missing");
     xmlStr=await f.async("string");
   }catch(e){toast(t("docxBad"));return}
-  // 超链接 ID → URL
+  // 超链接 rId → URL
   const rels={};
   try{
     const rf=zip.file("word/_rels/document.xml.rels");
@@ -10497,23 +10496,37 @@ async function importDocx(file,pos,opt){
       const rd=new DOMParser().parseFromString(await rf.async("string"),"text/xml");
       for(const r of rd.getElementsByTagName("Relationship")){
         const ty=r.getAttribute("Type")||"";
-        if(ty.endsWith("/hyperlink")){rels[r.getAttribute("Id")]=r.getAttribute("Target")}
+        if(ty.endsWith("/hyperlink"))rels[r.getAttribute("Id")]=r.getAttribute("Target")||"";
       }
     }
   }catch(e){}
-  const html=docxToHtml(xmlStr,rels);
-  if(!html.trim()){toast(t("docxEmpty"));return}
-  snap();
-  const width=(opt&&opt.width)||640;
+  const paras=docxParagraphs(xmlStr,rels);
+  if(!paras.length){toast(t("docxEmpty"));return}
+  // 新建一份写作页
   const name=(file.name||"Word").replace(/\.docx$/i,"");
-  const c={id:uid(),x:Math.round(pos.x),y:Math.round(pos.y),w:width,
-    text:"",rich:html,s:newStyle()};
-  S.cards.push(c);invalidateIndex();render();
-  sel=[c.id];selLink=null;render();save();
-  toast(t("docxDone")+" "+esc(name));
-  return c;
+  snap();
+  const d=addDoc(pos,name);
+  // 每个段落 → 一张 wrIn 卡片
+  const W=DOCW||520;
+  for(const pg of paras){
+    const c={id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:W,
+      text:"",rich:pg.rich,wrIn:d.id,s:newStyle()};
+    if(pg.level)c.level=pg.level;
+    // rich 里如果只有纯文本（没有任何标签），直接用 text 存，更干净
+    const stripped=pg.rich.replace(/<br>/gi,"\n").replace(/<[^>]+>/g,"").replace(/&nbsp;/g," ").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">");
+    if(stripped===pg.rich.replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")){
+      c.text=stripped;delete c.rich;
+    }
+    S.cards.push(c);
+    d.ids.push(c.id);
+  }
+  invalidateIndex();render();save();
+  // 打开这份写作页
+  focusDoc(d);
+  toast(t("docxDone")+" "+name+"（"+paras.length+"段）");
+  return d;
 }
-/* ================= Word 文档导入结束 ================= */
+/* ================= Word 文档导入为写作页结束 ================= */
 /* ================= import ================= */
 // 读画布文件。小文件照旧整份 JSON.parse；超过 STREAM_MIN 的走流式读取：
 // 从前整份读成一个字符串，超过约 512MB 根本读不进来，而且全部图片会同时留在内存里。
