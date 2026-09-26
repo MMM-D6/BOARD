@@ -8171,7 +8171,10 @@ function verToClip(c,vid){
 }
 function wrStyleObj(o,lv){
   const st={...DEF,...S.textDef,...(o.s||{})};
-  return {fontFamily:famCSS(st.family),fontSize:st.size+"px",
+  // 标题按层级放大字号：lv1 约 1.47×、lv2 约 1.2×、lv3 约 1.07×
+  // 基数取卡片自身的字号（用户可以调），倍率固定——既有层次感，又不破坏用户的字号设置
+  const scale=[1,1.47,1.2,1.07,1.07][Math.min(lv||0,4)];
+  return {fontFamily:famCSS(st.family),fontSize:Math.round(st.size*scale)+"px",
     fontWeight:String(lv?600:st.weight),lineHeight:String(st.lh),
     letterSpacing:st.spacing+"em",textAlign:st.align,color:st.color,
     fontStyle:st.italic?"italic":"normal"};
