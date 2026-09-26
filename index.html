@@ -1641,6 +1641,34 @@ function kvPut(k,v){return new Promise(async r=>{
     tx.oncomplete=()=>r(1);tx.onerror=()=>r(0);tx.onabort=()=>r(0);
   }catch(e){r(0)}
 })}
+async function gcImages(){
+  // 收集所有卡片（当前+撤销/重做栈）引用的图片哈希
+  const used=new Set();
+  const addC=c=>{if(c.ih)used.add(c.ih);
+    if(c.pdfbook&&c.pdfbook.pages)c.pdfbook.pages.forEach(p=>{if(p.ih)used.add(p.ih)})};
+  S.cards.forEach(addC);
+  for(const snap of [...undo,...redo]){
+    try{(JSON.parse(snap).cards||[]).forEach(addC)}catch(e){}
+  }
+  const db=await idb();if(!db)return;
+  await new Promise(res=>{
+    let tx;try{tx=db.transaction("kv","readwrite")}catch(e){return res()}
+    const st=tx.objectStore("kv");
+    const cur=st.openCursor();
+    cur.onsuccess=e=>{
+      const c=e.target.result;if(!c)return;
+      const k=String(c.key);
+      if(k.startsWith("img:")&&!used.has(k.slice(4))){
+        const h=k.slice(4);
+        // 内存缓存也清掉，省内存
+        if(IMG)IMG.delete(h);if(IMGB)IMGB.delete&&IMGB.delete(h);
+        c.delete();
+      }
+      c.continue();
+    };
+    tx.oncomplete=res;tx.onerror=res;tx.onabort=res;
+  });
+}
 async function loadState(){
   const v=await kvGet(KEY);if(v)return v;
   try{const l=localStorage.getItem("boardmin");return l?JSON.parse(l):null}catch(e){return null}
@@ -1868,6 +1896,7 @@ async function writeFileNow(quiet){
     lastWriteMs=performance.now()-t0;
     fileOK=true;fileErr="";fileState();
     if(!quiet){toast(t("savedTo")+" "+fileName);pushRecent(fileHandle,fileName)}
+    gcImages().catch(()=>{});   // 后台清理孤立图片，不阻塞当前写回流程
     return true;
   }catch(e){
     fileOK=false;
@@ -10476,6 +10505,17 @@ function docxItems(xmlStr,rels,styleHeadMap){
     }
   }
 
+  // 合并相邻的同格式片段：Word 里一个词可能被切成多个 run，每个 run 各自包 <b>…</b>，
+  // 合并后 HTML 变短，存档体积减小
+  function collapseAdjacentTags(html){
+    // 反复合并相邻的相同开/关标签，直到不再有变化
+    const tags=["b","i","u","s"];
+    let prev;
+    do{prev=html;
+      for(const t of tags)html=html.replace(new RegExp("<\/"+t+"><"+t+">","g"),"");
+    }while(html!==prev);
+    return html;
+  }
   function processHyperlink(hl){
     const url=atR(hl,"id")&&rels[atR(hl,"id")]||"";
     let inner="";
@@ -10509,16 +10549,16 @@ function docxItems(xmlStr,rels,styleHeadMap){
       ({"&amp;":"&","&lt;":"<","&gt;":">","&quot;":'"',"&nbsp;":" "}[x]||x));
     if(!plainText.trim()&&!numPr)return;   // 空段落跳过（图片段已在 extractDrawing 里加入 out）
 
+    const collapsed=collapseAdjacentTags(richContent);
     if(numPr){
       const iLvlEl=numPr.getElementsByTagNameNS(W,"ilvl")[0];
       const lv=iLvlEl?parseInt(atW(iLvlEl,"val"))||0:0;
-      out.push({type:"text",rich:"&nbsp;".repeat(lv*4)+"• "+richContent,level:0});
+      out.push({type:"text",rich:"&nbsp;".repeat(lv*4)+"• "+collapsed,level:0});
     }else if(hlv){
-      // 标题：去掉 Word 里经常整段加的粗体包裹，层级由 level 表达
-      const cleaned=richContent.replace(/^<b>([\s\S]*)<\/b>$/,"$1");
+      const cleaned=collapsed.replace(/^<b>([\s\S]*)<\/b>$/,"$1");
       out.push({type:"text",rich:cleaned,level:hlv});
     }else{
-      out.push({type:"text",rich:richContent,level:0});
+      out.push({type:"text",rich:collapsed,level:0});
     }
   }
 
@@ -10619,8 +10659,27 @@ async function importDocx(file,pos){
         const blob=new Blob([imgBuf],{type:mime});
         // 算宽高比（cx/cy 是 EMU）；如果没有尺寸信息就用 1
         const ar=item.cx&&item.cy?(item.cy/item.cx):1;
-        // 转 data URL → putImg 存进仓库
-        const dataURL=await new Promise(res=>{const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(blob)});
+        // 把图片缩放到卡片展示尺寸（宽度上限 card×2 = 1040px，2×屏用），再转 JPEG 压缩。
+        // Word 里常嵌高分辨率原图（几 MB），缩一遍可以把体积降到几十 KB
+        const dataURL=await new Promise(res=>{
+          const img=new Image(),url=URL.createObjectURL(blob);
+          img.onload=()=>{
+            URL.revokeObjectURL(url);
+            const maxW=(W||520)*2;                 // 1040px：2× 屏幕密度足够清晰
+            const scale=img.naturalWidth>maxW?maxW/img.naturalWidth:1;
+            const cw=Math.round(img.naturalWidth*scale);
+            const ch=Math.round(img.naturalHeight*scale);
+            const cv=document.createElement("canvas");cv.width=cw;cv.height=ch;
+            cv.getContext("2d").drawImage(img,0,0,cw,ch);
+            // SVG / PNG 带透明通道保持 PNG；其余一律 JPEG 压缩
+            const usePng=/svg|png/i.test(relInfo.ext);
+            res(cv.toDataURL(usePng?"image/png":"image/jpeg",.86));
+          };
+          img.onerror=()=>{URL.revokeObjectURL(url);
+            // 加载失败时退回未缩放的原始 data URL
+            const fr=new FileReader();fr.onload=()=>res(fr.result);fr.readAsDataURL(blob)};
+          img.src=url;
+        });
         const{h}=await putImg(dataURL);
         const c={id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:W,
           text:"",ih:h,ar,wrIn:d.id,s:newStyle()};
