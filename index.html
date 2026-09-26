@@ -4606,7 +4606,14 @@ function safeName(x,i){
 /* ================= document export ================= */
 function snippet(c0,n){
   const c=orig(c0);
-  const s=(c.text||"").replace(/\s+/g," ").trim();
+  // text 优先；text 为空时从 rich 里剥掉标签提取纯文字（标题常常只有 rich）
+  let s=(c.text||"");
+  if(!s&&c.rich)s=c.rich
+    .replace(/<br\s*\/?>/gi," ")
+    .replace(/<[^>]+>/g,"")
+    .replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">")
+    .replace(/&nbsp;/g," ").replace(/&quot;/g,'"');
+  s=s.replace(/\s+/g," ").trim();
   if(!s)return hasImg(c)?"[image]":"[empty]";
   return s.length>(n||28)?s.slice(0,n||28)+"…":s;
 }
