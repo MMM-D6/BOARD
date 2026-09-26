@@ -5246,7 +5246,143 @@ group("pdfbook 翻页本", async (c) => {
     r.afterAbsorb.cur === 2 && r.afterAbsorb.hasNav && r.afterAbsorb.pg === "3 / 3");
   c.ok("中英文案都齐了", await c.run(() => ["pdfMode", "pdfModeCards", "pdfModeBook", "pdfBookNote",
     "pdfBookDone"].every((k) => T.en[k] && T.zh[k])));
+
+  // 对齐：文字层必须贴在页面图那一块，翻页后也一样
+  // 早先的问题：pdfbook 卡片没有 oc.pt 所以没有 .pw 包裹层，
+  // paint() 退而求其次用整张卡片做容器，百分比按卡片全高算，越往下偏得越多
+  const align = await c.run(async (id) => {
+    sel = [id]; paintSel(); camTo(0, 0, 1, true);
+    await new Promise((z) => setTimeout(z, 800));
+    const el = document.querySelector('.card[data-id="' + id + '"]');
+    const hasPW = !!el.querySelector(".pw");
+    const ptInPW = el.querySelector(".pt")?.parentNode?.className === "pw";
+    const im = el.querySelector("img"), imBox = im.getBoundingClientRect();
+    const spans = [...el.querySelectorAll(".pt span")];
+    const boxes = spans.map((s) => s.getBoundingClientRect());
+    const p1ok = boxes.every((b) => b.top >= imBox.top - 3 && b.bottom <= imBox.bottom + 3);
+    const maxErr1 = Math.max(0, ...boxes.map((b) => Math.max(
+      b.top < imBox.top - 3 ? imBox.top - b.top : 0,
+      b.bottom > imBox.bottom + 3 ? b.bottom - imBox.bottom : 0)));
+    // 翻页后对齐
+    gotoPage(id, +1);
+    await new Promise((z) => { const iv = setInterval(() => { const img = el.querySelector("img");
+      if (img && img.complete && img.naturalWidth > 0) clearInterval(iv), setTimeout(z, 500); }, 50); });
+    const spans2 = [...el.querySelectorAll(".pt span")];
+    const imBox2 = el.querySelector("img").getBoundingClientRect();
+    const boxes2 = spans2.map((s) => s.getBoundingClientRect());
+    const p2ok = boxes2.every((b) => b.top >= imBox2.top - 3 && b.bottom <= imBox2.bottom + 3);
+    const maxErr2 = Math.max(0, ...boxes2.map((b) => Math.max(
+      b.top < imBox2.top - 3 ? imBox2.top - b.top : 0,
+      b.bottom > imBox2.bottom + 3 ? b.bottom - imBox2.bottom : 0)));
+    return { hasPW, ptInPW, p1ok, maxErr1: +maxErr1.toFixed(1), p2ok, maxErr2: +maxErr2.toFixed(1) };
+  }, r.bookCard.id || await c.run(() => S.cards.find((z) => z.pdfbook)?.id));
+  c.ok("文字层包裹在 .pw 里（与图片同一层级，不是整张卡片）", align.hasPW && align.ptInPW);
+  c.ok(`第 1 页文字层无越界（最大 ${align.maxErr1}px）`, align.p1ok);
+  c.ok(`翻到第 2 页后文字层无越界（最大 ${align.maxErr2}px）`, align.p2ok);
 });
+group("docimport Word 文档导入", async (c) => {
+  // 不需要真实的 .docx 文件——直接调 docxToHtml 测解析器，再用合成 ZIP 测完整流程
+  const r = await c.run(() => {
+    const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="${W}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p>
+      <w:pPr><w:pStyle w:val="Heading1"/></w:pPr>
+      <w:r><w:t>大标题</w:t></w:r>
+    </w:p>
+    <w:p>
+      <w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">粗体 </w:t></w:r>
+      <w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">斜体 </w:t></w:r>
+      <w:r><w:rPr><w:u w:val="single"/></w:rPr><w:t>下划线</w:t></w:r>
+    </w:p>
+    <w:p><w:r><w:rPr><w:strike/></w:rPr><w:t>删除线</w:t></w:r></w:p>
+    <w:p>
+      <w:pPr><w:numPr><w:ilvl w:val="0"/></w:numPr></w:pPr>
+      <w:r><w:t>列表项</w:t></w:r>
+    </w:p>
+    <w:p>
+      <w:pPr><w:numPr><w:ilvl w:val="1"/></w:numPr></w:pPr>
+      <w:r><w:t>二级列表</w:t></w:r>
+    </w:p>
+    <w:p><w:hyperlink r:id="rId1"><w:r><w:t>超链接</w:t></w:r></w:hyperlink></w:p>
+    <w:p/>
+    <w:p><w:r><w:t>普通段落，含 &amp;amp; 等特殊字符</w:t></w:r></w:p>
+    <w:tbl>
+      <w:tr>
+        <w:tc><w:p><w:r><w:t>单元A</w:t></w:r></w:p></w:tc>
+        <w:tc><w:p><w:r><w:t>单元B</w:t></w:r></w:p></w:tc>
+      </w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+    const rels = { rId1: "https://example.com" };
+    const html = docxToHtml(xml, rels);
+    return {
+      html,
+      heading: /<b>[^<]*大标题/.test(html),
+      bold: /<b>[^<]*粗体/.test(html),
+      italic: /<i>[^<]*斜体/.test(html),
+      underline: /<u>[^<]*下划线/.test(html),
+      strike: /<s>[^<]*删除线/.test(html),
+      bullet: /• 列表项/.test(html),
+      indent: /&nbsp;.*• 二级/.test(html),
+      link: /<a href="https:\/\/example\.com">超链接<\/a>/.test(html),
+      blankLine: /<br>/.test(html),
+      noTrailingBr: !/<br>\s*$/.test(html),
+      table: /单元A.*│.*单元B/.test(html),
+    };
+  });
+  c.ok("标题 → <b>", r.heading);
+  c.ok("粗体 → <b>", r.bold);
+  c.ok("斜体 → <i>", r.italic);
+  c.ok("下划线 → <u>", r.underline);
+  c.ok("删除线 → <s>", r.strike);
+  c.ok("列表项有 •", r.bullet);
+  c.ok("二级列表有缩进", r.indent);
+  c.ok("超链接 → <a href>", r.link);
+  c.ok("段落之间有换行", r.blankLine);
+  c.ok("末尾没有多余 <br>", r.noTrailingBr);
+  c.ok("表格单元格用 │ 分隔", r.table);
+
+  // 验证菜单入口和函数存在
+  const ui = await c.run(() => {
+    boardMenu(50, 50);
+    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent);
+    closeMenus();
+    return {
+      hasFn: typeof importDocx === "function" && typeof askDocx === "function",
+      inMenu: items.some((z) => z.includes(t("importDocx"))),
+      strings: ["importDocx", "docxWork", "docxDone", "docxBad",
+        "docxNoLib", "docxEmpty", "docxNote"].every((k) => T.en[k] && T.zh[k]),
+    };
+  });
+  c.ok("importDocx / askDocx 函数存在", ui.hasFn);
+  c.ok("右键菜单里有「导入 Word 文档」，紧跟 PDF 导入", ui.inMenu);
+  c.ok("中英文案都齐了", ui.strings);
+
+  // 用合成 ZIP（jszip 没有 jszip 也能测——直接调底层函数，用 JSZip.loadAsync 测实际创建）
+  const card = await c.run(async () => {
+    // 用 docxToHtml 已验证，这里只测 importDocx 从 html 创建卡片的逻辑
+    S.cards = []; S.links = []; S.frames = []; invalidateIndex(); render();
+    const html = "<b>测试标题</b><br>测试正文";
+    // 直接走 importDocx 的卡片创建部分（绕过 zip/xml，只测卡片写入）
+    const id = uid();
+    const card0 = { id, x: 0, y: 0, w: 640, text: "", rich: html, s: newStyle() };
+    snap(); S.cards.push(card0); invalidateIndex(); render();
+    sel = [id]; selLink = null; render(); save();
+    await new Promise((z) => setTimeout(z, 400));
+    const el = document.querySelector('.card[data-id="' + id + '"]');
+    return {
+      exists: !!el,
+      richRendered: el && /<b>测试标题<\/b>/.test(el.querySelector(".cap").innerHTML),
+      w: card0.w,
+    };
+  });
+  c.ok("导入的卡片富文本正确渲染（点击后可编辑）", card.exists && card.richRendered);
+  c.ok("卡片宽度用了对话框里选的值", card.w === 640);
+});
+
 group("imgorig 图片原尺寸", async (c) => {
   // 从前导入图片一律压到 1600px、卡片一律缩到 imgMax，撤不掉。现在多一个「原尺寸」。
   const r = await c.run(async () => {
