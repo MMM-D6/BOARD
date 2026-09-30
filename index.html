@@ -657,6 +657,9 @@
   .card .pt span::selection{background:rgba(90,140,255,.35)}
   body.lock .card .pt{pointer-events:none}
   .card.pdfcard .cap:empty:before{content:"" !important}
+  /* 透明底 PNG：没有文字时不显示下方的文字框 */
+  .card.nocap .cap:empty{display:none;margin-top:0}
+  .card.nocap .cap:empty:before{content:"" !important}
   .card .pdfb{position:absolute;right:6px;top:6px;z-index:3;padding:1px 6px;border-radius:5px;
     background:rgba(20,20,20,.5);color:#fff;font:400 10px/1.5 "IBM Plex Mono",monospace;
     pointer-events:none;opacity:0;transition:opacity .15s}
@@ -2807,6 +2810,7 @@ function makeCard(c){
   // 翻页模式：单卡多页，底部有上一页 / 下一页按钮
   if(oc.pdfbook)buildPdfNav(el,c,oc);
   }
+  if(oc.nocap)el.classList.add("nocap");
   const cap=document.createElement("div");cap.className="cap";
   if(oc.rich)cap.innerHTML=oc.rich;else cap.textContent=oc.text||"";
   cap.spellcheck=false;cap.dataset.ph=t("placeholder");
@@ -3706,21 +3710,25 @@ function shrink(file,cb){
       const cv=document.createElement("canvas");cv.width=Math.round(im.width*k);cv.height=Math.round(im.height*k);
       cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);
       const png=/png/i.test(file.type);
-      cb(cv.toDataURL(png?"image/png":"image/jpeg",S.imgMax===0?.95:.88),cv.width,cv.height)};
+      // 透明检测：逐像素扫描 alpha 通道，找到第一个半透明像素就停（大图通常边缘就是透明的）
+      let hasAlpha=false;
+      if(png){const px=cv.getContext("2d").getImageData(0,0,cv.width,cv.height).data;
+        for(let i=3;i<px.length;i+=4){if(px[i]<255){hasAlpha=true;break}}}
+      cb(cv.toDataURL(png?"image/png":"image/jpeg",S.imgMax===0?.95:.88),cv.width,cv.height,hasAlpha)};
     im.src=fr.result};
   fr.readAsDataURL(file);
 }
-async function addImage(d,w,h,p,quiet){
+async function addImage(d,w,h,p,quiet,alpha){
   const cap=S.imgMax===0?0:(S.imgMax||360);
   const W=cap?Math.round(w*Math.min(1,cap/Math.max(w,h))):w;   // 原尺寸：像素多宽，卡片就多宽
   const r=await putImg(d);
-  const c={id:uid(),ih:r.h,...(r.ok?{}:{src:d}),ar:h/w,iw:w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
+  const c={id:uid(),ih:r.h,...(r.ok?{}:{src:d}),ar:h/w,iw:w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",...(alpha?{nocap:true}:{}),s:newStyle()};
   invalidateIndex();S.cards.push(c);if(!quiet){sel=[c.id];selLink=null}render();save();return c;
 }
 function addImages(files,p){
   const list=[...files].filter(f=>f.type.startsWith("image/"));
   if(!list.length||lock)return;snap();
-  list.forEach((f,i)=>shrink(f,(d,w,h)=>addImage(d,w,h,{x:p.x+(i%4)*30,y:p.y+i*24},list.length>1)));
+  list.forEach((f,i)=>shrink(f,(d,w,h,a)=>addImage(d,w,h,{x:p.x+(i%4)*30,y:p.y+i*24},list.length>1,a)));
 }
 function addText(p){
   if(lock)return;snap();
