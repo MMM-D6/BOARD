@@ -8,7 +8,7 @@
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#EAEAE7; --paper:#FBFBF8; --ink:#1A1A1A; --mute:rgba(26,26,26,.42); --rule:rgba(26,26,26,.11);
+    --bg:#EAEAE7; --paper:#FBFBF8; --ink:#1A1A1A; --mute:rgba(26,26,26,.42); --rule:rgba(26,26,26,.11); --edge:rgba(26,26,26,.28);
     --acc:#2D6CDF; --glass:rgba(250,250,248,.86); --glassline:rgba(26,26,26,.10);
     --fs:15px;
     --sans:"IBM Plex Sans","PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
@@ -17,17 +17,24 @@
   *{box-sizing:border-box}
   [hidden]{display:none!important}
   html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:400 15px/1.5 var(--sans)}
-  body{display:flex;flex-direction:column;padding:max(16px,env(safe-area-inset-top)) 16px max(10px,env(safe-area-inset-bottom));
+  body{display:flex;padding:max(16px,env(safe-area-inset-top)) 16px max(10px,env(safe-area-inset-bottom));
     -webkit-tap-highlight-color:transparent}
   input,textarea{font:inherit;color:inherit}
+  .main{flex:1;min-width:0;display:flex;flex-direction:column}
 
-  /* 进到里面一层时，上方显示路径 */
+  /* 顶部：纸 / SOP / 收获 切换，后面跟着路径 */
   .crumbs{flex:none;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;min-height:22px;padding:0 2px 8px;
     font:400 13px var(--sans);color:var(--mute);user-select:none}
   .crumbs button{border:none;background:none;padding:1px 4px;margin:0 -4px;border-radius:4px;cursor:pointer;font:inherit;color:inherit}
   .crumbs button:hover,.crumbs button:focus-visible{color:var(--acc);outline:none}
+  .crumbs .switch{display:flex;gap:14px;margin-right:4px}
+  .crumbs .switch button.on{color:var(--ink);font-weight:500}
   .crumbs .here{color:var(--ink);font-weight:500}
   .crumbs .sep{opacity:.5}
+  .crumbs .title{flex:1;min-width:10em;border:none;border-bottom:1px dashed transparent;background:none;outline:none;
+    padding:0 0 1px;font:500 13px var(--sans);color:var(--ink);user-select:text}
+  .crumbs .title::placeholder{color:var(--mute);font-weight:400}
+  .crumbs .title:hover{border-bottom-color:var(--rule)} .crumbs .title:focus{border-bottom-color:var(--acc)}
 
   /* 一张纸，5 × 4 的格子铺满；越往里，底下垫的纸越多 */
   .paper{flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));
@@ -44,22 +51,68 @@
   .num{width:44px;margin-left:-4px;padding:1px 4px;border:none;border-radius:4px;background:none;
     font:500 12px var(--mono);color:var(--mute)}
   .num:focus{outline:none;background:#fff;color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
-  /* 格子里面还有内容时，右上角显示「未完成 / 全部」，点一下进去 */
   .sub{height:18px;padding:0 6px;border:1px solid var(--rule);border-radius:4px;background:none;cursor:pointer;
-    font:500 11px var(--mono);color:var(--mute)}
+    font:500 11px var(--mono);color:var(--mute);white-space:nowrap}
   .sub:hover,.sub:focus-visible{color:var(--acc);border-color:var(--acc);outline:none}
   .txt{flex:1;min-height:0;width:100%;margin-top:4px;padding:0;border:none;background:none;outline:none;resize:none;
     font-size:var(--fs);line-height:1.55;overflow:auto;scrollbar-width:thin}
 
   .slot.empty .num{opacity:.4}
-  .slot.leaving .txt{text-decoration:line-through;color:var(--mute);transition:color .2s}
+  .slot.leaving .txt,.slot.done .txt{text-decoration:line-through;text-decoration-color:rgba(26,26,26,.45);color:var(--mute);transition:color .2s}
   .slot.moved{animation:moved .9s ease-out}
   @keyframes moved{from{background:#DCE7FA}to{background:var(--paper)}}
-
   .done-mode .slot{background:#F3F3EF}
   .done-mode .txt{color:var(--mute);text-decoration:line-through;text-decoration-color:rgba(26,26,26,.25)}
 
-  .pageinfo{flex:none;height:22px;padding:5px 2px 0;text-align:right;font:400 11px var(--mono);color:var(--mute);user-select:none}
+  /* SOP 步骤：要做几次就有几个圈，点一下填上 */
+  .dots{flex:none;display:flex;flex-wrap:wrap;gap:7px;padding-top:6px}
+  .dot{width:15px;height:15px;padding:0;border-radius:50%;border:1.5px solid var(--edge);background:transparent;cursor:pointer;
+    transition:background-color .18s,border-color .18s,box-shadow .18s,transform .12s}
+  .dot:hover{border-color:var(--acc)}
+  .dot:active{transform:scale(.82)}
+  .dot:focus-visible{outline:none;border-color:var(--acc)}
+  .dot.on{background:var(--ink);border-color:var(--ink);box-shadow:inset 0 0 0 2.5px var(--paper)}
+  .slot.done .dot.on{background:var(--mute);border-color:var(--mute)}
+
+  /* SOP 架子上每一格底部的纸堆 */
+  .foot{flex:none;display:flex;align-items:flex-end;height:44px}
+  .pile{flex:none;width:28px;height:20px;border:1px solid var(--edge);border-radius:1.5px;background:var(--paper)}
+  .foot span{font:400 11px var(--mono);color:var(--mute);line-height:1}
+
+  /* 这一轮得出了什么 */
+  .note{flex:none;margin-top:10px;height:calc(var(--fs) * 3.1 + 18px);padding:8px 10px;border:1px solid var(--rule);border-radius:3px;
+    background:var(--paper);outline:none;resize:none;font-size:var(--fs);line-height:1.55}
+  .note::placeholder{color:var(--mute)}
+  .note:focus{box-shadow:inset 0 0 0 1.5px var(--acc)}
+
+  /* 收获页 */
+  .paper.harvest{display:block;overflow:auto;background:var(--paper);padding:14px 30px}
+  .harvest article{max-width:68ch;padding:16px 0;border-bottom:1px solid var(--rule)}
+  .harvest article:last-child{border-bottom:none}
+  .harvest .h-note{margin:0;font-size:calc(var(--fs) * 1.08);line-height:1.65;white-space:pre-wrap}
+  .harvest .h-meta{margin:6px 0 0;font:400 12px var(--sans);color:var(--mute);display:flex;flex-wrap:wrap;gap:4px 14px}
+  .harvest .h-empty{margin:18px 0;color:var(--mute)}
+
+  .pageinfo{flex:none;height:22px;padding:5px 2px 0;text-align:right;font:400 11px var(--mono);color:var(--mute);user-select:none;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* 右侧：所有进行中的轮次 */
+  #side{flex:none;width:216px;margin-left:14px;display:flex;flex-direction:column;gap:6px;min-height:0}
+  #sideBtn{flex:none;height:22px;padding:0 2px;border:none;background:none;text-align:left;cursor:pointer;
+    font:400 12px var(--sans);color:var(--mute)}
+  #sideBtn:hover,#sideBtn:focus-visible{color:var(--acc);outline:none}
+  #sideList{display:flex;flex-direction:column;gap:2px;overflow:auto;min-height:0}
+  .ri{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 8px;width:100%;padding:7px 9px;border:none;border-radius:6px;
+    background:none;cursor:pointer;text-align:left;color:var(--ink)}
+  .ri:hover,.ri:focus-visible{background:rgba(26,26,26,.05);outline:none}
+  .ri.here{background:var(--paper);box-shadow:0 0 0 1px var(--rule)}
+  .ri .s{font:400 11px var(--sans);color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ri .n{font:400 11px var(--mono);color:var(--mute)}
+  .ri .t{grid-column:1/-1;font:400 13px var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #side.closed{width:26px}
+  #side.closed #sideList{display:none}
+  #side.closed #sideBtn{height:auto;width:26px;padding:10px 0;writing-mode:vertical-rl;text-align:center;
+    border:1px solid var(--rule);border-radius:5px}
 
   /* 右键菜单 */
   #menu{position:fixed;z-index:20;min-width:188px;padding:4px;border-radius:9px;display:none;
@@ -73,10 +126,11 @@
   #menu button:disabled{opacity:.32;cursor:default}
   #menu kbd{font:400 11px var(--mono);opacity:.55}
   #menu hr{border:none;height:1px;background:var(--glassline);margin:4px 6px}
-  #menu .fontrow{display:flex;align-items:center;gap:2px;padding:0 4px 0 10px;height:30px}
-  #menu .fontrow span{flex:1;font:400 13px var(--sans)}
-  #menu .fontrow button{width:30px;flex:none;justify-content:center;padding:0;font:500 13px var(--mono)}
-  #menu .fontrow button.val{width:36px;font-weight:400}
+  #menu .head{padding:6px 10px 3px;font:400 12px var(--sans);color:var(--mute)}
+  #menu .stepper{display:flex;align-items:center;gap:2px;padding:0 4px 0 10px;height:30px}
+  #menu .stepper span{flex:1;font:400 13px var(--sans)}
+  #menu .stepper button{width:30px;flex:none;justify-content:center;padding:0;font:500 13px var(--mono)}
+  #menu .stepper button.val{width:36px;font-weight:400}
 
   #toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom,0px));transform:translate(-50%,8px);
     display:flex;gap:12px;align-items:center;padding:8px 13px;border-radius:8px;background:var(--ink);color:var(--paper);
@@ -84,65 +138,188 @@
   #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
   #toast button{border:none;background:none;color:#8FB3FF;cursor:pointer;font:500 13px var(--sans);padding:0}
 
-  /* 手机竖屏太窄，改成两列往下滚，还是 20 格 */
+  /* 手机竖屏：两列往下滚，侧栏放到下面 */
   @media (max-width:640px){
     html,body{height:auto}
+    body{flex-direction:column}
     .paper{flex:none;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:150px}
+    .paper.harvest{padding:6px 18px}
+    #side,#side.closed{width:auto;margin:12px 0 0}
+    #side.closed #sideBtn{writing-mode:horizontal-tb;width:auto;padding:0 2px;border:none;text-align:left;height:22px}
   }
-  @media (prefers-reduced-motion:reduce){.slot.moved{animation:none}#toast{transition:none}}
+  @media (prefers-reduced-motion:reduce){.slot.moved{animation:none}#toast,.dot{transition:none}}
 </style>
 </head>
 <body>
-<nav class="crumbs" id="crumbs" hidden></nav>
-<div class="paper" id="paper"></div>
-<div class="pageinfo" id="info"></div>
+<div class="main">
+  <nav class="crumbs" id="crumbs"></nav>
+  <div class="paper" id="paper"></div>
+  <textarea id="note" class="note" rows="2" placeholder="这一轮得出了什么（可以不写）" hidden></textarea>
+  <div class="pageinfo" id="info"></div>
+</div>
+<aside id="side" hidden><button id="sideBtn" type="button"></button><div id="sideList"></div></aside>
 <div id="menu" role="menu"></div>
 <div id="toast"><span id="toastMsg"></span><button id="toastUndo">撤销</button></div>
 <input type="file" id="file" accept=".json,application/json" hidden>
 
 <script>
 (()=>{
+/* =========================================================
+   常量和小工具
+   ========================================================= */
 const KEY="paper20-v1", PER=20;
-const MAXD=3;                                   // 最多三层：最外面这张纸算第一层
+const MAXD=3;                                   // 任务纸最多三层
 const FS_MIN=11, FS_MAX=28, FS_DEF=15;          // 字号范围
+const MAX_TIMES=12;                             // 一步最多重复几次
 const $=id=>document.getElementById(id);
 const MOD=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?"⌘":"Ctrl+";
-
 const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36);
+const now=()=>Date.now();
+const pad2=n=>String(n).padStart(2,"0");
+const fmtDay=t=>{const d=new Date(t);return `${d.getMonth()+1}月${d.getDate()}日`};
+const fmtTime=t=>{const d=new Date(t);return `${fmtDay(t)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`};
+const today=()=>{const d=new Date();return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`};
+const clampTimes=v=>Math.min(MAX_TIMES,Math.max(1,Math.round(+v)||1));
+const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
+const move=(arr,it,to)=>{arr.splice(arr.indexOf(it),1);arr.splice(to,0,it)};
 
-/* ---------- 数据 ----------
-   每一项：{id, text, done, doneAt?, children?}
-   children 里面是同样结构的一列，就是点进去之后那张纸 */
-const norm=a=>(Array.isArray(a)?a:[]).filter(i=>i&&typeof i.text==="string").map(i=>{
+/* =========================================================
+   数据
+   任务纸  items: [{id, text, done, doneAt?, children?}]
+   SOP    sops:  [{id, name, versions:[{v, at, steps:[{text,times}]}], useV,
+                   runs:[进行中 {id,title,note,v,start,touched,steps:[{id,text,times,ticks}]}
+                         已完成 {id,title,note,v,start,end}]}]
+   纸堆、轮数、收获页都从 runs 现算，不另外存。
+   ========================================================= */
+const normItems=a=>(Array.isArray(a)?a:[]).filter(i=>i&&typeof i.text==="string").map(i=>{
   const o={id:String(i.id||uid()),text:i.text,done:!!i.done};
   if(i.doneAt)o.doneAt=i.doneAt;
-  const c=norm(i.children);if(c.length)o.children=c;
+  const c=normItems(i.children);if(c.length)o.children=c;
   return o;
 });
+const normSteps=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.text==="string").map(s=>{
+  const times=clampTimes(s.times);
+  return {id:String(s.id||uid()),text:s.text,times,ticks:Math.min(times,Math.max(0,Math.round(+s.ticks)||0))};
+});
+const normSops=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.name==="string").map(s=>({
+  id:String(s.id||uid()), name:s.name,
+  versions:(Array.isArray(s.versions)?s.versions:[]).filter(v=>v&&Array.isArray(v.steps)).map(v=>({
+    v:+v.v||1, at:+v.at||0, steps:v.steps.filter(x=>x&&typeof x.text==="string").map(x=>({text:x.text,times:clampTimes(x.times)}))})),
+  useV:s.useV==null?null:+s.useV,
+  runs:(Array.isArray(s.runs)?s.runs:[]).filter(r=>r&&r.id).map(r=>{
+    const o={id:String(r.id),title:String(r.title||""),note:String(r.note||""),v:+r.v||0,start:+r.start||0};
+    if(r.end)o.end=+r.end; else{o.touched=+r.touched||o.start;o.steps=normSteps(r.steps)}
+    return o;
+  })
+}));
 
-let S={items:[],page:0,mode:"open",hint:true,path:[],font:FS_DEF};
+let S={items:[],page:0,mode:"open",hint:true,path:[],font:FS_DEF,view:"paper",sops:[],run:null,side:true};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 if(!S.items.length){
   // 如果之前用过「硬骨头」版本，把任务搬过来
   try{const old=JSON.parse(localStorage.getItem("hardbones-v1")||"null");
-    if(old&&Array.isArray(old.tasks)){
-      old.tasks.slice().sort((a,b)=>((+a.pri)||1e9)-((+b.pri)||1e9)).forEach(t=>{
-        if(typeof t.title==="string")S.items.push({text:t.title,done:!!t.done,doneAt:t.doneAt})});
-    }}catch(e){}
+    if(old&&Array.isArray(old.tasks))old.tasks.forEach(t=>{if(typeof t.title==="string")S.items.push({text:t.title,done:!!t.done,doneAt:t.doneAt})});
+  }catch(e){}
 }
-if(!S.items.length){
-  S.items=[{text:"Practice-based 结构部分：检查时态",done:false},{text:"给导师发邮件约 meeting",done:false}];
-}
-S.items=norm(S.items);
+if(!S.items.length)S.items=[{text:"Practice-based 结构部分：检查时态",done:false},{text:"给导师发邮件约 meeting",done:false}];
+S.items=normItems(S.items);
+S.sops=normSops(S.sops);
 if(!Array.isArray(S.path))S.path=[];
+if(!["paper","sop","harvest"].includes(S.view))S.view="paper";
 S.font=Math.min(FS_MAX,Math.max(FS_MIN,+S.font||FS_DEF));
 document.documentElement.style.setProperty("--fs",S.font+"px");
 
-const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast("没能存进浏览器，请用右键「保存」存到文件")}};
+/* 文件相关的状态放在前面，保存时要用 */
+const CAN_FS=!!window.showSaveFilePicker;
+let fileHandle=null, fileName=localStorage.getItem(KEY+":fname")||"";
+let savedSnap=localStorage.getItem(KEY+":snap")||"";
+const snap=()=>JSON.stringify([S.items,S.sops]);
+const isDirty=()=>snap()!==savedSnap;
 
-/* ---------- 现在在哪一层 ---------- */
-// 顺着 path 往里走，找到当前这张纸对应的那一列；路径失效就退回能走到的最深处
+/* =========================================================
+   保存：边打字边存进浏览器；选过文件的话，也自动写回文件
+   ========================================================= */
+let saveT, fileT;
+function save(){
+  clearTimeout(saveT);
+  try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast("没能存进浏览器，请用右键「保存」存到文件")}
+  if(fileHandle){clearTimeout(fileT);fileT=setTimeout(autoWrite,1500)}
+  updateInfo();
+}
+const saveSoon=()=>{clearTimeout(saveT);saveT=setTimeout(save,400)};
+addEventListener("pagehide",save);
+document.addEventListener("visibilitychange",()=>{if(document.hidden)save()});
+
+/* =========================================================
+   画面：按当前所在的地方分别画
+   ========================================================= */
+const paper=$("paper");
+let pageParts=[];
+function updateInfo(){
+  const f=fileName?[fileName+(isDirty()?"  有改动未保存":"  已保存")]:[];
+  $("info").textContent=[...pageParts,...(S.hint?["右键打开菜单"]:[]),...f].join("    ");
+}
+function render(focusIdx){
+  const R=curRun();
+  paper.className="paper";paper.textContent="";paper.dataset.depth=0;
+  document.body.classList.toggle("done-mode",S.view==="paper"&&S.mode==="done");
+  $("note").hidden=!R;
+  if(S.view==="paper")renderPaper(focusIdx);
+  else if(S.view==="harvest")renderHarvest();
+  else if(R)renderRun(R,focusIdx);
+  else renderShelf(focusIdx);
+  renderCrumbs(R);renderSide();updateInfo();
+  if(focusIdx!=null){const t=paper.querySelector(`.slot[data-idx="${focusIdx}"] .txt`);if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
+}
+// 一个格子的骨架：编号 + 文字
+function makeCell(idx,text){
+  const slot=el("div","slot");slot.dataset.idx=idx;
+  const num=el("input","num");num.inputMode="numeric";num.value=idx+1;num.setAttribute("aria-label","编号");
+  const txt=el("textarea","txt");txt.spellcheck=false;txt.value=text||"";txt.setAttribute("aria-label","第 "+(idx+1)+" 格");
+  const top=el("div","top");top.append(num);
+  slot.append(top,txt);paper.append(slot);
+  if(!text)slot.classList.add("empty");
+  return {slot,top,num,txt};
+}
+function subButton(label,tip,fn){const b=el("button","sub",label);b.type="button";b.title=tip;b.onclick=fn;return b}
+function pulse(id){const s=paper.querySelector(`.slot[data-id="${id}"]`);if(s){s.classList.remove("moved");void s.offsetWidth;s.classList.add("moved")}}
+// 先让正在编辑的格子失去焦点，把字存下来
+function commit(){const a=document.activeElement;if(a&&a!==document.body&&a.blur)a.blur()}
+
+// Tab 跳到下一格，Shift + Tab 回上一格；paged 为真时会自动翻页
+function bindTab(txt,idx,paged){
+  txt.addEventListener("keydown",e=>{
+    if(e.key!=="Tab"||e.isComposing||e.metaKey||e.ctrlKey||e.altKey)return;
+    e.preventDefault();
+    const to=idx+(e.shiftKey?-1:1);
+    if(to<0||(!paged&&to>=PER))return;
+    txt.blur();
+    if(paged){
+      if(to<S.page*PER)S.page--;
+      else if(to>=S.page*PER+PER&&openList().length>idx)S.page++;
+      save();
+    }
+    render(to);
+  });
+}
+// 改编号就把这一格挪到那个位置
+function bindNum(num,idx,getList,moveIt){
+  num.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();num.blur()}if(e.key==="Escape"){num.value=idx+1;num.blur()}});
+  num.addEventListener("focus",()=>num.select());
+  num.addEventListener("blur",()=>{
+    const list=getList(), it=list[idx], n=parseInt(num.value,10);
+    if(!it||isNaN(n)||n===idx+1){num.value=idx+1;return}
+    const to=Math.min(Math.max(n,1),list.length)-1;
+    moveIt(it,to);save();render();pulse(it.id);
+    if(to!==n-1)toast(`挪到了最后，第 ${to+1} 格`);
+  });
+}
+
+/* =========================================================
+   任务纸（可以往里开三层）
+   ========================================================= */
 let L={arr:S.items,chain:[]};
+// 顺着 path 往里走，找到当前这张纸对应的那一列；路径失效就退回能走到的最深处
 function locate(){
   let arr=S.items;const chain=[];
   for(let k=0;k<S.path.length;k++){
@@ -158,127 +335,56 @@ const openOf=a=>a.filter(i=>!i.done);
 const openList=()=>openOf(cur());
 const doneList=()=>cur().filter(i=>i.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
 const title=it=>{const t=(it.text.split("\n")[0]||"").trim();return t?(t.length>24?t.slice(0,24)+"…":t):"（空）"};
+function insertAtOpen(it,to,a=cur()){const open=openOf(a);if(to>=open.length){a.push(it);return}a.splice(a.indexOf(open[to]),0,it)}
+function moveTo(it,to,a=cur()){a.splice(a.indexOf(it),1);insertAtOpen(it,to,a)}
+function removeItem(it,a=cur()){const i=a.indexOf(it);if(i>-1)a.splice(i,1)}
 
-/* ---------- 画纸 ---------- */
-let pageParts=[];
-function updateInfo(){
-  const f=[];
-  if(typeof fileName!=="undefined"&&fileName)f.push(fileName+(isDirty()?"  有改动未保存":"  已保存"));
-  $("info").textContent=[...pageParts,...f].join("    ");
-}
-function renderCrumbs(){
-  const c=$("crumbs");c.textContent="";
-  if(!S.path.length){c.hidden=true;return}
-  c.hidden=false;
-  const names=["纸",...L.chain.map(title)];
-  names.forEach((n,d)=>{
-    if(d){const s=document.createElement("span");s.className="sep";s.textContent="/";c.append(s)}
-    if(d===names.length-1){const s=document.createElement("span");s.className="here";s.textContent=n;c.append(s)}
-    else{const b=document.createElement("button");b.textContent=n;b.onclick=()=>goUp(d);c.append(b)}
-  });
-}
-const paper=$("paper");
-function render(focusIdx){
+function renderPaper(focusIdx){
   locate();
   const list=S.mode==="done"?doneList():openList();
   const maxPage=Math.max(0,Math.floor((S.mode==="done"?list.length-1:list.length)/PER));
   S.page=Math.min(Math.max(0,S.page),maxPage);
-  document.body.classList.toggle("done-mode",S.mode==="done");
   paper.dataset.depth=S.path.length;
-  renderCrumbs();
-  paper.textContent="";
   const start=S.page*PER;
   for(let k=0;k<PER;k++){
     const idx=start+k, it=list[idx];
-    const slot=document.createElement("div");slot.className="slot";slot.dataset.idx=idx;
-    const num=document.createElement("input");num.className="num";num.inputMode="numeric";num.value=idx+1;
-    num.setAttribute("aria-label","编号");
-    const txt=document.createElement("textarea");txt.className="txt";txt.spellcheck=false;txt.setAttribute("aria-label","第 "+(idx+1)+" 格");
-    const top=document.createElement("div");top.className="top";top.append(num);
+    const {slot,top,num,txt}=makeCell(idx,it?it.text:"");
     if(it){
-      slot.dataset.id=it.id;txt.value=it.text;if(!it.text)slot.classList.add("empty");
+      slot.dataset.id=it.id;
       if(it.children&&it.children.length){
         const all=it.children.length, open=it.children.filter(c=>!c.done).length;
-        const b=document.createElement("button");b.className="sub";b.type="button";
-        b.textContent=open?`${open}/${all}`:"✓";
-        b.title=open?`里面还有 ${open} 条未完成，共 ${all} 条。点开`:`里面 ${all} 条都完成了。点开`;
-        b.onclick=()=>enter(it);
-        top.append(b);
+        top.append(subButton(open?`${open}/${all}`:"✓",open?`里面还有 ${open} 条未完成，共 ${all} 条。点开`:`里面 ${all} 条都完成了。点开`,()=>enter(it)));
       }
-    }else slot.classList.add("empty");
-    if(S.mode==="done"){txt.readOnly=true;num.readOnly=true;num.value=it?"✓":"";}
-    else bindSlot(slot,num,txt,idx);
-    slot.append(top,txt);paper.append(slot);
+    }
+    if(S.mode==="done"){txt.readOnly=true;num.readOnly=true;num.value=it?"✓":""}
+    else bindTask(num,txt,idx,it);
   }
-  const total=list.length, parts=[];
-  if(S.mode==="done")parts.push(`已完成 ${total} 条，第 ${S.page+1} 页，Esc 返回`);
+  const total=list.length;pageParts=[];
+  if(S.mode==="done")pageParts.push(`已完成 ${total} 条，第 ${S.page+1} 页，Esc 返回`);
   else{
-    if(total>PER||S.page>0)parts.push(`第 ${start+1} 到 ${start+PER} 格，共 ${total} 格`);
-    if(S.path.length)parts.push(`第 ${S.path.length+1} 层，Esc 回上一层`);
+    if(total>PER||S.page>0)pageParts.push(`第 ${start+1} 到 ${start+PER} 格，共 ${total} 格`);
+    if(S.path.length)pageParts.push(`第 ${S.path.length+1} 层，Esc 回上一层`);
   }
-  if(S.hint)parts.push("右键打开菜单");
-  pageParts=parts;updateInfo();
-  if(focusIdx!=null){const s=paper.querySelector(`.slot[data-idx="${focusIdx}"] .txt`);if(s){s.focus();s.setSelectionRange(s.value.length,s.value.length)}}
 }
-
-function bindSlot(slot,num,txt,idx){
-  // 文字：回车直接在格子里换行，离开格子时保存
+function bindTask(num,txt,idx,it){
+  const arr=cur(), orig=it?it.text:"";
+  txt.addEventListener("input",()=>{
+    if(!it){if(!txt.value.trim())return;it={id:uid(),text:"",done:false};arr.push(it)}
+    it.text=txt.value;saveSoon();
+  });
   txt.addEventListener("change",()=>{
-    const v=txt.value.trim(), arr=cur(), list=openOf(arr), it=list[idx];
-    if(it){
-      if(v)it.text=v;
-      else if(it.children&&it.children.length){
-        // 里面还有东西的格子不能靠清空文字删掉，免得一起丢
-        txt.value=it.text;toast(`这一格里面还有 ${it.children.length} 条，要删请用右键「删除」`);return;
-      }else{
-        const t=it;removeItem(t,arr);save();render();
-        toast("已清空这一格",()=>{insertAtOpen(t,idx,arr);save();render()});return;
-      }
+    if(!it)return;
+    const v=txt.value.trim();
+    if(v){it.text=v;save();render();return}
+    if(it.children&&it.children.length){   // 里面还有东西的格子不能靠清空文字删掉
+      it.text=orig;txt.value=orig;save();toast(`这一格里面还有 ${it.children.length} 条，要删请用右键「删除」`);return;
     }
-    else if(v){ arr.push({id:uid(),text:v,done:false}); }
-    save();render();
+    const t=it;removeItem(t,arr);save();render();
+    if(orig)toast("已清空这一格",()=>{t.text=orig;insertAtOpen(t,idx,arr);save();render()});
   });
-  txt.addEventListener("keydown",e=>{
-    // Tab 跳到下一格，Shift + Tab 回上一格
-    if(e.key!=="Tab"||e.isComposing||e.metaKey||e.ctrlKey||e.altKey)return;
-    e.preventDefault();
-    if(e.shiftKey){
-      if(idx<=0)return;
-      txt.blur();if(idx-1<S.page*PER)S.page--;save();render(idx-1);
-    }else{
-      txt.blur();
-      // 写到这一页最后一格，按 Tab 自动翻到下一页继续写
-      if(idx+1>=S.page*PER+PER&&openList().length>idx){S.page++;save()}
-      render(idx+1);
-    }
-  });
-  // 编号：改数字就把这一格挪到那个位置
-  num.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();num.blur()}if(e.key==="Escape"){num.value=idx+1;num.blur()}});
-  num.addEventListener("focus",()=>num.select());
-  num.addEventListener("blur",()=>{
-    const list=openList(), it=list[idx];
-    const n=parseInt(num.value,10);
-    if(!it||isNaN(n)||n===idx+1){num.value=idx+1;return}
-    const to=Math.min(Math.max(n,1),list.length)-1;
-    moveTo(it,to);
-    S.page=Math.floor(to/PER);save();render();pulse(it.id);
-    if(to!==n-1)toast(`挪到了最后，第 ${to+1} 格`);
-  });
+  bindTab(txt,idx,true);
+  bindNum(num,idx,openList,(t,to)=>{moveTo(t,to);S.page=Math.floor(to/PER)});
 }
-function pulse(id){const s=paper.querySelector(`.slot[data-id="${id}"]`);if(s){s.classList.remove("moved");void s.offsetWidth;s.classList.add("moved")}}
-
-// 这几个都作用在某一列上，默认是当前这张纸；撤销时用当时那一列，换了层也不会放错地方
-function insertAtOpen(it,to,a=cur()){
-  const open=openOf(a);
-  if(to>=open.length){a.push(it);return}
-  a.splice(a.indexOf(open[to]),0,it);
-}
-function moveTo(it,to,a=cur()){a.splice(a.indexOf(it),1);insertAtOpen(it,to,a)}
-function removeItem(it,a=cur()){const i=a.indexOf(it);if(i>-1)a.splice(i,1)}
-
-/* ---------- 进出一层 ---------- */
-// 先让正在编辑的格子失去焦点，把字存下来
-function commit(){const a=document.activeElement;if(a&&a!==document.body&&a.blur)a.blur()}
 const canEnter=()=>S.path.length<MAXD-1;
 function enter(it){
   if(!canEnter())return;
@@ -301,141 +407,427 @@ function goUp(depth){
   }
   S.mode="open";save();render();pulse(backTo);
 }
-
-/* ---------- 字号 ---------- */
-function setFont(v){
-  S.font=Math.min(FS_MAX,Math.max(FS_MIN,v));
-  document.documentElement.style.setProperty("--fs",S.font+"px");save();
-  const val=menu.querySelector(".fontrow .val");if(val)val.textContent=S.font;
-}
-
-/* ---------- 右键菜单 ---------- */
-const menu=$("menu");
-let target=null; // 当前右键的那一格对应的任务
-function openMenu(x,y,slot){
-  const idx=slot?+slot.dataset.idx:null;
-  const list=S.mode==="done"?doneList():openList();
-  target=slot&&slot.dataset.id?list[idx]:null;
-  const arr=cur(), done=doneList();
-  const lastPage=Math.floor((S.mode==="done"?list.length-1:list.length)/PER);
-  const openLabel=t=>t.children&&t.children.length?"打开这一格":"打开成新页";
-  const items=[];
-  if(S.mode==="done"){
-    if(target){
-      const t=target;
-      items.push(["放回清单最前",()=>{t.done=false;delete t.doneAt;moveTo(t,0);save();render();toast("放回了第 1 格")}]);
-      if(t.children&&t.children.length)items.push([openLabel(t),()=>enter(t),"",!canEnter()]);
-      items.push(["彻底删除",()=>{const i=arr.indexOf(t);removeItem(t,arr);save();render();toast("已删除",()=>{arr.splice(i,0,t);save();render()})}],"-");
-    }
-    items.push(["回到清单",()=>{S.mode="open";S.page=0;save();render()},"Esc"]);
-    if(done.length)items.push(["清理全部已完成",()=>{if(!confirm(`删除这一层的 ${done.length} 条已完成（连同它们里面的内容）？建议先备份。`))return;
-      const keep=arr.filter(i=>!i.done);arr.length=0;arr.push(...keep);S.mode="open";S.page=0;save();render()}]);
-  }else{
-    if(target){
-      const t=target;
-      items.push(["完成",()=>complete(t),MOD+"↵"]);
-      items.push([openLabel(t),()=>enter(t),canEnter()?"":"已到第三层",!canEnter()]);
-      items.push(["移到第 1 格",()=>{moveTo(t,0);S.page=0;save();render();pulse(t.id)}]);
-      items.push(["在前面空出一格",()=>{insertAtOpen({id:uid(),text:"",done:false},idx);save();render(idx)}]);
-      items.push(["删除",()=>{const i=arr.indexOf(t), n=t.children?t.children.length:0;removeItem(t,arr);save();render();
-        toast(n?`已删除，连同里面 ${n} 条`:"已删除",()=>{arr.splice(i,0,t);save();render()})}]);
-      items.push("-");
-    }
-    items.push(["上一页",()=>{S.page--;save();render()},"PgUp",S.page<=0]);
-    items.push(["下一页",()=>{S.page++;save();render()},"PgDn",S.page>=lastPage]);
-    items.push([`看已完成（${done.length}）`,()=>{S.mode="done";S.page=0;save();render()},"",!done.length]);
-    if(S.path.length)items.push(["回上一层",()=>goUp(S.path.length-1),"Esc"]);
-  }
-  items.push("-",{font:true});
-  items.push("-",["保存",()=>saveFile(false),MOD+"S"],["另存为…",()=>saveFile(true),MOD+"⇧S"],["打开文件…",openFile,MOD+"O"]);
-  menu.textContent="";
-  items.forEach(m=>{
-    if(m==="-"){menu.append(document.createElement("hr"));return}
-    if(m.font){
-      // 字号这一行点了不关菜单，可以连着点
-      const row=document.createElement("div");row.className="fontrow";
-      const lab=document.createElement("span");lab.textContent="字号";
-      const mk=(t,fn,cls,tip)=>{const b=document.createElement("button");b.textContent=t;if(cls)b.className=cls;if(tip)b.title=tip;b.onclick=fn;return b};
-      row.append(lab,
-        mk("−",()=>setFont(S.font-1),"","小一号"),
-        mk(String(S.font),()=>setFont(FS_DEF),"val","恢复默认 "+FS_DEF),
-        mk("+",()=>setFont(S.font+1),"","大一号"));
-      menu.append(row);return;
-    }
-    const [label,fn,key,dis]=m;
-    const b=document.createElement("button");b.setAttribute("role","menuitem");
-    const s=document.createElement("span");s.textContent=label;b.append(s);
-    if(key){const k=document.createElement("kbd");k.textContent=key;b.append(k)}
-    b.disabled=!!dis;b.onclick=()=>{closeMenu();fn()};menu.append(b);
-  });
-  menu.classList.add("on");
-  const w=menu.offsetWidth,h=menu.offsetHeight;
-  menu.style.left=Math.max(6,Math.min(x,innerWidth-w-6))+"px";
-  menu.style.top=Math.max(6,Math.min(y,innerHeight-h-6))+"px";
-  if(S.hint){S.hint=false;save();pageParts=pageParts.filter(x=>x!=="右键打开菜单");updateInfo()}
-}
-function closeMenu(){menu.classList.remove("on")}
-
-document.addEventListener("contextmenu",e=>{
-  if(e.target.closest("#menu"))return;
-  e.preventDefault();
-  commit();
-  openMenu(e.clientX,e.clientY,e.target.closest(".slot"));
-});
-// 手机长按
-let lp;
-document.addEventListener("touchstart",e=>{const t=e.touches[0];const tg=e.target;
-  lp=setTimeout(()=>{openMenu(t.clientX,t.clientY,tg.closest&&tg.closest(".slot"))},560)},{passive:true});
-["touchend","touchmove","touchcancel"].forEach(ev=>document.addEventListener(ev,()=>clearTimeout(lp),{passive:true}));
-document.addEventListener("pointerdown",e=>{if(!e.target.closest("#menu"))closeMenu()});
-addEventListener("scroll",closeMenu,{passive:true});addEventListener("resize",closeMenu);
-
-document.addEventListener("keydown",e=>{
-  if(e.key==="Escape"){
-    const a=document.activeElement, editing=a&&(a.tagName==="TEXTAREA"||a.tagName==="INPUT");
-    if(menu.classList.contains("on"))closeMenu();
-    else if(editing&&a.classList.contains("txt"))a.blur();          // 第一下：退出编辑
-    else if(S.mode==="done"){S.mode="open";S.page=0;save();render()}
-    else if(!editing&&S.path.length)goUp(S.path.length-1);          // 再按：回上一层
-    return;
-  }
-  const mod=e.metaKey||e.ctrlKey, k=(e.key||"").toLowerCase();
-  if(mod&&k==="s"){e.preventDefault();commit();saveFile(e.shiftKey);return}
-  if(mod&&k==="o"){e.preventDefault();openFile();return}
-  if(e.key==="PageDown"){e.preventDefault();commit();S.page++;save();render()}
-  if(e.key==="PageUp"){e.preventDefault();commit();S.page--;save();render()}
-  // ⌘/Ctrl + Enter 完成当前格
-  if(e.key==="Enter"&&mod&&S.mode==="open"){
-    const slot=document.activeElement&&document.activeElement.closest&&document.activeElement.closest(".slot");
-    if(slot&&slot.dataset.id){e.preventDefault();const it=openList()[+slot.dataset.idx];
-      const tx=slot.querySelector(".txt");if(it&&tx.value.trim())it.text=tx.value.trim();if(it)complete(it)}}
-});
-
-/* ---------- 完成 ---------- */
 function complete(it){
   const arr=cur();
   const slot=paper.querySelector(`.slot[data-id="${it.id}"]`);
   if(slot)slot.classList.add("leaving");
   setTimeout(()=>{
     const pos=openOf(arr).indexOf(it);
-    it.done=true;it.doneAt=Date.now();save();render();
+    it.text=it.text.trim();it.done=true;it.doneAt=now();save();render();
     toast("划掉了一格",()=>{it.done=false;delete it.doneAt;moveTo(it,pos,arr);save();render();pulse(it.id)});
   },260);
 }
 
-/* ---------- 保存到本地文件 ----------
-   Chrome / Edge：第一次选好位置后，之后 Ctrl+S 直接写回同一个文件，刷新页面也记得是哪个文件。
-   Safari / Firefox：不支持写回，每次保存会下载一个新的 .json。 */
-const CAN_FS=!!window.showSaveFilePicker;
-let fileHandle=null, fileName=localStorage.getItem(KEY+":fname")||"";
-let savedSnap=localStorage.getItem(KEY+":snap")||"";
-const snap=()=>JSON.stringify(S.items);
-const isDirty=()=>snap()!==savedSnap;
-function markSaved(name){savedSnap=snap();fileName=name||fileName;
+/* =========================================================
+   SOP
+   ========================================================= */
+const findSop=id=>S.sops.find(s=>s.id===id);
+const activeRuns=sop=>sop.runs.filter(r=>!r.end);
+const doneRuns=sop=>sop.runs.filter(r=>r.end);
+const latestV=sop=>sop.versions[sop.versions.length-1];
+const nextVersion=sop=>sop.versions.find(v=>v.v===sop.useV)||latestV(sop);
+const plainSteps=run=>run.steps.map(s=>({text:s.text.trim(),times:s.times}));
+const baseSteps=(sop,run)=>{const v=sop.versions.find(x=>x.v===run.v);return v?v.steps:[]};
+const isChanged=(sop,run)=>JSON.stringify(plainSteps(run))!==JSON.stringify(baseSteps(sop,run));
+const isStepDone=s=>s.ticks>=s.times;
+const runLabel=r=>r.title.trim()||fmtDay(r.start)+" 开始";
+
+function curRun(){
+  if(S.view!=="sop"||!S.run)return null;
+  const sop=findSop(S.run.sop), run=sop&&sop.runs.find(r=>r.id===S.run.run&&!r.end);
+  if(!run){S.run=null;return null}
+  return {sop,run};
+}
+function openRun(sop,run){
+  commit();
+  S.view="sop";S.run={sop:sop.id,run:run.id};run.touched=now();save();
+  render(run.steps.length?null:0);
+}
+function startRun(sop){
+  const v=nextVersion(sop);
+  const run={id:uid(),title:"",note:"",v:v?v.v:0,start:now(),touched:now(),
+    steps:(v?v.steps:[]).map(s=>({id:uid(),text:s.text,times:s.times,ticks:0}))};
+  sop.runs.push(run);openRun(sop,run);
+}
+// 点 SOP：进最近动过的那一轮，没有就开始新一轮
+function enterSop(sop){
+  const r=activeRuns(sop).sort((a,b)=>b.touched-a.touched)[0];
+  r?openRun(sop,r):startRun(sop);
+}
+function leaveRun(){
+  if(!S.run)return;
+  commit();const id=S.run.sop;S.run=null;save();render();pulse(id);
+}
+function touch(run){run.touched=now();save();renderSide();const R=curRun();if(R)runInfo(R),updateInfo()}
+
+// 结束一轮：finish 为真是完成，否则是放弃；keep 为真时把这一轮的步骤存成新版本
+function closeRun(sop,run,finish,keep){
+  commit();
+  const i=S.sops.indexOf(sop), before=JSON.stringify(sop), loc=S.run;
+  if(keep){const v={v:(latestV(sop)?latestV(sop).v:0)+1,at:now(),steps:plainSteps(run)};sop.versions.push(v);sop.useV=v.v;run.v=v.v}
+  if(finish){run.end=now();delete run.steps;delete run.touched}
+  else sop.runs.splice(sop.runs.indexOf(run),1);
+  S.run=null;save();render();pulse(sop.id);
+  const vtxt=keep?`，步骤存为 v${latestV(sop).v}`:"";
+  toast((finish?`完成了第 ${doneRuns(sop).length} 轮`:"已放弃这一轮")+vtxt,()=>{
+    S.sops[i]=normSops([JSON.parse(before)])[0];S.view="sop";S.run=loc;save();render();
+  });
+}
+function finishRun(sop,run){
+  if(!sop.versions.length)return closeRun(sop,run,true,run.steps.length>0);   // 第一轮完成时自动存为 v1
+  if(!isChanged(sop,run))return closeRun(sop,run,true,false);
+  const n=latestV(sop).v+1;
+  choose("这一轮改过步骤",[
+    [`存成新版本 v${n}，以后都用`,()=>closeRun(sop,run,true,true)],
+    ["只用于这一轮",()=>closeRun(sop,run,true,false)]]);
+}
+function abandonRun(sop,run){
+  if(!run.steps.length||!isChanged(sop,run))return closeRun(sop,run,false,false);
+  const n=(latestV(sop)?latestV(sop).v:0)+1;
+  choose("这一轮改过步骤",[
+    [`保留改动，存成 v${n}`,()=>closeRun(sop,run,false,true)],
+    ["不保留，直接放弃",()=>closeRun(sop,run,false,false)]]);
+}
+
+/* ----- SOP 架子：一格一个 SOP ----- */
+function renderShelf(focusIdx){
+  for(let k=0;k<PER;k++){
+    const sop=S.sops[k];
+    const {slot,top,num,txt}=makeCell(k,sop?sop.name:"");
+    if(sop){
+      slot.dataset.id=sop.id;
+      const a=activeRuns(sop).length, d=doneRuns(sop).length;
+      top.append(subButton(a?`进行中 ${a}`:"开始",a?"继续最近的一轮":"开始新一轮",()=>enterSop(sop)));
+      if(d)slot.append(pile(d));
+    }
+    bindSop(num,txt,k,sop);
+  }
+  pageParts=[S.sops.length?"":"在格子里写一个 SOP 的名字，比如「读一篇文献」，再点右上角开始"].filter(Boolean);
+}
+// 纸堆：前几轮每轮明显多一张，之后越来越密，最多八张
+function pile(n){
+  const layers=Math.min(8,n<=4?n:Math.round(4+Math.log2(n-3))), step=3, sh=[];
+  for(let k=1;k<layers;k++){const o=k*step;sh.push(`${o}px ${-o}px 0 -1px var(--paper)`,`${o}px ${-o}px 0 0 var(--edge)`)}
+  const foot=el("div","foot"), p=el("i","pile"), lab=el("span",null,`${n} 轮`);
+  p.style.boxShadow=sh.join(",");lab.style.marginLeft=(10+(layers-1)*step)+"px";
+  foot.title=`已经完成 ${n} 轮`;foot.append(p,lab);return foot;
+}
+function bindSop(num,txt,idx,sop){
+  const orig=sop?sop.name:"";
+  txt.addEventListener("input",()=>{
+    if(!sop){if(!txt.value.trim())return;sop={id:uid(),name:"",versions:[],useV:null,runs:[]};S.sops.push(sop)}
+    sop.name=txt.value;saveSoon();
+  });
+  txt.addEventListener("change",()=>{
+    if(!sop)return;
+    const v=txt.value.trim();
+    if(v){sop.name=v;save();render();return}
+    if(sop.runs.length||sop.versions.length){
+      sop.name=orig;txt.value=orig;save();toast("要删掉这个 SOP 请用右键「删除」");return;
+    }
+    S.sops.splice(S.sops.indexOf(sop),1);save();render();
+  });
+  bindTab(txt,idx,false);
+  bindNum(num,idx,()=>S.sops,(s,to)=>move(S.sops,s,to));
+}
+
+/* ----- 跑一轮：一格一步，完成的步骤留在原位划掉 ----- */
+function renderRun(R,focusIdx){
+  const {run}=R;
+  paper.dataset.depth=1;
+  for(let k=0;k<PER;k++){
+    const st=run.steps[k];
+    const {slot,num,txt}=makeCell(k,st?st.text:"");
+    if(st){slot.dataset.id=st.id;slot.append(dots(run,st,slot));paintStep(slot,st)}
+    bindStep(num,txt,k,run,st);
+  }
+  $("note").value=run.note;
+  runInfo(R);
+}
+function runInfo({sop,run}){
+  const n=run.steps.length, d=run.steps.filter(isStepDone).length;
+  pageParts=[n?`${d}/${n} 步`:"在格子里写下第一步",run.v?`v${run.v}`+(isChanged(sop,run)?" 有改动":""):"第一版",
+    fmtTime(run.start)+" 开始","Esc 回到 SOP"];
+}
+function dots(run,st,slot){
+  const row=el("div","dots");
+  for(let i=0;i<st.times;i++){
+    const b=el("button","dot");b.type="button";b.setAttribute("aria-label",`第 ${i+1} 次`);
+    b.onclick=()=>{st.ticks=st.ticks===i+1?i:i+1;paintStep(slot,st);touch(run)};
+    row.append(b);
+  }
+  return row;
+}
+function paintStep(slot,st){
+  slot.querySelectorAll(".dot").forEach((d,i)=>d.classList.toggle("on",i<st.ticks));
+  slot.classList.toggle("done",isStepDone(st));
+}
+// ⌘/Ctrl + 回车：勾一次；已经勾满就撤回一次
+function tickNext(run,st){st.ticks=isStepDone(st)?st.times-1:st.ticks+1}
+function bindStep(num,txt,idx,run,st){
+  const orig=st?st.text:"";
+  txt.addEventListener("input",()=>{
+    if(!st){if(!txt.value.trim())return;st={id:uid(),text:"",times:1,ticks:0};run.steps.push(st)}
+    st.text=txt.value;run.touched=now();saveSoon();
+  });
+  txt.addEventListener("change",()=>{
+    if(!st)return;
+    const v=txt.value.trim();
+    if(v){st.text=v;save();render();return}
+    const i=run.steps.indexOf(st);run.steps.splice(i,1);save();render();
+    if(orig)toast("已删掉这一步",()=>{st.text=orig;run.steps.splice(i,0,st);save();render()});
+  });
+  bindTab(txt,idx,false);
+  bindNum(num,idx,()=>run.steps,(s,to)=>move(run.steps,s,to));
+}
+$("note").addEventListener("input",()=>{const R=curRun();if(R){R.run.note=$("note").value;R.run.touched=now();saveSoon()}});
+
+/* ----- 收获页 ----- */
+function renderHarvest(){
+  paper.className="paper harvest";
+  const list=[];
+  S.sops.forEach(s=>doneRuns(s).forEach(r=>{if(r.note.trim())list.push({s,r})}));
+  list.sort((a,b)=>b.r.end-a.r.end);
+  if(!list.length)paper.append(el("p","h-empty","每完成一轮 SOP，写在底部的那句话会收在这里。"));
+  list.forEach(({s,r})=>{
+    const a=el("article"), meta=el("p","h-meta");
+    meta.append(el("span",null,s.name));
+    if(r.title.trim())meta.append(el("span",null,r.title.trim()));
+    meta.append(el("span",null,fmtDay(r.end)));
+    a.append(el("p","h-note",r.note.trim()),meta);paper.append(a);
+  });
+  pageParts=list.length?[`${list.length} 条`]:[];
+}
+
+/* =========================================================
+   顶部路径和右侧进行中列表
+   ========================================================= */
+function switchView(v){
+  commit();
+  if(v===S.view){
+    if(v==="paper"&&S.path.length)return goUp(0);
+    if(v==="sop"&&S.run)return leaveRun();
+    return;
+  }
+  S.view=v;save();render();
+}
+function renderCrumbs(R){
+  const c=$("crumbs");c.textContent="";
+  const sw=el("div","switch");
+  [["paper","纸"],["sop","SOP"],["harvest","收获"]].forEach(([v,label])=>{
+    const b=el("button",S.view===v?"on":"",label);b.type="button";b.onclick=()=>switchView(v);sw.append(b);
+  });
+  c.append(sw);
+  const sep=()=>c.append(el("span","sep","/"));
+  if(S.view==="paper"){
+    L.chain.forEach((it,d)=>{
+      sep();
+      if(d===L.chain.length-1)c.append(el("span","here",title(it)));
+      else{const b=el("button",null,title(it));b.onclick=()=>goUp(d+1);c.append(b)}
+    });
+  }else if(R){
+    sep();const b=el("button",null,R.sop.name);b.onclick=leaveRun;c.append(b);sep();
+    const t=el("input","title");t.value=R.run.title;t.placeholder="这一轮是关于什么（可以不写）";t.spellcheck=false;
+    t.addEventListener("input",()=>{R.run.title=t.value;R.run.touched=now();saveSoon();renderSide()});
+    t.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();t.blur()}});
+    c.append(t);
+  }
+}
+function renderSide(){
+  const runs=[];
+  S.sops.forEach(s=>activeRuns(s).forEach(r=>runs.push({s,r})));
+  runs.sort((a,b)=>b.r.touched-a.r.touched);
+  const side=$("side"), list=$("sideList"), here=S.view==="sop"&&S.run?S.run.run:null;
+  side.hidden=!runs.length;
+  side.classList.toggle("closed",!S.side);
+  $("sideBtn").textContent=`进行中 ${runs.length}`;
+  $("sideBtn").title=S.side?"收起":"展开";
+  list.textContent="";
+  runs.forEach(({s,r})=>{
+    const b=el("button","ri"+(r.id===here?" here":""));b.type="button";
+    b.append(el("span","s",s.name),el("span","n",`${r.steps.filter(isStepDone).length}/${r.steps.length}`),el("span","t",runLabel(r)));
+    b.onclick=()=>openRun(s,r);list.append(b);
+  });
+}
+$("sideBtn").onclick=()=>{S.side=!S.side;save();renderSide()};
+
+/* =========================================================
+   字号
+   ========================================================= */
+function setFont(v){
+  S.font=Math.min(FS_MAX,Math.max(FS_MIN,v));
+  document.documentElement.style.setProperty("--fs",S.font+"px");save();
+}
+
+/* =========================================================
+   右键菜单
+   每一项：["文字", 函数, 快捷键, 是否不可用] 或 "-" 或 {head} 或 {stepper}
+   ========================================================= */
+const menu=$("menu");
+function menuItems(slot){
+  const idx=slot?+slot.dataset.idx:null, has=!!(slot&&slot.dataset.id), items=[];
+  if(S.view==="paper")paperMenu(items,has,idx);
+  else if(S.view==="sop"){const R=curRun();R?runMenu(items,R,has,idx):shelfMenu(items,has,idx)}
+  items.push("-",{stepper:{label:"字号",get:()=>S.font,set:setFont,def:FS_DEF}});
+  items.push("-",["保存",()=>saveFile(false),MOD+"S"],["另存为…",()=>saveFile(true),MOD+"⇧S"],["打开文件…",openFile,MOD+"O"]);
+  return items;
+}
+function paperMenu(items,has,idx){
+  const list=S.mode==="done"?doneList():openList(), t=has?list[idx]:null, arr=cur(), done=doneList();
+  const lastPage=Math.floor((S.mode==="done"?list.length-1:list.length)/PER);
+  const openLabel=t=>t.children&&t.children.length?"打开这一格":"打开成新页";
+  if(S.mode==="done"){
+    if(t){
+      items.push(["放回清单最前",()=>{t.done=false;delete t.doneAt;moveTo(t,0);save();render();toast("放回了第 1 格")}]);
+      if(t.children&&t.children.length)items.push([openLabel(t),()=>enter(t),"",!canEnter()]);
+      items.push(["彻底删除",()=>{const i=arr.indexOf(t);removeItem(t,arr);save();render();toast("已删除",()=>{arr.splice(i,0,t);save();render()})}],"-");
+    }
+    items.push(["回到清单",()=>{S.mode="open";S.page=0;save();render()},"Esc"]);
+    if(done.length)items.push(["清理全部已完成",()=>{
+      if(!confirm(`删除这一层的 ${done.length} 条已完成（连同它们里面的内容）？建议先备份。`))return;
+      const keep=arr.filter(i=>!i.done);arr.length=0;arr.push(...keep);S.mode="open";S.page=0;save();render()}]);
+    return;
+  }
+  if(t){
+    items.push(["完成",()=>complete(t),MOD+"↵"]);
+    items.push([openLabel(t),()=>enter(t),canEnter()?"":"已到第三层",!canEnter()]);
+    items.push(["移到第 1 格",()=>{moveTo(t,0);S.page=0;save();render();pulse(t.id)}]);
+    items.push(["在前面空出一格",()=>{insertAtOpen({id:uid(),text:"",done:false},idx);save();render(idx)}]);
+    items.push(["删除",()=>{const i=arr.indexOf(t), n=t.children?t.children.length:0;removeItem(t,arr);save();render();
+      toast(n?`已删除，连同里面 ${n} 条`:"已删除",()=>{arr.splice(i,0,t);save();render()})}]);
+    items.push("-");
+  }
+  items.push(["上一页",()=>{S.page--;save();render()},"PgUp",S.page<=0]);
+  items.push(["下一页",()=>{S.page++;save();render()},"PgDn",S.page>=lastPage]);
+  items.push([`看已完成（${done.length}）`,()=>{S.mode="done";S.page=0;save();render()},"",!done.length]);
+  if(S.path.length)items.push(["回上一层",()=>goUp(S.path.length-1),"Esc"]);
+}
+function shelfMenu(items,has,idx){
+  const sop=has?S.sops[idx]:null;
+  if(!sop)return;
+  const a=activeRuns(sop).length;
+  items.push([a?"继续最近的一轮":"开始一轮",()=>enterSop(sop)]);
+  if(a)items.push(["再开一轮",()=>startRun(sop)]);
+  if(sop.versions.length){
+    const use=nextVersion(sop).v;
+    items.push("-",{head:"下一轮用的版本"});
+    sop.versions.slice().reverse().slice(0,8).forEach(v=>items.push([`v${v.v}  ${fmtTime(v.at)}`,
+      ()=>{sop.useV=v.v;save();toast(`下一轮用 v${v.v}`)},v.v===use?"✓":""]));
+  }
+  items.push("-",["删除这个 SOP",()=>{
+    if(!confirm(`删除「${sop.name}」？它的 ${sop.runs.length} 轮记录和收获会一起删掉。`))return;
+    const i=S.sops.indexOf(sop);S.sops.splice(i,1);save();render();
+    toast("已删除",()=>{S.sops.splice(i,0,sop);save();render()});
+  }]);
+}
+function runMenu(items,{sop,run},has,idx){
+  const st=has?run.steps[idx]:null;
+  if(st){
+    const slot=()=>paper.querySelector(`.slot[data-id="${st.id}"]`);
+    items.push([isStepDone(st)?"撤回一次":"勾一次",()=>{tickNext(run,st);const s=slot();if(s)paintStep(s,st);touch(run)},MOD+"↵"]);
+    items.push({stepper:{label:"次数",get:()=>st.times,def:1,
+      set:v=>{st.times=clampTimes(v);st.ticks=Math.min(st.ticks,st.times);touch(run);render()}}});
+    items.push(["在前面插入一步",()=>{run.steps.splice(idx,0,{id:uid(),text:"",times:1,ticks:0});touch(run);render(idx)}]);
+    items.push(["删除这一步",()=>{const i=run.steps.indexOf(st);run.steps.splice(i,1);touch(run);render();
+      toast("已删掉这一步",()=>{run.steps.splice(i,0,st);touch(run);render()})}]);
+    items.push("-");
+  }
+  items.push(["完成这一轮",()=>finishRun(sop,run)]);
+  items.push(["放弃这一轮",()=>abandonRun(sop,run)]);
+  items.push(["回到 SOP",leaveRun,"Esc"]);
+}
+
+function showMenu(x,y,items){
+  menu.textContent="";
+  const hr=()=>{if(menu.lastChild&&menu.lastChild.tagName!=="HR")menu.append(el("hr"))};
+  items.forEach(m=>{
+    if(m==="-")return hr();
+    if(m.head)return menu.append(el("div","head",m.head));
+    if(m.stepper){
+      // 数值这一行点了不关菜单，可以连着点
+      const {label,get,set,def}=m.stepper, row=el("div","stepper"), val=el("button","val",String(get()));
+      const btn=(t,fn,tip)=>{const b=el("button",null,t);b.title=tip;b.onclick=()=>{fn();val.textContent=get()};return b};
+      val.title="恢复默认 "+def;val.onclick=()=>{set(def);val.textContent=get()};
+      row.append(el("span",null,label),btn("−",()=>set(get()-1),"减一"),val,btn("+",()=>set(get()+1),"加一"));
+      return menu.append(row);
+    }
+    const [label,fn,key,dis]=m;
+    const b=el("button");b.setAttribute("role","menuitem");b.append(el("span",null,label));
+    if(key)b.append(el("kbd",null,key));
+    b.disabled=!!dis;b.onclick=()=>{closeMenu();fn()};menu.append(b);
+  });
+  if(menu.lastChild&&menu.lastChild.tagName==="HR")menu.lastChild.remove();
+  menu.classList.add("on");
+  const w=menu.offsetWidth,h=menu.offsetHeight;
+  menu.style.left=Math.max(6,Math.min(x,innerWidth-w-6))+"px";
+  menu.style.top=Math.max(6,Math.min(y,innerHeight-h-6))+"px";
+}
+function openMenu(x,y,slot){
+  showMenu(x,y,menuItems(slot));
+  if(S.hint){S.hint=false;save()}
+}
+// 在屏幕中间问一个问题，点外面就是取消
+function choose(msg,options){
+  showMenu(innerWidth/2-110,innerHeight/2-60,[{head:msg},...options]);
+  const f=menu.querySelector("button");if(f)f.focus();
+}
+function closeMenu(){menu.classList.remove("on")}
+
+document.addEventListener("contextmenu",e=>{
+  if(e.target.closest("#menu"))return;
+  e.preventDefault();commit();
+  openMenu(e.clientX,e.clientY,e.target.closest(".slot"));
+});
+// 手机长按
+let lp;
+document.addEventListener("touchstart",e=>{const t=e.touches[0], tg=e.target;
+  lp=setTimeout(()=>openMenu(t.clientX,t.clientY,tg.closest&&tg.closest(".slot")),560)},{passive:true});
+["touchend","touchmove","touchcancel"].forEach(ev=>document.addEventListener(ev,()=>clearTimeout(lp),{passive:true}));
+document.addEventListener("pointerdown",e=>{if(!e.target.closest("#menu"))closeMenu()});
+addEventListener("scroll",closeMenu,{passive:true});addEventListener("resize",closeMenu);
+
+/* =========================================================
+   键盘
+   ========================================================= */
+document.addEventListener("keydown",e=>{
+  const tg=e.target, editing=/^(TEXTAREA|INPUT)$/.test(tg.tagName);
+  if(e.key==="Escape"){
+    if(menu.classList.contains("on"))return closeMenu();
+    if(editing)return tg.blur();                                     // 第一下：退出编辑
+    if(S.view==="paper"){
+      if(S.mode==="done"){S.mode="open";S.page=0;save();render()}
+      else if(S.path.length)goUp(S.path.length-1);                   // 再按：回上一层
+    }else if(S.view==="sop"&&S.run)leaveRun();
+    return;
+  }
+  const mod=e.metaKey||e.ctrlKey, k=(e.key||"").toLowerCase();
+  if(mod&&k==="s"){e.preventDefault();commit();saveFile(e.shiftKey);return}
+  if(mod&&k==="o"){e.preventDefault();openFile();return}
+  if(S.view==="paper"&&(e.key==="PageDown"||e.key==="PageUp")){
+    e.preventDefault();commit();S.page+=e.key==="PageDown"?1:-1;save();render();return;
+  }
+  if(e.key==="Enter"&&mod){
+    const slot=tg.closest&&tg.closest(".slot");
+    if(!slot||!slot.dataset.id)return;
+    e.preventDefault();
+    const idx=+slot.dataset.idx, R=curRun();
+    if(S.view==="paper"&&S.mode==="open"){const it=openList()[idx];if(it)complete(it)}
+    else if(R){const st=R.run.steps[idx];if(st){tickNext(R.run,st);paintStep(slot,st);touch(R.run)}}
+  }
+});
+
+/* =========================================================
+   保存到本地文件
+   Chrome / Edge：第一次选好位置后，之后有改动会自动写回同一个文件；
+                  每次打开页面，第一次点击时浏览器可能会问一次是否允许写入。
+   Safari / Firefox：不支持写回，只能手动保存，每次下载一个新的 .json。
+   ========================================================= */
+function markSaved(name){
+  savedSnap=snap();fileName=name||fileName;
   try{localStorage.setItem(KEY+":snap",savedSnap);localStorage.setItem(KEY+":fname",fileName)}catch(e){}
-  updateInfo()}
-const fileData=()=>JSON.stringify({app:"paper20",v:2,at:new Date().toISOString(),items:S.items},null,2);
-const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+  updateInfo();
+}
+const fileData=()=>JSON.stringify({app:"paper20",v:3,at:new Date().toISOString(),items:S.items,sops:S.sops},null,2);
 
 // 用 IndexedDB 记住文件句柄
 const idb=(mode,fn)=>new Promise((res,rej)=>{const r=indexedDB.open("paper20",1);
@@ -446,12 +838,22 @@ const idb=(mode,fn)=>new Promise((res,rej)=>{const r=indexedDB.open("paper20",1)
 const rememberHandle=h=>idb("readwrite",s=>s.put(h,"handle")).catch(()=>{});
 if(CAN_FS)idb("readonly",s=>s.get("handle")).then(h=>{if(h){fileHandle=h;fileName=h.name;updateInfo()}}).catch(()=>{});
 
+const hasPerm=async h=>!h.queryPermission||(await h.queryPermission({mode:"readwrite"}))==="granted";
 async function writeTo(h){
-  if(h.queryPermission&&(await h.queryPermission({mode:"readwrite"}))!=="granted"){
-    if((await h.requestPermission({mode:"readwrite"}))!=="granted")throw new Error("perm");
-  }
+  if(!(await hasPerm(h))&&(await h.requestPermission({mode:"readwrite"}))!=="granted")throw new Error("perm");
   const w=await h.createWritable();await w.write(fileData());await w.close();
 }
+async function autoWrite(){
+  try{if(fileHandle&&isDirty()&&await hasPerm(fileHandle)){const w=await fileHandle.createWritable();await w.write(fileData());await w.close();markSaved(fileHandle.name)}}catch(e){}
+}
+// 每次打开页面，第一次点击或按键时请求写入权限（浏览器规定必须由用户操作触发）
+async function askPerm(){
+  document.removeEventListener("pointerdown",askPerm,true);document.removeEventListener("keydown",askPerm,true);
+  try{if(fileHandle&&fileHandle.requestPermission&&!(await hasPerm(fileHandle))&&
+    (await fileHandle.requestPermission({mode:"readwrite"}))==="granted")autoWrite()}catch(e){}
+}
+if(CAN_FS){document.addEventListener("pointerdown",askPerm,true);document.addEventListener("keydown",askPerm,true)}
+
 async function saveFile(saveAs){
   try{
     if(CAN_FS){
@@ -472,11 +874,10 @@ async function saveFile(saveAs){
 }
 async function openFile(){
   commit();
-  if(isDirty()&&S.items.some(i=>i.text)&&!confirm("现在的改动还没保存到文件，确定打开别的文件吗？"))return;
+  if(isDirty()&&!confirm("现在的改动还没保存到文件，确定打开别的文件吗？"))return;
   if(CAN_FS&&window.showOpenFilePicker){
     try{const [h]=await showOpenFilePicker({types:[{description:"纸的数据",accept:{"application/json":[".json"]}}]});
-      const ok=loadData(await (await h.getFile()).text());
-      if(ok){fileHandle=h;rememberHandle(h);markSaved(h.name);toast("已打开 "+h.name)}
+      if(loadData(await (await h.getFile()).text())){fileHandle=h;rememberHandle(h);markSaved(h.name);toast("已打开 "+h.name)}
     }catch(e){if(!e||e.name!=="AbortError")toast("打不开这个文件")}
   }else $("file").click();
 }
@@ -485,11 +886,13 @@ $("file").onchange=async e=>{
   if(loadData(await f.text())){markSaved(f.name);toast("已打开 "+f.name)}
 };
 function loadData(text){
-  try{const d=JSON.parse(text);
+  try{
+    const d=JSON.parse(text);
     let items=Array.isArray(d.items)?d.items:null;
     if(!items&&Array.isArray(d.tasks))items=d.tasks.map(t=>({text:t.title,done:t.done,doneAt:t.doneAt}));
-    if(!items)throw 0;
-    S.items=norm(items);S.path=[];S.page=0;S.mode="open";save();render();return true;
+    if(!items&&!Array.isArray(d.sops))throw 0;
+    S.items=normItems(items);S.sops=normSops(d.sops);
+    S.path=[];S.page=0;S.mode="open";S.run=null;save();render();return true;
   }catch(err){toast("这个文件不是这页纸的数据");return false}
 }
 function download(blob,name){
@@ -497,11 +900,13 @@ function download(blob,name){
   document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
 }
 
-/* ---------- 提示条 ---------- */
+/* =========================================================
+   提示条
+   ========================================================= */
 let tt,undoFn;
 function toast(msg,undo){
   $("toastMsg").textContent=msg;undoFn=undo;$("toastUndo").style.display=undo?"":"none";
-  $("toast").classList.add("on");clearTimeout(tt);tt=setTimeout(()=>$("toast").classList.remove("on"),undo?5000:2000);
+  $("toast").classList.add("on");clearTimeout(tt);tt=setTimeout(()=>$("toast").classList.remove("on"),undo?5000:2200);
 }
 $("toastUndo").onclick=()=>{if(undoFn)undoFn();undoFn=null;$("toast").classList.remove("on")};
 
