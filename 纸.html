@@ -74,10 +74,35 @@
   .dot.on{background:var(--ink);border-color:var(--ink);box-shadow:inset 0 0 0 2.5px var(--paper)}
   .slot.done .dot.on{background:var(--mute);border-color:var(--mute)}
 
+  /* 一轮里的步骤格：步骤文字、虚线下的记录，一起在格子里滑动 */
+  .body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto;scrollbar-width:thin;margin-top:4px}
+  .body .txt{flex:none;margin-top:0;overflow:hidden}
+  .memo-wrap{flex:1;display:flex;flex-direction:column;margin-top:8px;padding-top:6px;border-top:1px dashed var(--edge);cursor:text}
+  .memo{flex:none;width:100%;padding:0;border:none;background:none;outline:none;resize:none;overflow:hidden;
+    font-size:calc(var(--fs) * .84);line-height:1.55;color:rgba(26,26,26,.62)}
+  .memo::placeholder{color:var(--mute)}
+  .slot.step:not(:hover):not(:focus-within) .memo-wrap:not(.has){display:none}
+  .times{font:400 11px var(--mono);color:var(--mute)}
+  .readonly .memo-wrap:not(.has){display:none}
+  .readonly .dot{cursor:default}
+  .readonly .dot:hover{border-color:var(--edge)}
+  .readonly .dot.on:hover{border-color:var(--ink)}
+
+  /* 过去的轮次列表 */
+  .paper.list{display:block;overflow:auto;background:var(--paper);padding:8px 18px}
+  .past{display:block;width:100%;max-width:74ch;padding:14px 12px;border:none;border-bottom:1px solid var(--rule);background:none;
+    text-align:left;cursor:pointer;color:var(--ink);font:inherit;border-radius:0}
+  .past:hover,.past:focus-visible{background:rgba(26,26,26,.035);outline:none}
+  .past .pm{display:flex;flex-wrap:wrap;gap:4px 14px;font:400 12px var(--sans);color:var(--mute)}
+  .past .pm b{font-weight:500;color:var(--ink)}
+  .past .pn{margin:6px 0 0;font-size:var(--fs);line-height:1.6;white-space:pre-wrap}
+
   /* SOP 架子上每一格底部的纸堆 */
   .foot{flex:none;display:flex;align-items:flex-end;height:44px}
-  .pile{flex:none;width:28px;height:20px;border:1px solid var(--edge);border-radius:1.5px;background:var(--paper)}
+  .pile{flex:none;width:28px;height:20px;cursor:pointer;border:1px solid var(--edge);border-radius:1.5px;background:var(--paper)}
+  .foot{cursor:pointer}
   .foot span{font:400 11px var(--mono);color:var(--mute);line-height:1}
+  .foot:hover span{color:var(--acc)}
 
   /* 这一轮得出了什么 */
   .note{flex:none;margin-top:10px;height:calc(var(--fs) * 3.1 + 18px);padding:8px 10px;border:1px solid var(--rule);border-radius:3px;
@@ -87,6 +112,7 @@
 
   /* 收获页 */
   .paper.harvest{display:block;overflow:auto;background:var(--paper);padding:14px 30px}
+  .paper.list .h-empty,.harvest .h-empty{margin:18px 12px;color:var(--mute)}
   .harvest article{max-width:68ch;padding:16px 0;border-bottom:1px solid var(--rule)}
   .harvest article:last-child{border-bottom:none}
   .harvest .h-note{margin:0;font-size:calc(var(--fs) * 1.08);line-height:1.65;white-space:pre-wrap}
@@ -182,14 +208,20 @@ const today=()=>{const d=new Date();return `${d.getFullYear()}-${pad2(d.getMonth
 const clampTimes=v=>Math.min(MAX_TIMES,Math.max(1,Math.round(+v)||1));
 const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
 const move=(arr,it,to)=>{arr.splice(arr.indexOf(it),1);arr.splice(to,0,it)};
+// 文本框高度跟着内容走（格子里滑动的是整个格子，而不是每个文本框）
+const autosize=t=>{t.style.height="auto";if(t.value&&t.offsetParent)t.style.height=t.scrollHeight+"px"};
 
 /* =========================================================
    数据
    任务纸  items: [{id, text, done, doneAt?, children?}]
-   SOP    sops:  [{id, name, versions:[{v, at, steps:[{text,times}]}], useV,
-                   runs:[进行中 {id,title,note,v,start,touched,steps:[{id,text,times,ticks}]}
-                         已完成 {id,title,note,v,start,end}]}]
+   SOP    sops:  [{id, name, useV,
+                   versions:[{v, at, steps:[{text,times}]}],
+                   draft?, draftFrom?           正在编辑的模板
+                   runs:[进行中 {id,title,note,v,start,touched,steps}
+                         已完成 {id,title,note,v,start,end,steps}]}]
+          一轮里的一步：{id, text, times, ticks, note}
    纸堆、轮数、收获页都从 runs 现算，不另外存。
+   S.at 是在 SOP 里的位置：null 是架子，{kind:"tpl"|"run"|"hist", sop, run?}
    ========================================================= */
 const normItems=a=>(Array.isArray(a)?a:[]).filter(i=>i&&typeof i.text==="string").map(i=>{
   const o={id:String(i.id||uid()),text:i.text,done:!!i.done};
@@ -197,23 +229,25 @@ const normItems=a=>(Array.isArray(a)?a:[]).filter(i=>i&&typeof i.text==="string"
   const c=normItems(i.children);if(c.length)o.children=c;
   return o;
 });
+const newStep=()=>({id:uid(),text:"",times:1,ticks:0,note:""});
 const normSteps=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.text==="string").map(s=>{
   const times=clampTimes(s.times);
-  return {id:String(s.id||uid()),text:s.text,times,ticks:Math.min(times,Math.max(0,Math.round(+s.ticks)||0))};
+  return {id:String(s.id||uid()),text:s.text,times,ticks:Math.min(times,Math.max(0,Math.round(+s.ticks)||0)),note:String(s.note||"")};
 });
-const normSops=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.name==="string").map(s=>({
-  id:String(s.id||uid()), name:s.name,
-  versions:(Array.isArray(s.versions)?s.versions:[]).filter(v=>v&&Array.isArray(v.steps)).map(v=>({
-    v:+v.v||1, at:+v.at||0, steps:v.steps.filter(x=>x&&typeof x.text==="string").map(x=>({text:x.text,times:clampTimes(x.times)}))})),
-  useV:s.useV==null?null:+s.useV,
-  runs:(Array.isArray(s.runs)?s.runs:[]).filter(r=>r&&r.id).map(r=>{
-    const o={id:String(r.id),title:String(r.title||""),note:String(r.note||""),v:+r.v||0,start:+r.start||0};
-    if(r.end)o.end=+r.end; else{o.touched=+r.touched||o.start;o.steps=normSteps(r.steps)}
-    return o;
-  })
-}));
+const normSops=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.name==="string").map(s=>{
+  const o={id:String(s.id||uid()), name:s.name, useV:s.useV==null?null:+s.useV,
+    versions:(Array.isArray(s.versions)?s.versions:[]).filter(v=>v&&Array.isArray(v.steps)).map(v=>({
+      v:+v.v||1, at:+v.at||0, steps:v.steps.filter(x=>x&&typeof x.text==="string").map(x=>({text:x.text,times:clampTimes(x.times)}))})),
+    runs:(Array.isArray(s.runs)?s.runs:[]).filter(r=>r&&r.id).map(r=>{
+      const o={id:String(r.id),title:String(r.title||""),note:String(r.note||""),v:+r.v||0,start:+r.start||0,steps:normSteps(r.steps)};
+      if(r.end)o.end=+r.end; else o.touched=+r.touched||o.start;
+      return o;
+    })};
+  if(Array.isArray(s.draft)){o.draft=normSteps(s.draft);o.draftFrom=+s.draftFrom||0}
+  return o;
+});
 
-let S={items:[],page:0,mode:"open",hint:true,path:[],font:FS_DEF,view:"paper",sops:[],run:null,side:true};
+let S={items:[],page:0,mode:"open",hint:true,path:[],font:FS_DEF,view:"paper",sops:[],at:null,side:true};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 if(!S.items.length){
   // 如果之前用过「硬骨头」版本，把任务搬过来
@@ -224,6 +258,8 @@ if(!S.items.length){
 if(!S.items.length)S.items=[{text:"Practice-based 结构部分：检查时态",done:false},{text:"给导师发邮件约 meeting",done:false}];
 S.items=normItems(S.items);
 S.sops=normSops(S.sops);
+if(S.run&&!S.at)S.at={kind:"run",sop:S.run.sop,run:S.run.run};   // 上一版存的位置
+delete S.run;
 if(!Array.isArray(S.path))S.path=[];
 if(!["paper","sop","harvest"].includes(S.view))S.view="paper";
 S.font=Math.min(FS_MAX,Math.max(FS_MIN,+S.font||FS_DEF));
@@ -260,17 +296,23 @@ function updateInfo(){
   $("info").textContent=[...pageParts,...(S.hint?["右键打开菜单"]:[]),...f].join("    ");
 }
 function render(focusIdx){
-  const R=curRun();
+  const A=curAt();
   paper.className="paper";paper.textContent="";paper.dataset.depth=0;
   document.body.classList.toggle("done-mode",S.view==="paper"&&S.mode==="done");
-  $("note").hidden=!R;
+  const note=$("note"), showNote=A&&A.run&&(A.kind==="run"||A.run.note.trim());
+  note.hidden=!showNote;
+  if(showNote){note.value=A.run.note;note.readOnly=A.kind!=="run"}
   if(S.view==="paper")renderPaper(focusIdx);
   else if(S.view==="harvest")renderHarvest();
-  else if(R)renderRun(R,focusIdx);
-  else renderShelf(focusIdx);
-  renderCrumbs(R);renderSide();updateInfo();
+  else if(!A)renderShelf();
+  else if(A.kind==="tpl")renderTemplate(A,focusIdx);
+  else if(A.run)renderRun(A,focusIdx);
+  else renderPast(A);
+  renderCrumbs(A);renderSide();updateInfo();
+  paper.querySelectorAll(".body .txt,.memo").forEach(autosize);
   if(focusIdx!=null){const t=paper.querySelector(`.slot[data-idx="${focusIdx}"] .txt`);if(t){t.focus();t.setSelectionRange(t.value.length,t.value.length)}}
 }
+addEventListener("resize",()=>paper.querySelectorAll(".body .txt,.memo").forEach(autosize));
 // 一个格子的骨架：编号 + 文字
 function makeCell(idx,text){
   const slot=el("div","slot");slot.dataset.idx=idx;
@@ -423,58 +465,103 @@ function complete(it){
    ========================================================= */
 const findSop=id=>S.sops.find(s=>s.id===id);
 const activeRuns=sop=>sop.runs.filter(r=>!r.end);
-const doneRuns=sop=>sop.runs.filter(r=>r.end);
+const doneRuns=sop=>sop.runs.filter(r=>r.end).sort((a,b)=>a.end-b.end);
 const latestV=sop=>sop.versions[sop.versions.length-1];
 const nextVersion=sop=>sop.versions.find(v=>v.v===sop.useV)||latestV(sop);
-const plainSteps=run=>run.steps.map(s=>({text:s.text.trim(),times:s.times}));
-const baseSteps=(sop,run)=>{const v=sop.versions.find(x=>x.v===run.v);return v?v.steps:[]};
-const isChanged=(sop,run)=>JSON.stringify(plainSteps(run))!==JSON.stringify(baseSteps(sop,run));
+const plainSteps=steps=>steps.filter(s=>s.text.trim()).map(s=>({text:s.text.trim(),times:s.times}));
+const versionSteps=(sop,v)=>{const x=sop.versions.find(y=>y.v===v);return x?x.steps:[]};
+const isChanged=(sop,run)=>JSON.stringify(plainSteps(run.steps))!==JSON.stringify(versionSteps(sop,run.v));
 const isStepDone=s=>s.ticks>=s.times;
 const runLabel=r=>r.title.trim()||fmtDay(r.start)+" 开始";
+function addVersion(sop,steps){
+  const v={v:(latestV(sop)?latestV(sop).v:0)+1,at:now(),steps};
+  sop.versions.push(v);sop.useV=v.v;return v;
+}
 
-function curRun(){
-  if(S.view!=="sop"||!S.run)return null;
-  const sop=findSop(S.run.sop), run=sop&&sop.runs.find(r=>r.id===S.run.run&&!r.end);
-  if(!run){S.run=null;return null}
-  return {sop,run};
+// 当前在 SOP 里的哪个位置；位置失效就回到架子
+function curAt(){
+  const a=S.at;
+  if(S.view!=="sop"||!a)return null;
+  const sop=findSop(a.sop);
+  if(sop){
+    if(a.kind==="tpl"&&sop.draft)return {kind:"tpl",sop};
+    if(a.kind==="hist"&&!a.run)return {kind:"hist",sop};
+    const run=sop.runs.find(r=>r.id===a.run);
+    if(run&&(a.kind==="run")===!run.end)return {kind:a.kind,sop,run};
+  }
+  S.at=null;return null;
 }
-function openRun(sop,run){
+// 换位置都走这里：离开模板时，改过就存成新版本
+function go(at,focusIdx){
   commit();
-  S.view="sop";S.run={sop:sop.id,run:run.id};run.touched=now();save();
-  render(run.steps.length?null:0);
+  const A=curAt();
+  if(A&&A.kind==="tpl"&&!(at&&at.kind==="tpl"&&at.sop===A.sop.id)){
+    const v=closeTemplate(A.sop);
+    if(v)toast(`模板存为 v${v.v}`);
+  }
+  S.view="sop";S.at=at;save();render(focusIdx);
+  if(!at&&A)pulse(A.sop.id);
 }
+const toShelf=()=>go(null);
+
+/* ----- 模板 ----- */
+function openTemplate(sop){
+  if(!sop.draft){
+    const v=nextVersion(sop);
+    sop.draft=(v?v.steps:[]).map(s=>Object.assign(newStep(),s));
+    sop.draftFrom=v?v.v:0;
+  }
+  go({kind:"tpl",sop:sop.id},sop.draft.length?null:0);
+}
+function closeTemplate(sop){
+  const steps=plainSteps(sop.draft), base=versionSteps(sop,sop.draftFrom);
+  delete sop.draft;delete sop.draftFrom;
+  if(steps.length&&JSON.stringify(steps)!==JSON.stringify(base))return addVersion(sop,steps);
+  return null;
+}
+function renderTemplate({sop},focusIdx){
+  paper.dataset.depth=1;
+  for(let k=0;k<PER;k++){
+    const st=sop.draft[k];
+    const {slot,top,num,txt}=makeCell(k,st?st.text:"");
+    if(st){slot.dataset.id=st.id;if(st.times>1)top.append(el("span","times",`×${st.times}`))}
+    bindStep(num,txt,k,sop.draft,st,saveSoon);
+  }
+  pageParts=[sop.draftFrom?`基于 v${sop.draftFrom}`:"新的 SOP","改过的话，离开时存成新版本","Esc 回到 SOP"];
+}
+
+/* ----- 一轮 ----- */
+const openRun=(sop,run)=>{run.touched=now();go({kind:"run",sop:sop.id,run:run.id},run.steps.length?null:0)};
 function startRun(sop){
+  const A=curAt();
+  if(A&&A.kind==="tpl"&&A.sop===sop)closeTemplate(sop);   // 从模板直接开始：先把改动存成版本
   const v=nextVersion(sop);
   const run={id:uid(),title:"",note:"",v:v?v.v:0,start:now(),touched:now(),
-    steps:(v?v.steps:[]).map(s=>({id:uid(),text:s.text,times:s.times,ticks:0}))};
+    steps:(v?v.steps:[]).map(s=>Object.assign(newStep(),s))};
   sop.runs.push(run);openRun(sop,run);
 }
-// 点 SOP：进最近动过的那一轮，没有就开始新一轮
+// 点 SOP：有进行中的就进最近动过的那一轮；还没写过步骤就先写模板；否则开始新一轮
 function enterSop(sop){
   const r=activeRuns(sop).sort((a,b)=>b.touched-a.touched)[0];
-  r?openRun(sop,r):startRun(sop);
+  if(r)openRun(sop,r);else if(!nextVersion(sop))openTemplate(sop);else startRun(sop);
 }
-function leaveRun(){
-  if(!S.run)return;
-  commit();const id=S.run.sop;S.run=null;save();render();pulse(id);
-}
-function touch(run){run.touched=now();save();renderSide();const R=curRun();if(R)runInfo(R),updateInfo()}
+function touch(run){run.touched=now();save();renderSide();const A=curAt();if(A&&A.run===run){runInfo(A);updateInfo()}}
 
 // 结束一轮：finish 为真是完成，否则是放弃；keep 为真时把这一轮的步骤存成新版本
 function closeRun(sop,run,finish,keep){
   commit();
-  const i=S.sops.indexOf(sop), before=JSON.stringify(sop), loc=S.run;
-  if(keep){const v={v:(latestV(sop)?latestV(sop).v:0)+1,at:now(),steps:plainSteps(run)};sop.versions.push(v);sop.useV=v.v;run.v=v.v}
-  if(finish){run.end=now();delete run.steps;delete run.touched}
+  const i=S.sops.indexOf(sop), before=JSON.stringify(sop), at=S.at;
+  if(keep)run.v=addVersion(sop,plainSteps(run.steps)).v;
+  if(finish){run.end=now();delete run.touched}
   else sop.runs.splice(sop.runs.indexOf(run),1);
-  S.run=null;save();render();pulse(sop.id);
+  go(null);
   const vtxt=keep?`，步骤存为 v${latestV(sop).v}`:"";
   toast((finish?`完成了第 ${doneRuns(sop).length} 轮`:"已放弃这一轮")+vtxt,()=>{
-    S.sops[i]=normSops([JSON.parse(before)])[0];S.view="sop";S.run=loc;save();render();
+    S.sops[i]=normSops([JSON.parse(before)])[0];S.view="sop";S.at=at;save();render();
   });
 }
 function finishRun(sop,run){
-  if(!sop.versions.length)return closeRun(sop,run,true,run.steps.length>0);   // 第一轮完成时自动存为 v1
+  if(!sop.versions.length)return closeRun(sop,run,true,plainSteps(run.steps).length>0);   // 第一轮完成时自动存为 v1
   if(!isChanged(sop,run))return closeRun(sop,run,true,false);
   const n=latestV(sop).v+1;
   choose("这一轮改过步骤",[
@@ -482,7 +569,7 @@ function finishRun(sop,run){
     ["只用于这一轮",()=>closeRun(sop,run,true,false)]]);
 }
 function abandonRun(sop,run){
-  if(!run.steps.length||!isChanged(sop,run))return closeRun(sop,run,false,false);
+  if(!plainSteps(run.steps).length||!isChanged(sop,run))return closeRun(sop,run,false,false);
   const n=(latestV(sop)?latestV(sop).v:0)+1;
   choose("这一轮改过步骤",[
     [`保留改动，存成 v${n}`,()=>closeRun(sop,run,false,true)],
@@ -490,27 +577,28 @@ function abandonRun(sop,run){
 }
 
 /* ----- SOP 架子：一格一个 SOP ----- */
-function renderShelf(focusIdx){
+function renderShelf(){
   for(let k=0;k<PER;k++){
     const sop=S.sops[k];
     const {slot,top,num,txt}=makeCell(k,sop?sop.name:"");
     if(sop){
       slot.dataset.id=sop.id;
       const a=activeRuns(sop).length, d=doneRuns(sop).length;
-      top.append(subButton(a?`进行中 ${a}`:"开始",a?"继续最近的一轮":"开始新一轮",()=>enterSop(sop)));
-      if(d)slot.append(pile(d));
+      const [label,tip]=a?[`进行中 ${a}`,"继续最近的一轮"]:nextVersion(sop)?["开始","开始新一轮"]:["写步骤","先把步骤写下来"];
+      top.append(subButton(label,tip,()=>enterSop(sop)));
+      if(d)slot.append(pile(d,()=>go({kind:"hist",sop:sop.id})));
     }
     bindSop(num,txt,k,sop);
   }
-  pageParts=[S.sops.length?"":"在格子里写一个 SOP 的名字，比如「读一篇文献」，再点右上角开始"].filter(Boolean);
+  pageParts=S.sops.length?[]:["在格子里写一个 SOP 的名字，比如「读一篇文献」，再点右上角写步骤"];
 }
-// 纸堆：前几轮每轮明显多一张，之后越来越密，最多八张
-function pile(n){
+// 纸堆：前几轮每轮明显多一张，之后越来越密，最多八张。点一下看过去的轮次
+function pile(n,onClick){
   const layers=Math.min(8,n<=4?n:Math.round(4+Math.log2(n-3))), step=3, sh=[];
   for(let k=1;k<layers;k++){const o=k*step;sh.push(`${o}px ${-o}px 0 -1px var(--paper)`,`${o}px ${-o}px 0 0 var(--edge)`)}
   const foot=el("div","foot"), p=el("i","pile"), lab=el("span",null,`${n} 轮`);
   p.style.boxShadow=sh.join(",");lab.style.marginLeft=(10+(layers-1)*step)+"px";
-  foot.title=`已经完成 ${n} 轮`;foot.append(p,lab);return foot;
+  foot.title="看过去的轮次";foot.onclick=onClick;foot.append(p,lab);return foot;
 }
 function bindSop(num,txt,idx,sop){
   const orig=sop?sop.name:"";
@@ -531,29 +619,46 @@ function bindSop(num,txt,idx,sop){
   bindNum(num,idx,()=>S.sops,(s,to)=>move(S.sops,s,to));
 }
 
-/* ----- 跑一轮：一格一步，完成的步骤留在原位划掉 ----- */
-function renderRun(R,focusIdx){
-  const {run}=R;
+/* ----- 一轮的纸：一格一步，完成的步骤留在原位划掉；过去的轮次用同一个样子只读显示 ----- */
+function renderRun(A,focusIdx){
+  const {run}=A, live=A.kind==="run";
   paper.dataset.depth=1;
+  paper.classList.toggle("readonly",!live);
   for(let k=0;k<PER;k++){
     const st=run.steps[k];
     const {slot,num,txt}=makeCell(k,st?st.text:"");
-    if(st){slot.dataset.id=st.id;slot.append(dots(run,st,slot));paintStep(slot,st)}
-    bindStep(num,txt,k,run,st);
+    if(st){
+      slot.dataset.id=st.id;slot.classList.add("step");
+      const body=el("div","body"), wrap=el("div","memo-wrap"+(st.note.trim()?" has":"")), memo=el("textarea","memo");
+      memo.rows=1;memo.spellcheck=false;memo.value=st.note;memo.placeholder=live?"记录":"";memo.setAttribute("aria-label","第 "+(k+1)+" 步的记录");
+      wrap.append(memo);body.append(txt,wrap);slot.append(body,dots(run,st,slot,live));paintStep(slot,st);
+      if(live){
+        wrap.onclick=e=>{if(e.target===wrap)memo.focus()};
+        memo.addEventListener("input",()=>{st.note=memo.value;wrap.classList.toggle("has",!!memo.value.trim());autosize(memo);run.touched=now();saveSoon()});
+        txt.addEventListener("input",()=>autosize(txt));
+      }
+    }
+    if(live)bindStep(num,txt,k,run.steps,st,()=>{run.touched=now();saveSoon()});
+    else{txt.readOnly=true;num.readOnly=true;slot.querySelectorAll(".memo").forEach(m=>m.readOnly=true)}
   }
-  $("note").value=run.note;
-  runInfo(R);
+  runInfo(A);
 }
-function runInfo({sop,run}){
+function runInfo({kind,sop,run}){
   const n=run.steps.length, d=run.steps.filter(isStepDone).length;
+  if(kind!=="run"){
+    const no=doneRuns(sop).indexOf(run)+1;
+    pageParts=[`第 ${no} 轮`,run.v?`v${run.v}`:"",`${fmtTime(run.start)} 开始`,`${fmtTime(run.end)} 完成`,"Esc 返回"].filter(Boolean);
+    return;
+  }
   pageParts=[n?`${d}/${n} 步`:"在格子里写下第一步",run.v?`v${run.v}`+(isChanged(sop,run)?" 有改动":""):"第一版",
     fmtTime(run.start)+" 开始","Esc 回到 SOP"];
 }
-function dots(run,st,slot){
+function dots(run,st,slot,live){
   const row=el("div","dots");
   for(let i=0;i<st.times;i++){
     const b=el("button","dot");b.type="button";b.setAttribute("aria-label",`第 ${i+1} 次`);
-    b.onclick=()=>{st.ticks=st.ticks===i+1?i:i+1;paintStep(slot,st);touch(run)};
+    if(live)b.onclick=()=>{st.ticks=st.ticks===i+1?i:i+1;paintStep(slot,st);touch(run)};
+    else b.tabIndex=-1;
     row.append(b);
   }
   return row;
@@ -563,24 +668,45 @@ function paintStep(slot,st){
   slot.classList.toggle("done",isStepDone(st));
 }
 // ⌘/Ctrl + 回车：勾一次；已经勾满就撤回一次
-function tickNext(run,st){st.ticks=isStepDone(st)?st.times-1:st.ticks+1}
-function bindStep(num,txt,idx,run,st){
+function tickNext(st){st.ticks=isStepDone(st)?st.times-1:st.ticks+1}
+// 模板和一轮共用：一格一步，写字、清空删除、Tab、改编号
+function bindStep(num,txt,idx,steps,st,onEdit){
   const orig=st?st.text:"";
   txt.addEventListener("input",()=>{
-    if(!st){if(!txt.value.trim())return;st={id:uid(),text:"",times:1,ticks:0};run.steps.push(st)}
-    st.text=txt.value;run.touched=now();saveSoon();
+    if(!st){if(!txt.value.trim())return;st=newStep();steps.push(st)}
+    st.text=txt.value;onEdit();
   });
   txt.addEventListener("change",()=>{
     if(!st)return;
     const v=txt.value.trim();
     if(v){st.text=v;save();render();return}
-    const i=run.steps.indexOf(st);run.steps.splice(i,1);save();render();
-    if(orig)toast("已删掉这一步",()=>{st.text=orig;run.steps.splice(i,0,st);save();render()});
+    const i=steps.indexOf(st);steps.splice(i,1);save();render();
+    if(orig)toast("已删掉这一步",()=>{st.text=orig;steps.splice(i,0,st);save();render()});
   });
   bindTab(txt,idx,false);
-  bindNum(num,idx,()=>run.steps,(s,to)=>move(run.steps,s,to));
+  bindNum(num,idx,()=>steps,(s,to)=>move(steps,s,to));
 }
-$("note").addEventListener("input",()=>{const R=curRun();if(R){R.run.note=$("note").value;R.run.touched=now();saveSoon()}});
+$("note").addEventListener("input",()=>{const A=curAt();if(A&&A.kind==="run"){A.run.note=$("note").value;A.run.touched=now();saveSoon()}});
+
+/* ----- 过去的轮次 ----- */
+function renderPast({sop}){
+  paper.className="paper list";
+  const runs=doneRuns(sop).slice().reverse();
+  if(!runs.length)paper.append(el("p","h-empty","还没有完成过的轮次。"));
+  runs.forEach(r=>{
+    const b=el("button","past");b.type="button";
+    const meta=el("div","pm");
+    meta.append(el("b",null,`第 ${doneRuns(sop).indexOf(r)+1} 轮`));
+    if(r.title.trim())meta.append(el("span",null,r.title.trim()));
+    meta.append(el("span",null,fmtDay(r.end)));
+    if(r.v)meta.append(el("span",null,`v${r.v}`));
+    b.append(meta);
+    if(r.note.trim())b.append(el("p","pn",r.note.trim()));
+    b.onclick=()=>go({kind:"hist",sop:sop.id,run:r.id});
+    paper.append(b);
+  });
+  pageParts=[`${runs.length} 轮`,"Esc 回到 SOP"];
+}
 
 /* ----- 收获页 ----- */
 function renderHarvest(){
@@ -606,12 +732,12 @@ function switchView(v){
   commit();
   if(v===S.view){
     if(v==="paper"&&S.path.length)return goUp(0);
-    if(v==="sop"&&S.run)return leaveRun();
+    if(v==="sop"&&S.at)return toShelf();
     return;
   }
   S.view=v;save();render();
 }
-function renderCrumbs(R){
+function renderCrumbs(A){
   const c=$("crumbs");c.textContent="";
   const sw=el("div","switch");
   [["paper","纸"],["sop","SOP"],["harvest","收获"]].forEach(([v,label])=>{
@@ -619,16 +745,24 @@ function renderCrumbs(R){
   });
   c.append(sw);
   const sep=()=>c.append(el("span","sep","/"));
+  const link=(label,fn)=>{const b=el("button",null,label);b.onclick=fn;c.append(b)};
   if(S.view==="paper"){
     L.chain.forEach((it,d)=>{
       sep();
       if(d===L.chain.length-1)c.append(el("span","here",title(it)));
-      else{const b=el("button",null,title(it));b.onclick=()=>goUp(d+1);c.append(b)}
+      else link(title(it),()=>goUp(d+1));
     });
-  }else if(R){
-    sep();const b=el("button",null,R.sop.name);b.onclick=leaveRun;c.append(b);sep();
-    const t=el("input","title");t.value=R.run.title;t.placeholder="这一轮是关于什么（可以不写）";t.spellcheck=false;
-    t.addEventListener("input",()=>{R.run.title=t.value;R.run.touched=now();saveSoon();renderSide()});
+    return;
+  }
+  if(!A)return;
+  sep();link(A.sop.name,toShelf);sep();
+  if(A.kind==="tpl")c.append(el("span","here","模板"));
+  else if(A.kind==="hist"){
+    if(!A.run)c.append(el("span","here","过去的轮次"));
+    else{link("过去的轮次",()=>go({kind:"hist",sop:A.sop.id}));sep();c.append(el("span","here",runLabel(A.run)))}
+  }else{
+    const t=el("input","title");t.value=A.run.title;t.placeholder="这一轮是关于什么（可以不写）";t.spellcheck=false;
+    t.addEventListener("input",()=>{A.run.title=t.value;A.run.touched=now();saveSoon();renderSide()});
     t.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();t.blur()}});
     c.append(t);
   }
@@ -637,7 +771,7 @@ function renderSide(){
   const runs=[];
   S.sops.forEach(s=>activeRuns(s).forEach(r=>runs.push({s,r})));
   runs.sort((a,b)=>b.r.touched-a.r.touched);
-  const side=$("side"), list=$("sideList"), here=S.view==="sop"&&S.run?S.run.run:null;
+  const side=$("side"), list=$("sideList"), here=S.view==="sop"&&S.at&&S.at.kind==="run"?S.at.run:null;
   side.hidden=!runs.length;
   side.classList.toggle("closed",!S.side);
   $("sideBtn").textContent=`进行中 ${runs.length}`;
@@ -657,6 +791,7 @@ $("sideBtn").onclick=()=>{S.side=!S.side;save();renderSide()};
 function setFont(v){
   S.font=Math.min(FS_MAX,Math.max(FS_MIN,v));
   document.documentElement.style.setProperty("--fs",S.font+"px");save();
+  paper.querySelectorAll(".body .txt,.memo").forEach(autosize);
 }
 
 /* =========================================================
@@ -667,7 +802,13 @@ const menu=$("menu");
 function menuItems(slot){
   const idx=slot?+slot.dataset.idx:null, has=!!(slot&&slot.dataset.id), items=[];
   if(S.view==="paper")paperMenu(items,has,idx);
-  else if(S.view==="sop"){const R=curRun();R?runMenu(items,R,has,idx):shelfMenu(items,has,idx)}
+  else if(S.view==="sop"){
+    const A=curAt();
+    if(!A)shelfMenu(items,has,idx);
+    else if(A.kind==="tpl")stepMenu(items,A.sop.draft,has?A.sop.draft[idx]:null,idx,saveSoon),templateMenu(items,A.sop);
+    else if(A.kind==="run")runMenu(items,A,has,idx);
+    else items.push([A.run?"回到过去的轮次":"回到 SOP",()=>A.run?go({kind:"hist",sop:A.sop.id}):toShelf(),"Esc"]);
+  }
   items.push("-",{stepper:{label:"字号",get:()=>S.font,set:setFont,def:FS_DEF}});
   items.push("-",["保存",()=>saveFile(false),MOD+"S"],["另存为…",()=>saveFile(true),MOD+"⇧S"],["打开文件…",openFile,MOD+"O"]);
   return items;
@@ -705,14 +846,15 @@ function paperMenu(items,has,idx){
 function shelfMenu(items,has,idx){
   const sop=has?S.sops[idx]:null;
   if(!sop)return;
-  const a=activeRuns(sop).length;
-  items.push([a?"继续最近的一轮":"开始一轮",()=>enterSop(sop)]);
-  if(a)items.push(["再开一轮",()=>startRun(sop)]);
-  if(sop.versions.length){
-    const use=nextVersion(sop).v;
+  const a=activeRuns(sop).length, d=doneRuns(sop).length, v=nextVersion(sop);
+  if(a)items.push(["继续最近的一轮",()=>enterSop(sop)]);
+  if(v)items.push([a?"再开一轮":"开始一轮",()=>startRun(sop)]);
+  items.push(["编辑模板",()=>openTemplate(sop)]);
+  if(d)items.push([`过去的轮次（${d}）`,()=>go({kind:"hist",sop:sop.id})]);
+  if(sop.versions.length>1){
     items.push("-",{head:"下一轮用的版本"});
-    sop.versions.slice().reverse().slice(0,8).forEach(v=>items.push([`v${v.v}  ${fmtTime(v.at)}`,
-      ()=>{sop.useV=v.v;save();toast(`下一轮用 v${v.v}`)},v.v===use?"✓":""]));
+    sop.versions.slice().reverse().slice(0,8).forEach(x=>items.push([`v${x.v}  ${fmtTime(x.at)}`,
+      ()=>{sop.useV=x.v;save();toast(`下一轮用 v${x.v}`)},x.v===v.v?"✓":""]));
   }
   items.push("-",["删除这个 SOP",()=>{
     if(!confirm(`删除「${sop.name}」？它的 ${sop.runs.length} 轮记录和收获会一起删掉。`))return;
@@ -720,21 +862,29 @@ function shelfMenu(items,has,idx){
     toast("已删除",()=>{S.sops.splice(i,0,sop);save();render()});
   }]);
 }
+// 一步的通用菜单：次数、插入、删除（模板和一轮都用）
+function stepMenu(items,steps,st,idx,onEdit){
+  if(!st)return;
+  items.push({stepper:{label:"次数",get:()=>st.times,def:1,
+    set:v=>{st.times=clampTimes(v);st.ticks=Math.min(st.ticks,st.times);onEdit();save();render()}}});
+  items.push(["在前面插入一步",()=>{steps.splice(idx,0,newStep());onEdit();save();render(idx)}]);
+  items.push(["删除这一步",()=>{const i=steps.indexOf(st);steps.splice(i,1);onEdit();save();render();
+    toast("已删掉这一步",()=>{steps.splice(i,0,st);save();render()})}]);
+  items.push("-");
+}
+function templateMenu(items,sop){
+  items.push(["开始一轮",()=>startRun(sop),"",!plainSteps(sop.draft).length]);
+  items.push(["回到 SOP",toShelf,"Esc"]);
+}
 function runMenu(items,{sop,run},has,idx){
   const st=has?run.steps[idx]:null;
   if(st){
-    const slot=()=>paper.querySelector(`.slot[data-id="${st.id}"]`);
-    items.push([isStepDone(st)?"撤回一次":"勾一次",()=>{tickNext(run,st);const s=slot();if(s)paintStep(s,st);touch(run)},MOD+"↵"]);
-    items.push({stepper:{label:"次数",get:()=>st.times,def:1,
-      set:v=>{st.times=clampTimes(v);st.ticks=Math.min(st.ticks,st.times);touch(run);render()}}});
-    items.push(["在前面插入一步",()=>{run.steps.splice(idx,0,{id:uid(),text:"",times:1,ticks:0});touch(run);render(idx)}]);
-    items.push(["删除这一步",()=>{const i=run.steps.indexOf(st);run.steps.splice(i,1);touch(run);render();
-      toast("已删掉这一步",()=>{run.steps.splice(i,0,st);touch(run);render()})}]);
-    items.push("-");
+    items.push([isStepDone(st)?"撤回一次":"勾一次",()=>{tickNext(st);const s=paper.querySelector(`.slot[data-id="${st.id}"]`);if(s)paintStep(s,st);touch(run)},MOD+"↵"]);
+    stepMenu(items,run.steps,st,idx,()=>{run.touched=now()});
   }
   items.push(["完成这一轮",()=>finishRun(sop,run)]);
   items.push(["放弃这一轮",()=>abandonRun(sop,run)]);
-  items.push(["回到 SOP",leaveRun,"Esc"]);
+  items.push(["回到 SOP",toShelf,"Esc"]);
 }
 
 function showMenu(x,y,items){
@@ -790,14 +940,18 @@ addEventListener("scroll",closeMenu,{passive:true});addEventListener("resize",cl
    键盘
    ========================================================= */
 document.addEventListener("keydown",e=>{
-  const tg=e.target, editing=/^(TEXTAREA|INPUT)$/.test(tg.tagName);
+  const tg=e.target, editing=/^(TEXTAREA|INPUT)$/.test(tg.tagName)&&!tg.readOnly;
   if(e.key==="Escape"){
     if(menu.classList.contains("on"))return closeMenu();
     if(editing)return tg.blur();                                     // 第一下：退出编辑
     if(S.view==="paper"){
       if(S.mode==="done"){S.mode="open";S.page=0;save();render()}
       else if(S.path.length)goUp(S.path.length-1);                   // 再按：回上一层
-    }else if(S.view==="sop"&&S.run)leaveRun();
+    }else if(S.view==="sop"){
+      const A=curAt();
+      if(A&&A.kind==="hist"&&A.run)go({kind:"hist",sop:A.sop.id});
+      else if(A)toShelf();
+    }
     return;
   }
   const mod=e.metaKey||e.ctrlKey, k=(e.key||"").toLowerCase();
@@ -809,10 +963,9 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Enter"&&mod){
     const slot=tg.closest&&tg.closest(".slot");
     if(!slot||!slot.dataset.id)return;
-    e.preventDefault();
-    const idx=+slot.dataset.idx, R=curRun();
-    if(S.view==="paper"&&S.mode==="open"){const it=openList()[idx];if(it)complete(it)}
-    else if(R){const st=R.run.steps[idx];if(st){tickNext(R.run,st);paintStep(slot,st);touch(R.run)}}
+    const idx=+slot.dataset.idx, A=curAt();
+    if(S.view==="paper"&&S.mode==="open"){e.preventDefault();const it=openList()[idx];if(it)complete(it)}
+    else if(A&&A.kind==="run"){e.preventDefault();const st=A.run.steps[idx];if(st){tickNext(st);paintStep(slot,st);touch(A.run)}}
   }
 });
 
@@ -827,7 +980,7 @@ function markSaved(name){
   try{localStorage.setItem(KEY+":snap",savedSnap);localStorage.setItem(KEY+":fname",fileName)}catch(e){}
   updateInfo();
 }
-const fileData=()=>JSON.stringify({app:"paper20",v:3,at:new Date().toISOString(),items:S.items,sops:S.sops},null,2);
+const fileData=()=>JSON.stringify({app:"paper20",v:4,at:new Date().toISOString(),items:S.items,sops:S.sops},null,2);
 
 // 用 IndexedDB 记住文件句柄
 const idb=(mode,fn)=>new Promise((res,rej)=>{const r=indexedDB.open("paper20",1);
@@ -844,7 +997,7 @@ async function writeTo(h){
   const w=await h.createWritable();await w.write(fileData());await w.close();
 }
 async function autoWrite(){
-  try{if(fileHandle&&isDirty()&&await hasPerm(fileHandle)){const w=await fileHandle.createWritable();await w.write(fileData());await w.close();markSaved(fileHandle.name)}}catch(e){}
+  try{if(fileHandle&&isDirty()&&await hasPerm(fileHandle)){await writeTo(fileHandle);markSaved(fileHandle.name)}}catch(e){}
 }
 // 每次打开页面，第一次点击或按键时请求写入权限（浏览器规定必须由用户操作触发）
 async function askPerm(){
@@ -892,7 +1045,7 @@ function loadData(text){
     if(!items&&Array.isArray(d.tasks))items=d.tasks.map(t=>({text:t.title,done:t.done,doneAt:t.doneAt}));
     if(!items&&!Array.isArray(d.sops))throw 0;
     S.items=normItems(items);S.sops=normSops(d.sops);
-    S.path=[];S.page=0;S.mode="open";S.run=null;save();render();return true;
+    S.path=[];S.page=0;S.mode="open";S.at=null;save();render();return true;
   }catch(err){toast("这个文件不是这页纸的数据");return false}
 }
 function download(blob,name){
