@@ -1648,6 +1648,8 @@ function kvPut(k,v){return new Promise(async r=>{
     tx.oncomplete=()=>r(1);tx.onerror=()=>r(0);tx.onabort=()=>r(0);
   }catch(e){r(0)}
 })}
+// gcImages: IDB 이미지 정리 함수 (현재 자동 호출 없음, 필요시 수동으로만 실행)
+// 자동 호출 시 로드 타이밍에 따라 필요한 이미지까지 삭제되는 버그가 있어 비활성화
 async function gcImages(){
   // 收集所有卡片（当前+撤销/重做栈）引用的图片哈希
   const used=new Set();
@@ -1903,7 +1905,6 @@ async function writeFileNow(quiet){
     lastWriteMs=performance.now()-t0;
     fileOK=true;fileErr="";fileState();
     if(!quiet){toast(t("savedTo")+" "+fileName);pushRecent(fileHandle,fileName)}
-    gcImages().catch(()=>{});   // 后台清理孤立图片，不阻塞当前写回流程
     return true;
   }catch(e){
     fileOK=false;
