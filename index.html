@@ -755,6 +755,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   cutoutBlocked:"The browser blocked the new tab. Open cutout.html by hand.",
   tilerTool:"Tiling tool",tilerHint:"Split a large image or PDF into A4 sheets, then print them",
   tilerBlocked:"The browser blocked the new tab. Open Tiler.html by hand.",
+  toolbox:"Toolbox",toolboxHead:"Open tool in a new tab",
+  gridPaperTool:"Grid paper",gridPaperHint:"Grid paper for handwriting and sketching",gridPaperBlocked:"The browser blocked the new tab. Open 纸.html by hand.",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   bibShow:"Show what is filed under this entry",
@@ -953,6 +955,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   cutoutBlocked:"新标签被浏览器拦住了，请手动打开 cutout.html",
   tilerTool:"拼版工具",tilerHint:"把大图或 PDF 切成 A4 分页，拼好直接打印",
   tilerBlocked:"新标签被浏览器拦住了，请手动打开 Tiler.html",
+  toolbox:"工具箱",toolboxHead:"在新标签页里打开",
+  gridPaperTool:"格纸",gridPaperHint:"手写与草图用的格纸",gridPaperBlocked:"新标签被浏览器拦住了，请手动打开 纸.html",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   bibShow:"显示归在这条文献下的原文",
@@ -1980,10 +1984,9 @@ function newWindow(){window.open(location.pathname+"?w="+uid(),"_blank")}
 // index.html 仍然可以脱离 cutout.html 独立运行：拿不到就只是打不开那个标签页，
 // 画布本身一切照旧，所以这里不做任何存在性检查（file:// 上也检查不了）。
 function openCutout(){openSideTool("cutout.html","cutoutHint","cutoutBlocked")}
-// 拼版工具（Tiler.html）同理：也是独立的一份单文件，board 只留一个入口。
-// 两个工具都只是"链接过去"，不是把代码搬进来：以后单独更新 Tiler.html 或 cutout.html
-// 传上 GitHub，board 这边一行都不用动，刷新就是新的。
 function openTiler(){openSideTool("Tiler.html","tilerHint","tilerBlocked")}
+function openGridPaper(){openSideTool("纸.html","gridPaperHint","gridPaperBlocked")}
+// 格纸工具同理——三个工具都只是链接过去，代码互不干扰。
 // 每次都带一个时间戳参数，避开浏览器缓存，刚传上去的新版本刷新就能看到
 function openSideTool(file,hintKey,blockKey){
   const u=new URL(file,location.href);
@@ -10125,8 +10128,10 @@ function fileItems(x,y){
 function boardMenu(x,y){
   menuAt(x,y,[
     {label:t("insertImage"),on:()=>$("imgfile").click()},
-    {label:t("cutoutTool"),on:openCutout},
-    {label:t("tilerTool"),on:openTiler},
+    {label:t("toolbox"),sub:[{head:t("toolboxHead")},
+      {label:t("cutoutTool"),on:openCutout},
+      {label:t("tilerTool"),on:openTiler},
+      {label:t("gridPaperTool"),on:openGridPaper}]},
     {label:t("importPDF"),on:()=>$("pdffile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("insertTable"),sub:[{head:t("tbSize")},

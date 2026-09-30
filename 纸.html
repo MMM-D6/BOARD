@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>纸</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#EAEAE7; --paper:#FBFBF8; --ink:#1A1A1A; --mute:rgba(26,26,26,.42); --rule:rgba(26,26,26,.11);
+    --acc:#2D6CDF; --glass:rgba(250,250,248,.86); --glassline:rgba(26,26,26,.10);
+    --urgent:#C0392B; --fear:#7A4FB5; --bore:#8A7A3A;
+    --sans:"IBM Plex Sans","PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font:400 15px/1.5 var(--sans)}
+  body{display:flex;flex-direction:column;padding:max(16px,env(safe-area-inset-top)) 16px max(10px,env(safe-area-inset-bottom));
+    -webkit-tap-highlight-color:transparent}
+  input,textarea{font:inherit;color:inherit}
+
+  /* 一张纸，5 × 4 的格子铺满 */
+  .paper{flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));grid-template-rows:repeat(4,minmax(0,1fr));
+    gap:1px;background:var(--rule);border:1px solid var(--rule);border-radius:3px;overflow:hidden;
+    box-shadow:0 1px 2px rgba(0,0,0,.05),0 10px 30px rgba(0,0,0,.07)}
+
+  .slot{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--paper);padding:8px 10px 10px}
+  .slot:focus-within{box-shadow:inset 0 0 0 1.5px var(--acc);z-index:1}
+  .top{display:flex;align-items:center;justify-content:space-between;height:22px;flex:none}
+  .num{width:44px;margin-left:-4px;padding:1px 4px;border:none;border-radius:4px;background:none;
+    font:500 12px var(--mono);color:var(--mute)}
+  .num:focus{outline:none;background:#fff;color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
+  .mark{font-size:12px}
+  .mark[data-v="急"]{color:var(--urgent)} .mark[data-v="怕"]{color:var(--fear)} .mark[data-v="烦"]{color:var(--bore)}
+  .txt{flex:1;min-height:0;width:100%;margin-top:4px;padding:0;border:none;background:none;outline:none;resize:none;
+    font-size:15px;line-height:1.55;overflow:auto;scrollbar-width:thin}
+
+  .slot.empty .num{opacity:.4}
+  .slot.hang{background:#F4F4F0}
+  .slot.hang .txt{color:var(--mute);font-style:italic}
+  .slot.leaving .txt{text-decoration:line-through;color:var(--mute);transition:color .2s}
+  .slot.moved{animation:moved .9s ease-out}
+  @keyframes moved{from{background:#DCE7FA}to{background:var(--paper)}}
+
+  .done-mode .slot{background:#F3F3EF}
+  .done-mode .txt{color:var(--mute);text-decoration:line-through;text-decoration-color:rgba(26,26,26,.25)}
+
+  .pageinfo{flex:none;height:22px;padding:5px 2px 0;text-align:right;font:400 11px var(--mono);color:var(--mute);user-select:none}
+
+  /* 右键菜单 */
+  #menu{position:fixed;z-index:20;min-width:176px;padding:4px;border-radius:9px;display:none;
+    background:var(--glass);border:1px solid var(--glassline);
+    backdrop-filter:blur(12px) saturate(1.3);-webkit-backdrop-filter:blur(12px) saturate(1.3);
+    box-shadow:0 8px 28px rgba(0,0,0,.14)}
+  #menu.on{display:block}
+  #menu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:18px;height:28px;padding:0 10px;
+    border:none;border-radius:6px;background:none;cursor:pointer;font:400 13px var(--sans);color:var(--ink);text-align:left}
+  #menu button:hover:not(:disabled),#menu button:focus-visible{background:var(--ink);color:var(--paper);outline:none}
+  #menu button:disabled{opacity:.32;cursor:default}
+  #menu kbd{font:400 11px var(--mono);opacity:.55}
+  #menu hr{border:none;height:1px;background:var(--glassline);margin:4px 6px}
+  #menu .tags{display:flex;gap:2px;padding:2px 4px}
+  #menu .tags button{justify-content:center;width:auto;flex:1;padding:0}
+
+  #toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom,0px));transform:translate(-50%,8px);
+    display:flex;gap:12px;align-items:center;padding:8px 13px;border-radius:8px;background:var(--ink);color:var(--paper);
+    font-size:13px;opacity:0;pointer-events:none;transition:opacity .18s,transform .18s;z-index:30}
+  #toast.on{opacity:1;transform:translate(-50%,0);pointer-events:auto}
+  #toast button{border:none;background:none;color:#8FB3FF;cursor:pointer;font:500 13px var(--sans);padding:0}
+
+  /* 手机竖屏太窄，改成两列往下滚，还是 20 格 */
+  @media (max-width:640px){
+    html,body{height:auto}
+    .paper{flex:none;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:150px}
+  }
+  @media (prefers-reduced-motion:reduce){.slot.moved{animation:none}#toast{transition:none}}
+</style>
+</head>
+<body>
+<div class="paper" id="paper"></div>
+<div class="pageinfo" id="info"></div>
+<div id="menu" role="menu"></div>
+<div id="toast"><span id="toastMsg"></span><button id="toastUndo">撤销</button></div>
+<input type="file" id="file" accept=".json,application/json" hidden>
+
+<script>
+(()=>{
+const KEY="paper20-v1", PER=20, TAGS=["急","怕","烦"];
+const $=id=>document.getElementById(id);
+const MOD=/Mac|iPhone|iPad/.test(navigator.platform||navigator.userAgent)?"⌘":"Ctrl+";
+
+const uid=()=>Math.random().toString(36).slice(2,9)+Date.now().toString(36);
+
+/* ---------- 数据 ---------- */
+// items 的顺序就是格子的顺序；已完成的留在数组里但不占格子
+let S={items:[],page:0,mode:"open",hint:true};
+try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+if(!S.items.length){
+  // 如果之前用过「硬骨头」版本，把未完成的任务搬过来
+  try{const old=JSON.parse(localStorage.getItem("hardbones-v1")||"null");
+    if(old&&Array.isArray(old.tasks)){
+      old.tasks.slice().sort((a,b)=>((+a.pri)||1e9)-((+b.pri)||1e9)).forEach(t=>{
+        if(typeof t.title==="string")S.items.push({id:uid(),text:t.title,tag:TAGS.includes(t.tag)?t.tag:"",hang:t.stat==="悬挂",done:!!t.done,doneAt:t.doneAt})});
+    }}catch(e){}
+}
+if(!S.items.length){
+  S.items=[{id:uid(),text:"Practice-based 结构部分：检查时态",tag:"急",hang:false,done:false},
+           {id:uid(),text:"给导师发邮件约 meeting",tag:"",hang:true,done:false}];
+}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast("没能存进浏览器，请用右键「保存」存到文件")}};
+const openList=()=>S.items.filter(i=>!i.done);
+const doneList=()=>S.items.filter(i=>i.done).sort((a,b)=>(b.doneAt||0)-(a.doneAt||0));
+
+/* ---------- 画纸 ---------- */
+let pageParts=[];
+function updateInfo(){
+  const f=[];
+  if(typeof fileName!=="undefined"&&fileName)f.push(fileName+(isDirty()?"  有改动未保存":"  已保存"));
+  $("info").textContent=[...pageParts,...f].join("    ");
+}
+const paper=$("paper");
+function render(focusIdx){
+  const list=S.mode==="done"?doneList():openList();
+  const maxPage=Math.max(0,Math.floor((S.mode==="done"?list.length-1:list.length)/PER));
+  S.page=Math.min(Math.max(0,S.page),maxPage);
+  document.body.classList.toggle("done-mode",S.mode==="done");
+  paper.textContent="";
+  const start=S.page*PER;
+  for(let k=0;k<PER;k++){
+    const idx=start+k, it=list[idx];
+    const slot=document.createElement("div");slot.className="slot";slot.dataset.idx=idx;
+    const num=document.createElement("input");num.className="num";num.inputMode="numeric";num.value=idx+1;
+    num.setAttribute("aria-label","编号");
+    const txt=document.createElement("textarea");txt.className="txt";txt.spellcheck=false;txt.setAttribute("aria-label","第 "+(idx+1)+" 格");
+    const mark=document.createElement("span");mark.className="mark";
+    if(it){
+      slot.dataset.id=it.id;txt.value=it.text;if(!it.text)slot.classList.add("empty");
+      if(it.hang)slot.classList.add("hang");
+      if(it.tag){mark.textContent=it.tag;mark.dataset.v=it.tag}
+    }else slot.classList.add("empty");
+    if(S.mode==="done"){txt.readOnly=true;num.readOnly=true;num.value=it?"✓":"";}
+    else bindSlot(slot,num,txt,idx);
+    const top=document.createElement("div");top.className="top";top.append(num,mark);
+    slot.append(top,txt);paper.append(slot);
+  }
+  const total=list.length, parts=[];
+  if(S.mode==="done")parts.push(`已完成 ${total} 条，第 ${S.page+1} 页，Esc 返回`);
+  else if(total>PER||S.page>0)parts.push(`第 ${start+1} 到 ${start+PER} 格，共 ${total} 格`);
+  if(S.hint)parts.push("右键打开菜单");
+  pageParts=parts;updateInfo();
+  if(focusIdx!=null){const s=paper.querySelector(`.slot[data-idx="${focusIdx}"] .txt`);if(s){s.focus();s.setSelectionRange(s.value.length,s.value.length)}}
+}
+
+function bindSlot(slot,num,txt,idx){
+  // 文字
+  txt.addEventListener("change",()=>{
+    const v=txt.value.trim(), list=openList(), it=list[idx];
+    if(it){ if(v){it.text=v}else{ /* 清空就删掉，后面的往上补 */ const t=it;removeItem(t);save();render();toast("已清空这一格",()=>{insertAtOpen(t,idx);save();render()});return } }
+    else if(v){ S.items.push({id:uid(),text:v,tag:"",hang:false,done:false}); }
+    save();render();
+  });
+  txt.addEventListener("keydown",e=>{
+    // 回车跳到下一格，Shift + 回车在格子里换行
+    if(e.key==="Enter"&&!e.shiftKey&&!e.metaKey&&!e.ctrlKey&&!e.isComposing){e.preventDefault();txt.blur();
+      // 写到这一页最后一格，按回车自动翻到下一页继续写
+      if(idx+1>=S.page*PER+PER&&openList().length>idx){S.page++;save()}
+      render(idx+1);}
+  });
+  // 编号：改数字就把这一格挪到那个位置
+  num.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();num.blur()}if(e.key==="Escape"){num.value=idx+1;num.blur()}});
+  num.addEventListener("focus",()=>num.select());
+  num.addEventListener("blur",()=>{
+    const list=openList(), it=list[idx];
+    const n=parseInt(num.value,10);
+    if(!it||isNaN(n)||n===idx+1){num.value=idx+1;return}
+    const to=Math.min(Math.max(n,1),list.length)-1;
+    moveTo(it,to);
+    S.page=Math.floor(to/PER);save();render();pulse(it.id);
+    if(to!==n-1)toast(`挪到了最后，第 ${to+1} 格`);
+  });
+}
+function focusSlot(i){const s=paper.querySelector(`.slot[data-idx="${i}"] .txt`);if(s)s.focus()}
+function pulse(id){const s=paper.querySelector(`.slot[data-id="${id}"]`);if(s){s.classList.remove("moved");void s.offsetWidth;s.classList.add("moved")}}
+
+// 把某一项挪到未完成列表里的第 to 个位置
+function moveTo(it,to){
+  S.items.splice(S.items.indexOf(it),1);
+  insertAtOpen(it,to);
+}
+function insertAtOpen(it,to){
+  const open=openList();
+  if(to>=open.length){S.items.push(it);return}
+  S.items.splice(S.items.indexOf(open[to]),0,it);
+}
+function removeItem(it){const i=S.items.indexOf(it);if(i>-1)S.items.splice(i,1)}
+
+/* ---------- 右键菜单 ---------- */
+const menu=$("menu");
+let target=null; // 当前右键的那一格对应的任务
+function openMenu(x,y,slot){
+  const idx=slot?+slot.dataset.idx:null;
+  const list=S.mode==="done"?doneList():openList();
+  target=slot&&slot.dataset.id?list[idx]:null;
+  const open=openList(), done=doneList();
+  const lastPage=Math.floor((S.mode==="done"?list.length-1:list.length)/PER);
+  const items=[];
+  if(S.mode==="done"){
+    if(target)items.push(["放回清单最前",()=>{target.done=false;delete target.doneAt;moveTo(target,0);save();render();toast("放回了第 1 格")}],
+                         ["彻底删除",()=>{const t=target,i=S.items.indexOf(t);removeItem(t);save();render();toast("已删除",()=>{S.items.splice(i,0,t);save();render()})}],"-");
+    items.push(["回到清单",()=>{S.mode="open";S.page=0;save();render()},"Esc"]);
+    if(done.length)items.push(["清理全部已完成",()=>{if(!confirm(`删除 ${done.length} 条已完成？建议先备份。`))return;S.items=S.items.filter(i=>!i.done);S.mode="open";S.page=0;save();render()}]);
+  }else{
+    if(target){
+      const t=target;
+      items.push(["完成",()=>complete(t,idx),MOD+"↵"]);
+      items.push([t.hang?"取消悬挂":"悬挂",()=>{t.hang=!t.hang;save();render()}]);
+      items.push({tags:t});
+      items.push(["移到第 1 格",()=>{moveTo(t,0);S.page=0;save();render();pulse(t.id)}]);
+      items.push(["在前面空出一格",()=>{const n={id:uid(),text:"",tag:"",hang:false,done:false};insertAtOpen(n,idx);save();render(idx)}]);
+      items.push(["删除",()=>{const i=S.items.indexOf(t);removeItem(t);save();render();toast("已删除",()=>{S.items.splice(i,0,t);save();render()})}]);
+      items.push("-");
+    }
+    items.push(["上一页",()=>{S.page--;save();render()},"PgUp",S.page<=0]);
+    items.push(["下一页",()=>{S.page++;save();render()},"PgDn",S.page>=lastPage]);
+    items.push([`看已完成（${done.length}）`,()=>{S.mode="done";S.page=0;save();render()},"",!done.length]);
+    items.push("-");
+    items.push(["复制清单",copyList]);
+    items.push(["导出 PDF",exportPDF]);
+  }
+  items.push("-",["保存",()=>saveFile(false),MOD+"S"],["另存为…",()=>saveFile(true),MOD+"⇧S"],["打开文件…",openFile,MOD+"O"]);
+  if(S.mode==="done")items.push(["导出已完成为 PDF",exportPDF]);
+  menu.textContent="";
+  items.forEach(m=>{
+    if(m==="-"){menu.append(document.createElement("hr"));return}
+    if(m.tags){const row=document.createElement("div");row.className="tags";
+      ["急","怕","烦","无"].forEach(v=>{const b=document.createElement("button");b.textContent=v;
+        const cur=(m.tags.tag||"无")===v;if(cur)b.style.fontWeight="600";
+        if(v!=="无")b.style.color=getComputedStyle(document.documentElement).getPropertyValue(v==="急"?"--urgent":v==="怕"?"--fear":"--bore");
+        b.onclick=()=>{m.tags.tag=v==="无"?"":v;save();render();closeMenu()};row.append(b)});
+      menu.append(row);return}
+    const [label,fn,key,dis]=m;
+    const b=document.createElement("button");b.setAttribute("role","menuitem");
+    const s=document.createElement("span");s.textContent=label;b.append(s);
+    if(key){const k=document.createElement("kbd");k.textContent=key;b.append(k)}
+    b.disabled=!!dis;b.onclick=()=>{closeMenu();fn()};menu.append(b);
+  });
+  menu.classList.add("on");
+  const w=menu.offsetWidth,h=menu.offsetHeight;
+  menu.style.left=Math.max(6,Math.min(x,innerWidth-w-6))+"px";
+  menu.style.top=Math.max(6,Math.min(y,innerHeight-h-6))+"px";
+  if(S.hint){S.hint=false;save();pageParts=pageParts.filter(x=>x!=="右键打开菜单");updateInfo()}
+}
+function closeMenu(){menu.classList.remove("on")}
+
+document.addEventListener("contextmenu",e=>{
+  if(e.target.closest("#menu"))return;
+  e.preventDefault();
+  if(document.activeElement&&document.activeElement.blur)document.activeElement.blur();
+  openMenu(e.clientX,e.clientY,e.target.closest(".slot"));
+});
+// 手机长按
+let lp;
+document.addEventListener("touchstart",e=>{const t=e.touches[0];const tg=e.target;
+  lp=setTimeout(()=>{openMenu(t.clientX,t.clientY,tg.closest&&tg.closest(".slot"))},560)},{passive:true});
+["touchend","touchmove","touchcancel"].forEach(ev=>document.addEventListener(ev,()=>clearTimeout(lp),{passive:true}));
+document.addEventListener("pointerdown",e=>{if(!e.target.closest("#menu"))closeMenu()});
+addEventListener("scroll",closeMenu,{passive:true});addEventListener("resize",closeMenu);
+
+document.addEventListener("keydown",e=>{
+  if(e.key==="Escape"){if(menu.classList.contains("on"))closeMenu();else if(S.mode==="done"){S.mode="open";S.page=0;save();render()}}
+  const mod=e.metaKey||e.ctrlKey, k=(e.key||"").toLowerCase();
+  if(mod&&k==="s"){e.preventDefault();if(document.activeElement)document.activeElement.blur();saveFile(e.shiftKey);return}
+  if(mod&&k==="o"){e.preventDefault();openFile();return}
+  if(e.key==="PageDown"){e.preventDefault();S.page++;save();render()}
+  if(e.key==="PageUp"){e.preventDefault();S.page--;save();render()}
+  // ⌘/Ctrl + Enter 完成当前格
+  if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)&&S.mode==="open"){
+    const slot=document.activeElement&&document.activeElement.closest&&document.activeElement.closest(".slot");
+    if(slot&&slot.dataset.id){e.preventDefault();const idx=+slot.dataset.idx;const it=openList()[idx];
+      const tx=slot.querySelector(".txt");if(it&&tx.value.trim())it.text=tx.value.trim();complete(it,idx)}}
+});
+
+/* ---------- 完成 ---------- */
+function complete(it,idx){
+  const slot=paper.querySelector(`.slot[data-id="${it.id}"]`);
+  if(slot)slot.classList.add("leaving");
+  setTimeout(()=>{
+    const pos=openList().indexOf(it);
+    it.done=true;it.doneAt=Date.now();save();render();
+    toast("划掉了一格",()=>{it.done=false;delete it.doneAt;moveTo(it,pos);save();render();pulse(it.id)});
+  },260);
+}
+
+/* ---------- 复制 ---------- */
+async function copyList(){
+  const txt=openList().map((i,k)=>`${k+1}. ${i.tag?`[${i.tag}] `:""}${i.text}${i.hang?"（悬挂）":""}`).join("\n")||"（空）";
+  try{await navigator.clipboard.writeText(txt);toast("清单已复制")}catch(e){toast("浏览器不允许访问剪贴板")}
+}
+
+/* ---------- 保存到本地文件 ----------
+   Chrome / Edge：第一次选好位置后，之后 Ctrl+S 直接写回同一个文件，刷新页面也记得是哪个文件。
+   Safari / Firefox：不支持写回，每次保存会下载一个新的 .json。 */
+const CAN_FS=!!window.showSaveFilePicker;
+let fileHandle=null, fileName=localStorage.getItem(KEY+":fname")||"";
+let savedSnap=localStorage.getItem(KEY+":snap")||"";
+const snap=()=>JSON.stringify(S.items);
+const isDirty=()=>snap()!==savedSnap;
+function markSaved(name){savedSnap=snap();fileName=name||fileName;
+  try{localStorage.setItem(KEY+":snap",savedSnap);localStorage.setItem(KEY+":fname",fileName)}catch(e){}
+  updateInfo()}
+const fileData=()=>JSON.stringify({app:"paper20",v:1,at:new Date().toISOString(),items:S.items},null,2);
+const today=()=>{const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")};
+
+// 用 IndexedDB 记住文件句柄
+const idb=(mode,fn)=>new Promise((res,rej)=>{const r=indexedDB.open("paper20",1);
+  r.onupgradeneeded=()=>r.result.createObjectStore("kv");
+  r.onerror=()=>rej(r.error);
+  r.onsuccess=()=>{const tx=r.result.transaction("kv",mode);const q=fn(tx.objectStore("kv"));
+    tx.oncomplete=()=>res(q&&q.result);tx.onerror=()=>rej(tx.error)}});
+const rememberHandle=h=>idb("readwrite",s=>s.put(h,"handle")).catch(()=>{});
+if(CAN_FS)idb("readonly",s=>s.get("handle")).then(h=>{if(h){fileHandle=h;fileName=h.name;updateInfo()}}).catch(()=>{});
+
+async function writeTo(h){
+  if(h.queryPermission&&(await h.queryPermission({mode:"readwrite"}))!=="granted"){
+    if((await h.requestPermission({mode:"readwrite"}))!=="granted")throw new Error("perm");
+  }
+  const w=await h.createWritable();await w.write(fileData());await w.close();
+}
+async function saveFile(saveAs){
+  try{
+    if(CAN_FS){
+      if(!fileHandle||saveAs){
+        fileHandle=await showSaveFilePicker({suggestedName:fileName||`纸-${today()}.json`,
+          types:[{description:"纸的数据",accept:{"application/json":[".json"]}}]});
+        rememberHandle(fileHandle);
+      }
+      await writeTo(fileHandle);markSaved(fileHandle.name);toast("已保存到 "+fileHandle.name);
+    }else{
+      const name=`纸-${today()}.json`;download(new Blob([fileData()],{type:"application/json"}),name);
+      markSaved(name);toast("已下载 "+name);
+    }
+  }catch(e){
+    if(e&&e.name==="AbortError")return;
+    toast(e&&e.message==="perm"?"没有得到写入权限，换个位置另存为试试":"保存失败，试试「另存为」");
+  }
+}
+async function openFile(){
+  if(isDirty()&&S.items.some(i=>i.text)&&!confirm("现在的改动还没保存到文件，确定打开别的文件吗？"))return;
+  if(CAN_FS&&window.showOpenFilePicker){
+    try{const [h]=await showOpenFilePicker({types:[{description:"纸的数据",accept:{"application/json":[".json"]}}]});
+      const ok=loadData(await (await h.getFile()).text());
+      if(ok){fileHandle=h;rememberHandle(h);markSaved(h.name);toast("已打开 "+h.name)}
+    }catch(e){if(!e||e.name!=="AbortError")toast("打不开这个文件")}
+  }else $("file").click();
+}
+$("file").onchange=async e=>{
+  const f=e.target.files[0];e.target.value="";if(!f)return;
+  if(loadData(await f.text())){markSaved(f.name);toast("已打开 "+f.name)}
+};
+function loadData(text){
+  try{const d=JSON.parse(text);
+    let items=Array.isArray(d.items)?d.items:null;
+    if(!items&&Array.isArray(d.tasks))items=d.tasks.map(t=>({text:t.title,tag:t.tag,hang:t.stat==="悬挂",done:t.done,doneAt:t.doneAt}));
+    if(!items)throw 0;
+    S.items=items.filter(i=>i&&typeof i.text==="string").map(i=>({id:String(i.id||uid()),text:i.text,
+      tag:TAGS.includes(i.tag)?i.tag:"",hang:!!i.hang,done:!!i.done,doneAt:i.doneAt}));
+    S.page=0;S.mode="open";save();render();return true;
+  }catch(err){toast("这个文件不是这页纸的数据");return false}
+}
+function download(blob,name){
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=name;
+  document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+
+/* ---------- 导出 PDF：一张 A4 竖放，上下各一页 20 格 ---------- */
+async function exportPDF(){
+  toast("正在生成 PDF…");
+  try{await document.fonts.ready}catch(e){}
+  const list=S.mode==="done"?doneList():openList();
+  const pages=Math.max(1,Math.ceil(list.length/PER));
+  const sheets=Math.ceil(pages/2);
+  const DPI=200, PX=DPI/25.4;                       // 每毫米多少像素
+  const W=Math.round(210*PX), H=Math.round(297*PX);
+  const M=12*PX, GAP=10*PX, LBL=6*PX;               // 页边、上下两块之间的空、每块上方的小字
+  const gw=W-2*M, gh=(H-2*M-GAP)/2-LBL;
+  const cw=gw/5, ch=gh/4;
+  const SANS='"IBM Plex Sans","PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif';
+  const MONO='"IBM Plex Mono",Consolas,monospace';
+  const tagColor={"急":"#C0392B","怕":"#7A4FB5","烦":"#8A7A3A"};
+  const jpegs=[];
+  const cv=document.createElement("canvas");cv.width=W;cv.height=H;const g=cv.getContext("2d");
+
+  for(let s=0;s<sheets;s++){
+    g.fillStyle="#fff";g.fillRect(0,0,W,H);
+    for(let half=0;half<2;half++){
+      const p=s*2+half;                              // 第几页格子（从 0 开始）
+      const ox=M, oy=M+half*(gh+LBL+GAP)+LBL;
+      // 小字：第几格到第几格
+      g.fillStyle="rgba(26,26,26,.45)";g.font=`400 ${2.6*PX}px ${MONO}`;g.textBaseline="bottom";
+      g.textAlign="left";g.fillText(`第 ${p*PER+1} 到 ${p*PER+PER} 格`,ox,oy-1.4*PX);
+      if(half===0){g.textAlign="right";g.fillText(today()+(S.mode==="done"?"  已完成":""),ox+gw,oy-1.4*PX)}
+      // 格子线
+      g.strokeStyle="rgba(26,26,26,.28)";g.lineWidth=Math.max(1,.25*PX);
+      g.strokeRect(ox,oy,gw,gh);
+      g.beginPath();
+      for(let c=1;c<5;c++){g.moveTo(ox+c*cw,oy);g.lineTo(ox+c*cw,oy+gh)}
+      for(let r=1;r<4;r++){g.moveTo(ox,oy+r*ch);g.lineTo(ox+gw,oy+r*ch)}
+      g.stroke();
+      // 每一格
+      for(let k=0;k<PER;k++){
+        const idx=p*PER+k, it=list[idx];
+        const x=ox+(k%5)*cw, y=oy+Math.floor(k/5)*ch, pad=2.4*PX;
+        if(it&&it.hang){g.fillStyle="#F2F2EE";g.fillRect(x+1,y+1,cw-2,ch-2)}
+        g.textBaseline="top";g.textAlign="left";
+        g.fillStyle=it?"rgba(26,26,26,.5)":"rgba(26,26,26,.25)";g.font=`500 ${2.5*PX}px ${MONO}`;
+        g.fillText(String(idx+1),x+pad,y+pad);
+        if(!it)continue;
+        if(it.tag){g.textAlign="right";g.fillStyle=tagColor[it.tag];g.font=`400 ${2.6*PX}px ${SANS}`;
+          g.fillText(it.tag,x+cw-pad,y+pad);g.textAlign="left"}
+        const fs=3.3*PX, lh=fs*1.45;
+        g.font=`${it.hang?"italic ":""}400 ${fs}px ${SANS}`;
+        g.fillStyle=it.hang||S.mode==="done"?"rgba(26,26,26,.5)":"#1A1A1A";
+        const lines=wrap(g,it.text,cw-2*pad);
+        const maxL=Math.floor((ch-pad*2-4.2*PX)/lh);
+        lines.slice(0,maxL).forEach((ln,i)=>{
+          let t=ln;
+          if(i===maxL-1&&lines.length>maxL){while(t&&g.measureText(t+"…").width>cw-2*pad)t=t.slice(0,-1);t+="…"}
+          g.fillText(t,x+pad,y+pad+4.2*PX+i*lh);
+        });
+      }
+    }
+    const url=cv.toDataURL("image/jpeg",0.92);
+    jpegs.push(Uint8Array.from(atob(url.split(",")[1]),c=>c.charCodeAt(0)));
+  }
+  download(new Blob([buildPDF(jpegs,W,H)],{type:"application/pdf"}),`纸-${today()}${S.mode==="done"?"-已完成":""}.pdf`);
+  toast(`已导出 ${sheets} 张 A4`);
+}
+// 按宽度折行：中文逐字断，英文尽量整词断，保留原来的换行
+function wrap(g,text,maxW){
+  const out=[];
+  for(const para of String(text).split("\n")){
+    const tokens=para.match(/[A-Za-z0-9'’\-.,:;!?()]+\s*|\s+|./gu)||[""];
+    let line="";
+    for(const tk of tokens){
+      if(g.measureText(line+tk).width<=maxW){line+=tk;continue}
+      if(line.trim())out.push(line.trimEnd());
+      line="";
+      if(g.measureText(tk).width>maxW){ // 超长的词硬断
+        for(const ch of tk){if(g.measureText(line+ch).width>maxW){out.push(line);line=""}line+=ch}
+      }else line=tk.trimStart();
+    }
+    out.push(line.trimEnd());
+  }
+  return out;
+}
+// 最小 PDF：每页一张 JPEG 铺满 A4
+function buildPDF(jpegs,pw,ph){
+  const enc=new TextEncoder(), parts=[], offs=[];let len=0;
+  const put=x=>{const b=typeof x==="string"?enc.encode(x):x;parts.push(b);len+=b.length};
+  const n=jpegs.length, A4W=595.28, A4H=841.89;
+  put("%PDF-1.4\n%\xE2\xE3\xCF\xD3\n");
+  const obj=(id,body)=>{offs[id]=len;put(`${id} 0 obj\n`);body();put("\nendobj\n")};
+  obj(1,()=>put("<< /Type /Catalog /Pages 2 0 R >>"));
+  const kids=[];for(let i=0;i<n;i++)kids.push(`${3+i*3} 0 R`);
+  obj(2,()=>put(`<< /Type /Pages /Count ${n} /Kids [${kids.join(" ")}] >>`));
+  jpegs.forEach((jpg,i)=>{
+    const pid=3+i*3, cid=pid+1, iid=pid+2;
+    obj(pid,()=>put(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${A4W} ${A4H}] /Resources << /XObject << /Im0 ${iid} 0 R >> >> /Contents ${cid} 0 R >>`));
+    const cs=`q ${A4W} 0 0 ${A4H} 0 0 cm /Im0 Do Q`;
+    obj(cid,()=>put(`<< /Length ${cs.length} >>\nstream\n${cs}\nendstream`));
+    obj(iid,()=>{put(`<< /Type /XObject /Subtype /Image /Width ${pw} /Height ${ph} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpg.length} >>\nstream\n`);put(jpg);put("\nendstream")});
+  });
+  const total=3+n*3, xref=len;
+  let x=`xref\n0 ${total}\n0000000000 65535 f \n`;
+  for(let i=1;i<total;i++)x+=String(offs[i]).padStart(10,"0")+" 00000 n \n";
+  put(x+`trailer\n<< /Size ${total} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`);
+  const out=new Uint8Array(len);let o=0;for(const p of parts){out.set(p,o);o+=p.length}
+  return out;
+}
+
+/* ---------- 提示条 ---------- */
+let tt,undoFn;
+function toast(msg,undo){
+  $("toastMsg").textContent=msg;undoFn=undo;$("toastUndo").style.display=undo?"":"none";
+  $("toast").classList.add("on");clearTimeout(tt);tt=setTimeout(()=>$("toast").classList.remove("on"),undo?5000:2000);
+}
+$("toastUndo").onclick=()=>{if(undoFn)undoFn();undoFn=null;$("toast").classList.remove("on")};
+
+render();
+})();
+</script>
+</body>
+</html>

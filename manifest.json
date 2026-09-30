@@ -32,6 +32,19 @@
           "type": "image/png"
         }
       ]
+    },
+    {
+      "name": "Grid paper",
+      "short_name": "纸",
+      "description": "Grid paper for handwriting and sketching",
+      "url": "./纸.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ],
   "icons": [

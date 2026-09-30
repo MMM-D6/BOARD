@@ -5846,68 +5846,64 @@ group("static 静态检查", async (c) => {
    抠图工具（cutout.html）
    ===================================================================== */
 
-group("cutoutlink 外部工具的入口", async (c) => {
-  // 抠图与拼版都是各自独立的单文件，board 这边只是多一个"在新标签里打开它"的入口：
-  // 以后单独更新这两个文件传上去，board 一行都不用改，刷新就是新的。
+group("toolbox 工具箱入口", async (c) => {
+  // 三个工具（抠图、拼版、格纸）都是各自独立的单文件，board 通过工具箱子菜单链接过去
   await c.board([], []);
   const r = await c.run(() => {
     const real = window.open;
-    let url = null;
-    window.open = (u) => { url = u; return { closed: false }; };   // 别真的开标签页
+    let urlCut = null, urlTile = null, urlGrid = null;
     boardMenu(60, 60);
-    const labels = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
-    const hit = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("cutoutTool")));
-    if (hit) hit.click();
-    window.open = real;
+    const topLabels = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    // hover 子菜单
+    const tbItem = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("toolbox")));
+    if (tbItem) tbItem.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    const clickTool = (key, setter) => {
+      const item = [...document.querySelectorAll("#menu .mi, #menu .sub .mi, #menu button")].find(
+        (z) => z.textContent.includes(t(key)));
+      if (!item) return;
+      window.open = (u) => { setter(u); return { closed: false }; };
+      item.click();
+      window.open = real;
+    };
+    clickTool("cutoutTool",   (u) => { urlCut  = u; });
+    clickTool("tilerTool",    (u) => { urlTile = u; });
+    clickTool("gridPaperTool",(u) => { urlGrid = u; });
     closeMenus();
-    let url2 = null;
-    window.open = (u) => { url2 = u; return { closed: false }; };
-    boardMenu(60, 60);
-    const hit2 = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("tilerTool")));
-    if (hit2) hit2.click();
-    window.open = real;
-    closeMenus();
-    return { labels, url, url2, imgAt: labels.findIndex((z) => z.includes(t("insertImage"))),
-      cutAt: labels.findIndex((z) => z.includes(t("cutoutTool"))),
-      tileAt: labels.findIndex((z) => z.includes(t("tilerTool"))),
-      // board 自己不许把这两个工具搬进来：既没有它们的界面，也没有 iframe 之类的嵌入
+    return { topLabels,
+      tbInTop: topLabels.some((z) => z.includes(t("toolbox"))),
+      cutNotTop: !topLabels.some((z) => z.includes(t("cutoutTool"))),
+      urlCut, urlTile, urlGrid,
       inline: !!document.querySelector("iframe,embed,object") ||
         /id="(ndx|nudge|libs)"/.test(document.documentElement.innerHTML) };
   });
-  c.ok("画布右键菜单里有抠图工具", r.cutAt >= 0);
-  c.ok("board 只是链接过去，没有把这两个工具的代码搬进来", !r.inline);
-  c.ok("就放在插入图片旁边", r.cutAt === r.imgAt + 1);
-  c.ok("指向同目录的 cutout.html", !!r.url && /\/cutout\.html(\?|$)/.test(r.url));
-  c.ok("菜单里有拼版工具，就跟在抠图后面", r.tileAt === r.cutAt + 1);
-  c.ok("指向同目录的 Tiler.html", !!r.url2 && /\/Tiler\.html(\?|$)/.test(r.url2));
-  c.ok("都是绝对地址，子目录部署也找得到", r.url.startsWith("file://") && r.url2.startsWith("file://"));
-  c.ok("中英文案都齐了", await c.run(() => ["cutoutTool", "cutoutHint", "cutoutBlocked",
-    "tilerTool", "tilerHint", "tilerBlocked"].every((k) => T.en[k] && T.zh[k])));
-  // 部署在网上时给地址带个时间戳，刚传上去的新版本刷新就能看到；本地 file:// 不加，免得多此一举
+  c.ok("工具箱作为子菜单出现在顶层", r.tbInTop);
+  c.ok("三个工具不再各自散落在顶层菜单", r.cutNotTop);
+  c.ok("board 只是链接过去，没有把工具代码搬进来", !r.inline);
+  c.ok("子菜单里能开抠图工具", !!r.urlCut && /cutout\.html/.test(r.urlCut));
+  c.ok("子菜单里能开拼版工具", !!r.urlTile && /Tiler\.html/.test(r.urlTile));
+  c.ok("子菜单里能开格纸工具", !!r.urlGrid && /纸\.html/.test(r.urlGrid));
+  c.ok("都是绝对地址", !!(r.urlCut && r.urlCut.startsWith("file://")));
+  c.ok("中英文案都齐了", await c.run(() => [
+    "cutoutTool","cutoutHint","cutoutBlocked","tilerTool","tilerHint","tilerBlocked",
+    "gridPaperTool","gridPaperHint","gridPaperBlocked","toolbox","toolboxHead",
+  ].every((k) => T.en[k] && T.zh[k])));
   const bust = await c.run(() => {
     const real = window.open; let u = null;
     window.open = (x) => { u = x; return { closed: false }; };
-    openTiler();
-    const local = u;
-    const src = openSideTool.toString();
-    window.open = real;
-    return { local, stamps: /searchParams\.set\("v"/.test(src) && /location\.protocol!=="file:"/.test(src) };
+    openGridPaper(); window.open = real;
+    return { local: u, stamps: /searchParams\.set\("v"/.test(openSideTool.toString()) };
   });
-  c.ok("本地打开时地址干干净净", /Tiler\.html$/.test(bust.local));
-  c.ok("部署到网上时带时间戳，避开缓存", bust.stamps);
-  c.ok("index 挂着 manifest", await c.run(() =>
-    !!document.querySelector('link[rel="manifest"]')));
-
-  // 装成桌面应用之后，图标右键/长按的快捷方式里也要有一条抠图。
-  // manifest 在 file:// 上 fetch 不到，直接把这一页打开读文本即可。
+  c.ok("本地打开格纸时地址干干净净", /纸\.html$/.test(bust.local));
+  c.ok("部署到网上时带时间戳", bust.stamps);
+  c.ok("index 挂着 manifest", await c.run(() => !!document.querySelector('link[rel="manifest"]')));
   await c.page.goto("file://" + require("path").resolve(__dirname, "manifest.json"));
   const mf = JSON.parse(await c.run(() => document.body.innerText));
-  c.ok("manifest 里有抠图与拼版两条快捷方式",
+  c.ok("manifest 里有三条快捷方式（抠图、拼版、格纸）",
     Array.isArray(mf.shortcuts) && mf.shortcuts.some((z) => /cutout\.html$/.test(z.url || "")) &&
-    mf.shortcuts.some((z) => /Tiler\.html$/.test(z.url || "")));
-  c.ok("快捷方式落在 scope 之内", mf.scope === "./" && /^\.\//.test(mf.shortcuts[0].url));
-  c.ok("图标与主应用共用，不必再多两个文件",
-    mf.shortcuts.every((s) => s.icons.every((z) => mf.icons.some((m) => m.src === z.src))));
+    mf.shortcuts.some((z) => /Tiler\.html$/.test(z.url || "")) &&
+    mf.shortcuts.some((z) => /纸\.html$/.test(z.url || "")));
+  c.ok("快捷方式落在 scope 之内", mf.scope === "./" && mf.shortcuts.every((s) => /^\.\/./.test(s.url)));
+  c.ok("图标与主应用共用", mf.shortcuts.every((s) => s.icons.every((z) => mf.icons.some((m) => m.src === z.src))));
 });
 
 group("tiler 拼版工具", async (c) => {
