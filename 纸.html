@@ -9,7 +9,7 @@
 <style>
   :root{
     --bg:#EAEAE7; --paper:#FBFBF8; --ink:#1A1A1A; --mute:rgba(26,26,26,.42); --rule:rgba(26,26,26,.11); --edge:rgba(26,26,26,.28);
-    --acc:#2D6CDF; --mind:#9C4A2C; --mindbg:#F7EEE8; --glass:rgba(250,250,248,.86); --glassline:rgba(26,26,26,.10);
+    --acc:#2D6CDF; --mind:#1D4E89; --mindbg:#E9F4FF; --glass:rgba(250,250,248,.86); --glassline:rgba(26,26,26,.10);
     --fs:15px;
     --sans:"IBM Plex Sans","PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
     --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
@@ -45,17 +45,30 @@
   .paper[data-depth="2"]{box-shadow:0 1px 2px rgba(0,0,0,.05),0 10px 30px rgba(0,0,0,.07),
     4px 4px 0 -1px var(--paper),4px 4px 0 0 var(--rule),8px 8px 0 -1px var(--paper),8px 8px 0 0 var(--rule)}
 
-  .slot{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--paper);padding:8px 10px 10px}
+  /* 文字铺满整格；编号和圆点浮在上面，文字在顶部和底部渐渐淡出 */
+  .slot{position:relative;display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--paper);--fadeT:30px;--fadeB:14px}
+  .slot.step{--fadeB:36px}
+  .slot:has(.foot){--fadeB:48px}
+  .slot.mind{--fadeT:14px}
   .slot:focus-within{box-shadow:inset 0 0 0 1.5px var(--acc);z-index:1}
-  .top{display:flex;align-items:center;justify-content:space-between;height:22px;flex:none}
+  .top{position:absolute;z-index:2;top:6px;left:8px;right:8px;display:flex;align-items:center;justify-content:space-between;height:22px;pointer-events:none}
+  .top>*{pointer-events:auto}
+  .slot.mind .num{visibility:hidden}
   .num{width:44px;margin-left:-4px;padding:1px 4px;border:none;border-radius:4px;background:none;
     font:500 12px var(--mono);color:var(--mute)}
   .num:focus{outline:none;background:#fff;color:var(--acc);box-shadow:0 0 0 1px var(--acc)}
   .sub{height:18px;padding:0 6px;border:1px solid var(--rule);border-radius:4px;background:none;cursor:pointer;
     font:500 11px var(--mono);color:var(--mute);white-space:nowrap}
   .sub:hover,.sub:focus-visible{color:var(--acc);border-color:var(--acc);outline:none}
-  .txt{flex:1;min-height:0;width:100%;margin-top:4px;padding:0;border:none;background:none;outline:none;resize:none;
-    font-size:var(--fs);line-height:1.55;overflow:auto;scrollbar-width:thin}
+.txt{flex:1;min-height:0;width:100%;padding:var(--fadeT) 12px var(--fadeB) 10px;border:none;background:none;outline:none;resize:none;
+    font-size:var(--fs);line-height:1.55;overflow:auto}
+  .txt,.body{scrollbar-width:thin;scrollbar-color:rgba(26,26,26,.14) transparent;
+    -webkit-mask-image:linear-gradient(transparent 0,#000 var(--fadeT),#000 calc(100% - var(--fadeB)),transparent 100%);
+    mask-image:linear-gradient(transparent 0,#000 var(--fadeT),#000 calc(100% - var(--fadeB)),transparent 100%)}
+  .slot.mind .txt{scrollbar-color:rgba(29,78,137,.2) transparent}
+  .txt::-webkit-scrollbar,.body::-webkit-scrollbar{width:6px}
+  .txt::-webkit-scrollbar-thumb,.body::-webkit-scrollbar-thumb{background:rgba(26,26,26,.14);border-radius:9px}
+  .slot.mind .txt::-webkit-scrollbar-thumb{background:rgba(29,78,137,.2)}
 
   .slot.empty .num{opacity:.4}
   .slot.leaving .txt,.slot.done .txt{text-decoration:line-through;text-decoration-color:rgba(26,26,26,.45);color:var(--mute);transition:color .2s}
@@ -65,18 +78,21 @@
   .done-mode .txt{color:var(--mute);text-decoration:line-through;text-decoration-color:rgba(26,26,26,.25)}
 
   /* SOP 步骤：要做几次就有几个圈，点一下填上 */
-  .dots{flex:none;display:flex;flex-wrap:wrap;gap:7px;padding-top:6px}
-  .dot{width:15px;height:15px;padding:0;border-radius:50%;border:1.5px solid var(--edge);background:transparent;cursor:pointer;
-    transition:background-color .18s,border-color .18s,box-shadow .18s,transform .12s}
-  .dot:hover{border-color:var(--acc)}
-  .dot:active{transform:scale(.82)}
-  .dot:focus-visible{outline:none;border-color:var(--acc)}
-  .dot.on{background:var(--ink);border-color:var(--ink);box-shadow:inset 0 0 0 2.5px var(--paper)}
-  .slot.done .dot.on{background:var(--mute);border-color:var(--mute)}
+  .dots{position:absolute;z-index:2;left:10px;right:10px;bottom:9px;display:flex;flex-wrap:wrap;gap:7px}
+/* 圆点：半透明的小按钮，有一点立体；勾上后像被按下去，变成雾蓝色 */
+  .dot{width:13px;height:13px;padding:0;border-radius:50%;cursor:pointer;
+    border:1px solid rgba(26,26,26,.13);background:rgba(255,255,255,.55);
+    box-shadow:0 1px 2px rgba(0,0,0,.10),inset 0 1px 0 rgba(255,255,255,.9);
+    transition:transform .18s,background-color .2s,border-color .2s,box-shadow .2s}
+  .dot:hover{transform:scale(1.15) translateY(-.5px);box-shadow:0 2px 4px rgba(0,0,0,.12),inset 0 1px 0 rgba(255,255,255,.9)}
+  .dot:active{transform:scale(.9)}
+  .dot:focus-visible{outline:none;border-color:rgba(127,168,217,.9)}
+  .dot.on{background:rgba(127,168,217,.72);border-color:rgba(98,140,194,.45);box-shadow:inset 0 1px 2px rgba(29,78,137,.28),0 .5px 0 rgba(255,255,255,.8)}
+  .slot.done .dot.on{background:rgba(127,168,217,.5)}
 
   /* 一轮里的步骤格：步骤文字、虚线下的记录，一起在格子里滑动 */
-  .body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto;scrollbar-width:thin;margin-top:4px}
-  .body .txt{flex:none;margin-top:0;overflow:hidden}
+  .body{flex:1;min-height:0;display:flex;flex-direction:column;overflow:auto;padding:var(--fadeT) 12px var(--fadeB) 10px}
+  .body .txt{flex:none;padding:0;overflow:hidden;-webkit-mask-image:none;mask-image:none}
   .memo-wrap{flex:1;display:flex;flex-direction:column;margin-top:8px;padding-top:6px;border-top:1px dashed var(--edge);cursor:text}
   .memo{flex:none;width:100%;padding:0;border:none;background:none;outline:none;resize:none;overflow:hidden;
     font-size:calc(var(--fs) * .84);line-height:1.55;color:rgba(26,26,26,.62)}
@@ -85,9 +101,8 @@
   .times{font:400 11px var(--mono);color:var(--mute)}
   .readonly .memo-wrap:not(.has){display:none}
   .readonly .dot{cursor:default}
-  .readonly .dot:hover{border-color:var(--edge)}
-  .readonly .dot.on:hover{border-color:var(--ink)}
-
+  .readonly .dot:hover{transform:none}
+  
   /* 过去的轮次列表 */
   .paper.list{display:block;overflow:auto;background:var(--paper);padding:8px 18px}
   .past{display:block;width:100%;max-width:74ch;padding:14px 12px;border:none;border-bottom:1px solid var(--rule);background:none;
@@ -98,7 +113,7 @@
   .past .pn{margin:6px 0 0;font-size:var(--fs);line-height:1.6;white-space:pre-wrap}
 
   /* SOP 架子上每一格底部的纸堆 */
-  .foot{flex:none;display:flex;align-items:flex-end;height:44px}
+  .foot{position:absolute;z-index:2;left:10px;bottom:9px;display:flex;align-items:flex-end;height:40px}
   .pile{flex:none;width:28px;height:20px;cursor:pointer;border:1px solid var(--edge);border-radius:1.5px;background:var(--paper)}
   .foot{cursor:pointer}
   .foot span{font:400 11px var(--mono);color:var(--mute);line-height:1}
@@ -113,8 +128,7 @@
   /* Mindset：任何一格都可以设成，换一个颜色 */
   .slot.mind{background:var(--mindbg)}
   .slot.mind .txt{color:var(--mind)}
-  .slot.mind .num{color:rgba(156,74,44,.55)}
-
+  
   /* 长按拖动 */
   body.dragging,body.dragging *{user-select:none!important;cursor:grabbing!important}
   .slot.lift{z-index:8;pointer-events:none;box-shadow:0 14px 34px rgba(0,0,0,.2),0 0 0 1.5px var(--acc);transition:box-shadow .15s}
@@ -397,9 +411,12 @@ function render(focusIdx){
 }
 addEventListener("resize",()=>paper.querySelectorAll(".body .txt,.memo").forEach(autosize));
 // 一个格子的骨架：编号 + 文字
-function makeCell(idx,text){
+// 编号跳过 Mindset 格：第 idx 格显示的编号，以及编号 n 对应第几格
+function labelAt(list,idx){const k=Math.min(idx,list.length);return realSteps(list.slice(0,k)).length+(idx-k)+1}
+function idxOfLabel(list,n){let c=0;for(let i=0;i<list.length;i++){if(!list[i].mindset&&++c===n)return i}return list.length-1}
+function makeCell(idx,text,list){
   const slot=el("div","slot");slot.dataset.idx=idx;
-  const num=el("input","num");num.inputMode="numeric";num.value=idx+1;num.setAttribute("aria-label","编号");
+  const num=el("input","num");num.inputMode="numeric";num.value=num.dataset.label=labelAt(list,idx);num.setAttribute("aria-label","编号");
   const txt=el("textarea","txt");txt.spellcheck=false;txt.value=text||"";txt.setAttribute("aria-label","第 "+(idx+1)+" 格");
   const top=el("div","top");top.append(num);
   slot.append(top,txt);paper.append(slot);
@@ -429,14 +446,15 @@ function bindTab(txt,idx,paged){
 }
 // 改编号就把这一格挪到那个位置
 function bindNum(num,idx,getList,moveIt){
-  num.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();num.blur()}if(e.key==="Escape"){num.value=idx+1;num.blur()}});
+  const lab=+num.dataset.label;
+  num.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();num.blur()}if(e.key==="Escape"){num.value=lab;num.blur()}});
   num.addEventListener("focus",()=>num.select());
   num.addEventListener("blur",()=>{
     const list=getList(), it=list[idx], n=parseInt(num.value,10);
-    if(!it||isNaN(n)||n===idx+1){num.value=idx+1;return}
-    const to=Math.min(Math.max(n,1),list.length)-1;
+    if(!it||isNaN(n)||n===lab){num.value=lab;return}
+    const to=idxOfLabel(list,Math.max(n,1));
     moveIt(it,to);save();render();pulse(it.id);
-    if(to!==n-1)toast(`挪到了最后，第 ${to+1} 格`);
+    if(n>realSteps(list).length)toast("挪到了最后");
   });
 }
 
@@ -473,7 +491,7 @@ function renderPaper(focusIdx){
   const start=S.page*PER;
   for(let k=0;k<PER;k++){
     const idx=start+k, it=list[idx];
-    const {slot,top,num,txt}=makeCell(idx,it?it.text:"");
+    const {slot,top,num,txt}=makeCell(idx,it?it.text:"",list);
     if(it){
       slot.dataset.id=it.id;
       if(it.mindset)slot.classList.add("mind");
@@ -609,7 +627,7 @@ function renderTemplate({sop},focusIdx){
   paper.dataset.depth=1;
   for(let k=0;k<PER;k++){
     const st=sop.draft[k];
-    const {slot,top,num,txt}=makeCell(k,st?st.text:"");
+    const {slot,top,num,txt}=makeCell(k,st?st.text:"",sop.draft);
     if(st){slot.dataset.id=st.id;if(st.times>1)top.append(el("span","times",`×${st.times}`))}
     bindStep(num,txt,k,sop.draft,st,saveSoon);
   }
@@ -666,7 +684,7 @@ function abandonRun(sop,run){
 function renderShelf(){
   for(let k=0;k<PER;k++){
     const sop=S.sops[k];
-    const {slot,top,num,txt}=makeCell(k,sop?sop.name:"");
+    const {slot,top,num,txt}=makeCell(k,sop?sop.name:"",S.sops);
     if(sop){
       slot.dataset.id=sop.id;
       const a=activeRuns(sop).length, d=doneRuns(sop).length;
@@ -712,7 +730,7 @@ function renderRun(A,focusIdx){
   paper.classList.toggle("readonly",!live);
   for(let k=0;k<PER;k++){
     const st=run.steps[k];
-    const {slot,num,txt}=makeCell(k,st?st.text:"");
+    const {slot,num,txt}=makeCell(k,st?st.text:"",run.steps);
     if(st&&st.mindset){slot.dataset.id=st.id;slot.classList.add("mind")}
     else if(st){
       slot.dataset.id=st.id;slot.classList.add("step");txt.rows=1;
