@@ -658,11 +658,11 @@
   body.lock .card .pt{pointer-events:none}
   .card.pdfcard .cap:empty:before{content:"" !important}
   /* 所有图片卡片：未选中时空文字框隐藏；选中后自动显示方便添加文字 */
-  .card:has(img):not(.sel) .cap:empty{display:none;margin-top:0}
-  .card:has(img):not(.sel) .cap:empty:before{content:"" !important}
-  /* nocap 类：即使选中也强制隐藏（透明 PNG 或手动设置）*/
-  .card.nocap .cap:empty{display:none!important;margin-top:0!important}
-  .card.nocap .cap:empty:before{content:"" !important}
+  /* 图片卡片的空说明：没选中、也没在编辑时隐藏；选中或正在编辑时显示（带提示文字）。
+     所有图片一个规矩，不分 PNG / JPG、透明底 / 有色底（2026-10 统一）。
+     旧文件里的 nocap 字段原样留在数据里，程序不再读它。 */
+  .card:has(img):not(.sel) .cap:empty:not([contenteditable="true"]){display:none;margin-top:0}
+  .card:has(img):not(.sel) .cap:empty:not([contenteditable="true"]):before{content:"" !important}
   .card .pdfb{position:absolute;right:6px;top:6px;z-index:3;padding:1px 6px;border-radius:5px;
     background:rgba(20,20,20,.5);color:#fff;font:400 10px/1.5 "IBM Plex Mono",monospace;
     pointer-events:none;opacity:0;transition:opacity .15s}
@@ -2913,14 +2913,18 @@ function makeCard(c){
   // 翻页模式：单卡多页，底部有上一页 / 下一页按钮
   if(oc.pdfbook)buildPdfNav(el,c,oc);
   }
-  if(oc.nocap)el.classList.add("nocap");
   const cap=document.createElement("div");cap.className="cap";
   if(oc.rich)cap.innerHTML=oc.rich;else cap.textContent=oc.text||"";
   cap.spellcheck=false;cap.dataset.ph=t("placeholder");
   Object.assign(cap.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",fontWeight:s.weight,
     lineHeight:s.lh,letterSpacing:s.spacing+"em",textAlign:s.align,color:s.color,
     fontStyle:s.italic?"italic":"normal",marginTop:(withImg?10:0)+"px"});
-  cap.addEventListener("input",()=>{syncCap(c,cap);measure();drawLinksSoon();save()});
+  // 打字时只量这一张卡片，高度变了才重画连线（2026-10）。
+  // 从前每敲一个字都把画面上所有卡片量一遍、整画布的连线重画一遍，画布越大打字越涩。
+  cap.addEventListener("input",()=>{syncCap(c,cap);
+    const h=el.offsetHeight;size[c.id]={w:el.offsetWidth,h};
+    if(c.h!==h){c.h=h;drawLinksSoon()}
+    save()});
   cap.addEventListener("paste",e=>{
     if(!cap.isContentEditable)return;
     e.preventDefault();
@@ -2928,7 +2932,7 @@ function makeCard(c){
     document.execCommand("insertText",false,stripZotero(txt));
   });
   cap.addEventListener("mouseup",()=>setTimeout(syncBar,0));
-  cap.addEventListener("keyup",()=>setTimeout(syncBar,0));
+  cap.addEventListener("keyup",barAfterKeys);
   cap.addEventListener("blur",e=>{
     if(!cap.isContentEditable)return;
     const to=e.relatedTarget||document.activeElement;
@@ -3433,6 +3437,9 @@ function editText(c,ev,elOverride){
   c._tg=cardTags(c).join(",");
   const el=elOverride||nodes.get(c.id)?.querySelector(".cap");if(!el)return;
   editing=true;el.contentEditable="true";el.focus();
+  // 保险：光标没能进去（元素不可见等），就立刻退出编辑状态。
+  // 从前会停在"编辑中"：打不了字，这张卡片的按下拖动也一直被当成编辑而忽略，看起来就是卡在原地
+  if(document.activeElement!==el){el.contentEditable="false";editing=false;return}
   const s=getSelection();
   // 双击进入时按落点选中一个词（拉丁文字），其余情况全选
   let done=false;
@@ -3490,6 +3497,10 @@ function drawLinksSoon(){if(dlPend)return;dlPend=true;
 // 相机每帧都在写 transform 与 --iz，读写交替会让浏览器一帧内反复重算布局，
 // 所以这里合并到下一帧统一做一次，而不是每帧同步调用 syncBar。
 let barPend=false;
+// 连续打字时工具栏停手 0.12 秒再刷新一次，不再每个键都去问浏览器加粗、斜体的状态（2026-10）。
+// 卡片说明的 keyup 与编辑中的全局 keydown（撤销之后同步按钮）共用这一个计时器。
+let barKeyT=0;
+function barAfterKeys(){clearTimeout(barKeyT);barKeyT=setTimeout(syncBar,120)}
 function barSoon(){if(barPend)return;barPend=true;
   requestAnimationFrame(()=>{barPend=false;syncBar()})}
 let CIDX=null,CIDXsrc=null,CIDXn=-1;
@@ -3812,26 +3823,22 @@ function shrink(file,cb){
     im.onload=()=>{const max=S.imgMax===0?Infinity:1600,k=Math.min(1,max/Math.max(im.width,im.height));
       const cv=document.createElement("canvas");cv.width=Math.round(im.width*k);cv.height=Math.round(im.height*k);
       cv.getContext("2d").drawImage(im,0,0,cv.width,cv.height);
-      const png=/png/i.test(file.type);
-      // 透明检测：逐像素扫描 alpha 通道，找到第一个半透明像素就停（大图通常边缘就是透明的）
-      let hasAlpha=false;
-      if(png){const px=cv.getContext("2d").getImageData(0,0,cv.width,cv.height).data;
-        for(let i=3;i<px.length;i+=4){if(px[i]<255){hasAlpha=true;break}}}
-      cb(cv.toDataURL(png?"image/png":"image/jpeg",S.imgMax===0?.95:.88),cv.width,cv.height,hasAlpha)};
+      const png=/png/i.test(file.type);      // 存储格式照旧：PNG 存 PNG（保住透明），其余存 JPEG
+      cb(cv.toDataURL(png?"image/png":"image/jpeg",S.imgMax===0?.95:.88),cv.width,cv.height)};
     im.src=fr.result};
   fr.readAsDataURL(file);
 }
-async function addImage(d,w,h,p,quiet,alpha){
+async function addImage(d,w,h,p,quiet){
   const cap=S.imgMax===0?0:(S.imgMax||360);
   const W=cap?Math.round(w*Math.min(1,cap/Math.max(w,h))):w;   // 原尺寸：像素多宽，卡片就多宽
   const r=await putImg(d);
-  const c={id:uid(),ih:r.h,...(r.ok?{}:{src:d}),ar:h/w,iw:w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",...(alpha?{nocap:true}:{}),s:newStyle()};
+  const c={id:uid(),ih:r.h,...(r.ok?{}:{src:d}),ar:h/w,iw:w,x:Math.round(p.x-W/2),y:Math.round(p.y-W*(h/w)/2),w:W,text:"",s:newStyle()};
   invalidateIndex();S.cards.push(c);if(!quiet){sel=[c.id];selLink=null}render();save();return c;
 }
 function addImages(files,p){
   const list=[...files].filter(f=>f.type.startsWith("image/"));
   if(!list.length||lock)return;snap();
-  list.forEach((f,i)=>shrink(f,(d,w,h,a)=>addImage(d,w,h,{x:p.x+(i%4)*30,y:p.y+i*24},list.length>1,a)));
+  list.forEach((f,i)=>shrink(f,(d,w,h)=>addImage(d,w,h,{x:p.x+(i%4)*30,y:p.y+i*24},list.length>1)));
 }
 function addText(p){
   if(lock)return;snap();
@@ -3984,7 +3991,7 @@ addEventListener("keydown",e=>{
       e.preventDefault();cmd(k==="b"?"bold":k==="i"?"italic":"underline");return;
     }
     if((e.metaKey||e.ctrlKey)&&e.shiftKey&&k==="x"){e.preventDefault();cmd("strikeThrough");return}
-    setTimeout(syncBar,0);                      // 撤销后同步按钮状态
+    barAfterKeys();                             // 撤销后同步按钮状态（停手 0.12 秒后刷新一次）
     return;
   }
   if(lock){

@@ -5959,6 +5959,66 @@ group("round2 兜底副本、外部库指纹、标题字号、旧快照清理（
   c.ok("本地 vendor/ 文件照旧加载，不要求指纹", sri.local);
 });
 
+group("imgcap 图片说明统一、打字减负（2026-10）", async (c) => {
+  // 1) 三种图片（旧文件里带 nocap 的透明 PNG、普通 PNG、JPG）规矩完全一样
+  await c.run(async () => {
+    const mk = (alpha, type) => { const cv = document.createElement("canvas"); cv.width = 300; cv.height = 200; const g = cv.getContext("2d");
+      if (!alpha) { g.fillStyle = "#ddd"; g.fillRect(0, 0, 300, 200); } g.fillStyle = "rgba(200,0,0,.8)"; g.beginPath(); g.arc(150, 100, 80, 0, 7); g.fill(); return cv.toDataURL(type); };
+    const a = await putImg(mk(true, "image/png")), b = await putImg(mk(false, "image/png")), j = await putImg(mk(false, "image/jpeg"));
+    S.cards = [{ id: "legacy", x: 0, y: 0, w: 300, ar: 2 / 3, ih: a.h, text: "", nocap: true, s: newStyle() },
+      { id: "png", x: 400, y: 0, w: 300, ar: 2 / 3, ih: b.h, text: "", s: newStyle() },
+      { id: "jpg", x: 800, y: 0, w: 300, ar: 2 / 3, ih: j.h, text: "", s: newStyle() }];
+    S.links = []; S.frames = []; S.docs = []; invalidateIndex(); sel = []; render(); camTo(-550, -150, 1, true); syncCards();
+  });
+  await c.wait(800);
+  const shown = (id) => c.run((id) => document.querySelector(`.card[data-id="${id}"] .cap`).getClientRects().length > 0, id);
+  const ctr = (id) => c.run((id) => { const r = document.querySelector(`.card[data-id="${id}"] img`).getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, id);
+  const res = {};
+  for (const id of ["legacy", "png", "jpg"]) {
+    const o = {}; o.idle = !(await shown(id));
+    let p = await ctr(id); await c.page.mouse.click(p.x, p.y); await c.wait(150); o.sel = await shown(id);
+    await c.page.mouse.click(p.x, p.y, { clickCount: 2 }); await c.wait(200);
+    await c.page.keyboard.type("note"); await c.wait(150); o.text = await c.run((id) => card(id).text, id);
+    await c.page.mouse.click(700, 820); await c.wait(200);
+    p = await ctr(id); const x0 = await c.run((id) => card(id).x, id);
+    await c.page.mouse.move(p.x, p.y); await c.page.mouse.down();
+    for (let i = 1; i <= 8; i++) await c.page.mouse.move(p.x + i * 5, p.y + i * 10); await c.page.mouse.up(); await c.wait(200);
+    o.moved = (await c.run((id) => card(id).x, id)) !== x0;
+    await c.run((id) => { const z = card(id); z.text = ""; delete z.rich; sel = []; render(); }, id); await c.wait(200);
+    o.hiddenAgain = !(await shown(id));
+    res[id] = o;
+  }
+  const same = JSON.stringify(res.legacy) === JSON.stringify(res.png) && JSON.stringify(res.png) === JSON.stringify(res.jpg);
+  c.ok("三种图片的说明栏行为完全一样", same);
+  c.ok("空说明：平时隐藏、选中显示", res.png.idle && res.png.sel);
+  c.ok("双击能打字，离开后能拖动，不会卡住", res.png.text === "note" && res.png.moved && res.legacy.text === "note" && res.legacy.moved);
+  c.ok("清空后恢复隐藏", res.png.hiddenAgain && res.legacy.hiddenAgain);
+  c.ok("旧文件里的 nocap 字段原样留在数据里", await c.run(() => card("legacy").nocap === true));
+  c.ok("程序里不再有 nocap 的界面逻辑", await c.run(() => !document.querySelector(".nocap,.capedit") && !/nocap/.test(makeCard.toString() + editText.toString() + addImage.toString())));
+  c.ok("看不见的说明栏不会把卡片留在编辑中", await c.run(() => {
+    const el = document.createElement("div"); el.style.display = "none"; el.className = "cap"; document.body.appendChild(el);
+    editText(card("png"), null, el); const r = !editing && !el.isContentEditable; el.remove(); return r; }));
+
+  // 2) 打字减负：高度变了连线照样跟着走；打字过程中不刷新工具栏，停手后刷新一次；撤销按词块而不是逐字
+  await c.run(() => { S.cards = [{ id: "a", x: 0, y: 0, w: 200, text: "short", s: newStyle() }, { id: "b", x: 0, y: 400, w: 200, text: "below", s: newStyle() }];
+    S.links = [{ id: "l", a: "a", b: "b" }]; S.frames = []; S.docs = []; invalidateIndex(); sel = []; render(); camTo(-100, -200, 1, true); syncCards(); drawLinks(); });
+  await c.wait(500);
+  const d0 = await c.run(() => document.querySelector('path[data-link="l"]').getAttribute("d"));
+  const r = await c.run(() => { const e = document.querySelector('.card[data-id="a"] .cap').getBoundingClientRect(); return { x: e.x + e.width - 2, y: e.y + e.height / 2 }; });
+  await c.page.mouse.click(r.x, r.y); await c.page.mouse.click(r.x, r.y, { clickCount: 2 }); await c.page.keyboard.press("End");
+  await c.run(() => { window.__sb = 0; const o = syncBar; window.syncBar = function () { __sb++; return o.apply(this, arguments); }; });
+  await c.page.keyboard.type(" and a much longer sentence that has to wrap", { delay: 30 });
+  const during = await c.run(() => __sb); await c.wait(400);
+  const after = await c.run(() => __sb), d1 = await c.run(() => document.querySelector('path[data-link="l"]').getAttribute("d"));
+  c.ok("说明变高时连线跟着走", d1 !== d0);
+  c.ok("打字过程中不刷新工具栏（" + during + "），停手后刷新一次", during === 0 && after >= 1);
+  await c.page.keyboard.down("Control"); await c.page.keyboard.press("z"); await c.page.keyboard.up("Control"); await c.wait(250);
+  const t1 = await c.run(() => document.querySelector('.card[data-id="a"] .cap').innerText);
+  c.ok("撤销一次退回一段，不是一个字母", t1.length < "short and a much longer sentence that has to wra".length);
+  await c.page.mouse.click(700, 820); await c.wait(500);
+  c.ok("离开编辑后内容保存", await c.run((t) => card("a").text === t, t1));
+});
+
 group("static 静态检查", async (c) => {
   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");
   const js = src.split("<script>").pop().split("</script>")[0];
