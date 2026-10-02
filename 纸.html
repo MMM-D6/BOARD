@@ -9,7 +9,7 @@
 <style>
   :root{
     --bg:#EAEAE7; --paper:#FBFBF8; --ink:#1A1A1A; --mute:rgba(26,26,26,.42); --rule:rgba(26,26,26,.11); --edge:rgba(26,26,26,.28);
-    --acc:#2D6CDF; --glass:rgba(250,250,248,.86); --glassline:rgba(26,26,26,.10);
+    --acc:#2D6CDF; --mind:#9C4A2C; --mindbg:#F7EEE8; --glass:rgba(250,250,248,.86); --glassline:rgba(26,26,26,.10);
     --fs:15px;
     --sans:"IBM Plex Sans","PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
     --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
@@ -110,6 +110,73 @@
   .note::placeholder{color:var(--mute)}
   .note:focus{box-shadow:inset 0 0 0 1.5px var(--acc)}
 
+  /* Mindset：任何一格都可以设成，换一个颜色 */
+  .slot.mind{background:var(--mindbg)}
+  .slot.mind .txt{color:var(--mind)}
+  .slot.mind .num{color:rgba(156,74,44,.55)}
+
+  /* 长按拖动 */
+  body.dragging,body.dragging *{user-select:none!important;cursor:grabbing!important}
+  .slot.lift{z-index:8;pointer-events:none;box-shadow:0 14px 34px rgba(0,0,0,.2),0 0 0 1.5px var(--acc);transition:box-shadow .15s}
+  .slot.drop{box-shadow:inset 3px 0 0 var(--acc)}
+
+  /* 写记录时放大 */
+  .paper{position:relative}
+  .slot.ghost{pointer-events:none}
+  .slot.zoom{position:absolute;z-index:6;box-shadow:inset 0 0 0 1.5px var(--acc),0 16px 40px rgba(0,0,0,.16);
+    transition:left .18s ease-out,top .18s ease-out,width .18s ease-out,height .18s ease-out}
+
+  /* Mindset 页 */
+  .harvest .h-day{margin:22px 0 8px;font:400 12px var(--mono);color:var(--mute)}
+  .harvest .h-day:first-child{margin-top:8px}
+  .harvest .h-note{max-width:68ch;margin:0 0 12px}
+
+  /* 导出打印面板 */
+  #pp{position:fixed;inset:0;z-index:40;display:flex;background:var(--bg)}
+  .pp-side{flex:none;width:230px;padding:22px 20px;display:flex;flex-direction:column;gap:14px;border-right:1px solid var(--rule)}
+  .pp-h{font:500 14px var(--sans)}
+  .pp-row{display:flex;align-items:center;justify-content:space-between;font-size:13px}
+  .pp-seg{display:flex;border:1px solid var(--rule);border-radius:6px;overflow:hidden}
+  .pp-seg button,.pp-step button,.pp-act button{border:none;background:none;cursor:pointer;font:400 13px var(--sans);color:var(--ink)}
+  .pp-seg button{padding:4px 10px}
+  .pp-seg button.on{background:var(--ink);color:var(--paper)}
+  .pp-step{display:flex;align-items:center;gap:4px}
+  .pp-step button{width:26px;height:26px;border-radius:5px;font-family:var(--mono)}
+  .pp-step button:hover,.pp-seg button:not(.on):hover{background:rgba(26,26,26,.06)}
+  .pp-step b{min-width:46px;text-align:center;font:400 12px var(--mono)}
+  .pp-info{margin:0;font:400 12px var(--mono);color:var(--mute)}
+  .pp-tip{margin:0;font-size:12px;line-height:1.6;color:var(--mute)}
+  .pp-act{margin-top:auto;display:flex;gap:8px}
+  .pp-act button{flex:1;height:32px;border:1px solid var(--rule);border-radius:6px}
+  .pp-act button.go{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .pp-view{flex:1;overflow:auto;padding:24px}
+  #sheets{width:297mm;transform-origin:0 0}
+  .sheet{position:relative;display:flex;width:297mm;height:210mm;margin:0 0 24px;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.1)}
+  .sheet::after{content:"";position:absolute;left:50%;top:0;bottom:0;border-left:.3mm dashed #c8c8c8}
+  .a5{flex:none;width:148.5mm;height:210mm;padding:13mm 12mm 14mm}
+  .a5-in{height:100%;overflow:hidden;font-family:var(--sans);font-size:var(--ppt);line-height:var(--plh);color:#151515}
+  .pb{display:flex;gap:.55em}
+  .pb .tx{flex:1;min-width:0;white-space:pre-wrap;overflow-wrap:anywhere}
+  .pb .mk{flex:none;color:#666;letter-spacing:.04em}
+  .ph{font-weight:500;margin-top:1.3em;padding-bottom:.3em}
+  .a5-in>.pb:first-child{margin-top:0}
+  .pm .tx{color:#6a6a6a;font-size:.92em}
+  .pmind .tx{color:var(--mind)}
+  .pdone .tx{color:#8a8a8a}
+
+  @media print{
+    @page{size:A4 landscape;margin:0}
+    html,body{height:auto;padding:0;background:#fff;display:block}
+    body>*:not(#pp){display:none!important}
+    #pp{position:static;display:block;background:none}
+    .pp-side{display:none}
+    .pp-view{padding:0;overflow:visible}
+    #sheets{transform:none!important}
+    #sheetsBox{width:auto!important;height:auto!important}
+    .sheet{margin:0;box-shadow:none;break-after:page;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .sheet:last-child{break-after:auto}
+  }
+
   /* 收获页 */
   .paper.harvest{display:block;overflow:auto;background:var(--paper);padding:14px 30px}
   .paper.list .h-empty,.harvest .h-empty{margin:18px 12px;color:var(--mute)}
@@ -180,11 +247,22 @@
 <div class="main">
   <nav class="crumbs" id="crumbs"></nav>
   <div class="paper" id="paper"></div>
-  <textarea id="note" class="note" rows="2" placeholder="这一轮得出了什么（可以不写）" hidden></textarea>
   <div class="pageinfo" id="info"></div>
 </div>
 <aside id="side" hidden><button id="sideBtn" type="button"></button><div id="sideList"></div></aside>
 <div id="menu" role="menu"></div>
+<div id="pp" hidden>
+  <div class="pp-side">
+    <div class="pp-h">导出打印</div>
+    <div class="pp-row"><span>范围</span><div class="pp-seg"><button data-scope="page" type="button">这一页</button><button data-scope="all" type="button">全部</button></div></div>
+    <div class="pp-row"><span>字号</span><div class="pp-step"><button id="ppPtDown" type="button" aria-label="字号减小">−</button><b id="ppPt"></b><button id="ppPtUp" type="button" aria-label="字号增大">+</button></div></div>
+    <div class="pp-row"><span>行距</span><div class="pp-step"><button id="ppLhDown" type="button" aria-label="行距减小">−</button><b id="ppLh"></b><button id="ppLhUp" type="button" aria-label="行距增大">+</button></div></div>
+    <p class="pp-info" id="ppInfo"></p>
+    <p class="pp-tip">A4 横放，单面打印，从中间虚线裁开就是两张 A5。打印窗口里选「另存为 PDF」可以先存到本地。</p>
+    <div class="pp-act"><button id="ppGo" class="go" type="button">打印</button><button id="ppClose" type="button">关闭</button></div>
+  </div>
+  <div class="pp-view" id="ppView"><div id="sheetsBox"><div id="sheets"></div></div></div>
+</div>
 <div id="toast"><span id="toastMsg"></span><button id="toastUndo">撤销</button></div>
 <input type="file" id="file" accept=".json,application/json" hidden>
 
@@ -217,37 +295,43 @@ const autosize=t=>{t.style.height="auto";if(t.value&&t.offsetParent)t.style.heig
    SOP    sops:  [{id, name, useV,
                    versions:[{v, at, steps:[{text,times}]}],
                    draft?, draftFrom?           正在编辑的模板
-                   runs:[进行中 {id,title,note,v,start,touched,steps}
-                         已完成 {id,title,note,v,start,end,steps}]}]
-          一轮里的一步：{id, text, times, ticks, note}
+                   runs:[进行中 {id,title,v,start,touched,steps}
+                         已完成 {id,title,v,start,end,steps}]}]
+          一轮里的一步：{id, text, times, ticks, note, mindset, ms}
+   任何一格都可以设成 Mindset（mindset 为真，ms 是设的时间），它不算步骤，没有圆圈。
    纸堆、轮数、收获页都从 runs 现算，不另外存。
    S.at 是在 SOP 里的位置：null 是架子，{kind:"tpl"|"run"|"hist", sop, run?}
    ========================================================= */
 const normItems=a=>(Array.isArray(a)?a:[]).filter(i=>i&&typeof i.text==="string").map(i=>{
   const o={id:String(i.id||uid()),text:i.text,done:!!i.done};
   if(i.doneAt)o.doneAt=i.doneAt;
+  if(i.mindset){o.mindset=true;o.ms=+i.ms||0}
   const c=normItems(i.children);if(c.length)o.children=c;
   return o;
 });
-const newStep=()=>({id:uid(),text:"",times:1,ticks:0,note:""});
+const newStep=()=>({id:uid(),text:"",times:1,ticks:0,note:"",mindset:false,ms:0});
 const normSteps=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.text==="string").map(s=>{
   const times=clampTimes(s.times);
-  return {id:String(s.id||uid()),text:s.text,times,ticks:Math.min(times,Math.max(0,Math.round(+s.ticks)||0)),note:String(s.note||"")};
+  return {id:String(s.id||uid()),text:s.text,times,ticks:Math.min(times,Math.max(0,Math.round(+s.ticks)||0)),note:String(s.note||""),
+    mindset:!!s.mindset,ms:+s.ms||0};
 });
 const normSops=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.name==="string").map(s=>{
   const o={id:String(s.id||uid()), name:s.name, useV:s.useV==null?null:+s.useV,
     versions:(Array.isArray(s.versions)?s.versions:[]).filter(v=>v&&Array.isArray(v.steps)).map(v=>({
       v:+v.v||1, at:+v.at||0, steps:v.steps.filter(x=>x&&typeof x.text==="string").map(x=>({text:x.text,times:clampTimes(x.times)}))})),
     runs:(Array.isArray(s.runs)?s.runs:[]).filter(r=>r&&r.id).map(r=>{
-      const o={id:String(r.id),title:String(r.title||""),note:String(r.note||""),v:+r.v||0,start:+r.start||0,steps:normSteps(r.steps)};
+      const o={id:String(r.id),title:String(r.title||""),v:+r.v||0,start:+r.start||0,steps:normSteps(r.steps)};
       if(r.end)o.end=+r.end; else o.touched=+r.touched||o.start;
+      // 上一版底部的「收获」，转成这一轮里的一格 Mindset
+      if(typeof r.note==="string"&&r.note.trim())o.steps.push(Object.assign(newStep(),{text:r.note.trim(),mindset:true,ms:o.end||o.touched||o.start}));
       return o;
     })};
   if(Array.isArray(s.draft)){o.draft=normSteps(s.draft);o.draftFrom=+s.draftFrom||0}
   return o;
 });
 
-let S={items:[],page:0,mode:"open",hint:true,path:[],font:FS_DEF,view:"paper",sops:[],at:null,side:true};
+let S={items:[],page:0,mode:"open",hint:true,path:[],font:FS_DEF,view:"paper",sops:[],at:null,side:true,
+  print:{scope:"page",pt:9,lh:1.5}};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
 if(!S.items.length){
   // 如果之前用过「硬骨头」版本，把任务搬过来
@@ -261,7 +345,9 @@ S.sops=normSops(S.sops);
 if(S.run&&!S.at)S.at={kind:"run",sop:S.run.sop,run:S.run.run};   // 上一版存的位置
 delete S.run;
 if(!Array.isArray(S.path))S.path=[];
-if(!["paper","sop","harvest"].includes(S.view))S.view="paper";
+if(S.view==="harvest")S.view="mind";
+if(!["paper","sop","mind"].includes(S.view))S.view="paper";
+S.print=Object.assign({scope:"page",pt:9,lh:1.5},S.print);
 S.font=Math.min(FS_MAX,Math.max(FS_MIN,+S.font||FS_DEF));
 document.documentElement.style.setProperty("--fs",S.font+"px");
 
@@ -299,11 +385,8 @@ function render(focusIdx){
   const A=curAt();
   paper.className="paper";paper.textContent="";paper.dataset.depth=0;
   document.body.classList.toggle("done-mode",S.view==="paper"&&S.mode==="done");
-  const note=$("note"), showNote=A&&A.run&&(A.kind==="run"||A.run.note.trim());
-  note.hidden=!showNote;
-  if(showNote){note.value=A.run.note;note.readOnly=A.kind!=="run"}
   if(S.view==="paper")renderPaper(focusIdx);
-  else if(S.view==="harvest")renderHarvest();
+  else if(S.view==="mind")renderMindset();
   else if(!A)renderShelf();
   else if(A.kind==="tpl")renderTemplate(A,focusIdx);
   else if(A.run)renderRun(A,focusIdx);
@@ -393,6 +476,7 @@ function renderPaper(focusIdx){
     const {slot,top,num,txt}=makeCell(idx,it?it.text:"");
     if(it){
       slot.dataset.id=it.id;
+      if(it.mindset)slot.classList.add("mind");
       if(it.children&&it.children.length){
         const all=it.children.length, open=it.children.filter(c=>!c.done).length;
         top.append(subButton(open?`${open}/${all}`:"✓",open?`里面还有 ${open} 条未完成，共 ${all} 条。点开`:`里面 ${all} 条都完成了。点开`,()=>enter(it)));
@@ -468,7 +552,9 @@ const activeRuns=sop=>sop.runs.filter(r=>!r.end);
 const doneRuns=sop=>sop.runs.filter(r=>r.end).sort((a,b)=>a.end-b.end);
 const latestV=sop=>sop.versions[sop.versions.length-1];
 const nextVersion=sop=>sop.versions.find(v=>v.v===sop.useV)||latestV(sop);
-const plainSteps=steps=>steps.filter(s=>s.text.trim()).map(s=>({text:s.text.trim(),times:s.times}));
+const realSteps=steps=>steps.filter(s=>!s.mindset);
+const plainSteps=steps=>realSteps(steps).filter(s=>s.text.trim()).map(s=>({text:s.text.trim(),times:s.times}));
+const progress=run=>{const r=realSteps(run.steps);return `${r.filter(isStepDone).length}/${r.length}`};
 const versionSteps=(sop,v)=>{const x=sop.versions.find(y=>y.v===v);return x?x.steps:[]};
 const isChanged=(sop,run)=>JSON.stringify(plainSteps(run.steps))!==JSON.stringify(versionSteps(sop,run.v));
 const isStepDone=s=>s.ticks>=s.times;
@@ -536,7 +622,7 @@ function startRun(sop){
   const A=curAt();
   if(A&&A.kind==="tpl"&&A.sop===sop)closeTemplate(sop);   // 从模板直接开始：先把改动存成版本
   const v=nextVersion(sop);
-  const run={id:uid(),title:"",note:"",v:v?v.v:0,start:now(),touched:now(),
+  const run={id:uid(),title:"",v:v?v.v:0,start:now(),touched:now(),
     steps:(v?v.steps:[]).map(s=>Object.assign(newStep(),s))};
   sop.runs.push(run);openRun(sop,run);
 }
@@ -627,13 +713,16 @@ function renderRun(A,focusIdx){
   for(let k=0;k<PER;k++){
     const st=run.steps[k];
     const {slot,num,txt}=makeCell(k,st?st.text:"");
-    if(st){
-      slot.dataset.id=st.id;slot.classList.add("step");
+    if(st&&st.mindset){slot.dataset.id=st.id;slot.classList.add("mind")}
+    else if(st){
+      slot.dataset.id=st.id;slot.classList.add("step");txt.rows=1;
       const body=el("div","body"), wrap=el("div","memo-wrap"+(st.note.trim()?" has":"")), memo=el("textarea","memo");
       memo.rows=1;memo.spellcheck=false;memo.value=st.note;memo.placeholder=live?"记录":"";memo.setAttribute("aria-label","第 "+(k+1)+" 步的记录");
       wrap.append(memo);body.append(txt,wrap);slot.append(body,dots(run,st,slot,live));paintStep(slot,st);
       if(live){
         wrap.onclick=e=>{if(e.target===wrap)memo.focus()};
+        memo.addEventListener("focus",()=>zoom(slot));                 // 写记录时放大，写步骤时不放大
+        slot.addEventListener("focusout",e=>{if(!slot.contains(e.relatedTarget))unzoom(slot)});
         memo.addEventListener("input",()=>{st.note=memo.value;wrap.classList.toggle("has",!!memo.value.trim());autosize(memo);run.touched=now();saveSoon()});
         txt.addEventListener("input",()=>autosize(txt));
       }
@@ -644,7 +733,7 @@ function renderRun(A,focusIdx){
   runInfo(A);
 }
 function runInfo({kind,sop,run}){
-  const n=run.steps.length, d=run.steps.filter(isStepDone).length;
+  const real=realSteps(run.steps), n=real.length, d=real.filter(isStepDone).length;
   if(kind!=="run"){
     const no=doneRuns(sop).indexOf(run)+1;
     pageParts=[`第 ${no} 轮`,run.v?`v${run.v}`:"",`${fmtTime(run.start)} 开始`,`${fmtTime(run.end)} 完成`,"Esc 返回"].filter(Boolean);
@@ -686,7 +775,24 @@ function bindStep(num,txt,idx,steps,st,onEdit){
   bindTab(txt,idx,false);
   bindNum(num,idx,()=>steps,(s,to)=>move(steps,s,to));
 }
-$("note").addEventListener("input",()=>{const A=curAt();if(A&&A.kind==="run"){A.run.note=$("note").value;A.run.touched=now();saveSoon()}});
+
+/* ----- 写记录时，这一格浮起来放大到大约四格，点外面或 Esc 缩回 ----- */
+function zoom(slot){
+  if(slot.classList.contains("zoom"))return;
+  const x=slot.offsetLeft, y=slot.offsetTop, w=slot.offsetWidth, h=slot.offsetHeight;
+  const W=paper.clientWidth, H=paper.clientHeight, w2=Math.min(W,w*2+1), h2=Math.min(H,h*2+1);
+  const ghost=el("div","slot ghost");                                     // 占住原来的位置，别的格子不动
+  slot.classList.add("zoom");Object.assign(slot.style,{left:x+"px",top:y+"px",width:w+"px",height:h+"px"});
+  slot.before(ghost);
+  requestAnimationFrame(()=>Object.assign(slot.style,{left:Math.min(x,W-w2)+"px",top:Math.min(y,H-h2)+"px",width:w2+"px",height:h2+"px"}));
+  setTimeout(()=>slot.querySelectorAll(".body .txt,.memo").forEach(autosize),200);
+}
+function unzoom(slot){
+  if(!slot.classList.contains("zoom"))return;
+  slot.classList.remove("zoom");slot.style.cssText="";
+  const g=slot.previousElementSibling;if(g&&g.classList.contains("ghost"))g.remove();
+  slot.querySelectorAll(".body .txt,.memo").forEach(autosize);
+}
 
 /* ----- 过去的轮次 ----- */
 function renderPast({sop}){
@@ -701,26 +807,28 @@ function renderPast({sop}){
     meta.append(el("span",null,fmtDay(r.end)));
     if(r.v)meta.append(el("span",null,`v${r.v}`));
     b.append(meta);
-    if(r.note.trim())b.append(el("p","pn",r.note.trim()));
     b.onclick=()=>go({kind:"hist",sop:sop.id,run:r.id});
     paper.append(b);
   });
   pageParts=[`${runs.length} 轮`,"Esc 回到 SOP"];
 }
 
-/* ----- 收获页 ----- */
-function renderHarvest(){
+/* ----- Mindset 页：所有设成 Mindset 的格子，按时间倒着排，只标日期 ----- */
+function collectMinds(){
+  const out=[];
+  const walk=a=>a.forEach(i=>{if(i.mindset&&i.text.trim())out.push({text:i.text.trim(),ms:i.ms});if(i.children)walk(i.children)});
+  walk(S.items);
+  S.sops.forEach(s=>s.runs.forEach(r=>r.steps.forEach(st=>{if(st.mindset&&st.text.trim())out.push({text:st.text.trim(),ms:st.ms})})));
+  return out.sort((a,b)=>b.ms-a.ms);
+}
+function renderMindset(){
   paper.className="paper harvest";
-  const list=[];
-  S.sops.forEach(s=>doneRuns(s).forEach(r=>{if(r.note.trim())list.push({s,r})}));
-  list.sort((a,b)=>b.r.end-a.r.end);
-  if(!list.length)paper.append(el("p","h-empty","每完成一轮 SOP，写在底部的那句话会收在这里。"));
-  list.forEach(({s,r})=>{
-    const a=el("article"), meta=el("p","h-meta");
-    meta.append(el("span",null,s.name));
-    if(r.title.trim())meta.append(el("span",null,r.title.trim()));
-    meta.append(el("span",null,fmtDay(r.end)));
-    a.append(el("p","h-note",r.note.trim()),meta);paper.append(a);
+  const list=collectMinds();let day="";
+  if(!list.length)paper.append(el("p","h-empty","在任意一格右键「设为 Mindset」，它就会出现在这里。"));
+  list.forEach(m=>{
+    const d=fmtDay(m.ms);
+    if(d!==day){day=d;paper.append(el("h3","h-day",d))}
+    paper.append(el("p","h-note",m.text));
   });
   pageParts=list.length?[`${list.length} 条`]:[];
 }
@@ -740,7 +848,7 @@ function switchView(v){
 function renderCrumbs(A){
   const c=$("crumbs");c.textContent="";
   const sw=el("div","switch");
-  [["paper","纸"],["sop","SOP"],["harvest","收获"]].forEach(([v,label])=>{
+  [["paper","纸"],["sop","SOP"],["mind","Mindset"]].forEach(([v,label])=>{
     const b=el("button",S.view===v?"on":"",label);b.type="button";b.onclick=()=>switchView(v);sw.append(b);
   });
   c.append(sw);
@@ -779,7 +887,7 @@ function renderSide(){
   list.textContent="";
   runs.forEach(({s,r})=>{
     const b=el("button","ri"+(r.id===here?" here":""));b.type="button";
-    b.append(el("span","s",s.name),el("span","n",`${r.steps.filter(isStepDone).length}/${r.steps.length}`),el("span","t",runLabel(r)));
+    b.append(el("span","s",s.name),el("span","n",progress(r)),el("span","t",runLabel(r)));
     b.onclick=()=>openRun(s,r);list.append(b);
   });
 }
@@ -810,6 +918,7 @@ function menuItems(slot){
     else items.push([A.run?"回到过去的轮次":"回到 SOP",()=>A.run?go({kind:"hist",sop:A.sop.id}):toShelf(),"Esc"]);
   }
   items.push("-",{stepper:{label:"字号",get:()=>S.font,set:setFont,def:FS_DEF}});
+  items.push("-",["导出打印…",openPrint,MOD+"P"]);
   items.push("-",["保存",()=>saveFile(false),MOD+"S"],["另存为…",()=>saveFile(true),MOD+"⇧S"],["打开文件…",openFile,MOD+"O"]);
   return items;
 }
@@ -830,7 +939,8 @@ function paperMenu(items,has,idx){
     return;
   }
   if(t){
-    items.push(["完成",()=>complete(t),MOD+"↵"]);
+    if(!t.mindset)items.push(["完成",()=>complete(t),MOD+"↵"]);
+    items.push([t.mindset?"改回任务":"设为 Mindset",()=>toggleMind(t)]);
     items.push([openLabel(t),()=>enter(t),canEnter()?"":"已到第三层",!canEnter()]);
     items.push(["移到第 1 格",()=>{moveTo(t,0);S.page=0;save();render();pulse(t.id)}]);
     items.push(["在前面空出一格",()=>{insertAtOpen({id:uid(),text:"",done:false},idx);save();render(idx)}]);
@@ -865,7 +975,7 @@ function shelfMenu(items,has,idx){
 // 一步的通用菜单：次数、插入、删除（模板和一轮都用）
 function stepMenu(items,steps,st,idx,onEdit){
   if(!st)return;
-  items.push({stepper:{label:"次数",get:()=>st.times,def:1,
+  if(!st.mindset)items.push({stepper:{label:"次数",get:()=>st.times,def:1,
     set:v=>{st.times=clampTimes(v);st.ticks=Math.min(st.ticks,st.times);onEdit();save();render()}}});
   items.push(["在前面插入一步",()=>{steps.splice(idx,0,newStep());onEdit();save();render(idx)}]);
   items.push(["删除这一步",()=>{const i=steps.indexOf(st);steps.splice(i,1);onEdit();save();render();
@@ -879,7 +989,8 @@ function templateMenu(items,sop){
 function runMenu(items,{sop,run},has,idx){
   const st=has?run.steps[idx]:null;
   if(st){
-    items.push([isStepDone(st)?"撤回一次":"勾一次",()=>{tickNext(st);const s=paper.querySelector(`.slot[data-id="${st.id}"]`);if(s)paintStep(s,st);touch(run)},MOD+"↵"]);
+    if(!st.mindset)items.push([isStepDone(st)?"撤回一次":"勾一次",()=>{tickNext(st);const s=paper.querySelector(`.slot[data-id="${st.id}"]`);if(s)paintStep(s,st);touch(run)},MOD+"↵"]);
+    items.push([st.mindset?"改回步骤":"设为 Mindset",()=>{toggleMind(st);touch(run)}]);
     stepMenu(items,run.steps,st,idx,()=>{run.touched=now()});
   }
   items.push(["完成这一轮",()=>finishRun(sop,run)]);
@@ -887,6 +998,12 @@ function runMenu(items,{sop,run},has,idx){
   items.push(["回到 SOP",toShelf,"Esc"]);
 }
 
+// 设为 Mindset / 改回来：文字保留，只换身份
+function toggleMind(it){
+  it.mindset=!it.mindset;
+  if(it.mindset)it.ms=now();
+  save();render();pulse(it.id);
+}
 function showMenu(x,y,items){
   menu.textContent="";
   const hr=()=>{if(menu.lastChild&&menu.lastChild.tagName!=="HR")menu.append(el("hr"))};
@@ -928,11 +1045,6 @@ document.addEventListener("contextmenu",e=>{
   e.preventDefault();commit();
   openMenu(e.clientX,e.clientY,e.target.closest(".slot"));
 });
-// 手机长按
-let lp;
-document.addEventListener("touchstart",e=>{const t=e.touches[0], tg=e.target;
-  lp=setTimeout(()=>openMenu(t.clientX,t.clientY,tg.closest&&tg.closest(".slot")),560)},{passive:true});
-["touchend","touchmove","touchcancel"].forEach(ev=>document.addEventListener(ev,()=>clearTimeout(lp),{passive:true}));
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#menu"))closeMenu()});
 addEventListener("scroll",closeMenu,{passive:true});addEventListener("resize",closeMenu);
 
@@ -942,6 +1054,8 @@ addEventListener("scroll",closeMenu,{passive:true});addEventListener("resize",cl
 document.addEventListener("keydown",e=>{
   const tg=e.target, editing=/^(TEXTAREA|INPUT)$/.test(tg.tagName)&&!tg.readOnly;
   if(e.key==="Escape"){
+    if(drag)return endDrag();
+    if(!$("pp").hidden)return closePrint();
     if(menu.classList.contains("on"))return closeMenu();
     if(editing)return tg.blur();                                     // 第一下：退出编辑
     if(S.view==="paper"){
@@ -957,6 +1071,8 @@ document.addEventListener("keydown",e=>{
   const mod=e.metaKey||e.ctrlKey, k=(e.key||"").toLowerCase();
   if(mod&&k==="s"){e.preventDefault();commit();saveFile(e.shiftKey);return}
   if(mod&&k==="o"){e.preventDefault();openFile();return}
+  if(mod&&k==="p"){e.preventDefault();commit();openPrint();return}
+  if(!$("pp").hidden)return;
   if(S.view==="paper"&&(e.key==="PageDown"||e.key==="PageUp")){
     e.preventDefault();commit();S.page+=e.key==="PageDown"?1:-1;save();render();return;
   }
@@ -964,10 +1080,156 @@ document.addEventListener("keydown",e=>{
     const slot=tg.closest&&tg.closest(".slot");
     if(!slot||!slot.dataset.id)return;
     const idx=+slot.dataset.idx, A=curAt();
-    if(S.view==="paper"&&S.mode==="open"){e.preventDefault();const it=openList()[idx];if(it)complete(it)}
-    else if(A&&A.kind==="run"){e.preventDefault();const st=A.run.steps[idx];if(st){tickNext(st);paintStep(slot,st);touch(A.run)}}
+    if(S.view==="paper"&&S.mode==="open"){e.preventDefault();const it=openList()[idx];if(it&&!it.mindset)complete(it)}
+    else if(A&&A.kind==="run"){e.preventDefault();const st=A.run.steps[idx];if(st&&!st.mindset){tickNext(st);paintStep(slot,st);touch(A.run)}}
   }
 });
+
+/* =========================================================
+   长按拖动：按住约半秒不动，格子浮起，再拖到别的格子上就插到那里
+   （一按下就拖动，仍然是选中文字）
+   ========================================================= */
+const HOLD=500;
+let drag=null;   // {id, x0, y0, timer, on, slot, to}
+function dragModel(){
+  if(S.view==="paper")return S.mode==="open"?{list:openList(),move:(it,to)=>moveTo(it,to)}:null;
+  if(S.view!=="sop")return null;
+  const A=curAt();
+  if(!A)return {list:S.sops,move:(it,to)=>move(S.sops,it,to)};
+  if(A.kind==="tpl")return {list:A.sop.draft,move:(it,to)=>move(A.sop.draft,it,to)};
+  if(A.kind==="run")return {list:A.run.steps,move:(it,to)=>{move(A.run.steps,it,to);A.run.touched=now()}};
+  return null;
+}
+paper.addEventListener("mousedown",e=>{
+  const slot=e.target.closest(".slot");
+  if(e.button!==0||!slot||!slot.dataset.id||slot.classList.contains("zoom")||e.target.closest(".dot,.sub,.foot,.num")||!dragModel())return;
+  drag={id:slot.dataset.id,x0:e.clientX,y0:e.clientY,on:false};
+  drag.timer=setTimeout(lift,HOLD);
+});
+function lift(){
+  commit();
+  const s=paper.querySelector(`.slot[data-id="${drag.id}"]`);
+  if(!s){drag=null;return}
+  getSelection().removeAllRanges();
+  drag.on=true;drag.slot=s;s.classList.add("lift");document.body.classList.add("dragging");
+}
+document.addEventListener("mousemove",e=>{
+  if(!drag)return;
+  if(!drag.on){if(Math.hypot(e.clientX-drag.x0,e.clientY-drag.y0)>5)endDrag();return}
+  e.preventDefault();
+  drag.slot.style.transform=`translate(${e.clientX-drag.x0}px,${e.clientY-drag.y0}px) scale(1.04)`;
+  const hit=document.elementFromPoint(e.clientX,e.clientY), t=hit&&hit.closest(".slot[data-idx]");
+  paper.querySelectorAll(".drop").forEach(x=>x.classList.remove("drop"));
+  drag.to=null;
+  if(t&&t!==drag.slot&&paper.contains(t)){t.classList.add("drop");drag.to=+t.dataset.idx}
+});
+document.addEventListener("mouseup",()=>{
+  if(!drag)return;
+  const d=drag;endDrag();
+  if(!d.on||d.to==null)return;
+  const m=dragModel(), it=m&&m.list.find(x=>x.id===d.id);
+  if(!it)return;
+  const to=Math.min(d.to,m.list.length-1);
+  if(m.list.indexOf(it)===to)return;
+  m.move(it,to);save();render();pulse(it.id);
+});
+function endDrag(){
+  if(!drag)return;
+  clearTimeout(drag.timer);
+  if(drag.slot){drag.slot.classList.remove("lift");drag.slot.style.transform=""}
+  paper.querySelectorAll(".drop").forEach(x=>x.classList.remove("drop"));
+  document.body.classList.remove("dragging");drag=null;
+}
+
+/* =========================================================
+   导出打印：按结构平铺成文字，排成 A5 页，两页一张 A4 横放，单面打印后从中间裁开
+   ========================================================= */
+// 一行一块：{text, mk 前面的记号, lvl 缩进, head 标题行, memo 记录, mind, done}
+function itemBlocks(arr,lvl,out){
+  [...openOf(arr),...arr.filter(i=>i.done)].forEach(i=>{
+    if(!i.text.trim()&&!(i.children&&i.children.length))return;
+    out.push(i.mindset?{text:i.text.trim(),lvl,mind:true}:{text:i.text.trim(),lvl,mk:i.done?"●":"○",done:i.done});
+    if(i.children)itemBlocks(i.children,lvl+1,out);
+  });
+}
+function stepBlocks(steps,out,withTicks){
+  steps.forEach(s=>{
+    if(!s.text.trim()&&!s.note.trim())return;
+    if(s.mindset)return out.push({text:s.text.trim(),lvl:0,mind:true});
+    out.push({text:s.text.trim(),lvl:0,mk:withTicks?"●".repeat(s.ticks)+"○".repeat(s.times-s.ticks):"○".repeat(s.times),done:withTicks&&isStepDone(s)});
+    if(withTicks)s.note.split("\n").filter(l=>l.trim()).forEach(l=>out.push({text:l.trim(),lvl:1,memo:true}));
+  });
+}
+const runHead=(sop,r)=>[sop.name,r.title.trim(),fmtDay(r.start)].filter(Boolean).join("　");
+function sopBlocks(sop,out){
+  [...doneRuns(sop),...activeRuns(sop)].forEach(r=>{out.push({text:runHead(sop,r),head:true});stepBlocks(r.steps,out,true)});
+}
+function exportBlocks(scope){
+  const out=[];
+  if(scope==="all"){
+    out.push({text:"纸",head:true});itemBlocks(S.items,0,out);
+    S.sops.forEach(s=>sopBlocks(s,out));
+    return out;
+  }
+  const A=curAt();
+  if(S.view==="paper"){out.push({text:["纸",...L.chain.map(title)].join(" / "),head:true});itemBlocks(cur(),0,out)}
+  else if(S.view==="mind"){let day="";collectMinds().forEach(m=>{const d=fmtDay(m.ms);if(d!==day){day=d;out.push({text:d,head:true})}out.push({text:m.text,lvl:0,mind:true})})}
+  else if(!A)S.sops.forEach(s=>sopBlocks(s,out));
+  else if(A.kind==="tpl"){out.push({text:A.sop.name,head:true});stepBlocks(A.sop.draft,out,false)}
+  else if(A.run){out.push({text:runHead(A.sop,A.run),head:true});stepBlocks(A.run.steps,out,true)}
+  else sopBlocks(A.sop,out);
+  return out;
+}
+function blockNode(b){
+  const n=el("div","pb"+(b.head?" ph":"")+(b.memo?" pm":"")+(b.mind?" pmind":"")+(b.done?" pdone":""));
+  if(b.lvl)n.style.paddingLeft=(b.lvl*1.4)+"em";
+  if(b.mk)n.append(el("span","mk",b.mk));
+  n.append(el("span","tx",b.text));
+  return n;
+}
+// 一块一块往 A5 页里放，放不下就换下一页；标题不会单独留在页底
+function buildSheets(){
+  const {pt,lh,scope}=S.print, box=$("sheets");
+  box.textContent="";box.style.setProperty("--ppt",pt+"pt");box.style.setProperty("--plh",lh);
+  let sheet=null, inner=null, n=0;
+  const newPage=()=>{
+    if(n%2===0){sheet=el("div","sheet");box.append(sheet)}
+    const p=el("div","a5");inner=el("div","a5-in");p.append(inner);sheet.append(p);n++;
+  };
+  newPage();
+  const blocks=exportBlocks(scope);
+  if(!blocks.length)inner.append(el("div","pb pdone","这里还没有内容"));
+  blocks.forEach(b=>{
+    const node=blockNode(b);inner.append(node);
+    if(inner.scrollHeight>inner.clientHeight+1&&inner.children.length>1){
+      node.remove();
+      const prev=inner.lastElementChild, carry=prev&&prev.classList.contains("ph")&&inner.children.length>1;
+      newPage();if(carry)inner.append(prev);inner.append(node);
+    }
+  });
+  if(n%2===1)sheet.append(el("div","a5"));
+  $("ppInfo").textContent=`${n} 页 A5，打印 ${Math.ceil(n/2)} 张 A4`;
+  $("ppPt").textContent=pt+" pt";$("ppLh").textContent=lh.toFixed(1);
+  document.querySelectorAll("#pp [data-scope]").forEach(b=>b.classList.toggle("on",b.dataset.scope===scope));
+  fitPreview();
+}
+// 预览只是缩小来看（transform 不影响排版），打印时按原尺寸
+function fitPreview(){
+  const sh=$("sheets"), k=Math.min(1,($("ppView").clientWidth-48)/sh.offsetWidth);
+  sh.style.transform=`scale(${k})`;
+  Object.assign($("sheetsBox").style,{width:sh.offsetWidth*k+"px",height:sh.offsetHeight*k+"px"});
+}
+function openPrint(){closeMenu();commit();$("pp").hidden=false;buildSheets();document.fonts.ready.then(()=>{if(!$("pp").hidden)buildSheets()})}
+function closePrint(){$("pp").hidden=true}
+function setPrint(k,v){S.print[k]=v;save();buildSheets()}
+document.querySelectorAll("#pp [data-scope]").forEach(b=>b.onclick=()=>setPrint("scope",b.dataset.scope));
+$("ppPtDown").onclick=()=>setPrint("pt",Math.max(6,S.print.pt-0.5));
+$("ppPtUp").onclick=()=>setPrint("pt",Math.min(14,S.print.pt+0.5));
+$("ppLhDown").onclick=()=>setPrint("lh",Math.max(1.1,Math.round((S.print.lh-0.1)*10)/10));
+$("ppLhUp").onclick=()=>setPrint("lh",Math.min(2.4,Math.round((S.print.lh+0.1)*10)/10));
+$("ppGo").onclick=()=>print();
+$("ppClose").onclick=closePrint;
+addEventListener("resize",()=>{if(!$("pp").hidden)fitPreview()});
 
 /* =========================================================
    保存到本地文件
