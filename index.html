@@ -1445,7 +1445,7 @@ async function migrateInline(cards){
     // 翻页本：把每页里的内联 data URL 迁进图片仓库
     if(c.pdfbook&&c.pdfbook.pages){
       for(const pg of c.pdfbook.pages){
-        if(pg.src&&!pg.ih){try{const {h,ok}=await putImg(pg.src);pg.ih=h;if(ok)delete pg.src}catch(e){}}
+        if(pg.src&&!pg.ih){try{const {h,ok}=await putImg(pg.src);pg.ih=h;/* 同样不删 pg.src，留备份 */}catch(e){}}
       }
       const cur=c.pdfbook.cur||0,p0=c.pdfbook.pages[cur];
       if(p0&&p0.ih&&c.ih!==p0.ih){c.ih=p0.ih;if(p0.ar)c.ar=p0.ar}
@@ -1454,7 +1454,10 @@ async function migrateInline(cards){
     try{
       const {h,ok}=await putImg(c.src);
       c.ih=h;
-      if(ok)delete c.src;          // 存盘成功才丢掉内联副本
+      // 注意：故意不删 c.src。保留在内存里作为 writeBundle 的备份。
+      // 万一 IDB 在写文件时取不到数据，writeBundle 可以回退到 c.src。
+      // cleanCard 会在生成"存盘副本"时去掉它，避免 IDB 的 KEY 存储膨胀。
+      if(!ok){/* IDB 没写进去，src 留着是唯一副本 */}
     }catch(e){/* 保留 c.src，图片照样能显示 */}
   }
 }
@@ -1518,7 +1521,18 @@ const freeSel=()=>sel.filter(i=>!isLocked(i));        // 可改内容的
 const movableSel=()=>sel.filter(i=>!isPinned(i));     // 可移动的
 
 const size={};
-const cleanCard=c=>{const o={...c};delete o._tg;delete o._pg;return o};
+const cleanCard=c=>{
+  const o={...c};delete o._tg;delete o._pg;
+  // 有 ih（已安全存入 IDB）的卡片，从存档副本里去掉 src，避免 IDB 存储膨胀。
+  // 没有 ih 的（IDB 写失败），保留 src 确保存档里有图片数据。
+  if(o.ih&&o.src)delete o.src;
+  // pdfbook 各页同理
+  if(o.pdfbook&&o.pdfbook.pages){
+    o.pdfbook={...o.pdfbook,pages:o.pdfbook.pages.map(pg=>{
+      const q={...pg};if(q.ih&&q.src)delete q.src;return q})};
+  }
+  return o;
+};
 function packState(){return JSON.stringify({sheets:S.sheets,frames:S.frames,links:S.links,
   cards:S.cards.map(cleanCard),docs:S.docs})}
 function unpackState(str){return JSON.parse(str)}
@@ -1730,10 +1744,15 @@ async function writeBundle(list,put){
     // 翻页本：把每页的图也内联成 data URL 输出
     if(o.pdfbook&&o.pdfbook.pages){
       const ps=await Promise.all(o.pdfbook.pages.map(async pg=>{
-        const q={...pg};if(q.ih){q.src=(await imgDataURL(q.ih))||q.src||"";delete q.ih}return q}));
+        const q={...pg};if(q.ih){q.src=q.src||(await imgDataURL(q.ih))||"";delete q.ih}return q}));
       o.pdfbook={...o.pdfbook,pages:ps};
     }
-    if(o.ih){o.src=(await imgDataURL(o.ih))||o.src||"";delete o.ih}
+    if(o.ih){
+      // src 优先（内存里有备份，比 IDB 更可靠）；IDB 作为备用
+      const d=o.src||(await imgDataURL(o.ih));
+      if(d){o.src=d}else{o.src="";console.warn("[board] image missing:",o.ih)}
+      delete o.ih;
+    }
     const s=(i?",\n":"\n")+JSON.stringify(o,null,1);
     buf.push(s);bl+=s.length;
     if(bl>4e6){await put(buf.join(""));buf=[];bl=0}
