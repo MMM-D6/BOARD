@@ -1,0 +1,279 @@
+--- index.r1.html	2026-10-02 18:38:00.202596783 +0000
++++ index.html	2026-10-02 18:39:21.816709390 +0000
+@@ -1643,6 +1643,10 @@
+ const WID=QS.get("w")||"";
+ const KEY=WID?("state:"+WID):"state";
+ const FH=WID?("filehandle:"+WID):"filehandle";
++// localStorage 兜底副本（2026-10 改）：只在 IndexedDB 写入失败时才写，IndexedDB 一写成功就清掉，
++// 所以只要它带着 ":t" 标记还在，它就一定比 IndexedDB 里的新。按窗口分开存，各窗口互不串用。
++// 主窗口沿用原来的键名 "boardmin"；从前留下的、不带标记的旧副本在启动时挪进 IndexedDB 的 "lsold:" 下保存，不再被自动读出。
++const LSK=WID?("boardmin:"+WID):"boardmin";
+ let dbP=null;
+ function idb(){
+   if(dbP)return dbP;
+@@ -1696,14 +1700,27 @@
+   });
+ }
+ async function loadState(){
++  try{if(localStorage.getItem(LSK+":t")){const l=localStorage.getItem(LSK);if(l)return JSON.parse(l)}}catch(e){}
+   const v=await kvGet(KEY);if(v)return v;
+-  try{const l=localStorage.getItem("boardmin");return l?JSON.parse(l):null}catch(e){return null}
++  try{const l=localStorage.getItem(LSK);return l?JSON.parse(l):null}catch(e){return null}
++}
++// 旧版留下的兜底副本（不带 ":t" 标记）：可能是很久以前某次 IndexedDB 失败时写的。
++// 只有在 IndexedDB 里已经有正常数据时才处理：先完整存进 IndexedDB（"lsold:时间"），确认存好了才从 localStorage 删掉。
++// 一个字都不丢，只是不再有机会被当成当前画布读出来。
++async function retireLegacyLS(){
++  try{
++    if(WID||localStorage.getItem(LSK+":t"))return;
++    const l=localStorage.getItem(LSK);if(!l)return;
++    if(!(await kvGet(KEY)))return;
++    if(await kvPut("lsold:"+Date.now(),l))localStorage.removeItem(LSK);
++  }catch(e){}
+ }
+ let st,storeWarnT=0;const save=()=>{clearTimeout(st);st=setTimeout(async()=>{
+   const plain=JSON.parse(JSON.stringify({...S,cards:S.cards.map(cleanCard)}));
+   const ok=await kvPut(KEY,plain);
+   autoBackup(false);
+-  if(!ok){try{localStorage.setItem("boardmin",JSON.stringify(S))}
++  if(ok){try{if(localStorage.getItem(LSK+":t")){localStorage.removeItem(LSK);localStorage.removeItem(LSK+":t")}}catch(e){}}
++  if(!ok){try{localStorage.setItem(LSK,JSON.stringify(S));localStorage.setItem(LSK+":t",String(Date.now()))}
+     catch(e){if(Date.now()-storeWarnT>60000){storeWarnT=Date.now();toast(t("storeFail"))}}}   // 两处都没存进去才提示，一分钟最多一次
+   fileAutoSave();
+ },400)};
+@@ -2209,6 +2226,23 @@
+     BK=kept;
+   }catch(e){}
+ }
++// 清掉索引里已经没有的旧快照（2026-10）：修复之前每天漏下一份，这里在启动后补删。
++// 只删「不在索引里、并且是一天以前」的 bk: 条目，刚写下还没来得及进索引的绝不碰；只读键名，不读内容。
++async function cleanOrphanBackups(){
++  try{
++    const db=await idb();if(!db)return;
++    const keys=await new Promise(r=>{try{
++      const q=db.transaction("kv").objectStore("kv").getAllKeys(IDBKeyRange.bound("bk:","bk:\uffff"));
++      q.onsuccess=()=>r(q.result||[]);q.onerror=()=>r([])}catch(e){r([])}});
++    const idx=(await kvGet("bkIndex"))||[];
++    const live=new Set(idx.map(it=>"bk:"+it.t)),old=Date.now()-864e5;
++    const drop=keys.filter(k=>typeof k==="string"&&!live.has(k)&&+k.slice(3)<old);
++    if(!drop.length)return 0;
++    await new Promise(r=>{try{const tx=db.transaction("kv","readwrite"),st=tx.objectStore("kv");
++      drop.forEach(k=>st.delete(k));tx.oncomplete=r;tx.onerror=r;tx.onabort=r}catch(e){r()}});
++    return drop.length;
++  }catch(e){return 0}
++}
+ let BK=[];
+ async function loadBackups(){try{BK=(await kvGet("bkIndex"))||[]}catch(e){BK=[]}}
+ async function restoreBackup(it){
+@@ -5547,7 +5581,7 @@
+   if(window.html2canvas)return Promise.resolve(window.html2canvas);
+   return new Promise((res,rej)=>{
+     const el=document.createElement("script");
+-    el.src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
++    el.src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";sriTag(el,el.src);
+     const fail=()=>rej(new Error(t("errCDN")));
+     el.onload=()=>window.html2canvas?res(window.html2canvas):fail();el.onerror=fail;
+     document.head.appendChild(el);
+@@ -5689,6 +5723,31 @@
+    pdf.js 从 CDN 按需加载，只在真的导入 PDF 时才去取；取不到就明说，不影响其他功能。 */
+ // 解析库的来源：本地优先（放了 vendor/ 就完全离线可用），再依次试几个 CDN。
+ // 每一项的 worker 跟着同一个来源走，版本必须与主文件一致。
++/* 外部库的完整性校验（SRI，2026-10）。
++   每个 CDN 地址都配一个内容指纹：浏览器下载完先算一遍，跟这里对不上就拒绝执行，
++   当作这个地址失败，接着试列表里的下一个；所有来源都不对时，跟断网时的处理完全一样。
++   指纹是从 npm 上同一版本的原文件算出来的（jsdelivr /npm/ 与 unpkg 原样转发 npm 的文件）。
++   本地 vendor/ 下的文件没有指纹，照旧加载。升级任何一个库的版本时，这里的指纹必须一起换，
++   否则那个地址会一直被当成失败。 */
++const SRI={
++  "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js":"sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H",
++  "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js":"sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG",
++  "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js":"sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG",
++  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js":"sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
++  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js":"sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2",
++  "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js":"sha384-OemFRmhjDZwhIKuUld0HJozkF2YErsgDaCL41trxGQZt4/WgnopJQqQl2DvDZ07Z",
++  "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js":"sha384-sS8B4COeBqzQV9DaPpp5cbpF+xz2jPcFbN3L8FL3/dx0RMC6WLUwTUOFm0iFb1lw",
++  "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js":"sha384-OemFRmhjDZwhIKuUld0HJozkF2YErsgDaCL41trxGQZt4/WgnopJQqQl2DvDZ07Z",
++  "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js":"sha384-sS8B4COeBqzQV9DaPpp5cbpF+xz2jPcFbN3L8FL3/dx0RMC6WLUwTUOFm0iFb1lw"
++};
++function sriTag(el,src){const h=SRI[src];if(h){el.integrity=h;el.crossOrigin="anonymous"}}
++// PDF 解析的 worker 不能用 <script integrity>，所以先按指纹 fetch 下来，校验通过再交给 pdf.js（同源的 blob 地址）
++async function sriWorker(url){
++  const h=SRI[url];if(!h)return url;
++  const r=await fetch(url,{integrity:h,mode:"cors",credentials:"omit"});
++  if(!r.ok)throw new Error("cdn");
++  return URL.createObjectURL(new Blob([await r.text()],{type:"text/javascript"}));
++}
+ const PDFJS_SRCS=[
+   ["vendor/pdf.min.js","vendor/pdf.worker.min.js"],
+   ["https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
+@@ -5700,11 +5759,12 @@
+ ];
+ function loadOne(src,worker){
+   return new Promise((res,rej)=>{
+-    const el=document.createElement("script");el.src=src;let done=false;
++    const el=document.createElement("script");sriTag(el,src);el.src=src;let done=false;
+     const ok=()=>{if(done)return;done=true;
+       if(!window.pdfjsLib)return rej(new Error("cdn"));
+-      try{pdfjsLib.GlobalWorkerOptions.workerSrc=worker}catch(e){}
+-      res(window.pdfjsLib)};
++      sriWorker(worker).then(w=>{
++        try{pdfjsLib.GlobalWorkerOptions.workerSrc=w}catch(e){}
++        res(window.pdfjsLib)},()=>{el.remove();window.pdfjsLib=undefined;rej(new Error("cdn"))});};
+     el.onload=ok;
+     el.onerror=()=>{if(!done){done=true;el.remove();rej(new Error("cdn"))}};
+     document.head.appendChild(el);
+@@ -8287,10 +8347,9 @@
+ }
+ function wrStyleObj(o,lv){
+   const st={...DEF,...S.textDef,...(o.s||{})};
+-  // 标题按层级放大字号：lv1 约 1.47×、lv2 约 1.2×、lv3 约 1.07×
+-  // 基数取卡片自身的字号（用户可以调），倍率固定——既有层次感，又不破坏用户的字号设置
+-  const scale=[1,1.47,1.2,1.07,1.07][Math.min(lv||0,4)];
+-  return {fontFamily:famCSS(st.family),fontSize:Math.round(st.size*scale)+"px",
++  // 标题字号直接用卡片自己的字号，跟画布上一样大（2026-10 统一）。
++  // 从前这里再乘 1.47 / 1.2 / 1.07，可 setLevel 已经按 LVSCALE 放大过一次，一级标题画布 32px、稿子里变成 47px。
++  return {fontFamily:famCSS(st.family),fontSize:st.size+"px",
+     fontWeight:String(lv?600:st.weight),lineHeight:String(st.lh),
+     letterSpacing:st.spacing+"em",textAlign:st.align,color:st.color,
+     fontStyle:st.italic?"italic":"normal"};
+@@ -10473,7 +10532,7 @@
+   for(const src of JSZIP_SRCS){
+     try{
+       await new Promise((res,rej)=>{
+-        const el=document.createElement("script");el.src=src;let done=false;
++        const el=document.createElement("script");sriTag(el,src);el.src=src;let done=false;
+         const ok=()=>{if(done)return;done=true;window.JSZip?res():(el.remove(),rej(new Error("jszip")))};
+         el.onload=ok;el.onerror=()=>{if(!done){done=true;el.remove();rej(new Error("net"))}};
+         document.head.appendChild(el);
+@@ -10944,6 +11003,7 @@
+   await loadRecents();
+   await loadGlobalTpl();
+   await loadBackups();
++  setTimeout(()=>{retireLegacyLS();cleanOrphanBackups()},20000);   // 启动 20 秒后在后台做，不占打开的时间
+   const wantOpen=QS.get("open");
+   if(wantOpen)setTimeout(()=>openRecent(wantOpen).catch(()=>toast(t("noPerm"))),300);
+   applyCam();render();
+--- tests.r1.js	2026-10-02 18:41:24.835242138 +0000
++++ tests.js	2026-10-02 18:41:24.856197451 +0000
+@@ -5881,6 +5881,84 @@
+   c.ok("索引之外没有留下孤儿快照（" + bk.orphans + "）", bk.orphans === 0);
+ });
+ 
++group("round2 兜底副本、外部库指纹、标题字号、旧快照清理（2026-10）", async (c) => {
++  // 1) 写作页里的标题字号跟画布一样大（不再二次放大）
++  const hs = await c.run(async () => {
++    S.cards = [{ id: "h", x: 0, y: 0, w: 400, text: "H", s: { ...DEF } }, { id: "b", x: 0, y: 200, w: 400, text: "B", s: { ...DEF } }];
++    S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render(); sel = ["h"]; setLevel(1); camTo(0, 0, 1, true);
++    await new Promise((z) => setTimeout(z, 300));
++    const cv = getComputedStyle(document.querySelector('.card[data-id="h"] .cap')).fontSize;
++    const d = addDoc({ x: 1200, y: 0 }, "x"); wrImport(["h", "b"], false, d.id);
++    await new Promise((z) => setTimeout(z, 400));
++    const id = d.ids.find((i) => card(i).text === "H");
++    return { cv, doc: getComputedStyle(document.querySelector(`#docs .blk[data-id="${id}"] .cap`)).fontSize };
++  });
++  c.ok("一级标题在稿子里与画布上同样大（" + hs.cv + " / " + hs.doc + "）", hs.cv === hs.doc);
++
++  // 2) localStorage 兜底副本
++  const ls = await c.run(async () => {
++    const keep = await kvGet(KEY), lsKeep = localStorage.getItem(LSK), tKeep = localStorage.getItem(LSK + ":t");
++    const o = {};
++    await kvPut(KEY, { v: 8, cards: [{ id: "IDB", x: 0, y: 0, w: 200, text: "idb" }], links: [] });
++    // 新格式（带标记）：一定比 IndexedDB 新，优先读它
++    localStorage.setItem(LSK, JSON.stringify({ v: 8, cards: [{ id: "LS", x: 0, y: 0, w: 200, text: "ls" }], links: [] }));
++    localStorage.setItem(LSK + ":t", "1");
++    o.prefersMarked = ((await loadState()).cards[0].id === "LS");
++    // IndexedDB 一写成功，带标记的副本就被清掉
++    save(); await new Promise((z) => setTimeout(z, 900));
++    o.clearedOnSuccess = !localStorage.getItem(LSK) && !localStorage.getItem(LSK + ":t");
++    // 旧格式（不带标记）：IndexedDB 有数据时优先读 IndexedDB，并在后台挪进 IndexedDB 保存，不丢
++    await kvPut(KEY, { v: 8, cards: [{ id: "IDB", x: 0, y: 0, w: 200, text: "idb" }], links: [] });
++    localStorage.setItem(LSK, "LEGACYCOPY");
++    o.legacyNotPreferred = ((await loadState()).cards[0].id === "IDB");
++    await retireLegacyLS();
++    o.legacyMoved = !localStorage.getItem(LSK);
++    const db = await idb();
++    const keys = await new Promise((r) => { const q = db.transaction("kv").objectStore("kv").getAllKeys(IDBKeyRange.bound("lsold:", "lsold:\uffff")); q.onsuccess = () => r(q.result); });
++    let found = false; for (const k of keys) if ((await kvGet(k)) === "LEGACYCOPY") { found = true; await kvPut(k, null); }
++    o.legacyKept = found;
++    // IndexedDB 里没有数据时，旧副本仍然照原样读出、也不挪走（那时它可能是唯一的一份）
++    await kvPut(KEY, null); localStorage.setItem(LSK, JSON.stringify({ v: 8, cards: [{ id: "ONLY", x: 0, y: 0, w: 200, text: "o" }], links: [] }));
++    o.legacyStillReadWhenAlone = ((await loadState()).cards[0].id === "ONLY");
++    await retireLegacyLS(); o.legacyNotMovedWhenAlone = !!localStorage.getItem(LSK);
++    // 还原
++    await kvPut(KEY, keep || null);
++    if (lsKeep == null) localStorage.removeItem(LSK); else localStorage.setItem(LSK, lsKeep);
++    if (tKeep == null) localStorage.removeItem(LSK + ":t"); else localStorage.setItem(LSK + ":t", tKeep);
++    return o;
++  });
++  c.ok("带标记的兜底副本优先于 IndexedDB 读出", ls.prefersMarked);
++  c.ok("IndexedDB 写成功后兜底副本被清掉", ls.clearedOnSuccess);
++  c.ok("不带标记的旧副本不会盖过 IndexedDB", ls.legacyNotPreferred);
++  c.ok("旧副本挪进 IndexedDB 保存，一个字不丢", ls.legacyMoved && ls.legacyKept);
++  c.ok("IndexedDB 为空时，旧副本照旧读出、不挪走", ls.legacyStillReadWhenAlone && ls.legacyNotMovedWhenAlone);
++
++  // 3) 旧快照清理：只删索引外、一天以前的
++  const cl = await c.run(async () => {
++    const idx0 = await kvGet("bkIndex"), day = 864e5, now = Date.now();
++    const tOld = now - 5 * day, tNew = now - 3600e3, tIdx = now - 9 * day;
++    await kvPut("bk:" + tOld, { t: tOld }); await kvPut("bk:" + tNew, { t: tNew }); await kvPut("bk:" + tIdx, { t: tIdx });
++    await kvPut("bkIndex", [...(idx0 || []), { t: tIdx, n: 1, name: "" }]);
++    await cleanOrphanBackups();
++    const r = { oldGone: !(await kvGet("bk:" + tOld)), recentKept: !!(await kvGet("bk:" + tNew)), indexedKept: !!(await kvGet("bk:" + tIdx)),
++      indexIntact: !!(await kvGet("bkIndex")) };
++    await kvPut("bk:" + tNew, null); await kvPut("bk:" + tIdx, null); await kvPut("bkIndex", idx0 || []);
++    return r;
++  });
++  c.ok("索引之外、一天以前的旧快照被删掉", cl.oldGone);
++  c.ok("刚写下的快照（一天以内）不碰", cl.recentKept);
++  c.ok("索引里的快照不碰，索引本身也在", cl.indexedKept && cl.indexIntact);
++
++  // 4) 外部库：每个 CDN 地址都有指纹；本地 vendor/ 不需要
++  const sri = await c.run(() => {
++    const urls = [...PDFJS_SRCS.flat(), ...JSZIP_SRCS, "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"];
++    return { missing: urls.filter((u) => /^https:/.test(u) && !/^sha384-[A-Za-z0-9+\/]{64}$/.test(SRI[u] || "")),
++      local: urls.filter((u) => !/^https:/.test(u)).every((u) => !SRI[u]) };
++  });
++  c.ok("每个 CDN 地址都配了指纹" + (sri.missing.length ? "：" + sri.missing.join(" ") : ""), sri.missing.length === 0);
++  c.ok("本地 vendor/ 文件照旧加载，不要求指纹", sri.local);
++});
++
+ group("static 静态检查", async (c) => {
+   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");
+   const js = src.split("<script>").pop().split("</script>")[0];
+--- NOTES.r1.md	2026-10-02 18:46:55.847106311 +0000
++++ NOTES.md	2026-10-02 18:46:55.876823538 +0000
+@@ -1311,13 +1311,27 @@
+ **自动快照越积越多。** 旧代码先算要删的、后截到 40 份，被截掉的那些既不在索引里也没被删，
+ 大约每天漏下一份完整的结构快照。现在先截后删。修之前已经漏下的那些仍在浏览器仓库里，没有做一次性清理。
+ 
+-**这次查到、但涉及行为取舍、没有动的：**
+-- 启动读的是浏览器里的副本，不是绑定的文件；写回前也不看文件是否被别处改过。两台电脑经网盘同步同一个文件时，
+-  旧的一边写回会覆盖新的一边。
+-- localStorage 兜底副本键名不分窗口，只在 IndexedDB 失败时写入、从不清理，可能很旧。
+-- docx、html2canvas、jszip、pdf.js 从 CDN 取，没有 `integrity`。
+-- 写作页里标题字号被放大两次：`setLevel` 已按 `LVSCALE` 放大，`wrStyleObj` 又乘一次（一级标题画布 32px，稿子里 47px）。
+-  `docpage` 与 `write` 组的"保留卡片字号"因此不过，等决定要哪一种再改代码或改测试。
++**第二轮（同月，按用户的决定）改的四处，`round2` 组守着：**
++
++- **localStorage 兜底副本。** 键名按窗口分开（`LSK`，主窗口仍是 `boardmin`）；只在 IndexedDB 写入失败时写，
++  同时写一个 `LSK+":t"` 标记；IndexedDB 一写成功就连同标记一起清掉。所以**带标记的副本只要还在，就一定比 IndexedDB 新**，
++  `loadState` 先读它。旧版留下的、不带标记的副本：IndexedDB 里有数据时，启动 20 秒后 `retireLegacyLS` 把它原样存进
++  IndexedDB 的 `lsold:<时间>` 下，确认存好才从 localStorage 删；IndexedDB 为空时不动它（那时它可能是唯一的一份），照旧读出。
++- **外部库指纹（SRI）。** `SRI` 表给每个 CDN 地址配 sha384 指纹，`sriTag` 挂到 `<script>` 上；pdf.js 的 worker 不能挂
++  `integrity`，由 `sriWorker` 按指纹 fetch、校验通过后转成 blob 地址交给 pdf.js。对不上就当这个地址失败，试下一个；
++  全都不对时跟断网一样。本地 `vendor/` 不需要指纹。指纹是从 npm 上同一版本的文件算的；cdnjs 那几条是按 npm 文件推算的，
++  万一 cdnjs 的文件跟 npm 不是逐字节相同，结果只是跳过 cdnjs、改用 jsdelivr。**升级任何库的版本，指纹必须一起换。**
++- **写作页标题字号。** `wrStyleObj` 不再乘 1.47 / 1.2 / 1.07，直接用卡片自己的字号，与画布一致（一级标题都是 32px）。
++  导出 HTML / PDF 也跟着一致。字重仍是写作页自己的 600（画布一级标题是 700），这一处没有动。
++- **旧快照清理。** `cleanOrphanBackups` 启动 20 秒后在后台跑：只删不在 `bkIndex` 里、并且是一天以前的 `bk:` 条目，
++  只读键名不读内容。每次启动都会跑，没有可删的就什么都不做。
++
++**查到、按用户决定没有动的：**
++- 启动读的是浏览器里的副本，不是绑定的文件；写回前不看文件是否被别处改过。只用一台电脑时不成问题；
++  将来如果两台电脑经网盘同步同一个文件，旧的一边写回会覆盖新的一边。
++- **Word 的 `.docx` 从来没有真正导出过。** `loadDocx` 取的是 `docx@8.5.0/build/index.js`，而这个版本的包里没有这个文件
++  （只有 `build/index.umd.js` 等），所以每次都落到 `.doc`。`.doc` 那条路是好的，Word 照样打得开，所以没有动；
++  要启用真正的 `.docx`，得改地址、配指纹，并且第一次用真库跑通 `exportDocx` / `wrExportDocx`（这两条路从没被真库跑过）。
+ 
+ ## 十点九、两个外部小工具：抠图与拼版
+ 

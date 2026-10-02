@@ -88,7 +88,7 @@ frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
-render 画面导出、archive 存档与分页导出、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
+render 画面导出、archive 存档与分页导出、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
 
 ---
 
@@ -1023,7 +1023,7 @@ HTML 与 Markdown（`wrMD`）。画面类导出对这种版式没有意义，所
 |---|---|---|
 | 锁定 | 误碰已定稿内容 | 卡片级两段锁，连带锁住相关连线 |
 | 撤销 | 手滑 | 内存里 40 步 |
-| 自动快照 | 误操作且已自动保存 | 每 10 分钟一份存进 IndexedDB，留最近 12 份加按天 7 份 |
+| 自动快照 | 误操作且已自动保存 | 每 10 分钟一份存进 IndexedDB，留最近 12 份，其余每天一份，索引总共最多 40 份 |
 | 绑定文件 | 浏览器数据被清 | File System Access API 自动写回本地文件 |
 | 存档包 | 程序失效、平台变更、多年以后 | zip，内含分页 Markdown、图片原件、完整 json |
 
@@ -1285,6 +1285,53 @@ PBKDF2-SHA256 迭代 60 万次（`SNAP_KDF_ITER`，OWASP 2023 的建议值）派
 修法：新增 `escA`（在 `esc` 的基础上再转义引号）用于属性；菜单项改成 `textContent` 放文字。
 `safety` 组守着这几条，并顺带守：PDF 解析禁用 eval（`isEvalSupported:false`，PDF 里的脚本不会被执行，
 也不渲染注释层）、解析库只从 https 取、快照里只有自己那两段脚本。
+
+## 十点八之二、2026-10 系统排查补上的几处
+
+这次排查实测确认、并且已经修掉的问题，每一条都有 `importsafe` 组守着：
+
+**导入文件仍能执行脚本。** 十点八节只管了标签和菜单，另有几条路没堵上：画布卡片渲染时直接
+`cap.innerHTML=oc.rich`，导入时 `normCard` 也不洗 `rich`；卡片底色 `bg`、表格逐格颜色、
+连线颜色 `l.color`、各种 id 都原样拼进属性或 SVG 字符串。实测一个构造过的 .json 导入后脚本就会执行，
+而脚本能读到 IndexedDB 里的全部内容。修法集中在导入关口：`defangRich` 只删可执行的东西
+（脚本类元素、`on*` 属性、`javascript:` 链接），**没有可疑内容时原样返回，一个字符都不改**；
+id、颜色这类短字段含引号、尖括号、反引号、反斜杠就丢弃（`unsafeStr`），id 换一个新的，颜色退回默认；
+连线走 `normLinkIn`。不要把这里改成白名单式的整体重写，那会改动正常的格式。
+
+**`safeRich` 自己会触发 onerror。** 它原来用一个游离的 div 解析，赋值 `innerHTML` 的那一刻图片就开始加载。
+现在用 `<template>`（内容是惰性的），输出不变。粘贴路径也因此受益。
+
+**打开文件时各版本的样式丢了。** `verSnapshot` 存了 `s` 与 `bg`，`normCard` 规整版本时只留了文字，
+所以重新打开文件之后，切换版本只换字不换样子。现在一并保留。
+
+**写作页导出（HTML / PDF / .doc）的段落样式整个丢失。** `wrHTML` 把 `wrStyleObj` 拼成 `style="..."`，
+而字体名带双引号，属性在第一个引号处就断了，只剩 `font-family:`。现在用 `escA`。这正是第四点五节
+"行内样式要逐个属性赋值，不能拼字符串"说的那个坑在导出路径上的翻版。
+
+**自动快照越积越多。** 旧代码先算要删的、后截到 40 份，被截掉的那些既不在索引里也没被删，
+大约每天漏下一份完整的结构快照。现在先截后删。修之前已经漏下的那些仍在浏览器仓库里，没有做一次性清理。
+
+**第二轮（同月，按用户的决定）改的四处，`round2` 组守着：**
+
+- **localStorage 兜底副本。** 键名按窗口分开（`LSK`，主窗口仍是 `boardmin`）；只在 IndexedDB 写入失败时写，
+  同时写一个 `LSK+":t"` 标记；IndexedDB 一写成功就连同标记一起清掉。所以**带标记的副本只要还在，就一定比 IndexedDB 新**，
+  `loadState` 先读它。旧版留下的、不带标记的副本：IndexedDB 里有数据时，启动 20 秒后 `retireLegacyLS` 把它原样存进
+  IndexedDB 的 `lsold:<时间>` 下，确认存好才从 localStorage 删；IndexedDB 为空时不动它（那时它可能是唯一的一份），照旧读出。
+- **外部库指纹（SRI）。** `SRI` 表给每个 CDN 地址配 sha384 指纹，`sriTag` 挂到 `<script>` 上；pdf.js 的 worker 不能挂
+  `integrity`，由 `sriWorker` 按指纹 fetch、校验通过后转成 blob 地址交给 pdf.js。对不上就当这个地址失败，试下一个；
+  全都不对时跟断网一样。本地 `vendor/` 不需要指纹。指纹是从 npm 上同一版本的文件算的；cdnjs 那几条是按 npm 文件推算的，
+  万一 cdnjs 的文件跟 npm 不是逐字节相同，结果只是跳过 cdnjs、改用 jsdelivr。**升级任何库的版本，指纹必须一起换。**
+- **写作页标题字号。** `wrStyleObj` 不再乘 1.47 / 1.2 / 1.07，直接用卡片自己的字号，与画布一致（一级标题都是 32px）。
+  导出 HTML / PDF 也跟着一致。字重仍是写作页自己的 600（画布一级标题是 700），这一处没有动。
+- **旧快照清理。** `cleanOrphanBackups` 启动 20 秒后在后台跑：只删不在 `bkIndex` 里、并且是一天以前的 `bk:` 条目，
+  只读键名不读内容。每次启动都会跑，没有可删的就什么都不做。
+
+**查到、按用户决定没有动的：**
+- 启动读的是浏览器里的副本，不是绑定的文件；写回前不看文件是否被别处改过。只用一台电脑时不成问题；
+  将来如果两台电脑经网盘同步同一个文件，旧的一边写回会覆盖新的一边。
+- **Word 的 `.docx` 从来没有真正导出过。** `loadDocx` 取的是 `docx@8.5.0/build/index.js`，而这个版本的包里没有这个文件
+  （只有 `build/index.umd.js` 等），所以每次都落到 `.doc`。`.doc` 那条路是好的，Word 照样打得开，所以没有动；
+  要启用真正的 `.docx`，得改地址、配指纹，并且第一次用真库跑通 `exportDocx` / `wrExportDocx`（这两条路从没被真库跑过）。
 
 ## 十点九、两个外部小工具：抠图与拼版
 

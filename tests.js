@@ -5813,15 +5813,161 @@ group("snapgb 大画布的网页快照", async (c) => {
     .every((k) => T.en[k] && T.zh[k])));
 });
 
+group("importsafe 导入关口与本次修复（2026-10）", async (c) => {
+  // 1) 导入文件里的富文本、id、颜色、连线不得执行脚本；正常格式一个字符都不改
+  const r = await c.run(async () => {
+    window.__x = 0;
+    const legit = ['<b>粗体</b> <span style="color: rgb(200, 0, 0); font-family: &quot;EB Garamond&quot;;">红字</span>',
+      'a<br>b<div>c</div><font color="#123456">f</font><a href="https://x.org/?a=1&amp;b=2">L</a>',
+      '<span style="background-color: rgb(255, 240, 120);">荧光</span><i>i</i><u>u</u><s>s</s>',
+      '(Särmäkari, 2021, p. 7) &lt;x&gt; "q" \'s\''];
+    const same = legit.every((h) => defangRich(h) === h);
+    const d = { v: 8, cards: [
+      { id: "ok1", x: 0, y: 0, w: 300, text: "x", rich: legit[0] },
+      { id: "r1", x: 0, y: 150, w: 300, text: "r", rich: 'r<img src=x onerror="window.__x+=1"><script>window.__x+=1</script>' },
+      { id: 'q"><img src=x onerror="window.__x+=2">', x: 0, y: 300, w: 300, text: "y" },
+      { id: "c3", x: 0, y: 450, w: 300, text: "z", bg: 'red" onmouseover="window.__x+=4' }],
+      links: [{ id: "l1", a: "ok1", b: "c3", color: '#000"/><image href="x" onerror="window.__x+=8"/><path d="' }] };
+    await absorb(d, false); render(); drawLinks();
+    await new Promise((z) => setTimeout(z, 700));
+    window.__y = 0; safeRich('<img src=z onerror="window.__y++">');
+    await new Promise((z) => setTimeout(z, 400));
+    return { same, fired: window.__x, safeRichFired: window.__y, kept: card("ok1").rich === legit[0],
+      n: S.cards.length, linkColor: S.links[0] && S.links[0].color };
+  });
+  c.ok("正常的格式原样保留（逐字节相同）", r.same && r.kept);
+  c.ok("导入的富文本、id、底色、连线颜色都执行不了脚本", r.fired === 0);
+  c.ok("清洗函数 safeRich 本身解析时不会触发 onerror", r.safeRichFired === 0);
+  c.ok("可疑的卡片仍然导入（只洗字段，不丢卡片）", r.n === 4);
+  c.ok("带引号的连线颜色被丢弃，退回默认色", r.linkColor === undefined);
+
+  // 2) 打开文件时各版本的字体样式与底色不丢
+  const v = await c.run(async () => {
+    await absorb({ v: 8, cards: [{ id: "a", x: 0, y: 0, w: 300, text: "B", verOn: "v2",
+      vers: [{ id: "v1", name: "", text: "A", rich: "", s: { size: 28 }, bg: "#ffe0e0", t: 1 },
+             { id: "v2", name: "", text: "B", rich: "", s: { size: 15 }, bg: "", t: 2 }] }], links: [] }, false);
+    const q = S.cards[0].vers[0];
+    return { s: q.s && q.s.size, bg: q.bg };
+  });
+  c.ok("打开文件后，每一版的字号与底色还在", v.s === 28 && v.bg === "#ffe0e0");
+
+  // 3) 写作页导出 HTML：段落的内联样式完整（字体名里的双引号曾把整个 style 截断）
+  const ex = await c.run(() => {
+    S.cards = [{ id: "p1", x: 0, y: 0, w: 400, text: "Body", s: { ...DEF, size: 18, color: "#aa0000" } }];
+    S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render();
+    const d = addDoc({ x: 1200, y: 0 }, "E"); wrImport(["p1"], false, d.id);
+    const doc = new DOMParser().parseFromString(wrHTML(d, {}), "text/html");
+    const el = doc.querySelector(".blk div > div");
+    return el ? { size: el.style.fontSize, color: el.style.color, fam: el.style.fontFamily } : {};
+  });
+  c.ok("导出的段落保留字号、颜色与字体", ex.size === "18px" && /170, 0, 0|#aa0000/i.test(ex.color) && /Plex/.test(ex.fam || ""));
+
+  // 4) 自动快照：截出 40 份之外的旧快照真的被删掉，不再在仓库里越积越多
+  const bk = await c.run(async () => {
+    S.cards = [{ id: "k", x: 0, y: 0, w: 200, text: "k" }]; invalidateIndex();
+    const day = 864e5, base = Date.now() - 60 * day, idx = [];
+    for (let i = 0; i < 50; i++) { const t0 = base + i * day; idx.unshift({ t: t0, n: 1, name: "" });
+      await kvPut("bk:" + t0, { t: t0, n: 1, data: { cards: [] } }); }
+    await kvPut("bkIndex", idx);
+    await autoBackup(true);
+    const now = await kvGet("bkIndex");
+    let orphans = 0;
+    for (const it of idx) if (!now.some((z) => z.t === it.t) && (await kvGet("bk:" + it.t))) orphans++;
+    for (const it of idx) await kvPut("bk:" + it.t, null);
+    await kvPut("bkIndex", []); BK = [];
+    return { len: now.length, orphans };
+  });
+  c.ok("快照索引最多 40 份", bk.len <= 40);
+  c.ok("索引之外没有留下孤儿快照（" + bk.orphans + "）", bk.orphans === 0);
+});
+
+group("round2 兜底副本、外部库指纹、标题字号、旧快照清理（2026-10）", async (c) => {
+  // 1) 写作页里的标题字号跟画布一样大（不再二次放大）
+  const hs = await c.run(async () => {
+    S.cards = [{ id: "h", x: 0, y: 0, w: 400, text: "H", s: { ...DEF } }, { id: "b", x: 0, y: 200, w: 400, text: "B", s: { ...DEF } }];
+    S.links = []; S.frames = []; S.docs = []; invalidateIndex(); render(); sel = ["h"]; setLevel(1); camTo(0, 0, 1, true);
+    await new Promise((z) => setTimeout(z, 300));
+    const cv = getComputedStyle(document.querySelector('.card[data-id="h"] .cap')).fontSize;
+    const d = addDoc({ x: 1200, y: 0 }, "x"); wrImport(["h", "b"], false, d.id);
+    await new Promise((z) => setTimeout(z, 400));
+    const id = d.ids.find((i) => card(i).text === "H");
+    return { cv, doc: getComputedStyle(document.querySelector(`#docs .blk[data-id="${id}"] .cap`)).fontSize };
+  });
+  c.ok("一级标题在稿子里与画布上同样大（" + hs.cv + " / " + hs.doc + "）", hs.cv === hs.doc);
+
+  // 2) localStorage 兜底副本
+  const ls = await c.run(async () => {
+    const keep = await kvGet(KEY), lsKeep = localStorage.getItem(LSK), tKeep = localStorage.getItem(LSK + ":t");
+    const o = {};
+    await kvPut(KEY, { v: 8, cards: [{ id: "IDB", x: 0, y: 0, w: 200, text: "idb" }], links: [] });
+    // 新格式（带标记）：一定比 IndexedDB 新，优先读它
+    localStorage.setItem(LSK, JSON.stringify({ v: 8, cards: [{ id: "LS", x: 0, y: 0, w: 200, text: "ls" }], links: [] }));
+    localStorage.setItem(LSK + ":t", "1");
+    o.prefersMarked = ((await loadState()).cards[0].id === "LS");
+    // IndexedDB 一写成功，带标记的副本就被清掉
+    save(); await new Promise((z) => setTimeout(z, 900));
+    o.clearedOnSuccess = !localStorage.getItem(LSK) && !localStorage.getItem(LSK + ":t");
+    // 旧格式（不带标记）：IndexedDB 有数据时优先读 IndexedDB，并在后台挪进 IndexedDB 保存，不丢
+    await kvPut(KEY, { v: 8, cards: [{ id: "IDB", x: 0, y: 0, w: 200, text: "idb" }], links: [] });
+    localStorage.setItem(LSK, "LEGACYCOPY");
+    o.legacyNotPreferred = ((await loadState()).cards[0].id === "IDB");
+    await retireLegacyLS();
+    o.legacyMoved = !localStorage.getItem(LSK);
+    const db = await idb();
+    const keys = await new Promise((r) => { const q = db.transaction("kv").objectStore("kv").getAllKeys(IDBKeyRange.bound("lsold:", "lsold:\uffff")); q.onsuccess = () => r(q.result); });
+    let found = false; for (const k of keys) if ((await kvGet(k)) === "LEGACYCOPY") { found = true; await kvPut(k, null); }
+    o.legacyKept = found;
+    // IndexedDB 里没有数据时，旧副本仍然照原样读出、也不挪走（那时它可能是唯一的一份）
+    await kvPut(KEY, null); localStorage.setItem(LSK, JSON.stringify({ v: 8, cards: [{ id: "ONLY", x: 0, y: 0, w: 200, text: "o" }], links: [] }));
+    o.legacyStillReadWhenAlone = ((await loadState()).cards[0].id === "ONLY");
+    await retireLegacyLS(); o.legacyNotMovedWhenAlone = !!localStorage.getItem(LSK);
+    // 还原
+    await kvPut(KEY, keep || null);
+    if (lsKeep == null) localStorage.removeItem(LSK); else localStorage.setItem(LSK, lsKeep);
+    if (tKeep == null) localStorage.removeItem(LSK + ":t"); else localStorage.setItem(LSK + ":t", tKeep);
+    return o;
+  });
+  c.ok("带标记的兜底副本优先于 IndexedDB 读出", ls.prefersMarked);
+  c.ok("IndexedDB 写成功后兜底副本被清掉", ls.clearedOnSuccess);
+  c.ok("不带标记的旧副本不会盖过 IndexedDB", ls.legacyNotPreferred);
+  c.ok("旧副本挪进 IndexedDB 保存，一个字不丢", ls.legacyMoved && ls.legacyKept);
+  c.ok("IndexedDB 为空时，旧副本照旧读出、不挪走", ls.legacyStillReadWhenAlone && ls.legacyNotMovedWhenAlone);
+
+  // 3) 旧快照清理：只删索引外、一天以前的
+  const cl = await c.run(async () => {
+    const idx0 = await kvGet("bkIndex"), day = 864e5, now = Date.now();
+    const tOld = now - 5 * day, tNew = now - 3600e3, tIdx = now - 9 * day;
+    await kvPut("bk:" + tOld, { t: tOld }); await kvPut("bk:" + tNew, { t: tNew }); await kvPut("bk:" + tIdx, { t: tIdx });
+    await kvPut("bkIndex", [...(idx0 || []), { t: tIdx, n: 1, name: "" }]);
+    await cleanOrphanBackups();
+    const r = { oldGone: !(await kvGet("bk:" + tOld)), recentKept: !!(await kvGet("bk:" + tNew)), indexedKept: !!(await kvGet("bk:" + tIdx)),
+      indexIntact: !!(await kvGet("bkIndex")) };
+    await kvPut("bk:" + tNew, null); await kvPut("bk:" + tIdx, null); await kvPut("bkIndex", idx0 || []);
+    return r;
+  });
+  c.ok("索引之外、一天以前的旧快照被删掉", cl.oldGone);
+  c.ok("刚写下的快照（一天以内）不碰", cl.recentKept);
+  c.ok("索引里的快照不碰，索引本身也在", cl.indexedKept && cl.indexIntact);
+
+  // 4) 外部库：每个 CDN 地址都有指纹；本地 vendor/ 不需要
+  const sri = await c.run(() => {
+    const urls = [...PDFJS_SRCS.flat(), ...JSZIP_SRCS, "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"];
+    return { missing: urls.filter((u) => /^https:/.test(u) && !/^sha384-[A-Za-z0-9+\/]{64}$/.test(SRI[u] || "")),
+      local: urls.filter((u) => !/^https:/.test(u)).every((u) => !SRI[u]) };
+  });
+  c.ok("每个 CDN 地址都配了指纹" + (sri.missing.length ? "：" + sri.missing.join(" ") : ""), sri.missing.length === 0);
+  c.ok("本地 vendor/ 文件照旧加载，不要求指纹", sri.local);
+});
+
 group("static 静态检查", async (c) => {
   const src = fs.readFileSync(path.resolve(__dirname, "index.html"), "utf8");
   const js = src.split("<script>").pop().split("</script>")[0];
 
-  const en = src.match(/ en:\{([\s\S]*?)\n \},/)[1];
-  const zh = src.match(/ zh:\{([\s\S]*?)\n \}\n\};/)[1];
-  const keys = (b) => new Set([...b.matchAll(/(?:^|,|\n)\s*([A-Za-z][\w]*):/g)].map((m) => m[1]));
-  const ke = keys(en), kz = keys(zh);
-  const missing = [...ke].filter((k) => !kz.has(k)).concat([...kz].filter((k) => !ke.has(k)));
+  // 直接比运行时的 T.en / T.zh。从前用正则扫源码，文案里出现 ", pages:" 这种字样就会误报
+  const missing = await c.run(() => {
+    const e = Object.keys(T.en), z = Object.keys(T.zh);
+    return e.filter((k) => !(k in T.zh)).concat(z.filter((k) => !(k in T.en)));
+  });
   c.ok("中英文案条目一一对应" + (missing.length ? "：" + missing.join(",") : ""), missing.length === 0);
 
   // 单行箭头函数不得意外引用自身（曾经 hOf 自我调用导致导入直接崩溃）
@@ -5858,7 +6004,11 @@ group("toolbox 工具箱入口", async (c) => {
     const tbItem = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("toolbox")));
     if (tbItem) tbItem.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
     const clickTool = (key, setter) => {
-      const item = [...document.querySelectorAll("#menu .mi, #menu .sub .mi, #menu button")].find(
+      // 子菜单挂在 #submenu 上；点一项会关掉菜单，所以每次都重新打开
+      boardMenu(60, 60);
+      const tb = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("toolbox")));
+      if (tb) tb.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+      const item = [...document.querySelectorAll("#submenu .mi, #menu .mi, #menu .sub .mi, #menu button")].find(
         (z) => z.textContent.includes(t(key)));
       if (!item) return;
       window.open = (u) => { setter(u); return { closed: false }; };
@@ -5881,7 +6031,7 @@ group("toolbox 工具箱入口", async (c) => {
   c.ok("board 只是链接过去，没有把工具代码搬进来", !r.inline);
   c.ok("子菜单里能开抠图工具", !!r.urlCut && /cutout\.html/.test(r.urlCut));
   c.ok("子菜单里能开拼版工具", !!r.urlTile && /Tiler\.html/.test(r.urlTile));
-  c.ok("子菜单里能开格纸工具", !!r.urlGrid && /纸\.html/.test(r.urlGrid));
+  c.ok("子菜单里能开格纸工具", !!r.urlGrid && /纸\.html/.test(decodeURI(r.urlGrid)));
   c.ok("都是绝对地址", !!(r.urlCut && r.urlCut.startsWith("file://")));
   c.ok("中英文案都齐了", await c.run(() => [
     "cutoutTool","cutoutHint","cutoutBlocked","tilerTool","tilerHint","tilerBlocked",
@@ -5893,7 +6043,7 @@ group("toolbox 工具箱入口", async (c) => {
     openGridPaper(); window.open = real;
     return { local: u, stamps: /searchParams\.set\("v"/.test(openSideTool.toString()) };
   });
-  c.ok("本地打开格纸时地址干干净净", /纸\.html$/.test(bust.local));
+  c.ok("本地打开格纸时地址干干净净", /纸\.html$/.test(decodeURI(bust.local || "")));
   c.ok("部署到网上时带时间戳", bust.stamps);
   c.ok("index 挂着 manifest", await c.run(() => !!document.querySelector('link[rel="manifest"]')));
   await c.page.goto("file://" + require("path").resolve(__dirname, "manifest.json"));

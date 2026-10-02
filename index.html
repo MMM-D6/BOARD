@@ -657,8 +657,11 @@
   .card .pt span::selection{background:rgba(90,140,255,.35)}
   body.lock .card .pt{pointer-events:none}
   .card.pdfcard .cap:empty:before{content:"" !important}
-  /* 透明底 PNG：没有文字时不显示下方的文字框 */
-  .card.nocap .cap:empty{display:none;margin-top:0}
+  /* 所有图片卡片：未选中时空文字框隐藏；选中后自动显示方便添加文字 */
+  .card:has(img):not(.sel) .cap:empty{display:none;margin-top:0}
+  .card:has(img):not(.sel) .cap:empty:before{content:"" !important}
+  /* nocap 类：即使选中也强制隐藏（透明 PNG 或手动设置）*/
+  .card.nocap .cap:empty{display:none!important;margin-top:0!important}
   .card.nocap .cap:empty:before{content:"" !important}
   .card .pdfb{position:absolute;right:6px;top:6px;z-index:3;padding:1px 6px;border-radius:5px;
     background:rgba(20,20,20,.5);color:#fff;font:400 10px/1.5 "IBM Plex Mono",monospace;
@@ -1640,6 +1643,10 @@ const QS=new URLSearchParams(location.search);
 const WID=QS.get("w")||"";
 const KEY=WID?("state:"+WID):"state";
 const FH=WID?("filehandle:"+WID):"filehandle";
+// localStorage 兜底副本（2026-10 改）：只在 IndexedDB 写入失败时才写，IndexedDB 一写成功就清掉，
+// 所以只要它带着 ":t" 标记还在，它就一定比 IndexedDB 里的新。按窗口分开存，各窗口互不串用。
+// 主窗口沿用原来的键名 "boardmin"；从前留下的、不带标记的旧副本在启动时挪进 IndexedDB 的 "lsold:" 下保存，不再被自动读出。
+const LSK=WID?("boardmin:"+WID):"boardmin";
 let dbP=null;
 function idb(){
   if(dbP)return dbP;
@@ -1693,14 +1700,27 @@ async function gcImages(){
   });
 }
 async function loadState(){
+  try{if(localStorage.getItem(LSK+":t")){const l=localStorage.getItem(LSK);if(l)return JSON.parse(l)}}catch(e){}
   const v=await kvGet(KEY);if(v)return v;
-  try{const l=localStorage.getItem("boardmin");return l?JSON.parse(l):null}catch(e){return null}
+  try{const l=localStorage.getItem(LSK);return l?JSON.parse(l):null}catch(e){return null}
+}
+// 旧版留下的兜底副本（不带 ":t" 标记）：可能是很久以前某次 IndexedDB 失败时写的。
+// 只有在 IndexedDB 里已经有正常数据时才处理：先完整存进 IndexedDB（"lsold:时间"），确认存好了才从 localStorage 删掉。
+// 一个字都不丢，只是不再有机会被当成当前画布读出来。
+async function retireLegacyLS(){
+  try{
+    if(WID||localStorage.getItem(LSK+":t"))return;
+    const l=localStorage.getItem(LSK);if(!l)return;
+    if(!(await kvGet(KEY)))return;
+    if(await kvPut("lsold:"+Date.now(),l))localStorage.removeItem(LSK);
+  }catch(e){}
 }
 let st,storeWarnT=0;const save=()=>{clearTimeout(st);st=setTimeout(async()=>{
   const plain=JSON.parse(JSON.stringify({...S,cards:S.cards.map(cleanCard)}));
   const ok=await kvPut(KEY,plain);
   autoBackup(false);
-  if(!ok){try{localStorage.setItem("boardmin",JSON.stringify(S))}
+  if(ok){try{if(localStorage.getItem(LSK+":t")){localStorage.removeItem(LSK);localStorage.removeItem(LSK+":t")}}catch(e){}}
+  if(!ok){try{localStorage.setItem(LSK,JSON.stringify(S));localStorage.setItem(LSK+":t",String(Date.now()))}
     catch(e){if(Date.now()-storeWarnT>60000){storeWarnT=Date.now();toast(t("storeFail"))}}}   // 两处都没存进去才提示，一分钟最多一次
   fileAutoSave();
 },400)};
@@ -1767,9 +1787,41 @@ async function bundleBlob(list){
   await writeBundle(list,s=>{parts.push(s);n+=s.length;if(n>32e6){acc=new Blob([acc,...parts]);parts=[];n=0}});
   return new Blob([acc,...parts],{type:"application/json"});
 }
+/* 导入关口的注入防护（2026-10 排查补上，见 NOTES 十点八）。
+   别人发来的 .json 里，凡是会被拼进 HTML 的字段都在这里先洗一遍：
+   富文本只删可执行的东西（脚本类元素、on* 事件属性、javascript: 链接），格式一律保留，
+   没有可疑内容时原样返回、一个字符都不改；id、颜色这类短字段含引号或尖括号就丢弃。 */
+const UNSAFE_CH=/["'<>`\\]/;
+const unsafeStr=x=>typeof x==="string"&&UNSAFE_CH.test(x);
+const RICH_DROP=/^(SCRIPT|IFRAME|FRAME|FRAMESET|OBJECT|EMBED|APPLET|LINK|META|BASE|STYLE|FORM|SVG|MATH|TEMPLATE|NOSCRIPT|PORTAL)$/i;
+const RICH_URLATTR=/^(href|src|xlink:href|srcset|poster|background|data|lowsrc|dynsrc)$/;
+// 先用一个便宜的文字检查筛一遍：既没有危险元素、也没有事件属性和链接类属性的（绝大多数卡片），
+// 根本不必解析，原样返回。两万张带格式的卡片导入时省下约 0.4 秒。
+const RICH_SUSPECT=/<\s*\/?\s*(script|iframe|frame|object|embed|applet|link|meta|base|style|form|svg|math|template|noscript|portal)\b|[\s\/"']on[a-z]+\s*=|\b(href|src|srcset|srcdoc|action|formaction|poster|background|data|lowsrc|dynsrc|xlink:href)\s*=/i;
+function defangRich(html){
+  if(typeof html!=="string"||html.indexOf("<")<0||!RICH_SUSPECT.test(html))return html;
+  const tpl=document.createElement("template");tpl.innerHTML=html;
+  let changed=false;
+  tpl.content.querySelectorAll("*").forEach(el=>{
+    if(RICH_DROP.test(el.tagName)){el.remove();changed=true;return}
+    [...el.attributes].forEach(a=>{
+      const n=a.name.toLowerCase(),v=a.value.replace(/[\s\u0000-\u001f]+/g,"").toLowerCase();
+      if(n.startsWith("on")||n==="srcdoc"||n==="action"||n==="formaction"||
+        (RICH_URLATTR.test(n)&&/^(javascript|vbscript|data:text\/html)/.test(v))){el.removeAttribute(a.name);changed=true}
+    });
+  });
+  return changed?tpl.innerHTML:html;
+}
+function normLinkIn(l){
+  const o={...l};
+  ["color","kind","arrow","sa","sb","a","b"].forEach(k=>{if(unsafeStr(o[k]))delete o[k]});
+  if(o.w!=null){if(Number.isFinite(+o.w)&&+o.w>0)o.w=+o.w;else delete o.w}
+  if(unsafeStr(o.id))delete o.id;
+  return o;
+}
 function normCard(c){
   const o={...c};
-  o.id=o.id||uid();
+  if(o.id==null||o.id===""||unsafeStr(o.id))o.id=uid();
   o.x=Number.isFinite(+o.x)?+o.x:0;
   o.y=Number.isFinite(+o.y)?+o.y:0;
   o.w=Number.isFinite(+o.w)&&+o.w>20?+o.w:300;
@@ -1777,15 +1829,22 @@ function normCard(c){
   if(o.ar!=null&&!(+o.ar>0))delete o.ar;
   o.text=typeof o.text==="string"?o.text:"";
   if(o.rich&&typeof o.rich!=="string")delete o.rich;
+  if(o.rich)o.rich=defangRich(o.rich);
   o.s=(o.s&&typeof o.s==="object")?o.s:{};
   if(o.level&&![1,2,3].includes(+o.level))delete o.level;
   if(o.role&&!["apx","aside","bib"].includes(o.role))delete o.role;
   if(o.vers&&!Array.isArray(o.vers))delete o.vers;
   if(Array.isArray(o.vers)){
     o.vers=o.vers.filter(v=>v&&typeof v==="object"&&typeof v.id==="string")
-      .map(v=>({id:v.id,name:typeof v.name==="string"?v.name:"",
-        text:typeof v.text==="string"?v.text:"",rich:typeof v.rich==="string"?v.rich:"",
-        t:+v.t||Date.now()}));
+      .map(v=>{
+        const q={id:v.id,name:typeof v.name==="string"?v.name:"",
+          text:typeof v.text==="string"?v.text:"",rich:typeof v.rich==="string"?defangRich(v.rich):"",
+          t:+v.t||Date.now()};
+        // 每一版连同字体样式与底色一起存（verSnapshot），从前这里只留文字，重新打开文件后各版的样子就丢了
+        if(v.s&&typeof v.s==="object")q.s=v.s;
+        if(typeof v.bg==="string"&&!unsafeStr(v.bg))q.bg=v.bg;
+        return q;
+      });
     if(!o.vers.length)delete o.vers;
   }
   if(o.verOn&&!(o.vers||[]).some(v=>v.id===o.verOn))delete o.verOn;
@@ -1793,7 +1852,8 @@ function normCard(c){
   if(o.wrIn&&typeof o.wrIn!=="string")o.wrIn=String(o.wrIn);
   if(o.bib&&typeof o.bib!=="string")delete o.bib;
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
-  if(o.bg&&typeof o.bg!=="string")delete o.bg;
+  if(o.bg&&(typeof o.bg!=="string"||unsafeStr(o.bg)))delete o.bg;
+  ["ref","bib","wrIn","wrUnder","verOn"].forEach(k=>{if(unsafeStr(o[k]))delete o[k]});
   if(o.url&&typeof o.url!=="string")delete o.url;
   if(o.lock===true)o.lock="all";                    // 旧数据：布尔值等同全锁
   if(o.lock!=="text"&&o.lock!=="all")delete o.lock;
@@ -1811,7 +1871,8 @@ function normCard(c){
       g.head=!!g.head;g.headCol=!!g.headCol;
       if(g.fmt&&typeof g.fmt==="object"){
         Object.keys(g.fmt).forEach(k=>{
-          if(!/^\d+,\d+$/.test(k)||typeof g.fmt[k]!=="object")delete g.fmt[k]});
+          if(!/^\d+,\d+$/.test(k)||!g.fmt[k]||typeof g.fmt[k]!=="object"){delete g.fmt[k];return}
+          const f=g.fmt[k];Object.keys(f).forEach(q=>{if(unsafeStr(f[q]))delete f[q]})});
         if(!Object.keys(g.fmt).length)delete g.fmt;
       }else delete g.fmt;
     }
@@ -1834,17 +1895,17 @@ async function absorb(data,merge){
     }
     delete data.wr;
     data.docs=(Array.isArray(data.docs)?data.docs:[]).filter(z=>z&&typeof z==="object")
-      .map(z=>({id:z.id||uid(),x:+z.x||0,y:+z.y||0,
+      .map(z=>({id:(z.id&&!unsafeStr(z.id))?z.id:uid(),x:+z.x||0,y:+z.y||0,
         title:typeof z.title==="string"&&z.title?z.title:"稿子",
         ids:Array.isArray(z.ids)?z.ids.filter(q=>typeof q==="string"):[],
         mode:z.mode==="ctx"?"ctx":"iter",
         open:(z.open&&typeof z.open==="object")?z.open:{}}));
     data.sheets=(data.sheets||[]).filter(z=>z&&PAPER[z.kind])
-      .map(z=>({id:z.id||uid(),kind:z.kind,x:+z.x||0,y:+z.y||0,
+      .map(z=>({id:(z.id&&!unsafeStr(z.id))?z.id:uid(),kind:z.kind,x:+z.x||0,y:+z.y||0,
         title:typeof z.title==="string"?z.title:""}));
     S={...S,...data,cards,templates:Array.isArray(data.templates)?data.templates:[],
-      frames:Array.isArray(data.frames)?data.frames:[],
-      links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>({...l,id:l.id||uid()})),
+      frames:Array.isArray(data.frames)?data.frames.filter(Boolean).map(f=>unsafeStr(f.id)?{...f,id:uid()}:f):[],
+      links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>{const n=normLinkIn(l);n.id=n.id||uid();return n}),
   };
     return cards.length;                  // 图片不再在这里全部读进内存，画到哪张读哪张（needImg）
   }
@@ -1855,7 +1916,7 @@ async function absorb(data,merge){
   cards.forEach(c=>{if(c.ref)c.ref=map[c.ref]||undefined;if(c.ref===undefined)delete c.ref});
   invalidateIndex();S.cards=S.cards.concat(cards);
   (data.links||[]).forEach(l=>{if(l&&map[l.a]&&map[l.b]){
-    const nl={...l,id:uid(),a:map[l.a],b:map[l.b]};
+    const nl={...normLinkIn(l),id:uid(),a:map[l.a],b:map[l.b]};
     delete nl.dash;                       // 虚实只由连线身份决定，旧的手动设定一律丢弃
     if(nl.st!==true)delete nl.st;
     S.links.push(nl);
@@ -2157,11 +2218,30 @@ async function autoBackup(force){
       const day=new Date(it.t).toISOString().slice(0,10);
       if(i<12||!seenDay.has(day)){keep.push(it);seenDay.add(day)}
     });
-    const drop=idx.filter(it=>!keep.includes(it)).slice(0, 200);
+    // 先截到 40 份再算要删哪些：从前截掉的那些既不在索引里、也没被删，每天漏下一份完整快照占着浏览器配额
+    const kept=keep.slice(0,40);
+    const drop=idx.filter(it=>!kept.includes(it)).slice(0, 200);
     for(const d of drop)await kvPut("bk:"+d.t,null);
-    await kvPut("bkIndex",keep.slice(0,40));
-    BK=keep.slice(0,40);
+    await kvPut("bkIndex",kept);
+    BK=kept;
   }catch(e){}
+}
+// 清掉索引里已经没有的旧快照（2026-10）：修复之前每天漏下一份，这里在启动后补删。
+// 只删「不在索引里、并且是一天以前」的 bk: 条目，刚写下还没来得及进索引的绝不碰；只读键名，不读内容。
+async function cleanOrphanBackups(){
+  try{
+    const db=await idb();if(!db)return;
+    const keys=await new Promise(r=>{try{
+      const q=db.transaction("kv").objectStore("kv").getAllKeys(IDBKeyRange.bound("bk:","bk:\uffff"));
+      q.onsuccess=()=>r(q.result||[]);q.onerror=()=>r([])}catch(e){r([])}});
+    const idx=(await kvGet("bkIndex"))||[];
+    const live=new Set(idx.map(it=>"bk:"+it.t)),old=Date.now()-864e5;
+    const drop=keys.filter(k=>typeof k==="string"&&!live.has(k)&&+k.slice(3)<old);
+    if(!drop.length)return 0;
+    await new Promise(r=>{try{const tx=db.transaction("kv","readwrite"),st=tx.objectStore("kv");
+      drop.forEach(k=>st.delete(k));tx.oncomplete=r;tx.onerror=r;tx.onabort=r}catch(e){r()}});
+    return drop.length;
+  }catch(e){return 0}
 }
 let BK=[];
 async function loadBackups(){try{BK=(await kvGet("bkIndex"))||[]}catch(e){BK=[]}}
@@ -5384,7 +5464,10 @@ function zoteroPaste(e){
     :{text:stripZotero(txt)};
 }
 function safeRich(html){
-  const box=document.createElement("div");box.innerHTML=html||"";
+  // 用 <template> 解析：它的内容是惰性的，解析过程中 <img onerror> 之类不会触发。
+  // 从前用游离的 div，赋值 innerHTML 的那一刻图片就开始加载，onerror 当场执行（2026-10 排查实测）。
+  const tpl=document.createElement("template");tpl.innerHTML=html||"";
+  const box=tpl.content;
   box.querySelectorAll("*").forEach(el=>{
     if(el.tagName==="A"){
       const href=el.getAttribute("href")||"";
@@ -5397,7 +5480,7 @@ function safeRich(html){
     }
     [...el.attributes].forEach(a=>{if(a.name!=="style")el.removeAttribute(a.name)});
   });
-  return box.innerHTML;
+  return tpl.innerHTML;
 }
 function esc(x){return (x||"").replace(/[&<>]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[m]))}
 // 放进属性值里要连引号一起转义，否则一个引号就能跳出属性（标签、文件名这些都可能来自别人发来的文件）
@@ -5498,7 +5581,7 @@ function loadH2C(){
   if(window.html2canvas)return Promise.resolve(window.html2canvas);
   return new Promise((res,rej)=>{
     const el=document.createElement("script");
-    el.src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";
+    el.src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js";sriTag(el,el.src);
     const fail=()=>rej(new Error(t("errCDN")));
     el.onload=()=>window.html2canvas?res(window.html2canvas):fail();el.onerror=fail;
     document.head.appendChild(el);
@@ -5596,7 +5679,7 @@ function docHTML(o,tree,forPrint){
         const f=g.fmt&&g.fmt[ri+","+ci];
         const st2=[f&&f.al?"text-align:"+f.al:"",f&&f.b?"font-weight:700":"",
           f&&f.bg?"background:"+f.bg:"",f&&f.co?"color:"+f.co:""].filter(Boolean).join(";");
-        return `<${hd?"th":"td"}${st2?` style="${esc(st2)}"`:""}>`
+        return `<${hd?"th":"td"}${st2?` style="${escA(st2)}"`:""}>`
           +esc(String(cell||"")).replace(/\n/g,"<br>")+`</${hd?"th":"td"}>`;
       }).join("")+"</tr>").join("")+`</table>`;
       if(wrapBg)h+="</div>";
@@ -5640,6 +5723,31 @@ function dl(blob,name){
    pdf.js 从 CDN 按需加载，只在真的导入 PDF 时才去取；取不到就明说，不影响其他功能。 */
 // 解析库的来源：本地优先（放了 vendor/ 就完全离线可用），再依次试几个 CDN。
 // 每一项的 worker 跟着同一个来源走，版本必须与主文件一致。
+/* 外部库的完整性校验（SRI，2026-10）。
+   每个 CDN 地址都配一个内容指纹：浏览器下载完先算一遍，跟这里对不上就拒绝执行，
+   当作这个地址失败，接着试列表里的下一个；所有来源都不对时，跟断网时的处理完全一样。
+   指纹是从 npm 上同一版本的原文件算出来的（jsdelivr /npm/ 与 unpkg 原样转发 npm 的文件）。
+   本地 vendor/ 下的文件没有指纹，照旧加载。升级任何一个库的版本时，这里的指纹必须一起换，
+   否则那个地址会一直被当成失败。 */
+const SRI={
+  "https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js":"sha384-ZZ1pncU3bQe8y31yfZdMFdSpttDoPmOZg2wguVK9almUodir1PghgT0eY7Mrty8H",
+  "https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js":"sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG",
+  "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js":"sha384-+mbV2IY1Zk/X1p/nWllGySJSUN8uMs+gUAN10Or95UBH0fpj6GfKgPmgC5EXieXG",
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js":"sha384-/1qUCSGwTur9vjf/z9lmu/eCUYbpOTgSjmpbMQZ1/CtX2v/WcAIKqRv+U1DUCG6e",
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js":"sha384-SnzOobpRMLXZ52iJvZm/C0fYw0OQemTXzTjIsdsfMcrCtCEe9qgzxTd3RSklO5x2",
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js":"sha384-OemFRmhjDZwhIKuUld0HJozkF2YErsgDaCL41trxGQZt4/WgnopJQqQl2DvDZ07Z",
+  "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js":"sha384-sS8B4COeBqzQV9DaPpp5cbpF+xz2jPcFbN3L8FL3/dx0RMC6WLUwTUOFm0iFb1lw",
+  "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js":"sha384-OemFRmhjDZwhIKuUld0HJozkF2YErsgDaCL41trxGQZt4/WgnopJQqQl2DvDZ07Z",
+  "https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js":"sha384-sS8B4COeBqzQV9DaPpp5cbpF+xz2jPcFbN3L8FL3/dx0RMC6WLUwTUOFm0iFb1lw"
+};
+function sriTag(el,src){const h=SRI[src];if(h){el.integrity=h;el.crossOrigin="anonymous"}}
+// PDF 解析的 worker 不能用 <script integrity>，所以先按指纹 fetch 下来，校验通过再交给 pdf.js（同源的 blob 地址）
+async function sriWorker(url){
+  const h=SRI[url];if(!h)return url;
+  const r=await fetch(url,{integrity:h,mode:"cors",credentials:"omit"});
+  if(!r.ok)throw new Error("cdn");
+  return URL.createObjectURL(new Blob([await r.text()],{type:"text/javascript"}));
+}
 const PDFJS_SRCS=[
   ["vendor/pdf.min.js","vendor/pdf.worker.min.js"],
   ["https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js",
@@ -5651,11 +5759,12 @@ const PDFJS_SRCS=[
 ];
 function loadOne(src,worker){
   return new Promise((res,rej)=>{
-    const el=document.createElement("script");el.src=src;let done=false;
+    const el=document.createElement("script");sriTag(el,src);el.src=src;let done=false;
     const ok=()=>{if(done)return;done=true;
       if(!window.pdfjsLib)return rej(new Error("cdn"));
-      try{pdfjsLib.GlobalWorkerOptions.workerSrc=worker}catch(e){}
-      res(window.pdfjsLib)};
+      sriWorker(worker).then(w=>{
+        try{pdfjsLib.GlobalWorkerOptions.workerSrc=w}catch(e){}
+        res(window.pdfjsLib)},()=>{el.remove();window.pdfjsLib=undefined;rej(new Error("cdn"))});};
     el.onload=ok;
     el.onerror=()=>{if(!done){done=true;el.remove();rej(new Error("cdn"))}};
     document.head.appendChild(el);
@@ -8238,10 +8347,9 @@ function verToClip(c,vid){
 }
 function wrStyleObj(o,lv){
   const st={...DEF,...S.textDef,...(o.s||{})};
-  // 标题按层级放大字号：lv1 约 1.47×、lv2 约 1.2×、lv3 约 1.07×
-  // 基数取卡片自身的字号（用户可以调），倍率固定——既有层次感，又不破坏用户的字号设置
-  const scale=[1,1.47,1.2,1.07,1.07][Math.min(lv||0,4)];
-  return {fontFamily:famCSS(st.family),fontSize:Math.round(st.size*scale)+"px",
+  // 标题字号直接用卡片自己的字号，跟画布上一样大（2026-10 统一）。
+  // 从前这里再乘 1.47 / 1.2 / 1.07，可 setLevel 已经按 LVSCALE 放大过一次，一级标题画布 32px、稿子里变成 47px。
+  return {fontFamily:famCSS(st.family),fontSize:st.size+"px",
     fontWeight:String(lv?600:st.weight),lineHeight:String(st.lh),
     letterSpacing:st.spacing+"em",textAlign:st.align,color:st.color,
     fontStyle:st.italic?"italic":"normal"};
@@ -9756,7 +9864,7 @@ function wrHTML(d,opt){
     // 没有任何大纲结构，导航窗格是空的，也生成不了目录——看起来像"有层级"，
     // 其实只是文本加数字。PDF 的书签同理。
     const tag=lv?"h"+Math.min(lv,6):"div";
-    h+=`<div class="blk"><div style="${wrapS}"><${tag} style="${css}">${inner}</${tag}></div></div>`;
+    h+=`<div class="blk"><div style="${wrapS}"><${tag} style="${escA(css)}">${inner}</${tag}></div></div>`;
     if(opt.vers){
       const vs=verList(o);
       if(vs.length>1){
@@ -10424,7 +10532,7 @@ async function loadJSZip(){
   for(const src of JSZIP_SRCS){
     try{
       await new Promise((res,rej)=>{
-        const el=document.createElement("script");el.src=src;let done=false;
+        const el=document.createElement("script");sriTag(el,src);el.src=src;let done=false;
         const ok=()=>{if(done)return;done=true;window.JSZip?res():(el.remove(),rej(new Error("jszip")))};
         el.onload=ok;el.onerror=()=>{if(!done){done=true;el.remove();rej(new Error("net"))}};
         document.head.appendChild(el);
@@ -10895,6 +11003,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
   await loadRecents();
   await loadGlobalTpl();
   await loadBackups();
+  setTimeout(()=>{retireLegacyLS();cleanOrphanBackups()},20000);   // 启动 20 秒后在后台做，不占打开的时间
   const wantOpen=QS.get("open");
   if(wantOpen)setTimeout(()=>openRecent(wantOpen).catch(()=>toast(t("noPerm"))),300);
   applyCam();render();
