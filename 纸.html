@@ -204,11 +204,14 @@
     white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
   /* 右侧：所有进行中的轮次 */
-  #side{flex:none;width:216px;margin-left:14px;display:flex;flex-direction:column;gap:6px;min-height:0}
-  #sideBtn{flex:none;height:22px;padding:0 2px;border:none;background:none;text-align:left;cursor:pointer;
+  #side{flex:none;width:216px;margin-left:14px;display:flex;flex-direction:column;gap:14px;min-height:0}
+  #side section{display:flex;flex-direction:column;gap:6px;min-height:0}
+  .sh{flex:none;height:22px;padding:0 2px;border:none;background:none;text-align:left;cursor:pointer;
     font:400 12px var(--sans);color:var(--mute)}
-  #sideBtn:hover,#sideBtn:focus-visible{color:var(--acc);outline:none}
-  #sideList{display:flex;flex-direction:column;gap:2px;overflow:auto;min-height:0}
+  .sh:hover,.sh:focus-visible{color:var(--acc);outline:none}
+  section.open .sh{color:var(--ink)}
+  .sl{display:none;flex-direction:column;gap:2px;overflow:auto;min-height:0}
+  section.open .sl{display:flex}
   .ri{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:1px 8px;width:100%;padding:7px 9px;border:none;border-radius:6px;
     background:none;cursor:pointer;text-align:left;color:var(--ink)}
   .ri:hover,.ri:focus-visible{background:rgba(26,26,26,.05);outline:none}
@@ -216,9 +219,11 @@
   .ri .s{font:400 11px var(--sans);color:var(--mute);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .ri .n{font:400 11px var(--mono);color:var(--mute)}
   .ri .t{grid-column:1/-1;font:400 13px var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pi .t{grid-column:auto}
+  .ri.add{display:block;font:400 12px var(--sans);color:var(--mute)}
+  .ri.add:hover{color:var(--acc)}
   #side.closed{width:26px}
-  #side.closed #sideList{display:none}
-  #side.closed #sideBtn{height:auto;width:26px;padding:10px 0;writing-mode:vertical-rl;text-align:center;
+  #side.closed .sh{height:auto;width:26px;padding:10px 0;writing-mode:vertical-rl;text-align:center;
     border:1px solid var(--rule);border-radius:5px}
 
   /* 右键菜单 */
@@ -252,7 +257,7 @@
     .paper{flex:none;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:none;grid-auto-rows:150px}
     .paper.harvest{padding:6px 18px}
     #side,#side.closed{width:auto;margin:12px 0 0}
-    #side.closed #sideBtn{writing-mode:horizontal-tb;width:auto;padding:0 2px;border:none;text-align:left;height:22px}
+    #side.closed .sh{writing-mode:horizontal-tb;width:auto;padding:0 2px;border:none;text-align:left;height:22px}
   }
   @media (prefers-reduced-motion:reduce){.slot.moved{animation:none}#toast,.dot{transition:none}}
 </style>
@@ -263,7 +268,10 @@
   <div class="paper" id="paper"></div>
   <div class="pageinfo" id="info"></div>
 </div>
-<aside id="side" hidden><button id="sideBtn" type="button"></button><div id="sideList"></div></aside>
+<aside id="side">
+  <section id="secP"><button class="sh" id="btnP" type="button"></button><div class="sl" id="listP"></div></section>
+  <section id="secR" hidden><button class="sh" id="btnR" type="button"></button><div class="sl" id="listR"></div></section>
+</aside>
 <div id="menu" role="menu"></div>
 <div id="pp" hidden>
   <div class="pp-side">
@@ -344,21 +352,31 @@ const normSops=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.name==="string")
   return o;
 });
 
-let S={items:[],page:0,mode:"open",hint:true,path:[],font:FS_DEF,view:"paper",sops:[],at:null,side:true,
+let S={papers:[],paper:null,openP:false,mode:"open",hint:true,font:FS_DEF,view:"paper",sops:[],at:null,side:true,
   print:{scope:"page",pt:9,lh:1.5}};
 try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
-if(!S.items.length){
-  // 如果之前用过「硬骨头」版本，把任务搬过来
-  try{const old=JSON.parse(localStorage.getItem("hardbones-v1")||"null");
-    if(old&&Array.isArray(old.tasks))old.tasks.forEach(t=>{if(typeof t.title==="string")S.items.push({text:t.title,done:!!t.done,doneAt:t.doneAt})});
-  }catch(e){}
+/* 很多张纸：papers:[{id, name, items, path, page}]，paper 是当前打开的那张 */
+const normPaper=p=>({id:String(p.id||uid()),name:String(p.name||""),items:normItems(p.items),
+  path:Array.isArray(p.path)?p.path:[],page:+p.page||0});
+if(!Array.isArray(S.papers)||!S.papers.length){
+  // 上一版只有一张纸，把它变成第一张
+  let items=Array.isArray(S.items)?S.items:[];
+  if(!items.length){
+    try{const old=JSON.parse(localStorage.getItem("hardbones-v1")||"null");   // 更早的「硬骨头」版本
+      if(old&&Array.isArray(old.tasks))old.tasks.forEach(t=>{if(typeof t.title==="string")items.push({text:t.title,done:!!t.done,doneAt:t.doneAt})});
+    }catch(e){}
+  }
+  if(!items.length)items=[{text:"Practice-based 结构部分：检查时态",done:false},{text:"给导师发邮件约 meeting",done:false}];
+  S.papers=[{name:"",items,path:S.path,page:S.page}];
 }
-if(!S.items.length)S.items=[{text:"Practice-based 结构部分：检查时态",done:false},{text:"给导师发邮件约 meeting",done:false}];
-S.items=normItems(S.items);
+delete S.items;delete S.path;delete S.page;
+S.papers=S.papers.map(normPaper);
+if(!S.papers.some(p=>p.id===S.paper))S.paper=S.papers[0].id;
+const P=()=>S.papers.find(p=>p.id===S.paper)||S.papers[0];
+const paperName=p=>p.name.trim()||"未命名";
 S.sops=normSops(S.sops);
 if(S.run&&!S.at)S.at={kind:"run",sop:S.run.sop,run:S.run.run};   // 上一版存的位置
 delete S.run;
-if(!Array.isArray(S.path))S.path=[];
 if(S.view==="harvest")S.view="mind";
 if(!["paper","sop","mind"].includes(S.view))S.view="paper";
 S.print=Object.assign({scope:"page",pt:9,lh:1.5},S.print);
@@ -369,7 +387,7 @@ document.documentElement.style.setProperty("--fs",S.font+"px");
 const CAN_FS=!!window.showSaveFilePicker;
 let fileHandle=null, fileName=localStorage.getItem(KEY+":fname")||"";
 let savedSnap=localStorage.getItem(KEY+":snap")||"";
-const snap=()=>JSON.stringify([S.items,S.sops]);
+const snap=()=>JSON.stringify([S.papers.map(p=>[p.id,p.name,p.items]),S.sops]);
 const isDirty=()=>snap()!==savedSnap;
 
 /* =========================================================
@@ -437,8 +455,8 @@ function bindTab(txt,idx,paged){
     if(to<0||(!paged&&to>=PER))return;
     txt.blur();
     if(paged){
-      if(to<S.page*PER)S.page--;
-      else if(to>=S.page*PER+PER&&openList().length>idx)S.page++;
+      if(to<P().page*PER)P().page--;
+      else if(to>=P().page*PER+PER&&openList().length>idx)P().page++;
       save();
     }
     render(to);
@@ -461,13 +479,13 @@ function bindNum(num,idx,getList,moveIt){
 /* =========================================================
    任务纸（可以往里开三层）
    ========================================================= */
-let L={arr:S.items,chain:[]};
+let L={arr:P().items,chain:[]};
 // 顺着 path 往里走，找到当前这张纸对应的那一列；路径失效就退回能走到的最深处
 function locate(){
-  let arr=S.items;const chain=[];
-  for(let k=0;k<S.path.length;k++){
-    const it=arr.find(i=>i.id===S.path[k].id);
-    if(!it){S.path.length=k;break}
+  let arr=P().items;const chain=[];
+  for(let k=0;k<P().path.length;k++){
+    const it=arr.find(i=>i.id===P().path[k].id);
+    if(!it){P().path.length=k;break}
     chain.push(it);arr=it.children||(it.children=[]);
   }
   L={arr,chain};
@@ -486,9 +504,9 @@ function renderPaper(focusIdx){
   locate();
   const list=S.mode==="done"?doneList():openList();
   const maxPage=Math.max(0,Math.floor((S.mode==="done"?list.length-1:list.length)/PER));
-  S.page=Math.min(Math.max(0,S.page),maxPage);
-  paper.dataset.depth=S.path.length;
-  const start=S.page*PER;
+  P().page=Math.min(Math.max(0,P().page),maxPage);
+  paper.dataset.depth=P().path.length;
+  const start=P().page*PER;
   for(let k=0;k<PER;k++){
     const idx=start+k, it=list[idx];
     const {slot,top,num,txt}=makeCell(idx,it?it.text:"",list);
@@ -504,10 +522,10 @@ function renderPaper(focusIdx){
     else bindTask(num,txt,idx,it);
   }
   const total=list.length;pageParts=[];
-  if(S.mode==="done")pageParts.push(`已完成 ${total} 条，第 ${S.page+1} 页，Esc 返回`);
+  if(S.mode==="done")pageParts.push(`已完成 ${total} 条，第 ${P().page+1} 页，Esc 返回`);
   else{
-    if(total>PER||S.page>0)pageParts.push(`第 ${start+1} 到 ${start+PER} 格，共 ${total} 格`);
-    if(S.path.length)pageParts.push(`第 ${S.path.length+1} 层，Esc 回上一层`);
+    if(total>PER||P().page>0)pageParts.push(`第 ${start+1} 到 ${start+PER} 格，共 ${total} 格`);
+    if(P().path.length)pageParts.push(`第 ${P().path.length+1} 层，Esc 回上一层`);
   }
 }
 function bindTask(num,txt,idx,it){
@@ -527,27 +545,27 @@ function bindTask(num,txt,idx,it){
     if(orig)toast("已清空这一格",()=>{t.text=orig;insertAtOpen(t,idx,arr);save();render()});
   });
   bindTab(txt,idx,true);
-  bindNum(num,idx,openList,(t,to)=>{moveTo(t,to);S.page=Math.floor(to/PER)});
+  bindNum(num,idx,openList,(t,to)=>{moveTo(t,to);P().page=Math.floor(to/PER)});
 }
-const canEnter=()=>S.path.length<MAXD-1;
+const canEnter=()=>P().path.length<MAXD-1;
 function enter(it){
   if(!canEnter())return;
   commit();
-  S.path.push({id:it.id,page:S.page});
+  P().path.push({id:it.id,page:P().page});
   if(!it.children)it.children=[];
-  S.page=0;S.mode="open";save();
+  P().page=0;S.mode="open";save();
   render(it.children.some(c=>!c.done)?null:0);
 }
 // 回到第 depth 层（0 是最外面）
 function goUp(depth){
-  if(depth<0||depth>=S.path.length)return;
+  if(depth<0||depth>=P().path.length)return;
   commit();
-  const backTo=S.path[depth].id;
-  while(S.path.length>depth){
+  const backTo=P().path[depth].id;
+  while(P().path.length>depth){
     locate();
     const it=L.chain[L.chain.length-1];
     if(it&&it.children&&!it.children.length)delete it.children;   // 进去没写东西就不留空壳
-    S.page=S.path.pop().page;
+    P().page=P().path.pop().page;
   }
   S.mode="open";save();render();pulse(backTo);
 }
@@ -835,7 +853,7 @@ function renderPast({sop}){
 function collectMinds(){
   const out=[];
   const walk=a=>a.forEach(i=>{if(i.mindset&&i.text.trim())out.push({text:i.text.trim(),ms:i.ms});if(i.children)walk(i.children)});
-  walk(S.items);
+  S.papers.forEach(p=>walk(p.items));
   S.sops.forEach(s=>s.runs.forEach(r=>r.steps.forEach(st=>{if(st.mindset&&st.text.trim())out.push({text:st.text.trim(),ms:st.ms})})));
   return out.sort((a,b)=>b.ms-a.ms);
 }
@@ -857,7 +875,7 @@ function renderMindset(){
 function switchView(v){
   commit();
   if(v===S.view){
-    if(v==="paper"&&S.path.length)return goUp(0);
+    if(v==="paper"&&P().path.length)return goUp(0);
     if(v==="sop"&&S.at)return toShelf();
     return;
   }
@@ -873,6 +891,12 @@ function renderCrumbs(A){
   const sep=()=>c.append(el("span","sep","/"));
   const link=(label,fn)=>{const b=el("button",null,label);b.onclick=fn;c.append(b)};
   if(S.view==="paper"){
+    sep();
+    const t=el("input","title");t.value=P().name;t.placeholder="给这张纸起个名字";t.spellcheck=false;
+    t.addEventListener("input",()=>{P().name=t.value;saveSoon();renderSide()});
+    t.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.isComposing){e.preventDefault();t.blur()}});
+    if(L.chain.length)t.style.flex="0 1 auto",t.size=Math.max(4,[...t.value].length+1);
+    c.append(t);
     L.chain.forEach((it,d)=>{
       sep();
       if(d===L.chain.length-1)c.append(el("span","here",title(it)));
@@ -893,23 +917,53 @@ function renderCrumbs(A){
     c.append(t);
   }
 }
+// 右侧：上面是所有的纸（默认收起），下面是所有进行中的 SOP 轮次
 function renderSide(){
   const runs=[];
   S.sops.forEach(s=>activeRuns(s).forEach(r=>runs.push({s,r})));
   runs.sort((a,b)=>b.r.touched-a.r.touched);
-  const side=$("side"), list=$("sideList"), here=S.view==="sop"&&S.at&&S.at.kind==="run"?S.at.run:null;
-  side.hidden=!runs.length;
-  side.classList.toggle("closed",!S.side);
-  $("sideBtn").textContent=`进行中 ${runs.length}`;
-  $("sideBtn").title=S.side?"收起":"展开";
-  list.textContent="";
+  const hereRun=S.view==="sop"&&S.at&&S.at.kind==="run"?S.at.run:null, herePaper=S.view==="paper"?S.paper:null;
+  $("secR").hidden=!runs.length;
+  $("secP").classList.toggle("open",S.openP);
+  $("secR").classList.toggle("open",S.side);
+  $("side").classList.toggle("closed",!S.openP&&!(S.side&&runs.length));
+  $("btnP").textContent=`纸 ${S.papers.length}`;$("btnP").title=S.openP?"收起":"展开";
+  $("btnR").textContent=`进行中 ${runs.length}`;$("btnR").title=S.side?"收起":"展开";
+  const lp=$("listP"), lr=$("listR");lp.textContent="";lr.textContent="";
+  S.papers.forEach(p=>{
+    const open=realSteps(openOf(p.items)).length;
+    const b=el("button","ri pi"+(p.id===herePaper?" here":""));b.type="button";b.dataset.paper=p.id;
+    b.append(el("span","t",paperName(p)),el("span","n",String(open)));
+    b.title=`${open} 格没完成`;b.onclick=()=>openPaper(p);lp.append(b);
+  });
+  const add=el("button","ri add","新的纸");add.type="button";add.onclick=newPaper;lp.append(add);
   runs.forEach(({s,r})=>{
-    const b=el("button","ri"+(r.id===here?" here":""));b.type="button";
+    const b=el("button","ri"+(r.id===hereRun?" here":""));b.type="button";
     b.append(el("span","s",s.name),el("span","n",progress(r)),el("span","t",runLabel(r)));
-    b.onclick=()=>openRun(s,r);list.append(b);
+    b.onclick=()=>openRun(s,r);lr.append(b);
   });
 }
-$("sideBtn").onclick=()=>{S.side=!S.side;save();renderSide()};
+$("btnP").onclick=()=>{S.openP=!S.openP;save();renderSide()};
+$("btnR").onclick=()=>{S.side=!S.side;save();renderSide()};
+
+/* ----- 切换、新建、删除一张纸 ----- */
+function openPaper(p){
+  commit();
+  if(S.at&&curAt()&&curAt().kind==="tpl")go(null);   // 正在编辑模板的话，先把它收好
+  S.view="paper";S.paper=p.id;S.mode="open";save();render();
+}
+function newPaper(){
+  const p=normPaper({});S.papers.push(p);openPaper(p);
+  const t=$("crumbs").querySelector(".title");if(t)t.focus();
+}
+function deletePaper(p){
+  if(S.papers.length<2)return toast("至少要留一张纸");
+  if(p.items.length&&!confirm(`删除「${paperName(p)}」和里面的所有内容？`))return;
+  const i=S.papers.indexOf(p);S.papers.splice(i,1);
+  if(S.paper===p.id)S.paper=S.papers[Math.max(0,i-1)].id;
+  save();render();
+  toast("已删除",()=>{S.papers.splice(i,0,p);S.paper=p.id;S.view="paper";save();render()});
+}
 
 /* =========================================================
    字号
@@ -950,26 +1004,27 @@ function paperMenu(items,has,idx){
       if(t.children&&t.children.length)items.push([openLabel(t),()=>enter(t),"",!canEnter()]);
       items.push(["彻底删除",()=>{const i=arr.indexOf(t);removeItem(t,arr);save();render();toast("已删除",()=>{arr.splice(i,0,t);save();render()})}],"-");
     }
-    items.push(["回到清单",()=>{S.mode="open";S.page=0;save();render()},"Esc"]);
+    items.push(["回到清单",()=>{S.mode="open";P().page=0;save();render()},"Esc"]);
     if(done.length)items.push(["清理全部已完成",()=>{
       if(!confirm(`删除这一层的 ${done.length} 条已完成（连同它们里面的内容）？建议先备份。`))return;
-      const keep=arr.filter(i=>!i.done);arr.length=0;arr.push(...keep);S.mode="open";S.page=0;save();render()}]);
+      const keep=arr.filter(i=>!i.done);arr.length=0;arr.push(...keep);S.mode="open";P().page=0;save();render()}]);
     return;
   }
   if(t){
     if(!t.mindset)items.push(["完成",()=>complete(t),MOD+"↵"]);
     items.push([t.mindset?"改回任务":"设为 Mindset",()=>toggleMind(t)]);
     items.push([openLabel(t),()=>enter(t),canEnter()?"":"已到第三层",!canEnter()]);
-    items.push(["移到第 1 格",()=>{moveTo(t,0);S.page=0;save();render();pulse(t.id)}]);
+    items.push(["移到第 1 格",()=>{moveTo(t,0);P().page=0;save();render();pulse(t.id)}]);
     items.push(["在前面空出一格",()=>{insertAtOpen({id:uid(),text:"",done:false},idx);save();render(idx)}]);
     items.push(["删除",()=>{const i=arr.indexOf(t), n=t.children?t.children.length:0;removeItem(t,arr);save();render();
       toast(n?`已删除，连同里面 ${n} 条`:"已删除",()=>{arr.splice(i,0,t);save();render()})}]);
     items.push("-");
   }
-  items.push(["上一页",()=>{S.page--;save();render()},"PgUp",S.page<=0]);
-  items.push(["下一页",()=>{S.page++;save();render()},"PgDn",S.page>=lastPage]);
-  items.push([`看已完成（${done.length}）`,()=>{S.mode="done";S.page=0;save();render()},"",!done.length]);
-  if(S.path.length)items.push(["回上一层",()=>goUp(S.path.length-1),"Esc"]);
+  items.push(["上一页",()=>{P().page--;save();render()},"PgUp",P().page<=0]);
+  items.push(["下一页",()=>{P().page++;save();render()},"PgDn",P().page>=lastPage]);
+  items.push([`看已完成（${done.length}）`,()=>{S.mode="done";P().page=0;save();render()},"",!done.length]);
+  if(P().path.length)items.push(["回上一层",()=>goUp(P().path.length-1),"Esc"]);
+  items.push(["新的纸",newPaper]);
 }
 function shelfMenu(items,has,idx){
   const sop=has?S.sops[idx]:null;
@@ -1061,6 +1116,9 @@ function closeMenu(){menu.classList.remove("on")}
 document.addEventListener("contextmenu",e=>{
   if(e.target.closest("#menu"))return;
   e.preventDefault();commit();
+  const pi=e.target.closest(".pi");
+  if(pi){const p=S.papers.find(x=>x.id===pi.dataset.paper);
+    return showMenu(e.clientX,e.clientY,[["打开",()=>openPaper(p)],["新的纸",newPaper],"-",["删除这张纸",()=>deletePaper(p),"",S.papers.length<2]])}
   openMenu(e.clientX,e.clientY,e.target.closest(".slot"));
 });
 document.addEventListener("pointerdown",e=>{if(!e.target.closest("#menu"))closeMenu()});
@@ -1077,8 +1135,8 @@ document.addEventListener("keydown",e=>{
     if(menu.classList.contains("on"))return closeMenu();
     if(editing)return tg.blur();                                     // 第一下：退出编辑
     if(S.view==="paper"){
-      if(S.mode==="done"){S.mode="open";S.page=0;save();render()}
-      else if(S.path.length)goUp(S.path.length-1);                   // 再按：回上一层
+      if(S.mode==="done"){S.mode="open";P().page=0;save();render()}
+      else if(P().path.length)goUp(P().path.length-1);                   // 再按：回上一层
     }else if(S.view==="sop"){
       const A=curAt();
       if(A&&A.kind==="hist"&&A.run)go({kind:"hist",sop:A.sop.id});
@@ -1092,7 +1150,7 @@ document.addEventListener("keydown",e=>{
   if(mod&&k==="p"){e.preventDefault();commit();openPrint();return}
   if(!$("pp").hidden)return;
   if(S.view==="paper"&&(e.key==="PageDown"||e.key==="PageUp")){
-    e.preventDefault();commit();S.page+=e.key==="PageDown"?1:-1;save();render();return;
+    e.preventDefault();commit();P().page+=e.key==="PageDown"?1:-1;save();render();return;
   }
   if(e.key==="Enter"&&mod){
     const slot=tg.closest&&tg.closest(".slot");
@@ -1185,12 +1243,12 @@ function sopBlocks(sop,out){
 function exportBlocks(scope){
   const out=[];
   if(scope==="all"){
-    out.push({text:"纸",head:true});itemBlocks(S.items,0,out);
+    S.papers.forEach(p=>{out.push({text:paperName(p),head:true});itemBlocks(p.items,0,out)});
     S.sops.forEach(s=>sopBlocks(s,out));
     return out;
   }
   const A=curAt();
-  if(S.view==="paper"){out.push({text:["纸",...L.chain.map(title)].join(" / "),head:true});itemBlocks(cur(),0,out)}
+  if(S.view==="paper"){out.push({text:[paperName(P()),...L.chain.map(title)].join(" / "),head:true});itemBlocks(cur(),0,out)}
   else if(S.view==="mind"){let day="";collectMinds().forEach(m=>{const d=fmtDay(m.ms);if(d!==day){day=d;out.push({text:d,head:true})}out.push({text:m.text,lvl:0,mind:true})})}
   else if(!A)S.sops.forEach(s=>sopBlocks(s,out));
   else if(A.kind==="tpl"){out.push({text:A.sop.name,head:true});stepBlocks(A.sop.draft,out,false)}
@@ -1260,7 +1318,8 @@ function markSaved(name){
   try{localStorage.setItem(KEY+":snap",savedSnap);localStorage.setItem(KEY+":fname",fileName)}catch(e){}
   updateInfo();
 }
-const fileData=()=>JSON.stringify({app:"paper20",v:4,at:new Date().toISOString(),items:S.items,sops:S.sops},null,2);
+const fileData=()=>JSON.stringify({app:"paper20",v:5,at:new Date().toISOString(),
+  papers:S.papers.map(p=>({id:p.id,name:p.name,items:p.items})),sops:S.sops},null,2);
 
 // 用 IndexedDB 记住文件句柄
 const idb=(mode,fn)=>new Promise((res,rej)=>{const r=indexedDB.open("paper20",1);
@@ -1323,9 +1382,10 @@ function loadData(text){
     const d=JSON.parse(text);
     let items=Array.isArray(d.items)?d.items:null;
     if(!items&&Array.isArray(d.tasks))items=d.tasks.map(t=>({text:t.title,done:t.done,doneAt:t.doneAt}));
-    if(!items&&!Array.isArray(d.sops))throw 0;
-    S.items=normItems(items);S.sops=normSops(d.sops);
-    S.path=[];S.page=0;S.mode="open";S.at=null;save();render();return true;
+    if(!items&&!Array.isArray(d.sops)&&!Array.isArray(d.papers))throw 0;
+    S.papers=Array.isArray(d.papers)&&d.papers.length?d.papers.map(normPaper):[normPaper({items})];
+    S.paper=S.papers[0].id;S.sops=normSops(d.sops);
+    S.mode="open";S.at=null;save();render();return true;
   }catch(err){toast("这个文件不是这页纸的数据");return false}
 }
 function download(blob,name){
