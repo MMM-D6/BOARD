@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>纸</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
   :root{
     --bg:#EAEAE7; --paper:#FBFBF8; --ink:#1A1A1A; --mute:rgba(26,26,26,.42); --rule:rgba(26,26,26,.11); --edge:rgba(26,26,26,.28);
@@ -243,6 +243,14 @@
   #menu .stepper span{flex:1;font:400 13px var(--sans)}
   #menu .stepper button{width:30px;flex:none;justify-content:center;padding:0;font:500 13px var(--mono)}
   #menu .stepper button.val{width:36px;font-weight:400}
+  #menu .segrow button{width:auto;padding:0 8px;font-family:var(--sans)}
+  #menu .segrow button.on{background:rgba(26,26,26,.08)}
+  #menu .swatches{display:flex;gap:7px;padding:6px 10px 8px}
+  #menu .sw{width:20px;height:20px;padding:0;border-radius:50%;border:1px solid rgba(26,26,26,.14);background:#fff;flex:none;
+    box-shadow:0 1px 2px rgba(0,0,0,.08);transition:transform .15s}
+  #menu .sw:hover{transform:scale(1.12)}
+  #menu .sw.on{box-shadow:0 0 0 2px var(--paper),0 0 0 3.5px rgba(26,26,26,.55)}
+  #menu .sw.none{background:linear-gradient(135deg,transparent 45%,rgba(200,60,60,.55) 45%,rgba(200,60,60,.55) 55%,transparent 55%),#fff!important}
 
   #toast{position:fixed;left:50%;bottom:calc(26px + env(safe-area-inset-bottom,0px));transform:translate(-50%,8px);
     display:flex;gap:12px;align-items:center;padding:8px 13px;border-radius:8px;background:var(--ink);color:var(--paper);
@@ -328,6 +336,7 @@ const normItems=a=>(Array.isArray(a)?a:[]).filter(i=>i&&typeof i.text==="string"
   const o={id:String(i.id||uid()),text:i.text,done:!!i.done};
   if(i.doneAt)o.doneAt=i.doneAt;
   if(i.mindset){o.mindset=true;o.ms=+i.ms||0}
+  if(i.bg)o.bg=i.bg; if(i.fs)o.fs=+i.fs; if(i.fw)o.fw=+i.fw;
   const c=normItems(i.children);if(c.length)o.children=c;
   return o;
 });
@@ -335,7 +344,7 @@ const newStep=()=>({id:uid(),text:"",times:1,ticks:0,note:"",mindset:false,ms:0}
 const normSteps=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.text==="string").map(s=>{
   const times=clampTimes(s.times);
   return {id:String(s.id||uid()),text:s.text,times,ticks:Math.min(times,Math.max(0,Math.round(+s.ticks)||0)),note:String(s.note||""),
-    mindset:!!s.mindset,ms:+s.ms||0};
+    mindset:!!s.mindset,ms:+s.ms||0,...(s.bg?{bg:s.bg}:{}),...(s.fs?{fs:+s.fs}:{}),...(s.fw?{fw:+s.fw}:{})};
 });
 const normSops=a=>(Array.isArray(a)?a:[]).filter(s=>s&&typeof s.name==="string").map(s=>{
   const o={id:String(s.id||uid()), name:s.name, useV:s.useV==null?null:+s.useV,
@@ -429,8 +438,14 @@ function render(focusIdx){
 }
 addEventListener("resize",()=>paper.querySelectorAll(".body .txt,.memo").forEach(autosize));
 // 一个格子的骨架：编号 + 文字
+// 空着的格子：没有字、没有记录、里面也没有内容。它只是占住位置，让后面的格子不往前挪
+const isBlank=x=>!((x.text||x.name||"").trim()||(x.note||"").trim()||(x.children&&x.children.length)||(x.runs&&x.runs.length));
+// 在第 idx 格（按没完成的格子数）写下新内容：前面不够就用空格子补齐，内容就留在你写的那一格
+function placeAt(arr,it,idx,blank,open=a=>a){while(open(arr).length<idx)arr.push(blank());arr.push(it)}
+// 末尾多出来的空格子不需要留着
+function trimTail(arr){while(arr.length&&isBlank(arr[arr.length-1])&&!arr[arr.length-1].done)arr.pop()}
 // 编号跳过 Mindset 格：第 idx 格显示的编号，以及编号 n 对应第几格
-function labelAt(list,idx){const k=Math.min(idx,list.length);return realSteps(list.slice(0,k)).length+(idx-k)+1}
+function labelAt(list,idx){const k=Math.min(idx,list.length);return list.slice(0,k).filter(x=>!x.mindset).length+(idx-k)+1}
 function idxOfLabel(list,n){let c=0;for(let i=0;i<list.length;i++){if(!list[i].mindset&&++c===n)return i}return list.length-1}
 function makeCell(idx,text,list){
   const slot=el("div","slot");slot.dataset.idx=idx;
@@ -510,11 +525,13 @@ function renderPaper(focusIdx){
   for(let k=0;k<PER;k++){
     const idx=start+k, it=list[idx];
     const {slot,top,num,txt}=makeCell(idx,it?it.text:"",list);
-    if(it){
+    if(it&&!isBlank(it)){
       slot.dataset.id=it.id;
       if(it.mindset)slot.classList.add("mind");
-      if(it.children&&it.children.length){
-        const all=it.children.length, open=it.children.filter(c=>!c.done).length;
+      applyLook(slot,it);
+      const kids=(it.children||[]).filter(c=>!isBlank(c));
+      if(kids.length){
+        const all=kids.length, open=kids.filter(c=>!c.done).length;
         top.append(subButton(open?`${open}/${all}`:"✓",open?`里面还有 ${open} 条未完成，共 ${all} 条。点开`:`里面 ${all} 条都完成了。点开`,()=>enter(it)));
       }
     }
@@ -531,7 +548,7 @@ function renderPaper(focusIdx){
 function bindTask(num,txt,idx,it){
   const arr=cur(), orig=it?it.text:"";
   txt.addEventListener("input",()=>{
-    if(!it){if(!txt.value.trim())return;it={id:uid(),text:"",done:false};arr.push(it)}
+    if(!it){if(!txt.value.trim())return;it={id:uid(),text:"",done:false};placeAt(arr,it,idx,()=>({id:uid(),text:"",done:false}),openOf)}
     it.text=txt.value;saveSoon();
   });
   txt.addEventListener("change",()=>{
@@ -541,8 +558,9 @@ function bindTask(num,txt,idx,it){
     if(it.children&&it.children.length){   // 里面还有东西的格子不能靠清空文字删掉
       it.text=orig;txt.value=orig;save();toast(`这一格里面还有 ${it.children.length} 条，要删请用右键「删除」`);return;
     }
-    const t=it;removeItem(t,arr);save();render();
-    if(orig)toast("已清空这一格",()=>{t.text=orig;insertAtOpen(t,idx,arr);save();render()});
+    // 清空后格子留在原地，后面的格子不会往前挪
+    const t=it;t.text="";trimTail(arr);save();render();
+    if(orig)toast("已清空这一格",()=>{t.text=orig;if(!arr.includes(t))placeAt(arr,t,idx,()=>({id:uid(),text:"",done:false}),openOf);save();render()});
   });
   bindTab(txt,idx,true);
   bindNum(num,idx,openList,(t,to)=>{moveTo(t,to);P().page=Math.floor(to/PER)});
@@ -590,7 +608,7 @@ const latestV=sop=>sop.versions[sop.versions.length-1];
 const nextVersion=sop=>sop.versions.find(v=>v.v===sop.useV)||latestV(sop);
 const realSteps=steps=>steps.filter(s=>!s.mindset);
 const plainSteps=steps=>realSteps(steps).filter(s=>s.text.trim()).map(s=>({text:s.text.trim(),times:s.times}));
-const progress=run=>{const r=realSteps(run.steps);return `${r.filter(isStepDone).length}/${r.length}`};
+const progress=run=>{const r=realSteps(run.steps).filter(s=>!isBlank(s));return `${r.filter(isStepDone).length}/${r.length}`};
 const versionSteps=(sop,v)=>{const x=sop.versions.find(y=>y.v===v);return x?x.steps:[]};
 const isChanged=(sop,run)=>JSON.stringify(plainSteps(run.steps))!==JSON.stringify(versionSteps(sop,run.v));
 const isStepDone=s=>s.ticks>=s.times;
@@ -646,7 +664,7 @@ function renderTemplate({sop},focusIdx){
   for(let k=0;k<PER;k++){
     const st=sop.draft[k];
     const {slot,top,num,txt}=makeCell(k,st?st.text:"",sop.draft);
-    if(st){slot.dataset.id=st.id;if(st.times>1)top.append(el("span","times",`×${st.times}`))}
+    if(st&&!isBlank(st)){slot.dataset.id=st.id;if(st.times>1)top.append(el("span","times",`×${st.times}`))}
     bindStep(num,txt,k,sop.draft,st,saveSoon);
   }
   pageParts=[sop.draftFrom?`基于 v${sop.draftFrom}`:"新的 SOP","改过的话，离开时存成新版本","Esc 回到 SOP"];
@@ -703,7 +721,7 @@ function renderShelf(){
   for(let k=0;k<PER;k++){
     const sop=S.sops[k];
     const {slot,top,num,txt}=makeCell(k,sop?sop.name:"",S.sops);
-    if(sop){
+    if(sop&&!isBlank(sop)){
       slot.dataset.id=sop.id;
       const a=activeRuns(sop).length, d=doneRuns(sop).length;
       const [label,tip]=a?[`进行中 ${a}`,"继续最近的一轮"]:nextVersion(sop)?["开始","开始新一轮"]:["写步骤","先把步骤写下来"];
@@ -712,7 +730,7 @@ function renderShelf(){
     }
     bindSop(num,txt,k,sop);
   }
-  pageParts=S.sops.length?[]:["在格子里写一个 SOP 的名字，比如「读一篇文献」，再点右上角写步骤"];
+  pageParts=S.sops.some(x=>!isBlank(x))?[]:["在格子里写一个 SOP 的名字，比如「读一篇文献」，再点右上角写步骤"];
 }
 // 纸堆：前几轮每轮明显多一张，之后越来越密，最多八张。点一下看过去的轮次
 function pile(n,onClick){
@@ -725,7 +743,8 @@ function pile(n,onClick){
 function bindSop(num,txt,idx,sop){
   const orig=sop?sop.name:"";
   txt.addEventListener("input",()=>{
-    if(!sop){if(!txt.value.trim())return;sop={id:uid(),name:"",versions:[],useV:null,runs:[]};S.sops.push(sop)}
+    const blank=()=>({id:uid(),name:"",versions:[],useV:null,runs:[]});
+    if(!sop){if(!txt.value.trim())return;sop=blank();placeAt(S.sops,sop,idx,blank)}
     sop.name=txt.value;saveSoon();
   });
   txt.addEventListener("change",()=>{
@@ -735,7 +754,7 @@ function bindSop(num,txt,idx,sop){
     if(sop.runs.length||sop.versions.length){
       sop.name=orig;txt.value=orig;save();toast("要删掉这个 SOP 请用右键「删除」");return;
     }
-    S.sops.splice(S.sops.indexOf(sop),1);save();render();
+    sop.name="";trimTail(S.sops);save();render();
   });
   bindTab(txt,idx,false);
   bindNum(num,idx,()=>S.sops,(s,to)=>move(S.sops,s,to));
@@ -749,7 +768,9 @@ function renderRun(A,focusIdx){
   for(let k=0;k<PER;k++){
     const st=run.steps[k];
     const {slot,num,txt}=makeCell(k,st?st.text:"",run.steps);
-    if(st&&st.mindset){slot.dataset.id=st.id;slot.classList.add("mind")}
+    if(st&&!isBlank(st))applyLook(slot,st);
+    if(st&&isBlank(st)){}
+    else if(st&&st.mindset){slot.dataset.id=st.id;slot.classList.add("mind")}
     else if(st){
       slot.dataset.id=st.id;slot.classList.add("step");txt.rows=1;
       const body=el("div","body"), wrap=el("div","memo-wrap"+(st.note.trim()?" has":"")), memo=el("textarea","memo");
@@ -769,7 +790,7 @@ function renderRun(A,focusIdx){
   runInfo(A);
 }
 function runInfo({kind,sop,run}){
-  const real=realSteps(run.steps), n=real.length, d=real.filter(isStepDone).length;
+  const real=realSteps(run.steps).filter(s=>!isBlank(s)), n=real.length, d=real.filter(isStepDone).length;
   if(kind!=="run"){
     const no=doneRuns(sop).indexOf(run)+1;
     pageParts=[`第 ${no} 轮`,run.v?`v${run.v}`:"",`${fmtTime(run.start)} 开始`,`${fmtTime(run.end)} 完成`,"Esc 返回"].filter(Boolean);
@@ -798,15 +819,15 @@ function tickNext(st){st.ticks=isStepDone(st)?st.times-1:st.ticks+1}
 function bindStep(num,txt,idx,steps,st,onEdit){
   const orig=st?st.text:"";
   txt.addEventListener("input",()=>{
-    if(!st){if(!txt.value.trim())return;st=newStep();steps.push(st)}
+    if(!st){if(!txt.value.trim())return;st=newStep();placeAt(steps,st,idx,newStep)}
     st.text=txt.value;onEdit();
   });
   txt.addEventListener("change",()=>{
     if(!st)return;
     const v=txt.value.trim();
     if(v){st.text=v;save();render();return}
-    const i=steps.indexOf(st);steps.splice(i,1);save();render();
-    if(orig)toast("已删掉这一步",()=>{st.text=orig;steps.splice(i,0,st);save();render()});
+    const t=st;t.text="";trimTail(steps);save();render();
+    if(orig)toast("已清空这一格",()=>{t.text=orig;if(!steps.includes(t))placeAt(steps,t,idx,newStep);save();render()});
   });
   bindTab(txt,idx,false);
   bindNum(num,idx,()=>steps,(s,to)=>move(steps,s,to));
@@ -825,7 +846,7 @@ function zoom(slot){
 }
 function unzoom(slot){
   if(!slot.classList.contains("zoom"))return;
-  slot.classList.remove("zoom");slot.style.cssText="";
+  slot.classList.remove("zoom");["left","top","width","height"].forEach(k=>slot.style.removeProperty(k));
   const g=slot.previousElementSibling;if(g&&g.classList.contains("ghost"))g.remove();
   slot.querySelectorAll(".body .txt,.memo").forEach(autosize);
 }
@@ -931,7 +952,7 @@ function renderSide(){
   $("btnR").textContent=`进行中 ${runs.length}`;$("btnR").title=S.side?"收起":"展开";
   const lp=$("listP"), lr=$("listR");lp.textContent="";lr.textContent="";
   S.papers.forEach(p=>{
-    const open=realSteps(openOf(p.items)).length;
+    const open=openOf(p.items).filter(i=>!i.mindset&&!isBlank(i)).length;
     const b=el("button","ri pi"+(p.id===herePaper?" here":""));b.type="button";b.dataset.paper=p.id;
     b.append(el("span","t",paperName(p)),el("span","n",String(open)));
     b.title=`${open} 格没完成`;b.onclick=()=>openPaper(p);lp.append(b);
@@ -989,7 +1010,7 @@ function menuItems(slot){
     else if(A.kind==="run")runMenu(items,A,has,idx);
     else items.push([A.run?"回到过去的轮次":"回到 SOP",()=>A.run?go({kind:"hist",sop:A.sop.id}):toShelf(),"Esc"]);
   }
-  items.push("-",{stepper:{label:"字号",get:()=>S.font,set:setFont,def:FS_DEF}});
+  items.push("-",{stepper:{label:"整体字号",get:()=>S.font,set:setFont,def:FS_DEF}});
   items.push("-",["导出打印…",openPrint,MOD+"P"]);
   items.push("-",["保存",()=>saveFile(false),MOD+"S"],["另存为…",()=>saveFile(true),MOD+"⇧S"],["打开文件…",openFile,MOD+"O"]);
   return items;
@@ -1013,6 +1034,7 @@ function paperMenu(items,has,idx){
   if(t){
     if(!t.mindset)items.push(["完成",()=>complete(t),MOD+"↵"]);
     items.push([t.mindset?"改回任务":"设为 Mindset",()=>toggleMind(t)]);
+    lookItems(items,t);items.push("-");
     items.push([openLabel(t),()=>enter(t),canEnter()?"":"已到第三层",!canEnter()]);
     items.push(["移到第 1 格",()=>{moveTo(t,0);P().page=0;save();render();pulse(t.id)}]);
     items.push(["在前面空出一格",()=>{insertAtOpen({id:uid(),text:"",done:false},idx);save();render(idx)}]);
@@ -1064,6 +1086,7 @@ function runMenu(items,{sop,run},has,idx){
   if(st){
     if(!st.mindset)items.push([isStepDone(st)?"撤回一次":"勾一次",()=>{tickNext(st);const s=paper.querySelector(`.slot[data-id="${st.id}"]`);if(s)paintStep(s,st);touch(run)},MOD+"↵"]);
     items.push([st.mindset?"改回步骤":"设为 Mindset",()=>{toggleMind(st);touch(run)}]);
+    lookItems(items,st);items.push("-");
     stepMenu(items,run.steps,st,idx,()=>{run.touched=now()});
   }
   items.push(["完成这一轮",()=>finishRun(sop,run)]);
@@ -1071,6 +1094,22 @@ function runMenu(items,{sop,run},has,idx){
   items.push(["回到 SOP",toShelf,"Esc"]);
 }
 
+/* ----- 格子样式：底色、字号、粗细（纸和跑一轮里的格子） ----- */
+const BG={"":"",cream:"#FFF6DC",peach:"#FDEBDD",rose:"#FCE8EC",mint:"#E5F4EA",lilac:"#EEEAFB",stone:"#ECEBE5"};
+const WEIGHTS=[["常规",400],["中等",500],["粗",600]];
+function applyLook(slot,it){
+  slot.style.background=it.mindset?"":(BG[it.bg]||"");
+  if(it.fs)slot.style.setProperty("--fs",it.fs+"px");else slot.style.removeProperty("--fs");
+  slot.querySelectorAll(".txt").forEach(t=>t.style.fontWeight=it.fw||"");
+}
+function lookItems(items,it){
+  const re=()=>{save();const s=paper.querySelector(`.slot[data-id="${it.id}"]`);if(s){applyLook(s,it);s.querySelectorAll(".body .txt,.memo").forEach(autosize)}};
+  items.push({head:"这一格"});
+  if(!it.mindset)items.push({swatches:{get:()=>it.bg||"",set:v=>{if(v)it.bg=v;else delete it.bg;re()}}});
+  items.push({stepper:{label:"字号",get:()=>it.fs||S.font,def:null,
+    set:v=>{if(v==null)delete it.fs;else it.fs=Math.min(FS_MAX+8,Math.max(FS_MIN,v));re()}}});
+  items.push({seg:{label:"粗细",options:WEIGHTS,get:()=>it.fw||400,set:v=>{if(v===400)delete it.fw;else it.fw=v;re()}}});
+}
 // 设为 Mindset / 改回来：文字保留，只换身份
 function toggleMind(it){
   it.mindset=!it.mindset;
@@ -1087,8 +1126,25 @@ function showMenu(x,y,items){
       // 数值这一行点了不关菜单，可以连着点
       const {label,get,set,def}=m.stepper, row=el("div","stepper"), val=el("button","val",String(get()));
       const btn=(t,fn,tip)=>{const b=el("button",null,t);b.title=tip;b.onclick=()=>{fn();val.textContent=get()};return b};
-      val.title="恢复默认 "+def;val.onclick=()=>{set(def);val.textContent=get()};
+      val.title=def==null?"恢复默认":"恢复默认 "+def;val.onclick=()=>{set(def);val.textContent=get()};
       row.append(el("span",null,label),btn("−",()=>set(get()-1),"减一"),val,btn("+",()=>set(get()+1),"加一"));
+      return menu.append(row);
+    }
+    if(m.swatches){
+      // 底色：一排小圆片，点了不关菜单
+      const {get,set}=m.swatches, row=el("div","swatches");
+      Object.keys(BG).forEach(k=>{
+        const b=el("button","sw"+(k?"":" none")+(get()===k?" on":""));b.type="button";b.title=k?"":"无底色";
+        if(k)b.style.background=BG[k];
+        b.onclick=()=>{set(k);row.querySelectorAll(".sw").forEach(x=>x.classList.toggle("on",x===b))};
+        row.append(b);
+      });
+      return menu.append(row);
+    }
+    if(m.seg){
+      const {label,options,get,set}=m.seg, row=el("div","stepper segrow");row.append(el("span",null,label));
+      options.forEach(([t,v])=>{const b=el("button",get()===v?"on":"",t);b.style.fontWeight=v;
+        b.onclick=()=>{set(v);row.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b))};row.append(b)});
       return menu.append(row);
     }
     const [label,fn,key,dis]=m;
