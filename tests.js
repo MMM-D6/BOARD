@@ -2670,16 +2670,19 @@ group("wrrefsel 引文可选中、跳转对得准", async (c) => {
     return e.textContent === before;
   }));
 
-  // 从画布点分身角标跳过来：要落在那一条引文上，不是稿子左上角
+  // 从画布跳到稿子里的这条引文：要落在那一条引文上，不是稿子左上角。
+  // 2026-10 起点角标只在画布上转，不进写作页；去稿子里的引文改走角标右键菜单的"稿子里的引用"（gotoTwinRef）
   await c.run(() => { closeWrite(); camTo(0, 0, 1, true) });
   await c.wait(400);
   const jump = await c.run(() => {
     const el = nodes.get("q");
     const has = !!(el && el.querySelector(".twin"));
     gotoTwin(card("q"), false);
-    return has;
+    const stayed = !document.body.classList.contains("wr");
+    gotoTwinRef(card("q"));
+    return has && stayed;
   });
-  c.ok("画布上的源卡片有分身角标", jump);
+  c.ok("画布上的源卡片有分身角标；点角标不进写作页", jump);
   await c.wait(900);
   const land = await c.run(() => {
     const box2 = document.getElementById("wrmain");
@@ -6017,6 +6020,45 @@ group("imgcap 图片说明统一、打字减负（2026-10）", async (c) => {
   c.ok("撤销一次退回一段，不是一个字母", t1.length < "short and a much longer sentence that has to wra".length);
   await c.page.mouse.click(700, 820); await c.wait(500);
   c.ok("离开编辑后内容保存", await c.run((t) => card("a").text === t, t1));
+});
+
+group("twinnav 分身角标只在画布上转（2026-10）", async (c) => {
+  await c.board([{ id: "src", x: 0, y: 0, w: 300, text: "Source note", s: {} },
+    ...Array.from({ length: 4 }, (_, i) => ({ id: "f" + i, x: 2000, y: i * 80, w: 300, text: "para " + i, s: {} }))], []);
+  await c.run(() => {
+    S.docs = []; const d = addDoc({ x: -900, y: 0 }, "稿子");
+    sel = ["f0", "f1", "f2", "f3"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = ["src"]; clipCards("twin"); pasteClip({ x: 1200, y: 900 });
+    sel = ["src"]; clipCards("twin"); wrPasteTwin(d.ids[1], d);
+    sel = ["src"]; clipCards("twin"); pasteClip({ x: -1500, y: 1500 });
+    // 稿子里的引文在存放顺序上排到最前面：从前的编号与转法在这种情况下最容易出错
+    const r = S.cards.find((z) => z.ref === "src" && z.wrIn); S.cards.splice(S.cards.indexOf(r), 1); S.cards.splice(1, 0, r);
+    invalidateIndex(); sel = ["src"]; render(); camTo(-150, -20, 1, true); syncCards();
+  });
+  await c.wait(600);
+  const badge = () => c.run(() => { const el = nodes.get(sel[0]); const tw = el && el.querySelector(".twin"); return tw ? tw.textContent : null; });
+  const click = async (part) => {
+    const r = await c.run((part) => { const x = nodes.get(sel[0]).querySelector(".twin " + part).getBoundingClientRect(); return { x: x.x + x.width / 2, y: x.y + x.height / 2 }; }, part);
+    await c.page.mouse.click(r.x, r.y); await c.wait(650); await c.run(() => syncCards()); await c.wait(150);
+  };
+  c.ok("源卡片的角标是 1/3（只数画布上的，源排第一）", (await badge()) === "\u25C8 1/3");
+  const seen = [];
+  for (let k = 0; k < 3; k++) { await click(".twn"); seen.push(await c.run(() => ({ id: sel[0], wr: document.body.classList.contains("wr") }))); }
+  c.ok("点数字依次走遍画布上的三张，转回源头", seen.map((z) => z.id).filter((x, i, a) => a.indexOf(x) === i).length === 3 && seen[2].id === "src");
+  c.ok("始终不进写作页", seen.every((z) => !z.wr));
+  await click(".twn"); const mid = await c.run(() => sel[0]);
+  await click(".twd");
+  c.ok("点 \u25C8 回到源头", mid !== "src" && (await c.run(() => sel[0])) === "src");
+  c.ok("角标提示里写着稿子里还有引用", await c.run(() => /1/.test(nodes.get("src").querySelector(".twin").title)));
+  const r = await c.run(() => { const x = nodes.get("src").querySelector(".twin").getBoundingClientRect(); return { x: x.x + x.width / 2, y: x.y + x.height / 2 }; });
+  await c.page.mouse.click(r.x, r.y, { button: "right" }); await c.wait(200);
+  const it = await c.run(() => { const m = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("twinRefs"))); if (!m) return null; const x = m.getBoundingClientRect(); return { x: x.x + 10, y: x.y + x.height / 2 }; });
+  c.ok("右键菜单有\u201C稿子里的引用 (1)\u201D", !!it);
+  if (it) { await c.page.mouse.click(it.x, it.y); await c.wait(900); }
+  const land = await c.run(() => { const el = $("wrmain") && $("wrmain").querySelector(".ref"); return { wr: document.body.classList.contains("wr"), flash: !!(el && el.classList.contains("flash")) }; });
+  c.ok("从菜单去稿子：打开稿子、落在那一条引文上并闪一下", land.wr && land.flash);
+  await c.page.keyboard.press("Escape"); await c.wait(300);
+  c.ok("Esc 回到画布", await c.run(() => !document.body.classList.contains("wr")));
 });
 
 group("static 静态检查", async (c) => {

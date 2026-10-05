@@ -243,6 +243,7 @@
     font:500 calc(9.5px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.08em;
     pointer-events:auto;display:flex;align-items:center;gap:calc(3px * var(--iz))}
   .card .twin:hover{opacity:1}
+  .card .twin .twd{padding:0 2px}
   .card.isTwin .cap{box-shadow:calc(-3px * var(--iz)) 0 0 var(--tw)}
   body.lock .card .twin{display:none}
   .card .lvl{position:absolute;left:0;top:calc(-16px * var(--iz));opacity:.38;
@@ -771,7 +772,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   roleHead:"Outside the sequence",roleApx:"Appendix",roleAside:"Other, not numbered",
   linkAdd:"Add a link…",linkEdit:"Edit the link…",linkOpen:"Open the link",
   linkPrompt:"Web address: a PDF link, a Google Scholar entry, or a DOI. Empty removes it.",linkLabel:"Link",
-  twinAdd:"Create a twin",twinGo:"Next place it appears",twinSrc:"Jump to the source",
+  twinAdd:"Create a twin",twinGo:"Next place it appears",twinTip:"Number: next copy on the canvas \u00B7 \u25C8: back to the source",
+  twinRefsTip:"Also quoted {n} time(s) in documents (right-click to see)",twinRefs:"Quoted in documents",twinSrc:"Jump to the source",
   twinAll:"Select every place",twinUnlink:"Detach into its own card",twinDel:"Delete this one",
   twinHead:"Twin",twinMade:"Twin created at the centre of the view",twinNone:"No other place",
   twinSee:"Same entry, also at",findMerge:"Merge twins when searching",
@@ -971,7 +973,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   roleHead:"不参与排序",roleApx:"附录",roleAside:"其他（不编号）",
   linkAdd:"添加链接…",linkEdit:"修改链接…",linkOpen:"打开链接",
   linkPrompt:"网址：PDF 链接、Google Scholar 条目、或直接粘 DOI。留空则移除",linkLabel:"链接",
-  twinAdd:"创建分身",twinGo:"跳到下一处",twinSrc:"跳到源头",
+  twinAdd:"创建分身",twinGo:"跳到下一处",twinTip:"点数字：画布上的下一张 \u00B7 点 \u25C8：回到源头",
+  twinRefsTip:"另有 {n} 处在稿子里引用（右键查看）",twinRefs:"稿子里的引用",twinSrc:"跳到源头",
   twinAll:"选中全部出现位置",twinUnlink:"脱离为独立卡片",twinDel:"删除这一处",
   twinHead:"分身",twinMade:"分身已建在视野中央",twinNone:"没有其他位置",
   twinSee:"同一条目，另见",findMerge:"检索时合并分身",
@@ -1188,6 +1191,10 @@ const IMG=new Map();
 const orig=c=>(c&&c.ref)?(S.cards.find(z=>z.id===c.ref)||c):c;
 const twins=c=>{const o=orig(c);return S.cards.filter(z=>z===o||z.ref===o.id)};
 const hasTwins=c=>twins(c).length>1;
+// 角标只在画布上转（2026-10）：源排第一，其余分身按存放顺序；挂在稿子里的引文投影（wrIn）不算在内，
+// 点角标不会再把人带进写作页。稿子里的引文另走 gotoTwinRef（角标右键菜单）。
+const canvasTwins=c=>{const o=orig(c);return [o,...S.cards.filter(z=>z.ref===o.id&&!docOnly(z))]};
+const docRefs=c=>{const o=orig(c);return S.cards.filter(z=>z.ref===o.id&&docOnly(z))};
 function normUrl(u){
   u=(u||"").trim();
   if(!u)return "";
@@ -1312,17 +1319,22 @@ function makeTwin(){   // 锁定不影响创建分身
   sel=ns;render();save();toast(t("twinMade"));
 }
 function gotoTwin(c,back){
-  const list=twins(c);
-  if(list.length<2){toast(t("twinNone"));return}
   if(back){const o=orig(c);sel=[o.id];paintSel();focusOn([o],true);return}
+  // 只在画布上的分身之间转。从前稿子里的引文也排在里面，转到它就打开写作页，
+  // 那边没有角标，转不回来也指不到别的分身（2026-10 用户反馈）
+  const list=canvasTwins(c);
+  if(list.length<2){toast(t("twinNone"));return}
   const i=list.indexOf(c);
   const nx=list[(i+1)%list.length];
-  // 挂在稿子折叠框里的那种分身没有"位置"可言：它的 x/y 是拷贝时随手写的
-  // 稿子左上角。拿它去 focusOn，镜头就停在稿子的左上角，看不到那条引文——
-  // 用户报的"跳回写作页却不是对准引用条目"就是这个。改成把稿子打开、
-  // 展开它所在的折叠框、滚到那一条并闪一下。
-  if(docOnly(nx)){revealRef(nx);return}
   sel=[nx.id];paintSel();focusOn([nx],true);
+}
+// 稿子里的引文：依次打开稿子、翻开折叠框、滚到那一条并闪一下（原来角标转到引文时的做法，挪到这里）。
+// 挂在稿子折叠框里的分身没有"位置"可言，它的 x/y 是拷贝时随手写的稿子左上角，所以不能拿去 focusOn。
+const twRefI={};
+function gotoTwinRef(c){
+  const refs=docRefs(c);if(!refs.length){toast(t("twinNone"));return}
+  const o=orig(c),k=((o.id in twRefI?twRefI[o.id]:-1)+1)%refs.length;twRefI[o.id]=k;
+  revealRef(refs[k]);
 }
 // 把稿子里的某一条引文投影翻出来给人看
 function revealRef(tw){
@@ -2960,12 +2972,16 @@ function makeCard(c){
     el.appendChild(lk);
   }
   if(hasTwins(c)){
-    const list=twins(c),i=list.indexOf(c)+1;
+    const list=canvasTwins(c),refs=docRefs(c),i=list.indexOf(c)+1;
     if(c.ref)el.classList.add("isTwin");
     const tw=document.createElement("div");tw.className="twin";
-    tw.textContent="\u25C8 "+i+"/"+list.length;
+    // ◈ 点了回源头（第 1 张）；数字点了去画布上的下一张。外观跟从前一样是"◈ 1/3"
+    const dm=document.createElement("span");dm.className="twd";dm.textContent="\u25C8";
+    const nm=document.createElement("span");nm.className="twn";nm.textContent=" "+i+"/"+list.length;
+    tw.append(dm,nm);
+    tw.title=t("twinTip")+(refs.length?"\n"+t("twinRefsTip").replace("{n}",refs.length):"");
     tw.style.color=s.color;
-    tw.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();gotoTwin(c,e.shiftKey)});
+    tw.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();gotoTwin(c,e.shiftKey||e.target===dm)});
     tw.addEventListener("contextmenu",e=>{if(lock)return;e.preventDefault();e.stopPropagation();
       sel=[c.id];paintSel();twinMenu(e.clientX,e.clientY,c)});
     el.appendChild(tw);
@@ -3319,11 +3335,12 @@ function delFrame(f,withCards){
   selFrame=null;sel=[];render();save();
 }
 function twinMenu(x,y,c){
-  const list=twins(c);
+  const list=canvasTwins(c),refs=docRefs(c);
   menuAt(x,y,[
     {head:t("twinHead")+" "+(list.indexOf(c)+1)+"/"+list.length},
     {label:t("twinGo"),on:()=>gotoTwin(c)},
     {label:t("twinSrc"),on:()=>gotoTwin(c,true)},
+    ...(refs.length?[{label:t("twinRefs")+" ("+refs.length+")",on:()=>gotoTwinRef(c)}]:[]),
     {label:t("twinAll"),on:()=>{sel=list.map(z=>z.id);paintSel();focusOn(list,true)}},
     "-",
     {label:t("twinUnlink"),on:()=>unlinkTwin(c)},
