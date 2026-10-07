@@ -761,6 +761,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   tilerBlocked:"The browser blocked the new tab. Open Tiler.html by hand.",
   toolbox:"Toolbox",toolboxHead:"Open tool in a new tab",
   gridPaperTool:"Grid paper",gridPaperHint:"Grid paper for handwriting and sketching",gridPaperBlocked:"The browser blocked the new tab. Open 纸.html by hand.",
+  xTool:"X",xHint:"Priority machine: what to do now and how to start",xBlocked:"The browser blocked the new tab. Open X.html by hand.",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   bibShow:"Show what is filed under this entry",
@@ -962,6 +963,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   tilerBlocked:"新标签被浏览器拦住了，请手动打开 Tiler.html",
   toolbox:"工具箱",toolboxHead:"在新标签页里打开",
   gridPaperTool:"格纸",gridPaperHint:"手写与草图用的格纸",gridPaperBlocked:"新标签被浏览器拦住了，请手动打开 纸.html",
+  xTool:"X",xHint:"优先机器：现在做什么、怎么开始",xBlocked:"新标签被浏览器拦住了，请手动打开 X.html",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   bibShow:"显示归在这条文献下的原文",
@@ -2079,6 +2081,7 @@ function newWindow(){window.open(location.pathname+"?w="+uid(),"_blank")}
 function openCutout(){openSideTool("cutout.html","cutoutHint","cutoutBlocked")}
 function openTiler(){openSideTool("Tiler.html","tilerHint","tilerBlocked")}
 function openGridPaper(){openSideTool("纸.html","gridPaperHint","gridPaperBlocked")}
+function openX(){openSideTool("X.html","xHint","xBlocked")}
 // 格纸工具同理——三个工具都只是链接过去，代码互不干扰。
 // 每次都带一个时间戳参数，避开浏览器缓存，刚传上去的新版本刷新就能看到
 function openSideTool(file,hintKey,blockKey){
@@ -10283,7 +10286,8 @@ function boardMenu(x,y){
     {label:t("toolbox"),sub:[{head:t("toolboxHead")},
       {label:t("cutoutTool"),on:openCutout},
       {label:t("tilerTool"),on:openTiler},
-      {label:t("gridPaperTool"),on:openGridPaper}]},
+      {label:t("gridPaperTool"),on:openGridPaper},
+      {label:t("xTool"),on:openX}]},
     {label:t("importPDF"),on:()=>$("pdffile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("insertTable"),sub:[{head:t("tbSize")},
