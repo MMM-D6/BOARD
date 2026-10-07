@@ -8,36 +8,23 @@
   "theme_color": "#F4F4F2",
   "shortcuts": [
     {
-      "name": "Cutout tool",
-      "short_name": "Cutout",
-      "description": "Cut a subject out of an image, then paste it into the board",
-      "url": "./cutout.html",
-      "icons": [
-        {
-          "src": "icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "Tiling tool",
-      "short_name": "Tiler",
-      "description": "Split a large image or PDF into A4 sheets for printing",
-      "url": "./Tiler.html",
-      "icons": [
-        {
-          "src": "icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
       "name": "Grid paper",
       "short_name": "纸",
       "description": "Grid paper for handwriting and sketching",
       "url": "./纸.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "X",
+      "short_name": "X",
+      "description": "Priority machine: what to do now and how to start",
+      "url": "./X.html",
       "icons": [
         {
           "src": "icon-192.png",
