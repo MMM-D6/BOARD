@@ -3,18 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>机器</title>
+<title>X</title>
 <style>
 :root{
   --bg:#eef1f3; --grid:#dfe4e8; --card:#ffffff; --ink:#1b2227; --muted:#6a767e; --line:#d3dadf;
   --accent:#1f5f8a; --accent-bg:#e2eef7; --warn:#2b4a9b; --warn-bg:#e3e9fa;
   --bar:#f8fafb; --shadow:0 1px 2px rgba(20,30,40,.08),0 2px 8px rgba(20,30,40,.06);
+  --cy:#fff6c8; --co:#ffe6cc; --cr:#ffdede; --cp:#ece2fa; --cb:#dcebfa; --cg:#ddf3e4; --cn:#eceff1;
   --f:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
 }
 @media (prefers-color-scheme:dark){:root{
   --bg:#14191d; --grid:#1d252b; --card:#1d252b; --ink:#e2e7ea; --muted:#94a1a9; --line:#2f3a42;
   --accent:#7cb6de; --accent-bg:#1c3446; --warn:#a9bdf2; --warn-bg:#1f2a47;
-  --bar:#181e23; --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark}}
+  --bar:#181e23; --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark;
+  --cy:#3a3520; --co:#3d2e1f; --cr:#3d2426; --cp:#30283f; --cb:#1f3042; --cg:#1f3a2c; --cn:#2a3036}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{height:100%;margin:0}
@@ -43,9 +45,15 @@ textarea{resize:vertical;width:100%}
 .empty-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);pointer-events:none;text-align:center;line-height:1.8}
 #linkBar{position:absolute;top:54px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--card);padding:4px 12px;border-radius:6px;font-size:13px;z-index:10}
 
-.card{position:absolute;width:250px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px 6px;box-shadow:var(--shadow);user-select:none}
+.card{position:absolute;width:250px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px 4px;box-shadow:var(--shadow);user-select:none}
 .card.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg),var(--shadow)}
 .card.open{z-index:5}
+/* the card being edited or resized always sits on top of its neighbours */
+.card.editing,.card.rzing{z-index:7}
+.card.c-y{background:var(--cy)}.card.c-o{background:var(--co)}.card.c-r{background:var(--cr)}
+.card.c-p{background:var(--cp)}.card.c-b{background:var(--cb)}.card.c-g{background:var(--cg)}.card.c-n{background:var(--cn)}
+/* invisible resize grip in the bottom-right corner; double-click it to go back to the default size */
+.card .rz{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:2}
 .card.done{opacity:.6}
 .card.done .t{text-decoration:line-through}
 .card.linkfrom{outline:2px dashed var(--accent)}
@@ -54,14 +62,15 @@ textarea{resize:vertical;width:100%}
 .card .t{flex:1;min-width:0;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap;outline:none;min-height:21px}
 .card .t[contenteditable=true]{user-select:text;cursor:text;background:var(--bg);border-radius:4px;padding:0 3px}
 .card .t:empty::before{content:"（空）";color:var(--muted)}
-.chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.chips{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:5px 0 0 20px}
 .chip{font-size:11px;line-height:18px;padding:0 6px;border-radius:9px;background:var(--bg);color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip.blk{background:var(--warn-bg);color:var(--warn)}
 .chip.crit{border:1px solid var(--line);background:transparent;white-space:normal}
-.chip.res{background:var(--accent-bg);color:var(--accent);cursor:pointer}
-.ts{font-size:11px;color:var(--muted);margin-top:4px;display:flex;justify-content:space-between;gap:6px;font-variant-numeric:tabular-nums}
+.chip.res{display:inline-flex;align-items:center;gap:3px;height:17px;line-height:1;padding:0 5px;background:var(--accent-bg);color:var(--accent);cursor:pointer}
+.chip.res .ar{font-size:8px;line-height:1}
+.ts{font-size:10px;line-height:12px;color:var(--muted);opacity:.8;margin-top:2px;display:flex;justify-content:space-between;gap:6px;font-variant-numeric:tabular-nums}
 /* resistance notes, inside the card */
-.res{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:4px;cursor:default}
+div.res{margin:6px 0 0 20px;padding-top:6px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:4px;cursor:default}
 .ri{font-size:12.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border-radius:5px;padding:3px 6px;user-select:text}
 .ri .rt{display:block;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
 .resIn{font-size:12.5px;padding:4px 6px;line-height:1.5}
@@ -73,6 +82,13 @@ textarea{resize:vertical;width:100%}
 #menu .mi.danger{color:var(--warn)}
 #menu .sepl{height:1px;background:var(--line);margin:4px 2px}
 #menu .k{color:var(--muted);font-size:12px}
+#menu .mhd{padding:4px 10px 2px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
+#menu .mrow{display:flex;align-items:center;gap:4px;padding:3px 8px 3px 10px}
+#menu .mrow .ml{min-width:30px;color:var(--muted);font-size:12px}
+#menu .mb{min-width:22px;height:22px;padding:0 5px;border:1px solid var(--line);border-radius:5px;background:var(--card);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px}
+#menu .mb:hover{border-color:var(--muted)}
+#menu .mb.on{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+#menu .mb.sw{width:22px;padding:0}
 #dlg{position:fixed;inset:0;background:rgba(0,0,0,.3);display:none;align-items:center;justify-content:center;z-index:60}
 #dlg .box{background:var(--card);border-radius:10px;padding:16px;width:min(380px,92vw);display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
 #dlg .box h3{margin:0;font-size:15px}
@@ -82,18 +98,14 @@ textarea{resize:vertical;width:100%}
 </head>
 <body>
 <div id="top">
-  <span id="file"></span>
+  <span id="file" hidden></span>
   <button id="reconnect" hidden></button>
   <span class="sp"></span>
-  <button id="zoom" title="缩放比例，点一下回到 100%">100%</button>
-  <button id="tidy" title="按绑定关系整理成树">整理</button>
-  <button id="home" title="回到原点">回中</button>
-  <button id="fileBtn">文件 ▾</button>
   <input type="file" id="impFile" accept=".json,application/json" hidden>
 </div>
 <div id="canvas">
   <div id="world"><svg id="links" width="1" height="1"></svg><div id="cards"></div></div>
-  <div class="empty-hint" id="hint" hidden>双击空白处新建任务<br>右键卡片打开菜单</div>
+  <div class="empty-hint" id="hint" hidden>双击空白处新建任务<br>右键打开菜单</div>
   <div id="linkBar" hidden>点一下要作为父任务的卡片，Esc 取消</div>
 </div>
 <div id="menu"></div>
@@ -142,6 +154,8 @@ function fileLabel(){const el=$('#file');
   const n=fileHandle.name.replace(/\.json$/i,'');
   if(needPerm){el.textContent=n+' · offline';el.title='Chrome 需要重新授权，点一下页面任意处恢复自动保存';return}
   el.textContent=n+(dirty?' · unsaved':lastSaved?' · saved '+hm(lastSaved):'');el.title=fileHandle.name+'：每次改动约 1 秒后自动保存，另外每 5 分钟保存一次'}
+function fileStatus(){if(!fileHandle)return'还没有文件，改动只存在浏览器里';
+  return fileHandle.name+(needPerm?' · 需要重新连接':dirty?' · 未保存':lastSaved?' · 已保存 '+hm(lastSaved):'')}
 function touch(){dirty=true;backup();clearTimeout(saveTimer);saveTimer=setTimeout(writeFile,1000)}
 async function writeFile(force){if(!fileHandle||needPerm||(!dirty&&!force))return false;
   if(writing){await writing;if(!dirty&&!force)return true}
@@ -154,12 +168,14 @@ setInterval(()=>{if(fileHandle&&!needPerm)writeFile(true)},AUTOSAVE_MS);
 document.addEventListener('pointerdown',()=>{if(needPerm&&fileHandle)reconnect()},true);
 async function saveNow(){if(!fileHandle)return bindNew();if(needPerm)return reconnect();if(await writeFile(true))toast('已保存到 '+fileHandle.name)}
 const canFS='showSaveFilePicker' in window;
-async function bindNew(){if(!canFS)return toast('这个浏览器不支持绑定文件，请用 Chrome 或 Edge，或者用导出');try{fileHandle=await showSaveFilePicker({suggestedName:'machine-data.json',types:[{description:'机器数据',accept:{'application/json':['.json']}}]});await idbSet('handle',fileHandle);needPerm=false;dirty=true;await writeFile();$('#reconnect').hidden=true;toast('已绑定')}catch(_){}}
-async function bindOpen(){if(!canFS)return toast('这个浏览器不支持绑定文件，请用 Chrome 或 Edge，或者用导入');try{const[h]=await showOpenFilePicker({types:[{description:'机器数据',accept:{'application/json':['.json']}}]});const inc=norm(JSON.parse(await(await h.getFile()).text()));fileHandle=h;needPerm=false;await idbSet('handle',h);if(await askChoice('打开这个文件','用文件里的内容替换现在的画布，还是和现在的内容合并？',['用文件替换','合并'])==='用文件替换')D=inc;else D=merge(D,inc);$('#reconnect').hidden=true;dirty=true;writeFile();render();toast('已打开 '+h.name)}catch(e){if(e&&e.name!=='AbortError')toast('打开失败：'+e.message)}}
+/* new files are named with year and month, e.g. 26-10-X.json */
+function stampName(){const d=new Date();return pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-X.json'}
+async function bindNew(){if(!canFS)return toast('这个浏览器不支持绑定文件，请用 Chrome 或 Edge，或者用导出');try{const opt={suggestedName:stampName(),types:[{description:'X 文件',accept:{'application/json':['.json']}}]};if(fileHandle)opt.startIn=fileHandle;fileHandle=await showSaveFilePicker(opt);await idbSet('handle',fileHandle);needPerm=false;dirty=true;await writeFile();$('#reconnect').hidden=true;toast('已保存到 '+fileHandle.name)}catch(_){}}
+async function bindOpen(){if(!canFS)return toast('这个浏览器不支持绑定文件，请用 Chrome 或 Edge，或者用导入');try{const[h]=await showOpenFilePicker({types:[{description:'X 文件',accept:{'application/json':['.json']}}]});const inc=norm(JSON.parse(await(await h.getFile()).text()));fileHandle=h;needPerm=false;await idbSet('handle',h);if(await askChoice('打开这个文件','用文件里的内容替换现在的画布，还是和现在的内容合并？',['用文件替换','合并'])==='用文件替换')D=inc;else D=merge(D,inc);$('#reconnect').hidden=true;dirty=true;writeFile();render();toast('已打开 '+h.name)}catch(e){if(e&&e.name!=='AbortError')toast('打开失败：'+e.message)}}
 let reconnecting=false,renderAfterDrag=false;
 async function reconnect(){if(reconnecting)return;reconnecting=true;try{if(await fileHandle.requestPermission({mode:'readwrite'})==='granted'){needPerm=false;const inc=norm(JSON.parse(await(await fileHandle.getFile()).text()));D=merge(D,inc);$('#reconnect').hidden=true;dirty=true;await writeFile();if(drag)renderAfterDrag=true;else render();toast('已连接，自动保存恢复')}}catch(e){toast('连接失败：'+e.message)}finally{reconnecting=false;fileLabel()}}
 function norm(o){const b=blank();if(!o||typeof o!=='object')return b;for(const k of Object.keys(b))if(o[k]!==undefined)b[k]=o[k];
-  for(const t of Object.values(b.tasks)){t.history=t.history||[];t.blk=t.blk||'';t.crit=t.crit||'';t.res=t.res||[];t.fold=!!t.fold;t.x=+t.x||0;t.y=+t.y||0;delete t.cur;delete t.est;delete t.energy;delete t.tags}
+  for(const t of Object.values(b.tasks)){t.history=t.history||[];t.blk=t.blk||'';t.crit=t.crit||'';t.res=t.res||[];t.fold=false;t.x=+t.x||0;t.y=+t.y||0;delete t.cur;delete t.est;delete t.energy;delete t.tags}
   if(!b.view||typeof b.view!=='object')b.view={x:40,y:40,z:1};b.view.z=Math.min(1,Math.max(.3,+b.view.z||1));
   migrateSidebar(o,b);return b}
 /* older files kept notes in a sidebar. Notes tied to a task move into that card;
@@ -183,9 +199,11 @@ function merge(A,B){const R=JSON.parse(JSON.stringify(A));R.deleted=Object.assig
   return R}
 
 /* ---------- undo ---------- */
-const undoStack=[];
-function snap(){undoStack.push(JSON.stringify(D));if(undoStack.length>80)undoStack.shift()}
-function undo(){const s=undoStack.pop();if(!s)return toast('没有可以撤销的了');D=JSON.parse(s);ui.editing=null;ui.resIn=null;if(ui.sel&&!D.tasks[ui.sel])ui.sel=null;touch();render()}
+const undoStack=[],redoStack=[];
+function snap(){undoStack.push(JSON.stringify(D));if(undoStack.length>80)undoStack.shift();redoStack.length=0}
+function restore(s){D=JSON.parse(s);ui.editing=null;ui.resIn=null;if(ui.sel&&!D.tasks[ui.sel])ui.sel=null;touch();render()}
+function undo(){const s=undoStack.pop();if(!s)return toast('没有可以撤销的了');redoStack.push(JSON.stringify(D));restore(s)}
+function redo(){const s=redoStack.pop();if(!s)return toast('没有可以还原的了');undoStack.push(JSON.stringify(D));restore(s)}
 function mutate(fn){snap();fn();touch();render()}
 
 /* ---------- helpers ---------- */
@@ -196,16 +214,19 @@ function hm(d){d=new Date(d);return pad(d.getHours())+':'+pad(d.getMinutes())}
 function stamp(iso){if(!iso)return'';const d=new Date(iso);return pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+hm(d)}
 function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2200)}
 const kids=id=>Object.values(D.tasks).filter(t=>t.parent===id).sort((a,b)=>a.y-b.y||a.x-b.x);
-function hidden(t){let p=t.parent?D.tasks[t.parent]:null;while(p){if(p.fold)return true;p=p.parent?D.tasks[p.parent]:null}return false}
+/* folding was removed: every card is always visible */
+function hidden(t){return false}
 function descendants(id){const out=[];const st=[id];while(st.length){const c=st.pop();for(const k of kids(c)){out.push(k.id);st.push(k.id)}}return out}
 function hist(t,ev,v){t.history.push({at:now(),ev,v});t.updatedAt=now()}
 const cardEl=id=>document.querySelector('.card[data-id="'+id+'"]');
-const W=250,GX=290,GY=14;
+const W=250,GX=290,GY=14,GAP=GX-W;
+/* card width: a resized card keeps its own width, everything else is 250 */
+const cw=t=>t&&t.w?t.w:W;
 /* tidy measures cards collapsed, so an open resistance list never stretches the layout */
 let measureClosed=false;
-const H=id=>{const e=cardEl(id);if(!e)return 56;if(measureClosed){const r=e.querySelector('.res');if(r)return e.offsetHeight-r.offsetHeight-6}return e.offsetHeight};
+const H=id=>{const e=cardEl(id);return e?e.offsetHeight:56};
 /* first free y in a column, so new cards never land on top of existing ones */
-function freeY(x,y){const boxes=Object.values(D.tasks).filter(t=>!hidden(t)&&Math.abs(t.x-x)<W).map(t=>[t.y,t.y+H(t.id)]);
+function freeY(x,y){const boxes=Object.values(D.tasks).filter(t=>!hidden(t)&&t.x<x+W&&t.x+cw(t)>x).map(t=>[t.y,t.y+H(t.id)]);
   let moved=true,n=0;while(moved&&n++<500){moved=false;for(const[a,b]of boxes)if(y<b+8&&y+52>a-8){y=b+GY;moved=true}}return y}
 function delTask(id){for(const d of[id,...descendants(id)]){delete D.tasks[d];D.deleted[d]=now();ui.open.delete(d)}if(ui.resIn&&!D.tasks[ui.resIn])ui.resIn=null;if(ui.sel&&!D.tasks[ui.sel])ui.sel=null}
 
@@ -223,17 +244,16 @@ function askChoice(title,msg,opts){return new Promise(res=>{openDlg('<h3>'+esc(t
 /* ---------- render ---------- */
 function applyView(){$('#world').style.transform='translate('+D.view.x+'px,'+D.view.y+'px) scale('+D.view.z+')';const g=20*D.view.z;cv.style.backgroundSize=g+'px '+g+'px';cv.style.backgroundPosition=D.view.x+'px '+D.view.y+'px';const zl=$('#zoom');if(zl)zl.textContent=Math.round(D.view.z*100)+'%'}
 function cardHTML(t){
-  const R=t.res||[];const open=(ui.open.has(t.id)&&R.length>0)||ui.resIn===t.id;
-  const c=['card'];if(ui.sel===t.id)c.push('sel');if(t.done)c.push('done');if(ui.linking===t.id)c.push('linkfrom');if(open)c.push('open');
+  const R=t.res||[];const open=R.length>0||ui.resIn===t.id;
+  const c=['card'];if(ui.sel===t.id)c.push('sel');if(ui.editing===t.id)c.push('editing');if(t.color)c.push('c-'+t.color);if(t.done)c.push('done');if(ui.linking===t.id)c.push('linkfrom');if(open)c.push('open');
   const ch=[];
   if(t.blk)ch.push('<span class="chip blk">卡住：'+esc(t.blk)+'</span>');
-  if(R.length)ch.push('<span class="chip res" data-a="res" title="展开或收起">阻力 '+R.length+(open?' ▴':' ▾')+'</span>');
-  const nk=kids(t.id).length;if(t.fold&&nk)ch.push('<span class="chip">+'+nk+' 已折叠</span>');
   if(t.crit)ch.push('<span class="chip crit">标准：'+esc(t.crit)+'</span>');
   let rs='';
   if(open)rs='<div class="res">'+R.map(r=>'<div class="ri" data-r="'+r.id+'">'+esc(r.text)+'<span class="rt">'+stamp(r.createdAt)+'</span></div>').join('')+
     (ui.resIn===t.id?'<textarea class="resIn" rows="2" placeholder="为什么开始不了？卡在哪一步？打算怎么处理？"></textarea><div class="rh">Enter 记下 · Shift+Enter 换行 · Esc 收起</div>':'')+'</div>';
-  return '<div class="'+c.join(' ')+'" data-id="'+t.id+'" style="left:'+t.x+'px;top:'+t.y+'px"><div class="row"><input type="checkbox" tabindex="-1" data-a="done" '+(t.done?'checked':'')+' title="封存"><div class="t" '+(ui.editing===t.id?'contenteditable="true"':'')+'>'+esc(t.text)+'</div></div>'+(ch.length?'<div class="chips">'+ch.join('')+'</div>':'')+rs+'<div class="ts"><span>'+stamp(t.createdAt)+'</span><span>'+(t.done&&t.doneAt?'封存 '+stamp(t.doneAt):'')+'</span></div></div>'}
+  const st='left:'+t.x+'px;top:'+t.y+'px'+(t.w?';width:'+t.w+'px':'')+(t.h?';min-height:'+t.h+'px':'');
+  return '<div class="'+c.join(' ')+'" data-id="'+t.id+'" style="'+st+'"><div class="row"><input type="checkbox" tabindex="-1" data-a="done" '+(t.done?'checked':'')+' title="封存"><div class="t" '+(t.fs?'style="font-size:'+t.fs+'px" ':'')+(ui.editing===t.id?'contenteditable="true"':'')+'>'+esc(t.text)+'</div></div>'+(ch.length?'<div class="chips">'+ch.join('')+'</div>':'')+rs+'<div class="ts"><span>'+stamp(t.createdAt)+'</span><span>'+(t.done&&t.doneAt?'封存 '+stamp(t.doneAt):'')+'</span></div><div class="rz" title="拖动调整大小，双击恢复默认"></div></div>'}
 /* replacing the cards removes the focused element, and Chrome fires focusout for it;
    the rendering flag tells the focusout handlers to ignore that */
 let rendering=false;
@@ -256,7 +276,14 @@ function select(id){ui.sel=id;document.querySelectorAll('.card.sel').forEach(c=>
 function openRes(id){ui.open.add(id);ui.resIn=id;ui.resDraft='';select(id);renderCanvas()}
 function closeResIn(){if(!ui.resIn)return;const id=ui.resIn;ui.resIn=null;ui.resDraft='';const t=D.tasks[id];if(t&&!(t.res||[]).length)ui.open.delete(id);renderCanvas()}
 function saveRes(id,v,keepOpen){const t=D.tasks[id];if(!t)return;ui.busy=true;if(!keepOpen)ui.resIn=null;ui.resDraft='';
-  mutate(()=>{t.res=t.res||[];t.res.push({id:uid(),text:v,createdAt:now(),updatedAt:now()});t.updatedAt=now()});ui.busy=false}
+  mutate(()=>{t.res=t.res||[];t.res.push({id:uid(),text:v,createdAt:now(),updatedAt:now()});t.updatedAt=now()});if(makeRoom(id)){touch();render()}ui.busy=false}
+/* a card that grew (new resistance note) pushes the cards below it in the same column down,
+   together with their branches, so nothing ends up covered */
+function makeRoom(id){const t=D.tasks[id],el=cardEl(id);if(!t||!el)return false;
+  const below=Object.values(D.tasks).filter(o=>o.id!==id&&o.y>t.y&&o.x<t.x+cw(t)&&o.x+cw(o)>t.x);if(!below.length)return false;
+  const d=t.y+el.offsetHeight+GY-Math.min(...below.map(o=>o.y));if(d<=0)return false;
+  const ids=new Set();for(const o of below){ids.add(o.id);for(const k of descendants(o.id))ids.add(k)}
+  for(const k of descendants(id))ids.delete(k);for(const k of ids)D.tasks[k].y+=d;return true}
 function toggleRes(id){if(ui.open.has(id)||ui.resIn===id){ui.open.delete(id);if(ui.resIn===id)ui.resIn=null}else ui.open.add(id);renderCanvas()}
 const cards=$('#cards');
 cards.addEventListener('input',e=>{if(e.target.matches('.resIn'))ui.resDraft=e.target.value});
@@ -270,7 +297,6 @@ cards.addEventListener('focusout',e=>{
   if(e.target.matches('.resIn')){if(ui.busy||ui.resIn!==e.target.closest('.card').dataset.id)return;const v=e.target.value.trim();const id=ui.resIn;if(v)saveRes(id,v,false);else closeResIn();return}
   const c=e.target.closest&&e.target.closest('.card');if(c&&ui.editing===c.dataset.id&&e.target.isContentEditable){commitEdit();renderCanvas()}});
 cards.addEventListener('paste',e=>{if(!e.target.closest('.t[contenteditable=true]'))return;e.preventDefault();const txt=(e.clipboardData||window.clipboardData).getData('text/plain');document.execCommand('insertText',false,txt)});
-cards.addEventListener('click',e=>{const ch=e.target.closest('[data-a=res]');if(ch&&!dragMoved)toggleRes(ch.closest('.card').dataset.id)});
 
 /* ---------- canvas interaction ---------- */
 const cv=$('#canvas');let drag=null,dragMoved=false;
@@ -282,6 +308,8 @@ cv.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()});
 cv.addEventListener('pointerdown',e=>{
   if(e.button===1){e.preventDefault();hideMenu();dragMoved=false;drag={pan:true,sx:e.clientX,sy:e.clientY,ox:D.view.x,oy:D.view.y,moved:false};cv.classList.add('panning');return}
   if(e.button!==0)return;hideMenu();dragMoved=false;const card=e.target.closest('.card');
+  if(card&&e.target.closest('.rz')&&!ui.linking){const id=card.dataset.id;if(ui.editing&&ui.editing!==id){commitEdit();renderCanvas()}select(id);const el=cardEl(id);
+    drag={rz:id,sx:e.clientX,sy:e.clientY,ow:el.offsetWidth,oh:el.offsetHeight,moved:false};el.classList.add('rzing');e.preventDefault();return}
   if(card){const id=card.dataset.id;
     if(ui.linking){const child=D.tasks[ui.linking];if(id!==child.id){if(descendants(child.id).includes(id))toast('不能绑定到自己的子任务下面');else{mutate(()=>{child.parent=id;hist(child,'parent',id);D.tasks[id].fold=false});tidyBranch(id,true)}}stopLinking();return}
     if(e.target.matches('input')||e.target.isContentEditable)return;
@@ -297,17 +325,26 @@ cv.addEventListener('pointerdown',e=>{
 window.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
   if(!drag.moved&&Math.abs(dx)+Math.abs(dy)<4)return;dragMoved=true;
   if(drag.pan){drag.moved=true;D.view.x=drag.ox+dx;D.view.y=drag.oy+dy;applyView();return}
+  if(drag.rz){if(!drag.moved){snap();drag.moved=true}const t=D.tasks[drag.rz],el=cardEl(drag.rz);if(!t||!el)return;
+    t.w=Math.max(160,Math.min(900,Math.round(drag.ow+dx/D.view.z)));el.style.width=t.w+'px';
+    /* height only sticks when dragged past what the text needs, so widening never leaves a gap */
+    const want=Math.round(drag.oh+dy/D.view.z);el.style.minHeight='';const nat=el.offsetHeight;
+    if(want>nat+4){t.h=want;el.style.minHeight=want+'px'}else delete t.h;drawLinks();return}
   if(!drag.moved){snap();drag.moved=true}
   const t=D.tasks[drag.id];t.x=Math.round(drag.ox+dx/D.view.z);t.y=Math.round(drag.oy+dy/D.view.z);
   for(const[d,x,y]of drag.sub){D.tasks[d].x=Math.round(x+dx/D.view.z);D.tasks[d].y=Math.round(y+dy/D.view.z)}
   for(const id of[drag.id,...drag.sub.map(s=>s[0])]){const el=cardEl(id);if(el){el.style.left=D.tasks[id].x+'px';el.style.top=D.tasks[id].y+'px'}}drawLinks()});
-window.addEventListener('pointerup',()=>{if(!drag)return;if(drag.pan)cv.classList.remove('panning');if(drag.moved){const t=!drag.pan&&D.tasks[drag.id];if(t)t.updatedAt=now();touch()}drag=null;if(renderAfterDrag){renderAfterDrag=false;render()}});
+window.addEventListener('pointerup',()=>{if(!drag)return;if(drag.pan)cv.classList.remove('panning');
+  if(drag.rz){const el=cardEl(drag.rz);el&&el.classList.remove('rzing');const t=D.tasks[drag.rz];if(drag.moved&&t){t.updatedAt=now();touch()}drag=null;if(renderAfterDrag){renderAfterDrag=false;render()}return}
+  if(drag.moved){const t=!drag.pan&&D.tasks[drag.id];if(t)t.updatedAt=now();touch()}drag=null;if(renderAfterDrag){renderAfterDrag=false;render()}});
 /* mouse wheel zooms around the pointer, between 30% and 100% */
 const ZMIN=.3,ZMAX=1;
 function zoomAt(mx,my,z){const z0=D.view.z;z=Math.min(ZMAX,Math.max(ZMIN,z));if(z===z0)return;D.view.x=mx-(mx-D.view.x)*z/z0;D.view.y=my-(my-D.view.y)*z/z0;D.view.z=z;applyView();clearTimeout(cv._w);cv._w=setTimeout(touch,400)}
 cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();
   const dy=e.deltaMode===1?e.deltaY*33:e.deltaY;zoomAt(e.clientX-r.left,e.clientY-r.top,D.view.z*Math.exp(-dy*0.0015))},{passive:false});
-cv.addEventListener('dblclick',e=>{const card=e.target.closest('.card');if(card){if(ui.editing===card.dataset.id)return;if(!e.target.matches('input,textarea')&&!e.target.closest('.res,.chip'))startEdit(card.dataset.id);return}const p=toWorld(e.clientX,e.clientY);newAt(p.x,p.y)});
+cv.addEventListener('dblclick',e=>{const card=e.target.closest('.card');
+  if(card&&e.target.closest('.rz')){const t=D.tasks[card.dataset.id];if(t&&(t.w||t.h))mutate(()=>{delete t.w;delete t.h;t.updatedAt=now()});return}
+  if(card){if(ui.editing===card.dataset.id)return;if(!e.target.matches('input,textarea')&&!e.target.closest('.res,.chip'))startEdit(card.dataset.id);return}const p=toWorld(e.clientX,e.clientY);newAt(p.x,p.y)});
 cv.addEventListener('change',e=>{if(e.target.dataset.a==='done'){const id=e.target.closest('.card').dataset.id;e.target.blur();setDone(id,e.target.checked);select(id)}});
 
 function newAt(x,y){let t;mutate(()=>{t=newTask('',null,Math.round(x),Math.round(y))});select(t.id);startEdit(t.id)}
@@ -320,7 +357,7 @@ function commitEdit(cancel){const id=ui.editing;if(!id)return false;ui.editing=n
   if(cancel||!v){if(isBlank(t)){delete D.tasks[id];D.deleted[id]=now();if(ui.sel===id)select(null);touch();return false}return true}
   if(v!==t.text){snap();t.text=v;hist(t,'text');touch()}return true}
 function addChild(id){let n;const p=D.tasks[id];snap();if(p.fold){p.fold=false;renderCanvas()}const ks=kids(id);const y=ks.length?Math.max(...ks.map(k=>k.y+H(k.id)))+GY:p.y;
-  n=newTask('',id,p.x+GX,freeY(p.x+GX,y));touch();render();startEdit(n.id)}
+  const nx=p.x+cw(p)+GAP;n=newTask('',id,nx,freeY(nx,y));touch();render();startEdit(n.id)}
 function addSibling(id){let n;const t=D.tasks[id];const x=t.x;const y=freeY(x,t.y+H(id)+GY);mutate(()=>{n=newTask('',t.parent,x,y)});startEdit(n.id)}
 
 document.addEventListener('keydown',e=>{
@@ -336,6 +373,7 @@ document.addEventListener('keydown',e=>{
   if(e.target.matches&&e.target.matches('textarea,input:not([type=checkbox]):not([type=file])'))return;
   if(e.key==='Tab')e.preventDefault();
   if(e.key==='Escape'){hideMenu();if(ui.linking)stopLinking();else if(ui.sel)select(null);return}
+  if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.key.toLowerCase()==='z'&&e.shiftKey))){e.preventDefault();redo();return}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo();return}
   if(!ui.sel||!D.tasks[ui.sel])return;const id=ui.sel;
   if(e.ctrlKey||e.metaKey||e.altKey)return;
@@ -349,10 +387,10 @@ async function confirmDelete(id){const n=descendants(id).length;const c=await as
 
 /* ---------- tidy: tree layout, each parent centred on its children ---------- */
 function layout(roots,ox,oy){const memo={};measureClosed=true;
-  const ks=t=>t.fold?[]:kids(t.id);
+  const ks=t=>kids(t.id);
   const size=t=>{if(memo[t.id]!=null)return memo[t.id];const k=ks(t);let s=H(t.id);if(k.length)s=Math.max(s,k.reduce((a,c)=>a+size(c),0)+GY*(k.length-1));return memo[t.id]=s};
   const place=(t,x,y0)=>{t.x=x;const h=H(t.id),sz=size(t),k=ks(t);if(!k.length){t.y=Math.round(y0);return}
-    const cb=k.reduce((a,c)=>a+size(c),0)+GY*(k.length-1);let cy=y0+(sz-cb)/2;for(const c of k){place(c,x+GX,cy);cy+=size(c)+GY}
+    const cb=k.reduce((a,c)=>a+size(c),0)+GY*(k.length-1);let cy=y0+(sz-cb)/2;for(const c of k){place(c,x+cw(t)+GAP,cy);cy+=size(c)+GY}
     const f=k[0],l=k[k.length-1];const mid=(f.y+H(f.id)/2+l.y+H(l.id)/2)/2;t.y=Math.round(Math.min(Math.max(mid-h/2,y0),y0+sz-h))};
   try{let y=oy;for(const r of roots){size(r);place(r,ox,y);y+=size(r)+36}}finally{measureClosed=false}}
 function tidy(){const roots=Object.values(D.tasks).filter(t=>!t.parent).sort((a,b)=>a.y-b.y||a.x-b.x);if(!roots.length)return;
@@ -364,10 +402,14 @@ function tidyBranch(id,quiet){const t=D.tasks[id];if(!t)return;const run=()=>{re
 
 /* ---------- menus ---------- */
 const menu=$('#menu');let menuAct={};
-function showMenu(x,y,items){menuAct={};menu.innerHTML=items.map((it,i)=>{if(it==='-')return'<div class="sepl"></div>';menuAct[i]=it.f;return'<div class="mi'+(it.danger?' danger':'')+'" data-i="'+i+'"><span>'+esc(it.l)+'</span>'+(it.k?'<span class="k">'+esc(it.k)+'</span>':'')+'</div>'}).join('');
+function showMenu(x,y,items){menuAct={};menu.innerHTML=items.map((it,i)=>{if(it==='-')return'<div class="sepl"></div>';
+    if(it.head)return'<div class="mhd" title="'+esc(it.head)+'">'+esc(it.head)+'</div>';
+    if(it.row){menuAct[i]=it.row.map(b=>b.f);return'<div class="mrow"><span class="ml">'+esc(it.l)+'</span>'+it.row.map((b,j)=>'<span class="mb'+(b.sw?' sw':'')+(b.on?' on':'')+'" data-i="'+i+'" data-j="'+j+'" title="'+esc(b.t||'')+'"'+(b.sw?' style="background:'+b.sw+'"':'')+'>'+esc(b.l||'')+'</span>').join('')+'</div>'}
+    menuAct[i]=it.f;return'<div class="mi'+(it.danger?' danger':'')+'" data-i="'+i+'"><span>'+esc(it.l)+'</span>'+(it.k?'<span class="k">'+esc(it.k)+'</span>':'')+'</div>'}).join('');
   menu.style.display='block';const w=menu.offsetWidth,h=menu.offsetHeight;menu.style.left=Math.max(4,Math.min(x,innerWidth-w-8))+'px';menu.style.top=Math.max(4,Math.min(y,innerHeight-h-8))+'px'}
 function hideMenu(){menu.style.display='none'}
-menu.addEventListener('click',e=>{const m=e.target.closest('.mi');if(!m)return;const f=menuAct[m.dataset.i];hideMenu();f&&f()});
+menu.addEventListener('click',e=>{const b=e.target.closest('.mb');if(b){const f=menuAct[b.dataset.i]&&menuAct[b.dataset.i][b.dataset.j];hideMenu();f&&f();return}
+  const m=e.target.closest('.mi');if(!m)return;const f=menuAct[m.dataset.i];hideMenu();f&&f()});
 document.addEventListener('pointerdown',e=>{if(!menu.contains(e.target)&&!e.target.closest('#fileBtn'))hideMenu()});
 window.addEventListener('blur',hideMenu);
 
@@ -378,8 +420,17 @@ document.addEventListener('contextmenu',e=>{
   if(card){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}const id=card.dataset.id;if(!D.tasks[id])return;select(id);showMenu(e.clientX,e.clientY,taskMenu(id));return}
   if(e.target.closest('#canvas')){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}const p=toWorld(e.clientX,e.clientY);showMenu(e.clientX,e.clientY,[
     {l:'在这里新建任务',k:'双击',f:()=>newAt(p.x,p.y)},
-    {l:'整理成树',f:tidy},{l:'回到原点',f:home},'-',{l:'撤销',k:'Ctrl+Z',f:undo}])}
+    {l:'整理成树',f:tidy},{l:'回到原点',f:home},
+    ...(D.view.z<1?[{l:'缩放回 100%',k:Math.round(D.view.z*100)+'%',f:()=>{const r=cv.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1)}}]:[]),'-',{l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},'-',...fileItems()])}
 });
+/* colour and text size, kept simple: one row each */
+const COLS=[['','默认','var(--card)'],['y','黄','var(--cy)'],['o','橙','var(--co)'],['r','红','var(--cr)'],['p','紫','var(--cp)'],['b','蓝','var(--cb)'],['g','绿','var(--cg)'],['n','灰','var(--cn)']];
+const SIZES=[[13,'小'],[0,'中'],[16,'大'],[18,'特大']];
+function styleRows(t){return[
+  {l:'颜色',row:COLS.map(([k,n,v])=>({sw:v,t:n,on:(t.color||'')===k,f:()=>mutate(()=>{if(k)t.color=k;else delete t.color;t.updatedAt=now()})}))},
+  {l:'字号',row:SIZES.map(([v,n])=>({l:n,on:(t.fs||0)===v,f:()=>mutate(()=>{if(v)t.fs=v;else delete t.fs;t.updatedAt=now()})}))},
+  ...(t.w||t.h?[{l:'恢复默认大小',f:()=>mutate(()=>{delete t.w;delete t.h;t.updatedAt=now()})}]:[])]}
+function fileItems(){return[{head:fileStatus()},{l:'保存',k:'Ctrl+S',f:saveNow},{l:'另存为…',f:bindNew},{l:'打开文件…',f:bindOpen},{l:'导入并合并…',f:()=>$('#impFile').click()},{l:'导出备份',f:exportJSON}]}
 function taskMenu(id){const t=D.tasks[id];const nk=kids(id).length;return[
   {l:'编辑文字',k:'Enter',f:()=>startEdit(id)},
   {l:'添加子任务',k:'Tab',f:()=>addChild(id)},
@@ -393,7 +444,11 @@ function taskMenu(id){const t=D.tasks[id];const nk=kids(id).length;return[
   '-',
   {l:'绑定到父任务…',f:()=>{ui.linking=id;cv.classList.add('linking');renderCanvas()}},
   ...(t.parent?[{l:'解除绑定',f:()=>mutate(()=>{t.parent=null;hist(t,'parent',null)})}]:[]),
-  ...(nk?[{l:t.fold?'展开子任务（'+nk+'）':'折叠子任务（'+nk+'）',f:()=>{const opening=t.fold;mutate(()=>{t.fold=!t.fold;t.updatedAt=now()});if(opening)tidyBranch(id,true);else{select(id);if(ui.resIn&&hidden(D.tasks[ui.resIn]))ui.resIn=null}}},{l:'整理这一支',f:()=>tidyBranch(id)}]:[]),
+  ...(nk?[{l:'整理这一支',f:()=>tidyBranch(id)}]:[]),
+  '-',
+  ...styleRows(t),
+  '-',
+  {l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},
   '-',
   {l:'删除'+(nk?'（含子任务）':''),k:'Delete',danger:true,f:()=>confirmDelete(id)}]}
 function resMenu(tid,rid){const t=D.tasks[tid];const r=t&&(t.res||[]).find(x=>x.id===rid);if(!r)return[];return[
@@ -405,11 +460,7 @@ function home(){D.view={x:40,y:40,z:1};applyView();touch()}
 /* ---------- top bar ---------- */
 document.querySelectorAll('#top button').forEach(b=>b.addEventListener('mousedown',e=>e.preventDefault()));
 $('#reconnect').onclick=reconnect;
-$('#zoom').onclick=()=>{const r=cv.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1)};$('#tidy').onclick=tidy;$('#home').onclick=home;
-$('#fileBtn').onclick=e=>{if(menu.style.display==='block')return hideMenu();const r=e.currentTarget.getBoundingClientRect();showMenu(r.right-200,r.bottom+4,[
-  {l:'绑定新数据文件…',f:bindNew},{l:'打开已有数据文件…',f:bindOpen},'-',
-  {l:'立即保存',k:'Ctrl+S',f:saveNow},'-',{l:'导入并合并…',f:()=>$('#impFile').click()},{l:'导出备份',f:exportJSON}])};
-function exportJSON(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'});const a=document.createElement('a');const d=new Date();a.href=URL.createObjectURL(b);a.download='machine-data-'+d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function exportJSON(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'});const a=document.createElement('a');const d=new Date();a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'-X-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 $('#impFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const inc=norm(JSON.parse(await f.text()));mutate(()=>{D=merge(D,inc)});toast('已合并：较新的条目覆盖较旧的')}catch(err){toast('这个文件读不了：'+err.message)}};
 window.addEventListener('beforeunload',()=>{if(dirty&&fileHandle)writeFile()});
 
