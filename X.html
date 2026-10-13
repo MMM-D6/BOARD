@@ -9,6 +9,9 @@
   --bg:#eef1f3; --grid:#dfe4e8; --card:#ffffff; --ink:#1b2227; --muted:#6a767e; --line:#d3dadf;
   --accent:#1f5f8a; --accent-bg:#e2eef7; --warn:#2b4a9b; --warn-bg:#e3e9fa;
   --bar:#f8fafb; --shadow:0 1px 2px rgba(20,30,40,.08),0 2px 8px rgba(20,30,40,.06);
+  --tint:rgba(40,60,80,.055); --tint-line:rgba(40,60,80,.16);
+  --glass:linear-gradient(180deg,rgba(255,255,255,.62),rgba(255,255,255,.30));
+  --glass-edge:inset 0 1px 0 rgba(255,255,255,.9),inset 0 0 0 .6px rgba(40,65,88,.13),inset 0 -1px 1px rgba(40,65,88,.04),0 1px 2px rgba(15,30,45,.06),0 3px 8px -4px rgba(15,30,45,.12);
   --cy:#fff6c8; --co:#ffe6cc; --cr:#ffdede; --cp:#ece2fa; --cb:#dcebfa; --cg:#ddf3e4; --cn:#eceff1;
   --f:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
 }
@@ -16,6 +19,9 @@
   --bg:#14191d; --grid:#1d252b; --card:#1d252b; --ink:#e2e7ea; --muted:#94a1a9; --line:#2f3a42;
   --accent:#7cb6de; --accent-bg:#1c3446; --warn:#a9bdf2; --warn-bg:#1f2a47;
   --bar:#181e23; --shadow:0 1px 2px rgba(0,0,0,.4); color-scheme:dark;
+  --tint:rgba(255,255,255,.06); --tint-line:rgba(255,255,255,.16);
+  --glass:linear-gradient(180deg,rgba(255,255,255,.10),rgba(255,255,255,.035));
+  --glass-edge:inset 0 1px 0 rgba(255,255,255,.14),inset 0 0 0 .6px rgba(255,255,255,.10),0 1px 2px rgba(0,0,0,.25),0 3px 8px -4px rgba(0,0,0,.4);
   --cy:#3a3520; --co:#3d2e1f; --cr:#3d2426; --cp:#30283f; --cb:#1f3042; --cg:#1f3a2c; --cn:#2a3036}}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -46,7 +52,7 @@ textarea{resize:vertical;width:100%}
 #marq{position:absolute;border:1px solid var(--accent);background:rgba(125,125,125,.13);border-radius:2px;pointer-events:none;z-index:15}
 #linkBar{position:absolute;top:54px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--card);padding:4px 12px;border-radius:6px;font-size:13px;z-index:10}
 
-.card{position:absolute;width:250px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px 4px;box-shadow:var(--shadow);user-select:none}
+.card{position:absolute;width:max-content;min-width:96px;max-width:250px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px 4px;box-shadow:var(--shadow);user-select:none}
 .card.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-bg),var(--shadow)}
 .card.open{z-index:5}
 /* the card being edited or resized always sits on top of its neighbours */
@@ -61,20 +67,20 @@ textarea{resize:vertical;width:100%}
 /* a note card has no checkbox, so its extras line up with the card edge */
 .card.note .chips,.card.note div.res{margin-left:0}
 .card .t{flex:1;min-width:0;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap;outline:none;min-height:21px}
-.card .t[contenteditable=true]{user-select:text;cursor:text;background:var(--bg);border-radius:4px;padding:0 3px}
+.card .t[contenteditable=true]{user-select:text;cursor:text;background:var(--tint);border-radius:4px;padding:0 3px}
 .card .t:empty::before{content:"（空）";color:var(--muted)}
 .chips{display:flex;flex-wrap:wrap;align-items:center;gap:4px;margin:5px 0 0 20px}
-.chip{font-size:11px;line-height:18px;padding:0 6px;border-radius:9px;background:var(--bg);color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chip{font-size:11px;line-height:18px;padding:0 6px;border-radius:9px;background:var(--tint);color:var(--muted);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chip.blk{background:var(--warn-bg);color:var(--warn)}
 .chip.crit{border:1px solid var(--line);background:transparent;white-space:normal}
 .chip.res{display:inline-flex;align-items:center;gap:3px;height:17px;line-height:1;padding:0 5px;background:var(--accent-bg);color:var(--accent);cursor:pointer}
 .chip.res .ar{font-size:8px;line-height:1}
 .ts{font-size:10px;line-height:12px;color:var(--muted);opacity:.8;margin-top:2px;display:flex;justify-content:space-between;gap:6px;font-variant-numeric:tabular-nums}
 /* resistance notes, inside the card */
-div.res{margin:6px 0 0 20px;padding-top:6px;border-top:1px dashed var(--line);display:flex;flex-direction:column;gap:4px;cursor:default}
-.ri{font-size:12.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bg);border-radius:5px;padding:3px 6px;user-select:text}
-.ri .rt{display:block;font-size:10.5px;color:var(--muted);font-variant-numeric:tabular-nums}
-.resIn{font-size:12.5px;padding:4px 6px;line-height:1.5}
+div.res{margin:7px 0 2px 20px;display:flex;flex-direction:column;gap:5px;cursor:default}
+.ri{font-size:12.5px;line-height:1.5;white-space:pre-wrap;overflow-wrap:anywhere;border-radius:8px;padding:4px 9px;user-select:text;background:var(--glass);
+  -webkit-backdrop-filter:blur(6px) saturate(140%);backdrop-filter:blur(6px) saturate(140%);box-shadow:var(--glass-edge)}
+.resIn{font-size:12.5px;padding:4px 9px;line-height:1.5;border:0;border-radius:8px;background:var(--glass);box-shadow:var(--glass-edge)}
 .rh{font-size:10.5px;color:var(--muted)}
 
 #menu{position:fixed;z-index:50;min-width:180px;background:var(--card);border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 24px rgba(0,0,0,.18);padding:4px;display:none;max-height:80vh;overflow-y:auto}
@@ -94,6 +100,36 @@ div.res{margin:6px 0 0 20px;padding-top:6px;border-top:1px dashed var(--line);di
 #dlg .box{background:var(--card);border-radius:10px;padding:16px;width:min(380px,92vw);display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
 #dlg .box h3{margin:0;font-size:15px}
 .btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+/* small glass "+" used for adding a child card and for saving a template */
+.gplus{position:relative;width:20px;height:20px;padding:0;border:0;cursor:pointer;flex:none;background:transparent url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%220%22 y1=%224%22 x2=%220%22 y2=%2216%22 gradientUnits=%22userSpaceOnUse%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%22.82%22/%3E%3Cstop offset=%22.45%22 stop-color=%22%23dfe8ef%22 stop-opacity=%22.42%22/%3E%3Cstop offset=%221%22 stop-color=%22%236f8ca4%22 stop-opacity=%22.62%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22r%22 x1=%220%22 y1=%224%22 x2=%220%22 y2=%2216%22 gradientUnits=%22userSpaceOnUse%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%22.95%22/%3E%3Cstop offset=%22.55%22 stop-color=%22%239fb4c5%22 stop-opacity=%22.7%22/%3E%3Cstop offset=%221%22 stop-color=%22%233d5a72%22 stop-opacity=%22.75%22/%3E%3C/linearGradient%3E%3Cfilter id=%22s%22 x=%22-40%25%22 y=%22-40%25%22 width=%22180%25%22 height=%22180%25%22%3E%3CfeGaussianBlur stdDeviation=%22.85%22/%3E%3C/filter%3E%3Cfilter id=%22g%22 x=%22-40%25%22 y=%22-40%25%22 width=%22180%25%22 height=%22180%25%22%3E%3CfeGaussianBlur stdDeviation=%22.45%22/%3E%3C/filter%3E%3C/defs%3E%3Cpath d=%22M8.3 5.6A1.7 1.7 0 0 1 11.7 5.6V8.3H14.4A1.7 1.7 0 0 1 14.4 11.7H11.7V14.4A1.7 1.7 0 0 1 8.3 14.4V11.7H5.6A1.7 1.7 0 0 1 5.6 8.3H8.3Z%22 fill=%22%230f1e2d%22 fill-opacity=%22.30%22 filter=%22url(%23s)%22 transform=%22translate(0 1.2)%22/%3E%3Cpath d=%22M8.3 5.6A1.7 1.7 0 0 1 11.7 5.6V8.3H14.4A1.7 1.7 0 0 1 14.4 11.7H11.7V14.4A1.7 1.7 0 0 1 8.3 14.4V11.7H5.6A1.7 1.7 0 0 1 5.6 8.3H8.3Z%22 fill=%22url(%23b)%22 stroke=%22url(%23r)%22 stroke-width=%22.7%22 stroke-linejoin=%22round%22/%3E%3Cpath d=%22M9.15 5.5V7.6M5.5 9.15H7.6%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.95%22 stroke-width=%22.75%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M10.85 13.4V14.3M13.4 10.85H14.3%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.55%22 stroke-width=%22.9%22 stroke-linecap=%22round%22 filter=%22url(%23g)%22/%3E%3C/svg%3E") center/100% 100% no-repeat;
+  -webkit-backdrop-filter:none;backdrop-filter:none;box-shadow:none;transition:transform .15s,opacity .15s,filter .15s}
+.gplus:hover{transform:scale(1.1);filter:brightness(1.04)}.gplus:active{transform:scale(.92)}
+.gplus:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:4px}
+@media (prefers-color-scheme:dark){.gplus{background-image:url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%220%22 y1=%224%22 x2=%220%22 y2=%2216%22 gradientUnits=%22userSpaceOnUse%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%22.40%22/%3E%3Cstop offset=%22.45%22 stop-color=%22%23c8d8e4%22 stop-opacity=%22.14%22/%3E%3Cstop offset=%221%22 stop-color=%22%23dbe8f2%22 stop-opacity=%22.30%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22r%22 x1=%220%22 y1=%224%22 x2=%220%22 y2=%2216%22 gradientUnits=%22userSpaceOnUse%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%22.75%22/%3E%3Cstop offset=%221%22 stop-color=%22%23fff%22 stop-opacity=%22.22%22/%3E%3C/linearGradient%3E%3Cfilter id=%22s%22 x=%22-40%25%22 y=%22-40%25%22 width=%22180%25%22 height=%22180%25%22%3E%3CfeGaussianBlur stdDeviation=%22.85%22/%3E%3C/filter%3E%3Cfilter id=%22g%22 x=%22-40%25%22 y=%22-40%25%22 width=%22180%25%22 height=%22180%25%22%3E%3CfeGaussianBlur stdDeviation=%22.45%22/%3E%3C/filter%3E%3C/defs%3E%3Cpath d=%22M8.3 5.6A1.7 1.7 0 0 1 11.7 5.6V8.3H14.4A1.7 1.7 0 0 1 14.4 11.7H11.7V14.4A1.7 1.7 0 0 1 8.3 14.4V11.7H5.6A1.7 1.7 0 0 1 5.6 8.3H8.3Z%22 fill=%22%23000%22 fill-opacity=%22.6%22 filter=%22url(%23s)%22 transform=%22translate(0 1.2)%22/%3E%3Cpath d=%22M8.3 5.6A1.7 1.7 0 0 1 11.7 5.6V8.3H14.4A1.7 1.7 0 0 1 14.4 11.7H11.7V14.4A1.7 1.7 0 0 1 8.3 14.4V11.7H5.6A1.7 1.7 0 0 1 5.6 8.3H8.3Z%22 fill=%22url(%23b)%22 stroke=%22url(%23r)%22 stroke-width=%22.7%22 stroke-linejoin=%22round%22/%3E%3Cpath d=%22M9.15 5.5V7.6M5.5 9.15H7.6%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.8%22 stroke-width=%22.75%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M10.85 13.4V14.3M13.4 10.85H14.3%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.3%22 stroke-width=%22.9%22 stroke-linecap=%22round%22 filter=%22url(%23g)%22/%3E%3C/svg%3E")}}
+/* 1. hidden "+" at the right edge of each card: shows on hover, adds a child card */
+.card .addk{position:absolute;right:-10px;top:50%;margin-top:-10px;opacity:0;z-index:3;pointer-events:none}
+.card:hover .addk{opacity:.95;pointer-events:auto}
+.card.editing .addk,.card.rzing .addk{opacity:0;pointer-events:none}
+/* 4. floating glass toolbar above the selected card(s): colour, size, templates */
+#fbar{position:fixed;z-index:40;display:flex;align-items:center;gap:6px;height:30px;padding:0 7px;border-radius:11px;
+  background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(244,248,251,.62));
+  -webkit-backdrop-filter:blur(14px) saturate(170%);backdrop-filter:blur(14px) saturate(170%);
+  box-shadow:inset 0 0 0 .6px rgba(40,65,88,.18),inset 0 1px 0 rgba(255,255,255,.95),inset 0 -1px 2px rgba(120,146,168,.12),0 1px 2px rgba(15,30,45,.10),0 8px 20px -6px rgba(15,30,45,.25);
+  user-select:none}
+#fbar .sep{width:1px;height:16px;background:rgba(40,65,88,.14)}
+#fbar .dot{width:14px;height:14px;border-radius:50%;cursor:pointer;box-shadow:inset 0 0 0 .7px rgba(40,65,88,.28),inset 0 1px 1px rgba(255,255,255,.7);transition:transform .12s}
+#fbar .dot:hover{transform:scale(1.15)}
+#fbar .dot.on{box-shadow:0 0 0 1.5px var(--card),0 0 0 2.6px var(--accent)}
+#fbar select{-webkit-appearance:none;appearance:none;font:inherit;font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink);height:20px;padding:0 15px 0 7px;border:0;border-radius:6px;cursor:pointer;outline:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M1 1l3 3 3-3' fill='none' stroke='%23778' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 5px center no-repeat,rgba(40,65,88,.06)}
+#fbar select:hover{background-color:rgba(40,65,88,.1)}
+#fbar .tp{font-size:11.5px;line-height:18px;height:20px;padding:0 7px;border-radius:6px;cursor:pointer;white-space:nowrap;color:var(--ink);box-shadow:inset 0 0 0 .7px rgba(40,65,88,.2)}
+#fbar .tp:hover{box-shadow:inset 0 0 0 .7px rgba(40,65,88,.45)}
+#fbar .tp.on{box-shadow:inset 0 0 0 1.2px var(--accent)}
+@media (prefers-color-scheme:dark){#fbar{background:linear-gradient(180deg,rgba(44,54,62,.78),rgba(30,38,44,.66));
+  box-shadow:inset 0 0 0 .6px rgba(255,255,255,.14),inset 0 1px 0 rgba(255,255,255,.12),0 1px 2px rgba(0,0,0,.4),0 8px 20px -6px rgba(0,0,0,.6)}
+  #fbar .sep{background:rgba(255,255,255,.14)}#fbar select{background-color:rgba(255,255,255,.08)}
+  #fbar .tp,#fbar .dot{box-shadow:inset 0 0 0 .7px rgba(255,255,255,.22)}}
 /* one-tap tidy: a small clear glass bead in the bottom-right corner, no icon.
    Layers: blurred view of the canvas behind it, a tinted body that darkens toward the rim,
    a soft caustic glow at the bottom where light passes through, a sharp specular highlight
@@ -141,6 +177,7 @@ div.res{margin:6px 0 0 20px;padding-top:6px;border-top:1px dashed var(--line);di
   <div id="linkBar" hidden>点一下要作为父任务的卡片，Esc 取消</div>
 </div>
 <button id="tidyBtn" title="一键整理" aria-label="一键整理"></button>
+<div id="fbar" hidden></div>
 <div id="menu"></div>
 <div id="dlg"><div class="box" id="dlgBox"></div></div>
 <div id="toast"></div>
@@ -257,7 +294,7 @@ function hist(t,ev,v){t.history.push({at:now(),ev,v});t.updatedAt=now()}
 const cardEl=id=>document.querySelector('.card[data-id="'+id+'"]');
 const W=250,GX=290,GY=14,GAP=GX-W;
 /* card width: a resized card keeps its own width, everything else is 250 */
-const cw=t=>t&&t.w?t.w:W;
+const cw=t=>{if(!t)return W;if(t.w)return t.w;const e=cardEl(t.id);return e?e.offsetWidth:W};
 /* tidy measures cards collapsed, so an open resistance list never stretches the layout */
 let measureClosed=false;
 const H=id=>{const e=cardEl(id);return e?e.offsetHeight:56};
@@ -278,7 +315,7 @@ function askChoice(title,msg,opts){return new Promise(res=>{openDlg('<h3>'+esc(t
   $('#dlgBox').onkeydown=e=>{if(e.key==='Escape'){closeDlg();res(null)}}})}
 
 /* ---------- render ---------- */
-function applyView(){$('#world').style.transform='translate('+D.view.x+'px,'+D.view.y+'px) scale('+D.view.z+')';const g=20*D.view.z;cv.style.backgroundSize=g+'px '+g+'px';cv.style.backgroundPosition=D.view.x+'px '+D.view.y+'px';const zl=$('#zoom');if(zl)zl.textContent=Math.round(D.view.z*100)+'%'}
+function applyView(){$('#world').style.transform='translate('+D.view.x+'px,'+D.view.y+'px) scale('+D.view.z+')';const g=20*D.view.z;cv.style.backgroundSize=g+'px '+g+'px';cv.style.backgroundPosition=D.view.x+'px '+D.view.y+'px';const zl=$('#zoom');if(zl)zl.textContent=Math.round(D.view.z*100)+'%';placeBar()}
 function cardHTML(t){
   const R=t.res||[];const open=R.length>0||ui.resIn===t.id;
   const c=['card'];if(t.note)c.push('note');if(ui.sel===t.id||ui.multi.has(t.id))c.push('sel');if(ui.editing===t.id)c.push('editing');if(t.color)c.push('c-'+t.color);if(ui.linking===t.id)c.push('linkfrom');if(open)c.push('open');
@@ -286,19 +323,46 @@ function cardHTML(t){
   if(t.blk)ch.push('<span class="chip blk">卡住：'+esc(t.blk)+'</span>');
   if(t.crit)ch.push('<span class="chip crit">标准：'+esc(t.crit)+'</span>');
   let rs='';
-  if(open)rs='<div class="res">'+R.map(r=>'<div class="ri" data-r="'+r.id+'">'+esc(r.text)+'<span class="rt">'+stamp(r.createdAt)+'</span></div>').join('')+
+  if(open)rs='<div class="res">'+R.map(r=>'<div class="ri" data-r="'+r.id+'">'+esc(r.text)+'</div>').join('')+
     (ui.resIn===t.id?'<textarea class="resIn" rows="2" placeholder="为什么开始不了？卡在哪一步？打算怎么处理？"></textarea><div class="rh">Enter 记下 · Shift+Enter 换行 · Esc 收起</div>':'')+'</div>';
-  const st='left:'+t.x+'px;top:'+t.y+'px'+(t.w?';width:'+t.w+'px':'')+(t.h?';min-height:'+t.h+'px':'');
-  return '<div class="'+c.join(' ')+'" data-id="'+t.id+'" style="'+st+'"><div class="row">'+(t.note?'':'<input type="checkbox" tabindex="-1" data-a="done" '+(t.done?'checked':'')+'>')+'<div class="t" '+(t.fs?'style="font-size:'+t.fs+'px" ':'')+(ui.editing===t.id?'contenteditable="true"':'')+'>'+esc(t.text)+'</div></div>'+(ch.length?'<div class="chips">'+ch.join('')+'</div>':'')+rs+'<div class="ts"><span>'+stamp(t.createdAt)+'</span></div><div class="rz" title="拖动调整大小，双击恢复默认"></div></div>'}
+  const st='left:'+t.x+'px;top:'+t.y+'px'+(t.w?';width:'+t.w+'px;max-width:none':'')+(t.h?';min-height:'+t.h+'px':'');
+  return '<div class="'+c.join(' ')+'" data-id="'+t.id+'" style="'+st+'"><div class="row">'+(t.note?'':'<input type="checkbox" tabindex="-1" data-a="done" '+(t.done?'checked':'')+'>')+'<div class="t" '+(t.fs?'style="font-size:'+t.fs+'px" ':'')+(ui.editing===t.id?'contenteditable="true"':'')+'>'+esc(t.text)+'</div></div>'+(ch.length?'<div class="chips">'+ch.join('')+'</div>':'')+rs+'<div class="ts"><span>'+stamp(t.createdAt)+'</span></div><div class="rz" title="拖动调整大小，双击恢复默认"></div><button class="gplus addk" tabindex="-1" title="添加子卡片"></button></div>'}
 /* replacing the cards removes the focused element, and Chrome fires focusout for it;
    the rendering flag tells the focusout handlers to ignore that */
 let rendering=false;
+/* ---------- floating toolbar ---------- */
+const FS=[12,13,14,15,16,18,20,22,24,28];
+const fbar=$('#fbar');
+function updateBar(){const ids=selIds();if(!ids.length||ui.linking){fbar.hidden=true;return}
+  const ts=ids.map(i=>D.tasks[i]);const same=f=>ts.every(t=>f(t)===f(ts[0]))?f(ts[0]):null;
+  const col=same(t=>t.color||''),fs=same(t=>t.fs||14);
+  const html=COLS.map(([k,n,v])=>'<span class="dot'+(col===k?' on':'')+'" data-c="'+k+'" title="'+n+'" style="background:'+v+'"></span>').join('')+
+    '<span class="sep"></span><select title="字号">'+(fs===null?'<option value="">—</option>':'')+FS.map(v=>'<option value="'+v+'"'+(fs===v?' selected':'')+'>'+v+'</option>').join('')+'</select>'+
+    '<span class="sep"></span>'+D.templates.map(x=>'<span class="tp'+(ts.every(t=>(t.color||'')===(x.color||'')&&(t.fs||0)===(x.fs||0))?' on':'')+'" data-t="'+x.id+'" title="套用：'+esc(tplLabel(x))+'（右键删除）" style="background:'+tplBg(x)+'">'+esc(x.name)+'</span>').join('')+
+    '<button class="gplus" data-a="tpl" title="把'+(ts.length>1?'第一张':'这张')+'卡片的字号和底色存为模板"></button>';
+  /* only rebuild when something changed, so a click that is in progress is never lost */
+  if(html!==fbar._html){fbar.innerHTML=html;fbar._html=html}fbar.hidden=false;placeBar()}
+function placeBar(){if(fbar.hidden)return;const ids=selIds();if(!ids.length)return;let L=1e9,T=1e9,B=-1e9;
+  for(const id of ids){const el=cardEl(id);if(!el)continue;const r=el.getBoundingClientRect();L=Math.min(L,r.left);T=Math.min(T,r.top);B=Math.max(B,r.bottom)}
+  if(L===1e9){fbar.hidden=true;return}const w=fbar.offsetWidth,h=fbar.offsetHeight;let top=T-h-10;if(top<8)top=B+10;
+  fbar.style.left=Math.max(8,Math.min(L,innerWidth-w-8))+'px';fbar.style.top=Math.min(top,innerHeight-h-8)+'px'}
+function styleSel(fn){const ids=selIds();if(!ids.length)return;mutate(()=>{for(const i of ids){const t=D.tasks[i];fn(t);t.updatedAt=now()}})}
+fbar.addEventListener('pointerdown',e=>{e.stopPropagation();hideMenu();if(ui.editing){commitEdit();renderCanvas()}if(!e.target.matches('select'))e.preventDefault()});
+fbar.addEventListener('click',e=>{const d=e.target.closest('.dot'),tp=e.target.closest('.tp'),pl=e.target.closest('[data-a=tpl]');
+  if(d){const k=d.dataset.c;styleSel(t=>{if(k)t.color=k;else delete t.color})}
+  else if(tp){const x=D.templates.find(x=>x.id===tp.dataset.t);if(x)styleSel(t=>{if(x.color)t.color=x.color;else delete t.color;if(x.fs)t.fs=x.fs;else delete t.fs})}
+  else if(pl){const t=D.tasks[selIds()[0]];if(t)saveTpl(t)}});
+fbar.addEventListener('change',e=>{if(!e.target.matches('select')||!e.target.value)return;const v=+e.target.value;styleSel(t=>{if(v===14)delete t.fs;else t.fs=v})});
+fbar.addEventListener('contextmenu',async e=>{e.preventDefault();const tp=e.target.closest('.tp');if(!tp)return;const x=D.templates.find(x=>x.id===tp.dataset.t);if(!x)return;
+  if(await askChoice('删除模板','删除模板「'+x.name+'」？已经套用的卡片不变。',['取消','删除'])==='删除')mutate(()=>{D.templates=D.templates.filter(y=>y!==x);D.deleted[x.id]=now()})});
+window.addEventListener('resize',placeBar);
 function renderCanvas(){
   const vis=Object.values(D.tasks).filter(t=>!hidden(t));
   rendering=true;try{$('#cards').innerHTML=vis.map(cardHTML).join('')}finally{rendering=false}
   $('#hint').hidden=vis.length>0;$('#linkBar').hidden=!ui.linking;applyView();drawLinks();
   if(ui.editing){const el=cardEl(ui.editing);const tx=el&&el.querySelector('.t');if(tx){tx.focus();const r=document.createRange();r.selectNodeContents(tx);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r)}}
-  else if(ui.resIn){const ta=cardEl(ui.resIn)&&cardEl(ui.resIn).querySelector('.resIn');if(ta){ta.value=ui.resDraft;ta.focus();ta.selectionStart=ta.selectionEnd=ta.value.length}}}
+  else if(ui.resIn){const ta=cardEl(ui.resIn)&&cardEl(ui.resIn).querySelector('.resIn');if(ta){ta.value=ui.resDraft;ta.focus();ta.selectionStart=ta.selectionEnd=ta.value.length}}
+  updateBar()}
 function drawLinks(){let p='';
   for(const t of Object.values(D.tasks)){if(!t.parent||hidden(t))continue;const a=cardEl(t.parent),b=cardEl(t.id);if(!a||!b)continue;const P=D.tasks[t.parent];
     const ha=Math.min(a.offsetHeight/2,40),hb=Math.min(b.offsetHeight/2,40);
@@ -307,7 +371,7 @@ function drawLinks(){let p='';
   $('#links').innerHTML=p}
 function render(){renderCanvas();fileLabel()}
 function select(id,keep){ui.sel=id;if(!keep)ui.multi.clear();paintSel()}
-function paintSel(){document.querySelectorAll('.card.sel').forEach(c=>c.classList.remove('sel'));for(const id of selIds()){const el=cardEl(id);el&&el.classList.add('sel')}}
+function paintSel(){document.querySelectorAll('.card.sel').forEach(c=>c.classList.remove('sel'));for(const id of selIds()){const el=cardEl(id);el&&el.classList.add('sel')}updateBar()}
 const selIds=()=>ui.multi.size?[...ui.multi].filter(id=>D.tasks[id]):ui.sel&&D.tasks[ui.sel]?[ui.sel]:[];
 /* Shift+click adds or removes one card */
 function toggleMulti(id){if(!ui.multi.size&&ui.sel&&ui.sel!==id)ui.multi.add(ui.sel);
@@ -328,7 +392,7 @@ function makeRoom(id){const t=D.tasks[id],el=cardEl(id);if(!t||!el)return false;
   for(const k of descendants(id))ids.delete(k);for(const k of ids)D.tasks[k].y+=d;return true}
 function toggleRes(id){if(ui.open.has(id)||ui.resIn===id){ui.open.delete(id);if(ui.resIn===id)ui.resIn=null}else ui.open.add(id);renderCanvas()}
 const cards=$('#cards');
-cards.addEventListener('input',e=>{if(e.target.matches('.resIn'))ui.resDraft=e.target.value});
+cards.addEventListener('input',e=>{placeBar();if(e.target.matches('.resIn'))ui.resDraft=e.target.value});
 cards.addEventListener('keydown',e=>{const ta=e.target.closest('.resIn');if(!ta)return;if(e.isComposing||e.keyCode===229)return;
   const id=ta.closest('.card').dataset.id;
   if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();const v=ta.value.trim();if(v)saveRes(id,v,true);else{ui.busy=true;closeResIn();ui.busy=false}}
@@ -350,6 +414,7 @@ cv.addEventListener('auxclick',e=>{if(e.button===1)e.preventDefault()});
 cv.addEventListener('pointerdown',e=>{
   if(e.button===1){e.preventDefault();hideMenu();dragMoved=false;drag={pan:true,sx:e.clientX,sy:e.clientY,ox:D.view.x,oy:D.view.y,moved:false};cv.classList.add('panning');return}
   if(e.button!==0)return;hideMenu();dragMoved=false;const card=e.target.closest('.card');
+  if(card&&e.target.closest('.addk')&&!ui.linking){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}addChild(card.dataset.id);return}
   if(card&&e.target.closest('.rz')&&!ui.linking){const id=card.dataset.id;if(ui.editing&&ui.editing!==id){commitEdit();renderCanvas()}select(id);const el=cardEl(id);
     drag={rz:id,sx:e.clientX,sy:e.clientY,ow:el.offsetWidth,oh:el.offsetHeight,moved:false};el.classList.add('rzing');e.preventDefault();return}
   if(card){const id=card.dataset.id;
@@ -378,14 +443,14 @@ window.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-dra
     for(const t of Object.values(D.tasks))if(t.x<b.x&&t.x+cw(t)>a.x&&t.y<b.y&&t.y+H(t.id)>a.y)hit.add(t.id);
     ui.multi=hit;ui.sel=hit.size?[...hit].pop():null;paintSel();return}
   if(drag.rz){if(!drag.moved){snap();drag.moved=true}const t=D.tasks[drag.rz],el=cardEl(drag.rz);if(!t||!el)return;
-    t.w=Math.max(160,Math.min(900,Math.round(drag.ow+dx/D.view.z)));el.style.width=t.w+'px';
+    t.w=Math.max(160,Math.min(900,Math.round(drag.ow+dx/D.view.z)));el.style.width=t.w+'px';el.style.maxWidth='none';
     /* height only sticks when dragged past what the text needs, so widening never leaves a gap */
     const want=Math.round(drag.oh+dy/D.view.z);el.style.minHeight='';const nat=el.offsetHeight;
-    if(want>nat+4){t.h=want;el.style.minHeight=want+'px'}else delete t.h;drawLinks();return}
+    if(want>nat+4){t.h=want;el.style.minHeight=want+'px'}else delete t.h;drawLinks();placeBar();return}
   if(!drag.moved){snap();drag.moved=true}
   const t=D.tasks[drag.id];t.x=Math.round(drag.ox+dx/D.view.z);t.y=Math.round(drag.oy+dy/D.view.z);
   for(const[d,x,y]of drag.sub){D.tasks[d].x=Math.round(x+dx/D.view.z);D.tasks[d].y=Math.round(y+dy/D.view.z)}
-  for(const id of[drag.id,...drag.sub.map(s=>s[0])]){const el=cardEl(id);if(el){el.style.left=D.tasks[id].x+'px';el.style.top=D.tasks[id].y+'px'}}drawLinks()});
+  for(const id of[drag.id,...drag.sub.map(s=>s[0])]){const el=cardEl(id);if(el){el.style.left=D.tasks[id].x+'px';el.style.top=D.tasks[id].y+'px'}}drawLinks();placeBar()});
 window.addEventListener('pointerup',()=>{if(!drag)return;if(drag.pan)cv.classList.remove('panning');
   if(drag.box){drag.box.remove();if(ui.multi.size<2){const one=[...ui.multi][0]||null;select(one)}drag=null;return}
   /* a plain click on one of several picked cards narrows the pick to that card */
@@ -398,6 +463,7 @@ function zoomAt(mx,my,z){const z0=D.view.z;z=Math.min(ZMAX,Math.max(ZMIN,z));if(
 cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();
   const dy=e.deltaMode===1?e.deltaY*33:e.deltaY;zoomAt(e.clientX-r.left,e.clientY-r.top,D.view.z*Math.exp(-dy*0.0015))},{passive:false});
 cv.addEventListener('dblclick',e=>{const card=e.target.closest('.card');
+  if(card&&e.target.closest('.addk'))return;
   if(card&&e.target.closest('.rz')){const t=D.tasks[card.dataset.id];if(t&&(t.w||t.h))mutate(()=>{delete t.w;delete t.h;t.updatedAt=now()});return}
   if(card){if(ui.editing===card.dataset.id)return;if(!e.target.matches('input,textarea')&&!e.target.closest('.res,.chip'))startEdit(card.dataset.id);return}const p=toWorld(e.clientX,e.clientY);newAt(p.x,p.y)});
 cv.addEventListener('change',e=>{if(e.target.dataset.a==='done'){const id=e.target.closest('.card').dataset.id;e.target.blur();setCheck(id,e.target.checked);select(id)}});
@@ -453,8 +519,7 @@ function layout(roots,ox,oy){const memo={};measureClosed=true;
     const f=k[0],l=k[k.length-1];const mid=(f.y+H(f.id)/2+l.y+H(l.id)/2)/2;t.y=Math.round(Math.min(Math.max(mid-h/2,y0),y0+sz-h))};
   try{let y=oy;for(const r of roots){size(r);place(r,ox,y);y+=size(r)+36}}finally{measureClosed=false}}
 function tidy(){const roots=Object.values(D.tasks).filter(t=>!t.parent).sort((a,b)=>a.y-b.y||a.x-b.x);if(!roots.length)return;
-  const ox=Math.min(...roots.map(r=>r.x)),oy=Math.min(...roots.map(r=>r.y));
-  mutate(()=>{renderCanvas();layout(roots,ox,oy)});toast('已按绑定关系整理')}
+  mutate(()=>{renderCanvas();for(const r of roots){const x0=r.x,y0=r.y;layout([r],x0,y0);const dy=y0-r.y;for(const d of[r.id,...descendants(r.id)])D.tasks[d].y+=dy}});toast('已整理，主卡片位置不变')}
 /* lay out one branch, keeping its root card where it is */
 function tidyBranch(id,quiet){const t=D.tasks[id];if(!t)return;const run=()=>{renderCanvas();const x0=t.x,y0=t.y;layout([t],x0,y0);const dy=y0-t.y;for(const d of[id,...descendants(id)])if(!hidden(D.tasks[d]))D.tasks[d].y+=dy};
   if(quiet){run();touch();render()}else mutate(run)}
@@ -481,27 +546,19 @@ document.addEventListener('contextmenu',e=>{
     select(id);showMenu(e.clientX,e.clientY,taskMenu(id));return}
   if(e.target.closest('#canvas')){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}const p=toWorld(e.clientX,e.clientY);showMenu(e.clientX,e.clientY,[
     {l:'在这里新建卡片',k:'双击',f:()=>newAt(p.x,p.y)},
-    ...(D.templates.length?[{l:'用模板新建',row:D.templates.map(x=>({l:x.name,bg:tplBg(x),t:tplLabel(x),f:()=>newFromTpl(x,p.x,p.y)}))},{l:'删除模板…',f:delTplDlg}]:[]),
-    {l:'整理成树',f:tidy},{l:'回到原点',f:home},
-    ...(D.view.z!==1?[{l:'缩放回 100%',k:Math.round(D.view.z*100)+'%',f:()=>{const r=cv.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1)}}]:[]),'-',{l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},'-',...fileItems()])}
+    '-',
+    {l:'整理',f:tidy},{l:'回到原点',f:home},
+    ...(D.view.z!==1?[{l:'缩放回 100%',k:Math.round(D.view.z*100)+'%',f:()=>{const r=cv.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1)}}]:[]),
+    '-',{l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},'-',...fileItems()])}
 });
 /* colour and text size, kept simple: one row each */
 const COLS=[['','默认','var(--card)'],['y','黄','var(--cy)'],['o','橙','var(--co)'],['r','红','var(--cr)'],['p','紫','var(--cp)'],['b','蓝','var(--cb)'],['g','绿','var(--cg)'],['n','灰','var(--cn)']];
-const SIZES=[[13,'小'],[0,'中'],[16,'大'],[18,'特大']];
 function tplBg(x){const c=COLS.find(c=>c[0]===(x.color||''));return c?c[2]:'var(--card)'}
 function tplLabel(x){return x.name+(x.fs?' '+x.fs:'')}
 function applyTpl(t,x){mutate(()=>{if(x.color)t.color=x.color;else delete t.color;if(x.fs)t.fs=x.fs;else delete t.fs;t.updatedAt=now()})}
 async function saveTpl(t){const v=await ask('模板名称','','比如：标题、步骤、提醒');if(!v)return;
   mutate(()=>{D.templates.push({id:uid(),name:v,color:t.color||'',fs:t.fs||0})});toast('已存为模板：'+v)}
-async function delTplDlg(){if(!D.templates.length)return;const names=D.templates.map(x=>x.name);
-  const c=await askChoice('删除模板','选一个要删除的模板（只删模板，已经套用的卡片不变）',['取消',...names]);
-  const x=D.templates.find(x=>x.name===c);if(x)mutate(()=>{D.templates=D.templates.filter(y=>y!==x);D.deleted[x.id]=now()})}
-function newFromTpl(x,px,py){let t;mutate(()=>{t=newTask('',null,Math.round(px),Math.round(py));if(x.color)t.color=x.color;if(x.fs)t.fs=x.fs});select(t.id);startEdit(t.id)}
-function styleRows(t){return[
-  {l:'颜色',row:COLS.map(([k,n,v])=>({sw:v,t:n,on:(t.color||'')===k,f:()=>mutate(()=>{if(k)t.color=k;else delete t.color;t.updatedAt=now()})}))},
-  {l:'字号',row:SIZES.map(([v,n])=>({l:n,on:(t.fs||0)===v,f:()=>mutate(()=>{if(v)t.fs=v;else delete t.fs;t.updatedAt=now()})}))},
-  {l:'模板',row:[...D.templates.map(x=>({l:x.name,bg:tplBg(x),t:'套用：'+tplLabel(x),on:(t.color||'')===(x.color||'')&&(t.fs||0)===(x.fs||0),f:()=>applyTpl(t,x)})),{l:'＋',t:'把这张卡的字号和底色存为模板',f:()=>saveTpl(t)}]},
-  ...(t.w||t.h?[{l:'恢复默认大小',f:()=>mutate(()=>{delete t.w;delete t.h;t.updatedAt=now()})}]:[])]}
+function styleRows(t){return[...(t.w||t.h?[{l:'恢复默认大小',f:()=>mutate(()=>{delete t.w;delete t.h;t.updatedAt=now()})}]:[])]}
 function fileItems(){return[{head:fileStatus()},{l:'保存',k:'Ctrl+S',f:saveNow},{l:'另存为…',f:bindNew},{l:'打开文件…',f:bindOpen},{l:'导入并合并…',f:()=>$('#impFile').click()},{l:'导出备份',f:exportJSON}]}
 /* the card and everything under it as an indented outline, ready to paste into a chat with Claude */
 function flowText(id){const d=new Date(),out=[];const root=D.tasks[id];
@@ -522,43 +579,37 @@ function downloadFlow(id){const t=D.tasks[id];const b=new Blob([flowText(id)],{t
   const nm=(t.text||'流程').split('\n')[0].replace(/[\\/:*?"<>|]/g,'').slice(0,30).trim()||'流程';
   a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+nm+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 /* one menu for several cards: every change below applies to all of them in a single undo step */
-function multiMenu(ids){const ts=ids.map(i=>D.tasks[i]);const all=f=>ts.every(f);
+function multiMenu(ids){const ts=ids.map(i=>D.tasks[i]);
   const each=fn=>()=>mutate(()=>{for(const t of ts){fn(t);t.updatedAt=now()}});
   return[{head:'已选 '+ts.length+' 张卡片'},
-  {l:'颜色',row:COLS.map(([k,n,v])=>({sw:v,t:n,on:all(t=>(t.color||'')===k),f:each(t=>{if(k)t.color=k;else delete t.color})}))},
-  {l:'字号',row:SIZES.map(([v,n])=>({l:n,on:all(t=>(t.fs||0)===v),f:each(t=>{if(v)t.fs=v;else delete t.fs})}))},
-  ...(D.templates.length?[{l:'模板',row:D.templates.map(x=>({l:x.name,bg:tplBg(x),t:'套用：'+tplLabel(x),
-    f:each(t=>{if(x.color)t.color=x.color;else delete t.color;if(x.fs)t.fs=x.fs;else delete t.fs})}))}]:[]),
+  ...(ts.some(t=>t.note)?[{l:'设为任务',f:each(t=>{if(t.note){delete t.note;hist(t,'task')}})}]:[]),
+  ...(ts.some(t=>!t.note)?[{l:'取消任务',f:each(t=>{if(!t.note){t.note=true;t.done=false;hist(t,'note')}})}]:[]),
   ...(ts.some(t=>t.w||t.h)?[{l:'恢复默认大小',f:each(t=>{delete t.w;delete t.h})}]:[]),
-  '-',
-  ...(ts.some(t=>!t.note)?[{l:'去掉小方框',f:each(t=>{if(!t.note){t.note=true;t.done=false;hist(t,'note')}})}]:[]),
-  ...(ts.some(t=>t.note)?[{l:'加上小方框（变成任务）',f:each(t=>{if(t.note){delete t.note;hist(t,'task')}})}]:[]),
   '-',
   {l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},
   '-',
   {l:'删除这 '+ts.length+' 张',k:'Delete',danger:true,f:()=>confirmDeleteMany(ids)}]}
+/* card menu, top to bottom: share it, describe it, place it in the tree, undo, delete */
 function taskMenu(id){const t=D.tasks[id];const nk=kids(id).length;return[
-  {l:'编辑文字',k:'Enter',f:()=>startEdit(id)},
-  {l:'添加子任务',k:'Tab',f:()=>addChild(id)},
-  {l:'添加同级任务',f:()=>addSibling(id)},
+  {l:'复制整条流程给 Claude',f:()=>copyFlow(id)},
+  {l:'下载整条流程（.md）',f:()=>downloadFlow(id)},
   '-',
   {l:'记一条阻力',k:'R',f:()=>openRes(id)},
-  {l:t.note?'加上小方框（变成任务）':'去掉小方框',f:()=>mutate(()=>{if(t.note)delete t.note;else{t.note=true;t.done=false}hist(t,t.note?'note':'task');})},
   {l:t.crit?'修改完成标准':'写完成标准',f:async()=>{const v=await ask('完成标准',t.crit,'做到什么程度就算完');if(v!==null)mutate(()=>{t.crit=v;hist(t,'crit',v)})}},
   {l:t.blk?'修改卡住原因':'标记为卡住',f:async()=>{const v=await ask('卡在哪里',t.blk,'在等谁、等什么');if(v!==null)mutate(()=>{t.blk=v;hist(t,'blocked',v)})}},
   ...(t.blk?[{l:'解除卡住',f:()=>mutate(()=>{t.blk='';hist(t,'unblocked')})}]:[]),
+  {l:t.note?'设为任务':'取消任务',f:()=>mutate(()=>{if(t.note)delete t.note;else{t.note=true;t.done=false}hist(t,t.note?'note':'task')})},
   '-',
-  {l:'绑定到父任务…',f:()=>{ui.linking=id;cv.classList.add('linking');renderCanvas()}},
+  {l:'添加子卡片',k:'Tab',f:()=>addChild(id)},
+  {l:'添加同级卡片',f:()=>addSibling(id)},
+  {l:'绑定到父卡片…',f:()=>{ui.linking=id;cv.classList.add('linking');renderCanvas()}},
   ...(t.parent?[{l:'解除绑定',f:()=>mutate(()=>{t.parent=null;hist(t,'parent',null)})}]:[]),
   ...(nk?[{l:'整理这一支',f:()=>tidyBranch(id)}]:[]),
-  '-',
   ...styleRows(t),
-  '-',
-  {l:'复制整条流程给 Claude',f:()=>copyFlow(id)},{l:'下载整条流程（.md）',f:()=>downloadFlow(id)},
   '-',
   {l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},
   '-',
-  {l:'删除'+(nk?'（含子任务）':''),k:'Delete',danger:true,f:()=>confirmDelete(id)}]}
+  {l:'删除'+(nk?'（连同子卡片）':''),k:'Delete',danger:true,f:()=>confirmDelete(id)}]}
 function resMenu(tid,rid){const t=D.tasks[tid];const r=t&&(t.res||[]).find(x=>x.id===rid);if(!r)return[];return[
   {l:'编辑这条阻力',f:async()=>{const v=await ask('编辑',r.text,'',true);if(v&&v!==r.text)mutate(()=>{r.text=v;r.updatedAt=now();t.updatedAt=now()})}},
   {l:'再记一条',f:()=>openRes(tid)},
