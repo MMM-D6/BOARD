@@ -59,6 +59,8 @@ textarea{resize:vertical;width:100%}
 .card.linkfrom{outline:2px dashed var(--accent)}
 .card .row{display:flex;gap:7px;align-items:flex-start}
 .card input[type=checkbox]{margin-top:3px;accent-color:var(--accent);flex:none}
+/* a note card has no checkbox, so its extras line up with the card edge */
+.card.note .chips,.card.note div.res{margin-left:0}
 .card .t{flex:1;min-width:0;line-height:1.5;overflow-wrap:anywhere;white-space:pre-wrap;outline:none;min-height:21px}
 .card .t[contenteditable=true]{user-select:text;cursor:text;background:var(--bg);border-radius:4px;padding:0 3px}
 .card .t:empty::before{content:"（空）";color:var(--muted)}
@@ -83,7 +85,7 @@ div.res{margin:6px 0 0 20px;padding-top:6px;border-top:1px dashed var(--line);di
 #menu .sepl{height:1px;background:var(--line);margin:4px 2px}
 #menu .k{color:var(--muted);font-size:12px}
 #menu .mhd{padding:4px 10px 2px;font-size:11.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:280px}
-#menu .mrow{display:flex;align-items:center;gap:4px;padding:3px 8px 3px 10px}
+#menu .mrow{display:flex;flex-wrap:wrap;align-items:center;gap:4px;padding:3px 8px 3px 10px;max-width:320px}
 #menu .mrow .ml{min-width:30px;color:var(--muted);font-size:12px}
 #menu .mb{min-width:22px;height:22px;padding:0 5px;border:1px solid var(--line);border-radius:5px;background:var(--card);display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:12px}
 #menu .mb:hover{border-color:var(--muted)}
@@ -117,7 +119,7 @@ div.res{margin:6px 0 0 20px;padding-top:6px;border-top:1px dashed var(--line);di
 /* ---------- data ---------- */
 const now=()=>new Date().toISOString();
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-function blank(){return{app:'priority-machine',schema:3,tasks:{},deleted:{},view:{x:40,y:40,z:1}}}
+function blank(){return{app:'priority-machine',schema:3,tasks:{},deleted:{},templates:[],view:{x:40,y:40,z:1}}}
 let D=blank();
 /* open: cards whose resistance list is expanded; resIn: card with the input open */
 const ui={sel:null,editing:null,linking:null,open:new Set(),resIn:null,resDraft:'',busy:false};
@@ -176,7 +178,8 @@ let reconnecting=false,renderAfterDrag=false;
 async function reconnect(){if(reconnecting)return;reconnecting=true;try{if(await fileHandle.requestPermission({mode:'readwrite'})==='granted'){needPerm=false;const inc=norm(JSON.parse(await(await fileHandle.getFile()).text()));D=merge(D,inc);$('#reconnect').hidden=true;dirty=true;await writeFile();if(drag)renderAfterDrag=true;else render();toast('已连接，自动保存恢复')}}catch(e){toast('连接失败：'+e.message)}finally{reconnecting=false;fileLabel()}}
 function norm(o){const b=blank();if(!o||typeof o!=='object')return b;for(const k of Object.keys(b))if(o[k]!==undefined)b[k]=o[k];
   for(const t of Object.values(b.tasks)){t.history=t.history||[];t.blk=t.blk||'';t.crit=t.crit||'';t.res=t.res||[];t.fold=false;t.x=+t.x||0;t.y=+t.y||0;delete t.cur;delete t.est;delete t.energy;delete t.tags}
-  if(!b.view||typeof b.view!=='object')b.view={x:40,y:40,z:1};b.view.z=Math.min(1,Math.max(.3,+b.view.z||1));
+  if(!Array.isArray(b.templates))b.templates=[];
+  if(!b.view||typeof b.view!=='object')b.view={x:40,y:40,z:1};b.view.z=Math.min(1.5,Math.max(.3,+b.view.z||1));
   migrateSidebar(o,b);return b}
 /* older files kept notes in a sidebar. Notes tied to a task move into that card;
    loose notes and parked thoughts become cards under one "暂存" card. Ids are
@@ -196,6 +199,7 @@ function merge(A,B){const R=JSON.parse(JSON.stringify(A));R.deleted=Object.assig
   for(const[id,t]of Object.entries(B.tasks||{}))R.tasks[id]=newer(R.tasks[id],t);
   for(const[id,at]of Object.entries(R.deleted))if(R.tasks[id]&&(R.tasks[id].updatedAt||'')<=at)delete R.tasks[id];
   for(const t of Object.values(R.tasks))if(t.parent&&!R.tasks[t.parent])t.parent=null;
+  const tp=new Map();for(const x of[...(A.templates||[]),...(B.templates||[])])if(!R.deleted[x.id])tp.set(x.id,x);R.templates=[...tp.values()];
   return R}
 
 /* ---------- undo ---------- */
@@ -245,7 +249,7 @@ function askChoice(title,msg,opts){return new Promise(res=>{openDlg('<h3>'+esc(t
 function applyView(){$('#world').style.transform='translate('+D.view.x+'px,'+D.view.y+'px) scale('+D.view.z+')';const g=20*D.view.z;cv.style.backgroundSize=g+'px '+g+'px';cv.style.backgroundPosition=D.view.x+'px '+D.view.y+'px';const zl=$('#zoom');if(zl)zl.textContent=Math.round(D.view.z*100)+'%'}
 function cardHTML(t){
   const R=t.res||[];const open=R.length>0||ui.resIn===t.id;
-  const c=['card'];if(ui.sel===t.id)c.push('sel');if(ui.editing===t.id)c.push('editing');if(t.color)c.push('c-'+t.color);if(t.done)c.push('done');if(ui.linking===t.id)c.push('linkfrom');if(open)c.push('open');
+  const c=['card'];if(t.note)c.push('note');if(ui.sel===t.id)c.push('sel');if(ui.editing===t.id)c.push('editing');if(t.color)c.push('c-'+t.color);if(t.done)c.push('done');if(ui.linking===t.id)c.push('linkfrom');if(open)c.push('open');
   const ch=[];
   if(t.blk)ch.push('<span class="chip blk">卡住：'+esc(t.blk)+'</span>');
   if(t.crit)ch.push('<span class="chip crit">标准：'+esc(t.crit)+'</span>');
@@ -253,7 +257,7 @@ function cardHTML(t){
   if(open)rs='<div class="res">'+R.map(r=>'<div class="ri" data-r="'+r.id+'">'+esc(r.text)+'<span class="rt">'+stamp(r.createdAt)+'</span></div>').join('')+
     (ui.resIn===t.id?'<textarea class="resIn" rows="2" placeholder="为什么开始不了？卡在哪一步？打算怎么处理？"></textarea><div class="rh">Enter 记下 · Shift+Enter 换行 · Esc 收起</div>':'')+'</div>';
   const st='left:'+t.x+'px;top:'+t.y+'px'+(t.w?';width:'+t.w+'px':'')+(t.h?';min-height:'+t.h+'px':'');
-  return '<div class="'+c.join(' ')+'" data-id="'+t.id+'" style="'+st+'"><div class="row"><input type="checkbox" tabindex="-1" data-a="done" '+(t.done?'checked':'')+' title="封存"><div class="t" '+(t.fs?'style="font-size:'+t.fs+'px" ':'')+(ui.editing===t.id?'contenteditable="true"':'')+'>'+esc(t.text)+'</div></div>'+(ch.length?'<div class="chips">'+ch.join('')+'</div>':'')+rs+'<div class="ts"><span>'+stamp(t.createdAt)+'</span><span>'+(t.done&&t.doneAt?'封存 '+stamp(t.doneAt):'')+'</span></div><div class="rz" title="拖动调整大小，双击恢复默认"></div></div>'}
+  return '<div class="'+c.join(' ')+'" data-id="'+t.id+'" style="'+st+'"><div class="row">'+(t.note?'':'<input type="checkbox" tabindex="-1" data-a="done" '+(t.done?'checked':'')+' title="封存">')+'<div class="t" '+(t.fs?'style="font-size:'+t.fs+'px" ':'')+(ui.editing===t.id?'contenteditable="true"':'')+'>'+esc(t.text)+'</div></div>'+(ch.length?'<div class="chips">'+ch.join('')+'</div>':'')+rs+'<div class="ts"><span>'+stamp(t.createdAt)+'</span><span>'+(t.done&&t.doneAt?'封存 '+stamp(t.doneAt):'')+'</span></div><div class="rz" title="拖动调整大小，双击恢复默认"></div></div>'}
 /* replacing the cards removes the focused element, and Chrome fires focusout for it;
    the rendering flag tells the focusout handlers to ignore that */
 let rendering=false;
@@ -337,8 +341,8 @@ window.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-dra
 window.addEventListener('pointerup',()=>{if(!drag)return;if(drag.pan)cv.classList.remove('panning');
   if(drag.rz){const el=cardEl(drag.rz);el&&el.classList.remove('rzing');const t=D.tasks[drag.rz];if(drag.moved&&t){t.updatedAt=now();touch()}drag=null;if(renderAfterDrag){renderAfterDrag=false;render()}return}
   if(drag.moved){const t=!drag.pan&&D.tasks[drag.id];if(t)t.updatedAt=now();touch()}drag=null;if(renderAfterDrag){renderAfterDrag=false;render()}});
-/* mouse wheel zooms around the pointer, between 30% and 100% */
-const ZMIN=.3,ZMAX=1;
+/* mouse wheel zooms around the pointer, between 30% and 150% */
+const ZMIN=.3,ZMAX=1.5;
 function zoomAt(mx,my,z){const z0=D.view.z;z=Math.min(ZMAX,Math.max(ZMIN,z));if(z===z0)return;D.view.x=mx-(mx-D.view.x)*z/z0;D.view.y=my-(my-D.view.y)*z/z0;D.view.z=z;applyView();clearTimeout(cv._w);cv._w=setTimeout(touch,400)}
 cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientRect();
   const dy=e.deltaMode===1?e.deltaY*33:e.deltaY;zoomAt(e.clientX-r.left,e.clientY-r.top,D.view.z*Math.exp(-dy*0.0015))},{passive:false});
@@ -379,7 +383,7 @@ document.addEventListener('keydown',e=>{
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.key==='Enter'||e.key==='F2'){e.preventDefault();startEdit(id)}
   else if(e.key==='Tab'){e.preventDefault();addChild(id)}
-  else if(e.key===' '){e.preventDefault();setDone(id,!D.tasks[id].done)}
+  else if(e.key===' '){e.preventDefault();if(!D.tasks[id].note)setDone(id,!D.tasks[id].done)}
   else if(e.key.toLowerCase()==='r'||e.code==='KeyR'){e.preventDefault();openRes(id)}
   else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();confirmDelete(id)}
 });
@@ -404,7 +408,7 @@ function tidyBranch(id,quiet){const t=D.tasks[id];if(!t)return;const run=()=>{re
 const menu=$('#menu');let menuAct={};
 function showMenu(x,y,items){menuAct={};menu.innerHTML=items.map((it,i)=>{if(it==='-')return'<div class="sepl"></div>';
     if(it.head)return'<div class="mhd" title="'+esc(it.head)+'">'+esc(it.head)+'</div>';
-    if(it.row){menuAct[i]=it.row.map(b=>b.f);return'<div class="mrow"><span class="ml">'+esc(it.l)+'</span>'+it.row.map((b,j)=>'<span class="mb'+(b.sw?' sw':'')+(b.on?' on':'')+'" data-i="'+i+'" data-j="'+j+'" title="'+esc(b.t||'')+'"'+(b.sw?' style="background:'+b.sw+'"':'')+'>'+esc(b.l||'')+'</span>').join('')+'</div>'}
+    if(it.row){menuAct[i]=it.row.map(b=>b.f);return'<div class="mrow"><span class="ml">'+esc(it.l)+'</span>'+it.row.map((b,j)=>'<span class="mb'+(b.sw?' sw':'')+(b.on?' on':'')+'" data-i="'+i+'" data-j="'+j+'" title="'+esc(b.t||'')+'"'+(b.sw||b.bg?' style="background:'+(b.sw||b.bg)+'"':'')+'>'+esc(b.l||'')+'</span>').join('')+'</div>'}
     menuAct[i]=it.f;return'<div class="mi'+(it.danger?' danger':'')+'" data-i="'+i+'"><span>'+esc(it.l)+'</span>'+(it.k?'<span class="k">'+esc(it.k)+'</span>':'')+'</div>'}).join('');
   menu.style.display='block';const w=menu.offsetWidth,h=menu.offsetHeight;menu.style.left=Math.max(4,Math.min(x,innerWidth-w-8))+'px';menu.style.top=Math.max(4,Math.min(y,innerHeight-h-8))+'px'}
 function hideMenu(){menu.style.display='none'}
@@ -420,24 +424,55 @@ document.addEventListener('contextmenu',e=>{
   if(card){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}const id=card.dataset.id;if(!D.tasks[id])return;select(id);showMenu(e.clientX,e.clientY,taskMenu(id));return}
   if(e.target.closest('#canvas')){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}const p=toWorld(e.clientX,e.clientY);showMenu(e.clientX,e.clientY,[
     {l:'在这里新建任务',k:'双击',f:()=>newAt(p.x,p.y)},
+    ...(D.templates.length?[{l:'用模板新建',row:D.templates.map(x=>({l:x.name,bg:tplBg(x),t:tplLabel(x),f:()=>newFromTpl(x,p.x,p.y)}))},{l:'删除模板…',f:delTplDlg}]:[]),
     {l:'整理成树',f:tidy},{l:'回到原点',f:home},
-    ...(D.view.z<1?[{l:'缩放回 100%',k:Math.round(D.view.z*100)+'%',f:()=>{const r=cv.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1)}}]:[]),'-',{l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},'-',...fileItems()])}
+    ...(D.view.z!==1?[{l:'缩放回 100%',k:Math.round(D.view.z*100)+'%',f:()=>{const r=cv.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1)}}]:[]),'-',{l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},'-',...fileItems()])}
 });
 /* colour and text size, kept simple: one row each */
 const COLS=[['','默认','var(--card)'],['y','黄','var(--cy)'],['o','橙','var(--co)'],['r','红','var(--cr)'],['p','紫','var(--cp)'],['b','蓝','var(--cb)'],['g','绿','var(--cg)'],['n','灰','var(--cn)']];
 const SIZES=[[13,'小'],[0,'中'],[16,'大'],[18,'特大']];
+function tplBg(x){const c=COLS.find(c=>c[0]===(x.color||''));return c?c[2]:'var(--card)'}
+function tplLabel(x){return x.name+(x.fs?' '+x.fs:'')}
+function applyTpl(t,x){mutate(()=>{if(x.color)t.color=x.color;else delete t.color;if(x.fs)t.fs=x.fs;else delete t.fs;t.updatedAt=now()})}
+async function saveTpl(t){const v=await ask('模板名称','','比如：标题、步骤、提醒');if(!v)return;
+  mutate(()=>{D.templates.push({id:uid(),name:v,color:t.color||'',fs:t.fs||0})});toast('已存为模板：'+v)}
+async function delTplDlg(){if(!D.templates.length)return;const names=D.templates.map(x=>x.name);
+  const c=await askChoice('删除模板','选一个要删除的模板（只删模板，已经套用的卡片不变）',['取消',...names]);
+  const x=D.templates.find(x=>x.name===c);if(x)mutate(()=>{D.templates=D.templates.filter(y=>y!==x);D.deleted[x.id]=now()})}
+function newFromTpl(x,px,py){let t;mutate(()=>{t=newTask('',null,Math.round(px),Math.round(py));if(x.color)t.color=x.color;if(x.fs)t.fs=x.fs});select(t.id);startEdit(t.id)}
 function styleRows(t){return[
   {l:'颜色',row:COLS.map(([k,n,v])=>({sw:v,t:n,on:(t.color||'')===k,f:()=>mutate(()=>{if(k)t.color=k;else delete t.color;t.updatedAt=now()})}))},
   {l:'字号',row:SIZES.map(([v,n])=>({l:n,on:(t.fs||0)===v,f:()=>mutate(()=>{if(v)t.fs=v;else delete t.fs;t.updatedAt=now()})}))},
+  {l:'模板',row:[...D.templates.map(x=>({l:x.name,bg:tplBg(x),t:'套用：'+tplLabel(x),on:(t.color||'')===(x.color||'')&&(t.fs||0)===(x.fs||0),f:()=>applyTpl(t,x)})),{l:'＋',t:'把这张卡的字号和底色存为模板',f:()=>saveTpl(t)}]},
   ...(t.w||t.h?[{l:'恢复默认大小',f:()=>mutate(()=>{delete t.w;delete t.h;t.updatedAt=now()})}]:[])]}
 function fileItems(){return[{head:fileStatus()},{l:'保存',k:'Ctrl+S',f:saveNow},{l:'另存为…',f:bindNew},{l:'打开文件…',f:bindOpen},{l:'导入并合并…',f:()=>$('#impFile').click()},{l:'导出备份',f:exportJSON}]}
+/* the card and everything under it as an indented outline, ready to paste into a chat with Claude */
+function flowText(id){const d=new Date(),out=[];const root=D.tasks[id];
+  out.push('下面是我在任务工具 X 里的一条流程（'+(root.parent?'某条流程中的一支':'从最前面的卡片开始')+'）。缩进表示上下级，从上到下是卡片在画布上的顺序。');
+  out.push('[ ] 是未完成任务，[x] 是已封存（完成）的任务，没有方框的是笔记。「标准」是完成标准，「卡住」是在等的东西，「阻力」是我记下的开始不了的原因。');
+  out.push('导出时间：'+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+hm(d),'');
+  const one=(t,dep)=>{const ind='  '.repeat(dep),sub=ind+'  ';const box=t.note?'':t.done?'[x] ':'[ ] ';
+    const lines=(t.text||'（空）').split('\n');out.push(ind+'- '+box+lines[0]);for(const l of lines.slice(1))out.push(sub+l);
+    if(t.done&&t.doneAt)out.push(sub+'封存于 '+stamp(t.doneAt));
+    if(t.crit)out.push(sub+'标准：'+t.crit);if(t.blk)out.push(sub+'卡住：'+t.blk);
+    for(const r of t.res||[])out.push(sub+'阻力（'+stamp(r.createdAt)+'）：'+r.text.replace(/\n/g,' '));
+    for(const k of kids(t.id))one(k,dep+1)};
+  one(root,0);return out.join('\n')}
+async function copyFlow(id){const txt=flowText(id);let ok=false;
+  try{await navigator.clipboard.writeText(txt);ok=true}catch(_){}
+  if(!ok){const ta=document.createElement('textarea');ta.value=txt;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{ok=document.execCommand('copy')}catch(_){}ta.remove()}
+  toast(ok?'已复制整条流程，去 Claude 里粘贴就行':'复制没成功，改用下载');if(!ok)downloadFlow(id)}
+function downloadFlow(id){const t=D.tasks[id];const b=new Blob([flowText(id)],{type:'text/markdown'});const a=document.createElement('a');const d=new Date();
+  const nm=(t.text||'流程').split('\n')[0].replace(/[\\/:*?"<>|]/g,'').slice(0,30).trim()||'流程';
+  a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+nm+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 function taskMenu(id){const t=D.tasks[id];const nk=kids(id).length;return[
   {l:'编辑文字',k:'Enter',f:()=>startEdit(id)},
   {l:'添加子任务',k:'Tab',f:()=>addChild(id)},
   {l:'添加同级任务',f:()=>addSibling(id)},
   '-',
   {l:'记一条阻力',k:'R',f:()=>openRes(id)},
-  {l:t.done?'取消封存':'封存',k:'空格',f:()=>setDone(id,!t.done)},
+  ...(t.note?[]:[{l:t.done?'取消封存':'封存',k:'空格',f:()=>setDone(id,!t.done)}]),
+  {l:t.note?'改回任务（加上小方框）':'改成笔记（去掉小方框）',f:()=>mutate(()=>{if(t.note)delete t.note;else{t.note=true;t.done=false;t.doneAt=null}hist(t,t.note?'note':'task');})},
   {l:t.crit?'修改完成标准':'写完成标准',f:async()=>{const v=await ask('完成标准',t.crit,'做到什么程度就算完');if(v!==null)mutate(()=>{t.crit=v;hist(t,'crit',v)})}},
   {l:t.blk?'修改卡住原因':'标记为卡住',f:async()=>{const v=await ask('卡在哪里',t.blk,'在等谁、等什么');if(v!==null)mutate(()=>{t.blk=v;hist(t,'blocked',v)})}},
   ...(t.blk?[{l:'解除卡住',f:()=>mutate(()=>{t.blk='';hist(t,'unblocked')})}]:[]),
@@ -447,6 +482,8 @@ function taskMenu(id){const t=D.tasks[id];const nk=kids(id).length;return[
   ...(nk?[{l:'整理这一支',f:()=>tidyBranch(id)}]:[]),
   '-',
   ...styleRows(t),
+  '-',
+  {l:'复制整条流程给 Claude',f:()=>copyFlow(id)},{l:'下载整条流程（.md）',f:()=>downloadFlow(id)},
   '-',
   {l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},
   '-',
