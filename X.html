@@ -43,6 +43,7 @@ textarea{resize:vertical;width:100%}
 #links{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
 #links path{fill:none;stroke:var(--muted);stroke-width:1.4;opacity:.6}
 .empty-hint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--muted);pointer-events:none;text-align:center;line-height:1.8}
+#marq{position:absolute;border:1px solid var(--accent);background:rgba(125,125,125,.13);border-radius:2px;pointer-events:none;z-index:15}
 #linkBar{position:absolute;top:54px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--card);padding:4px 12px;border-radius:6px;font-size:13px;z-index:10}
 
 .card{position:absolute;width:250px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px 4px;box-shadow:var(--shadow);user-select:none}
@@ -54,8 +55,6 @@ textarea{resize:vertical;width:100%}
 .card.c-p{background:var(--cp)}.card.c-b{background:var(--cb)}.card.c-g{background:var(--cg)}.card.c-n{background:var(--cn)}
 /* invisible resize grip in the bottom-right corner; double-click it to go back to the default size */
 .card .rz{position:absolute;right:0;bottom:0;width:14px;height:14px;cursor:nwse-resize;z-index:2}
-.card.done{opacity:.6}
-.card.done .t{text-decoration:line-through}
 .card.linkfrom{outline:2px dashed var(--accent)}
 .card .row{display:flex;gap:7px;align-items:flex-start}
 .card input[type=checkbox]{margin-top:3px;accent-color:var(--accent);flex:none}
@@ -95,6 +94,37 @@ div.res{margin:6px 0 0 20px;padding-top:6px;border-top:1px dashed var(--line);di
 #dlg .box{background:var(--card);border-radius:10px;padding:16px;width:min(380px,92vw);display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.25)}
 #dlg .box h3{margin:0;font-size:15px}
 .btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+/* one-tap tidy: a small clear glass bead in the bottom-right corner, no icon.
+   Layers: blurred view of the canvas behind it, a tinted body that darkens toward the rim,
+   a soft caustic glow at the bottom where light passes through, a sharp specular highlight
+   at the top left, a thin bright rim, and two shadows (contact and ambient). */
+#tidyBtn{position:absolute;right:20px;bottom:20px;z-index:25;width:30px;height:30px;padding:0;border:0;border-radius:50%;cursor:pointer;
+  background:
+    radial-gradient(ellipse 54% 26% at 50% 88%,rgba(255,255,255,.55),rgba(255,255,255,0) 70%),
+    radial-gradient(circle farthest-side at 48% 44%,rgba(120,145,165,0) 0%,rgba(110,138,160,.10) 38%,rgba(85,112,136,.34) 70%,rgba(50,74,96,.62) 92%,rgba(40,60,80,.72) 100%);
+  -webkit-backdrop-filter:blur(1.2px) saturate(150%) contrast(1.05);backdrop-filter:blur(1.2px) saturate(150%) contrast(1.05);
+  box-shadow:
+    inset 0 0 0 .7px rgba(40,65,88,.30),
+    inset 0 0 0 1.4px rgba(255,255,255,.38),
+    inset 0 1.5px 1px -1px rgba(255,255,255,.95),
+    inset 0 -3px 5px -2px rgba(255,255,255,.6),
+    0 1px 1.5px rgba(15,30,45,.25),
+    0 7px 14px -5px rgba(15,30,45,.35);
+  opacity:.9;transition:opacity .2s,transform .18s cubic-bezier(.3,.7,.4,1),box-shadow .2s}
+#tidyBtn::before{content:"";position:absolute;left:17%;top:8%;width:48%;height:30%;border-radius:50%;transform:rotate(-20deg);
+  background:radial-gradient(ellipse at 45% 42%,rgba(255,255,255,1) 0%,rgba(255,255,255,.85) 26%,rgba(255,255,255,0) 70%);pointer-events:none}
+#tidyBtn::after{content:"";position:absolute;left:30%;top:20%;width:9%;height:9%;border-radius:50%;background:#fff;opacity:.95;
+  filter:blur(.3px);pointer-events:none}
+#tidyBtn:hover{opacity:1;transform:translateY(-1px)}
+#tidyBtn:active{transform:translateY(0) scale(.93)}
+#tidyBtn:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+@media (prefers-color-scheme:dark){#tidyBtn{
+  background:
+    radial-gradient(ellipse 62% 34% at 50% 86%,rgba(255,255,255,.22),rgba(255,255,255,0) 72%),
+    radial-gradient(circle farthest-side at 48% 44%,rgba(255,255,255,.04) 0%,rgba(160,185,205,.08) 58%,rgba(200,220,235,.18) 90%,rgba(220,235,245,.26) 100%);
+  box-shadow:inset 0 0 0 .6px rgba(255,255,255,.35),inset 0 1.5px 1px -1px rgba(255,255,255,.55),inset 0 -3px 5px -2px rgba(255,255,255,.18),
+    0 1px 1.5px rgba(0,0,0,.5),0 7px 14px -5px rgba(0,0,0,.6)}
+  #tidyBtn::before{opacity:.7}#tidyBtn::after{opacity:.8}}
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:6px 14px;border-radius:6px;font-size:13px;display:none;z-index:70}
 </style>
 </head>
@@ -107,9 +137,10 @@ div.res{margin:6px 0 0 20px;padding-top:6px;border-top:1px dashed var(--line);di
 </div>
 <div id="canvas">
   <div id="world"><svg id="links" width="1" height="1"></svg><div id="cards"></div></div>
-  <div class="empty-hint" id="hint" hidden>双击空白处新建任务<br>右键打开菜单</div>
+  <div class="empty-hint" id="hint" hidden>双击空白处新建卡片<br>右键打开菜单 · 按住 Shift 点选或框选多张</div>
   <div id="linkBar" hidden>点一下要作为父任务的卡片，Esc 取消</div>
 </div>
+<button id="tidyBtn" title="一键整理" aria-label="一键整理"></button>
 <div id="menu"></div>
 <div id="dlg"><div class="box" id="dlgBox"></div></div>
 <div id="toast"></div>
@@ -122,9 +153,10 @@ const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
 function blank(){return{app:'priority-machine',schema:3,tasks:{},deleted:{},templates:[],view:{x:40,y:40,z:1}}}
 let D=blank();
 /* open: cards whose resistance list is expanded; resIn: card with the input open */
-const ui={sel:null,editing:null,linking:null,open:new Set(),resIn:null,resDraft:'',busy:false};
+/* multi: cards picked with Shift (click or drag a box); empty when only one card is selected */
+const ui={sel:null,multi:new Set(),editing:null,linking:null,open:new Set(),resIn:null,resDraft:'',busy:false};
 
-function newTask(text,parent,x,y){const t={id:uid(),text:text||'',parent:parent||null,x,y,done:false,doneAt:null,blk:'',crit:'',res:[],fold:false,createdAt:now(),updatedAt:now(),history:[]};D.tasks[t.id]=t;return t}
+function newTask(text,parent,x,y){const t={id:uid(),text:text||'',parent:parent||null,x,y,note:true,done:false,blk:'',crit:'',res:[],fold:false,createdAt:now(),updatedAt:now(),history:[]};D.tasks[t.id]=t;return t}
 function seed(){
   const T=(text,parent,extra)=>{const t=newTask(text,parent,0,0);Object.assign(t,extra||{});return t.id};
   const m=T('2026-10-08 导师会议');
@@ -177,7 +209,7 @@ async function bindOpen(){if(!canFS)return toast('这个浏览器不支持绑定
 let reconnecting=false,renderAfterDrag=false;
 async function reconnect(){if(reconnecting)return;reconnecting=true;try{if(await fileHandle.requestPermission({mode:'readwrite'})==='granted'){needPerm=false;const inc=norm(JSON.parse(await(await fileHandle.getFile()).text()));D=merge(D,inc);$('#reconnect').hidden=true;dirty=true;await writeFile();if(drag)renderAfterDrag=true;else render();toast('已连接，自动保存恢复')}}catch(e){toast('连接失败：'+e.message)}finally{reconnecting=false;fileLabel()}}
 function norm(o){const b=blank();if(!o||typeof o!=='object')return b;for(const k of Object.keys(b))if(o[k]!==undefined)b[k]=o[k];
-  for(const t of Object.values(b.tasks)){t.history=t.history||[];t.blk=t.blk||'';t.crit=t.crit||'';t.res=t.res||[];t.fold=false;t.x=+t.x||0;t.y=+t.y||0;delete t.cur;delete t.est;delete t.energy;delete t.tags}
+  for(const t of Object.values(b.tasks)){t.history=t.history||[];t.blk=t.blk||'';t.crit=t.crit||'';t.res=t.res||[];t.fold=false;t.x=+t.x||0;t.y=+t.y||0;delete t.doneAt;delete t.cur;delete t.est;delete t.energy;delete t.tags}
   if(!Array.isArray(b.templates))b.templates=[];
   if(!b.view||typeof b.view!=='object')b.view={x:40,y:40,z:1};b.view.z=Math.min(1.5,Math.max(.3,+b.view.z||1));
   migrateSidebar(o,b);return b}
@@ -190,10 +222,10 @@ function migrateSidebar(o,b){const notes=(o.notes||[]).filter(n=>!b.deleted[n.id
   const todo=loose.filter(n=>!b.tasks['m-'+n.id]&&!b.deleted['m-'+n.id]);if(!todo.length)return;
   const all=Object.values(b.tasks);const RID='m-stash';
   if(!b.tasks[RID]&&!b.deleted[RID]){const x=all.length?Math.min(...all.map(t=>t.x)):0,y=all.length?Math.max(...all.map(t=>t.y))+140:0;
-    b.tasks[RID]={id:RID,text:'暂存（从旧侧栏迁移过来的想法）',parent:null,x,y,done:false,doneAt:null,blk:'',crit:'',res:[],fold:false,createdAt:'2000-01-01T00:00:00.000Z',updatedAt:'2000-01-01T00:00:00.000Z',history:[]}}
+    b.tasks[RID]={id:RID,text:'暂存（从旧侧栏迁移过来的想法）',parent:null,x,y,done:false,blk:'',crit:'',res:[],fold:false,createdAt:'2000-01-01T00:00:00.000Z',updatedAt:'2000-01-01T00:00:00.000Z',history:[]}}
   const root=b.tasks[RID];let y=root?root.y:0;
   todo.sort((a,c)=>(a.createdAt||'')<(c.createdAt||'')?-1:1);
-  for(const n of todo){b.tasks['m-'+n.id]={id:'m-'+n.id,text:n.text,parent:root?RID:null,x:(root?root.x:0)+GX,y,done:false,doneAt:null,blk:'',crit:'',res:[],fold:false,createdAt:n.createdAt||now(),updatedAt:n.updatedAt||n.createdAt||now(),history:[]};y+=70}}
+  for(const n of todo){b.tasks['m-'+n.id]={id:'m-'+n.id,text:n.text,parent:root?RID:null,x:(root?root.x:0)+GX,y,done:false,blk:'',crit:'',res:[],fold:false,createdAt:n.createdAt||now(),updatedAt:n.updatedAt||n.createdAt||now(),history:[]};y+=70}}
 function merge(A,B){const R=JSON.parse(JSON.stringify(A));R.deleted=Object.assign({},A.deleted,B.deleted);
   const newer=(a,b)=>!a?b:!b?a:((b.updatedAt||b.createdAt||'')>(a.updatedAt||a.createdAt||'')?b:a);
   for(const[id,t]of Object.entries(B.tasks||{}))R.tasks[id]=newer(R.tasks[id],t);
@@ -205,7 +237,7 @@ function merge(A,B){const R=JSON.parse(JSON.stringify(A));R.deleted=Object.assig
 /* ---------- undo ---------- */
 const undoStack=[],redoStack=[];
 function snap(){undoStack.push(JSON.stringify(D));if(undoStack.length>80)undoStack.shift();redoStack.length=0}
-function restore(s){D=JSON.parse(s);ui.editing=null;ui.resIn=null;if(ui.sel&&!D.tasks[ui.sel])ui.sel=null;touch();render()}
+function restore(s){D=JSON.parse(s);ui.editing=null;ui.resIn=null;if(ui.sel&&!D.tasks[ui.sel])ui.sel=null;for(const m of[...ui.multi])if(!D.tasks[m])ui.multi.delete(m);if(ui.multi.size<2)ui.multi.clear();touch();render()}
 function undo(){const s=undoStack.pop();if(!s)return toast('没有可以撤销的了');redoStack.push(JSON.stringify(D));restore(s)}
 function redo(){const s=redoStack.pop();if(!s)return toast('没有可以还原的了');undoStack.push(JSON.stringify(D));restore(s)}
 function mutate(fn){snap();fn();touch();render()}
@@ -249,7 +281,7 @@ function askChoice(title,msg,opts){return new Promise(res=>{openDlg('<h3>'+esc(t
 function applyView(){$('#world').style.transform='translate('+D.view.x+'px,'+D.view.y+'px) scale('+D.view.z+')';const g=20*D.view.z;cv.style.backgroundSize=g+'px '+g+'px';cv.style.backgroundPosition=D.view.x+'px '+D.view.y+'px';const zl=$('#zoom');if(zl)zl.textContent=Math.round(D.view.z*100)+'%'}
 function cardHTML(t){
   const R=t.res||[];const open=R.length>0||ui.resIn===t.id;
-  const c=['card'];if(t.note)c.push('note');if(ui.sel===t.id)c.push('sel');if(ui.editing===t.id)c.push('editing');if(t.color)c.push('c-'+t.color);if(t.done)c.push('done');if(ui.linking===t.id)c.push('linkfrom');if(open)c.push('open');
+  const c=['card'];if(t.note)c.push('note');if(ui.sel===t.id||ui.multi.has(t.id))c.push('sel');if(ui.editing===t.id)c.push('editing');if(t.color)c.push('c-'+t.color);if(ui.linking===t.id)c.push('linkfrom');if(open)c.push('open');
   const ch=[];
   if(t.blk)ch.push('<span class="chip blk">卡住：'+esc(t.blk)+'</span>');
   if(t.crit)ch.push('<span class="chip crit">标准：'+esc(t.crit)+'</span>');
@@ -257,7 +289,7 @@ function cardHTML(t){
   if(open)rs='<div class="res">'+R.map(r=>'<div class="ri" data-r="'+r.id+'">'+esc(r.text)+'<span class="rt">'+stamp(r.createdAt)+'</span></div>').join('')+
     (ui.resIn===t.id?'<textarea class="resIn" rows="2" placeholder="为什么开始不了？卡在哪一步？打算怎么处理？"></textarea><div class="rh">Enter 记下 · Shift+Enter 换行 · Esc 收起</div>':'')+'</div>';
   const st='left:'+t.x+'px;top:'+t.y+'px'+(t.w?';width:'+t.w+'px':'')+(t.h?';min-height:'+t.h+'px':'');
-  return '<div class="'+c.join(' ')+'" data-id="'+t.id+'" style="'+st+'"><div class="row">'+(t.note?'':'<input type="checkbox" tabindex="-1" data-a="done" '+(t.done?'checked':'')+' title="封存">')+'<div class="t" '+(t.fs?'style="font-size:'+t.fs+'px" ':'')+(ui.editing===t.id?'contenteditable="true"':'')+'>'+esc(t.text)+'</div></div>'+(ch.length?'<div class="chips">'+ch.join('')+'</div>':'')+rs+'<div class="ts"><span>'+stamp(t.createdAt)+'</span><span>'+(t.done&&t.doneAt?'封存 '+stamp(t.doneAt):'')+'</span></div><div class="rz" title="拖动调整大小，双击恢复默认"></div></div>'}
+  return '<div class="'+c.join(' ')+'" data-id="'+t.id+'" style="'+st+'"><div class="row">'+(t.note?'':'<input type="checkbox" tabindex="-1" data-a="done" '+(t.done?'checked':'')+'>')+'<div class="t" '+(t.fs?'style="font-size:'+t.fs+'px" ':'')+(ui.editing===t.id?'contenteditable="true"':'')+'>'+esc(t.text)+'</div></div>'+(ch.length?'<div class="chips">'+ch.join('')+'</div>':'')+rs+'<div class="ts"><span>'+stamp(t.createdAt)+'</span></div><div class="rz" title="拖动调整大小，双击恢复默认"></div></div>'}
 /* replacing the cards removes the focused element, and Chrome fires focusout for it;
    the rendering flag tells the focusout handlers to ignore that */
 let rendering=false;
@@ -274,7 +306,13 @@ function drawLinks(){let p='';
     p+='<path d="M'+x1+' '+y1+' C'+mx+' '+y1+','+mx+' '+y2+','+x2+' '+y2+'"/>'}
   $('#links').innerHTML=p}
 function render(){renderCanvas();fileLabel()}
-function select(id){ui.sel=id;document.querySelectorAll('.card.sel').forEach(c=>c.classList.remove('sel'));if(id){const el=cardEl(id);el&&el.classList.add('sel')}}
+function select(id,keep){ui.sel=id;if(!keep)ui.multi.clear();paintSel()}
+function paintSel(){document.querySelectorAll('.card.sel').forEach(c=>c.classList.remove('sel'));for(const id of selIds()){const el=cardEl(id);el&&el.classList.add('sel')}}
+const selIds=()=>ui.multi.size?[...ui.multi].filter(id=>D.tasks[id]):ui.sel&&D.tasks[ui.sel]?[ui.sel]:[];
+/* Shift+click adds or removes one card */
+function toggleMulti(id){if(!ui.multi.size&&ui.sel&&ui.sel!==id)ui.multi.add(ui.sel);
+  if(ui.multi.has(id)){ui.multi.delete(id);ui.sel=ui.multi.size?[...ui.multi].pop():null}else{ui.multi.add(id);ui.sel=id}
+  if(ui.multi.size===1){ui.sel=[...ui.multi][0];ui.multi.clear()}paintSel()}
 
 /* ---------- resistance inside a card ---------- */
 function openRes(id){ui.open.add(id);ui.resIn=id;ui.resDraft='';select(id);renderCanvas()}
@@ -317,18 +355,28 @@ cv.addEventListener('pointerdown',e=>{
   if(card){const id=card.dataset.id;
     if(ui.linking){const child=D.tasks[ui.linking];if(id!==child.id){if(descendants(child.id).includes(id))toast('不能绑定到自己的子任务下面');else{mutate(()=>{child.parent=id;hist(child,'parent',id);D.tasks[id].fold=false});tidyBranch(id,true)}}stopLinking();return}
     if(e.target.matches('input')||e.target.isContentEditable)return;
+    if(e.shiftKey){if(ui.editing){commitEdit();renderCanvas()}toggleMulti(id);return}
     if(e.target.closest('.res')){if(ui.sel!==id)select(id);return}
     if(ui.editing&&ui.editing!==id){commitEdit();renderCanvas()}
-    select(id);const t=D.tasks[id];
-    /* dragging a card carries its whole branch; hold Alt to move only this card */
-    drag={id,sx:e.clientX,sy:e.clientY,ox:t.x,oy:t.y,moved:false,sub:e.altKey?[]:descendants(id).map(d=>[d,D.tasks[d].x,D.tasks[d].y])};return}
+    const group=ui.multi.size>1&&ui.multi.has(id);
+    if(group)ui.sel=id;else select(id);const t=D.tasks[id];
+    /* dragging a card carries its whole branch (and the other picked cards); hold Alt to move only the cards themselves */
+    const mv=new Set();for(const g of group?selIds():[id]){mv.add(g);if(!e.altKey)for(const d of descendants(g))mv.add(d)}mv.delete(id);
+    drag={id,group,sx:e.clientX,sy:e.clientY,ox:t.x,oy:t.y,moved:false,sub:[...mv].map(d=>[d,D.tasks[d].x,D.tasks[d].y])};return}
   if(ui.linking){stopLinking();return}
   if(ui.editing){commitEdit();renderCanvas()}
-  if(ui.sel)select(null);
+  if(e.shiftKey){const r=cv.getBoundingClientRect();const m=document.createElement('div');m.id='marq';cv.appendChild(m);
+    drag={box:m,sx:e.clientX,sy:e.clientY,r,base:new Set(selIds()),moved:false};e.preventDefault();return}
+  if(ui.sel||ui.multi.size)select(null);
   drag={pan:true,sx:e.clientX,sy:e.clientY,ox:D.view.x,oy:D.view.y,moved:false};cv.classList.add('panning')});
 window.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
   if(!drag.moved&&Math.abs(dx)+Math.abs(dy)<4)return;dragMoved=true;
   if(drag.pan){drag.moved=true;D.view.x=drag.ox+dx;D.view.y=drag.oy+dy;applyView();return}
+  if(drag.box){drag.moved=true;const r=drag.r,x1=Math.min(drag.sx,e.clientX),y1=Math.min(drag.sy,e.clientY),x2=Math.max(drag.sx,e.clientX),y2=Math.max(drag.sy,e.clientY);
+    Object.assign(drag.box.style,{left:x1-r.left+'px',top:y1-r.top+'px',width:x2-x1+'px',height:y2-y1+'px'});
+    const a=toWorld(x1,y1),b=toWorld(x2,y2);const hit=new Set(drag.base);
+    for(const t of Object.values(D.tasks))if(t.x<b.x&&t.x+cw(t)>a.x&&t.y<b.y&&t.y+H(t.id)>a.y)hit.add(t.id);
+    ui.multi=hit;ui.sel=hit.size?[...hit].pop():null;paintSel();return}
   if(drag.rz){if(!drag.moved){snap();drag.moved=true}const t=D.tasks[drag.rz],el=cardEl(drag.rz);if(!t||!el)return;
     t.w=Math.max(160,Math.min(900,Math.round(drag.ow+dx/D.view.z)));el.style.width=t.w+'px';
     /* height only sticks when dragged past what the text needs, so widening never leaves a gap */
@@ -339,6 +387,9 @@ window.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-dra
   for(const[d,x,y]of drag.sub){D.tasks[d].x=Math.round(x+dx/D.view.z);D.tasks[d].y=Math.round(y+dy/D.view.z)}
   for(const id of[drag.id,...drag.sub.map(s=>s[0])]){const el=cardEl(id);if(el){el.style.left=D.tasks[id].x+'px';el.style.top=D.tasks[id].y+'px'}}drawLinks()});
 window.addEventListener('pointerup',()=>{if(!drag)return;if(drag.pan)cv.classList.remove('panning');
+  if(drag.box){drag.box.remove();if(ui.multi.size<2){const one=[...ui.multi][0]||null;select(one)}drag=null;return}
+  /* a plain click on one of several picked cards narrows the pick to that card */
+  if(drag.group&&!drag.moved){const id=drag.id;drag=null;select(id);return}
   if(drag.rz){const el=cardEl(drag.rz);el&&el.classList.remove('rzing');const t=D.tasks[drag.rz];if(drag.moved&&t){t.updatedAt=now();touch()}drag=null;if(renderAfterDrag){renderAfterDrag=false;render()}return}
   if(drag.moved){const t=!drag.pan&&D.tasks[drag.id];if(t)t.updatedAt=now();touch()}drag=null;if(renderAfterDrag){renderAfterDrag=false;render()}});
 /* mouse wheel zooms around the pointer, between 30% and 150% */
@@ -349,10 +400,10 @@ cv.addEventListener('wheel',e=>{e.preventDefault();const r=cv.getBoundingClientR
 cv.addEventListener('dblclick',e=>{const card=e.target.closest('.card');
   if(card&&e.target.closest('.rz')){const t=D.tasks[card.dataset.id];if(t&&(t.w||t.h))mutate(()=>{delete t.w;delete t.h;t.updatedAt=now()});return}
   if(card){if(ui.editing===card.dataset.id)return;if(!e.target.matches('input,textarea')&&!e.target.closest('.res,.chip'))startEdit(card.dataset.id);return}const p=toWorld(e.clientX,e.clientY);newAt(p.x,p.y)});
-cv.addEventListener('change',e=>{if(e.target.dataset.a==='done'){const id=e.target.closest('.card').dataset.id;e.target.blur();setDone(id,e.target.checked);select(id)}});
+cv.addEventListener('change',e=>{if(e.target.dataset.a==='done'){const id=e.target.closest('.card').dataset.id;e.target.blur();setCheck(id,e.target.checked);select(id)}});
 
 function newAt(x,y){let t;mutate(()=>{t=newTask('',null,Math.round(x),Math.round(y))});select(t.id);startEdit(t.id)}
-function setDone(id,v){mutate(()=>{const t=D.tasks[id];t.done=v;t.doneAt=v?now():null;hist(t,v?'sealed':'unsealed')})}
+function setCheck(id,v){mutate(()=>{const t=D.tasks[id];t.done=v;t.updatedAt=now()})}
 function startEdit(id){if(ui.resIn){ui.busy=true;closeResIn();ui.busy=false}select(id);ui.editing=id;renderCanvas()}
 const isBlank=t=>!t.text&&!kids(t.id).length&&!t.crit&&!t.blk&&!(t.res||[]).length&&!t.history.length;
 /* returns true if the card still exists afterwards */
@@ -376,17 +427,21 @@ document.addEventListener('keydown',e=>{
   /* only real text fields swallow shortcuts; a focused checkbox or button must not */
   if(e.target.matches&&e.target.matches('textarea,input:not([type=checkbox]):not([type=file])'))return;
   if(e.key==='Tab')e.preventDefault();
-  if(e.key==='Escape'){hideMenu();if(ui.linking)stopLinking();else if(ui.sel)select(null);return}
+  if(e.key==='Escape'){hideMenu();if(ui.linking)stopLinking();else if(ui.sel||ui.multi.size)select(null);return}
   if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.key.toLowerCase()==='z'&&e.shiftKey))){e.preventDefault();redo();return}
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo();return}
+  if(ui.multi.size>1&&!(e.ctrlKey||e.metaKey||e.altKey)){const ids=selIds();
+    if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();confirmDeleteMany(ids)}return}
   if(!ui.sel||!D.tasks[ui.sel])return;const id=ui.sel;
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.key==='Enter'||e.key==='F2'){e.preventDefault();startEdit(id)}
   else if(e.key==='Tab'){e.preventDefault();addChild(id)}
-  else if(e.key===' '){e.preventDefault();if(!D.tasks[id].note)setDone(id,!D.tasks[id].done)}
   else if(e.key.toLowerCase()==='r'||e.code==='KeyR'){e.preventDefault();openRes(id)}
   else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();confirmDelete(id)}
 });
+async function confirmDeleteMany(ids){const all=new Set();for(const i of ids){all.add(i);for(const d of descendants(i))all.add(d)}
+  const extra=all.size-ids.length;const c=await askChoice('删除 '+ids.length+' 张卡片',extra?'下面还有 '+extra+' 个子任务，会一起删除。':'确定删除选中的卡片？',['取消','删除']);
+  if(c==='删除'){mutate(()=>{for(const i of ids)if(D.tasks[i])delTask(i)});select(null)}}
 async function confirmDelete(id){const n=descendants(id).length;const c=await askChoice('删除任务',n?'这个任务下面还有 '+n+' 个子任务，会一起删除。':'确定删除这个任务？',['取消','删除']);if(c==='删除')mutate(()=>delTask(id))}
 
 /* ---------- tidy: tree layout, each parent centred on its children ---------- */
@@ -421,9 +476,11 @@ document.addEventListener('contextmenu',e=>{
   const ri=e.target.closest('.ri'),card=e.target.closest('.card');
   if(e.target.matches('textarea'))return;
   if(ri){e.preventDefault();showMenu(e.clientX,e.clientY,resMenu(card.dataset.id,ri.dataset.r));return}
-  if(card){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}const id=card.dataset.id;if(!D.tasks[id])return;select(id);showMenu(e.clientX,e.clientY,taskMenu(id));return}
+  if(card){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}const id=card.dataset.id;if(!D.tasks[id])return;
+    if(ui.multi.size>1&&ui.multi.has(id)){showMenu(e.clientX,e.clientY,multiMenu(selIds()));return}
+    select(id);showMenu(e.clientX,e.clientY,taskMenu(id));return}
   if(e.target.closest('#canvas')){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}const p=toWorld(e.clientX,e.clientY);showMenu(e.clientX,e.clientY,[
-    {l:'在这里新建任务',k:'双击',f:()=>newAt(p.x,p.y)},
+    {l:'在这里新建卡片',k:'双击',f:()=>newAt(p.x,p.y)},
     ...(D.templates.length?[{l:'用模板新建',row:D.templates.map(x=>({l:x.name,bg:tplBg(x),t:tplLabel(x),f:()=>newFromTpl(x,p.x,p.y)}))},{l:'删除模板…',f:delTplDlg}]:[]),
     {l:'整理成树',f:tidy},{l:'回到原点',f:home},
     ...(D.view.z!==1?[{l:'缩放回 100%',k:Math.round(D.view.z*100)+'%',f:()=>{const r=cv.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1)}}]:[]),'-',{l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},'-',...fileItems()])}
@@ -449,11 +506,10 @@ function fileItems(){return[{head:fileStatus()},{l:'保存',k:'Ctrl+S',f:saveNow
 /* the card and everything under it as an indented outline, ready to paste into a chat with Claude */
 function flowText(id){const d=new Date(),out=[];const root=D.tasks[id];
   out.push('下面是我在任务工具 X 里的一条流程（'+(root.parent?'某条流程中的一支':'从最前面的卡片开始')+'）。缩进表示上下级，从上到下是卡片在画布上的顺序。');
-  out.push('[ ] 是未完成任务，[x] 是已封存（完成）的任务，没有方框的是笔记。「标准」是完成标准，「卡住」是在等的东西，「阻力」是我记下的开始不了的原因。');
+  out.push('[ ] 是没打勾的任务，[x] 是已打勾的任务，没有方框的是笔记。「标准」是完成标准，「卡住」是在等的东西，「阻力」是我记下的开始不了的原因。');
   out.push('导出时间：'+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+hm(d),'');
   const one=(t,dep)=>{const ind='  '.repeat(dep),sub=ind+'  ';const box=t.note?'':t.done?'[x] ':'[ ] ';
     const lines=(t.text||'（空）').split('\n');out.push(ind+'- '+box+lines[0]);for(const l of lines.slice(1))out.push(sub+l);
-    if(t.done&&t.doneAt)out.push(sub+'封存于 '+stamp(t.doneAt));
     if(t.crit)out.push(sub+'标准：'+t.crit);if(t.blk)out.push(sub+'卡住：'+t.blk);
     for(const r of t.res||[])out.push(sub+'阻力（'+stamp(r.createdAt)+'）：'+r.text.replace(/\n/g,' '));
     for(const k of kids(t.id))one(k,dep+1)};
@@ -465,14 +521,29 @@ async function copyFlow(id){const txt=flowText(id);let ok=false;
 function downloadFlow(id){const t=D.tasks[id];const b=new Blob([flowText(id)],{type:'text/markdown'});const a=document.createElement('a');const d=new Date();
   const nm=(t.text||'流程').split('\n')[0].replace(/[\\/:*?"<>|]/g,'').slice(0,30).trim()||'流程';
   a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+nm+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+/* one menu for several cards: every change below applies to all of them in a single undo step */
+function multiMenu(ids){const ts=ids.map(i=>D.tasks[i]);const all=f=>ts.every(f);
+  const each=fn=>()=>mutate(()=>{for(const t of ts){fn(t);t.updatedAt=now()}});
+  return[{head:'已选 '+ts.length+' 张卡片'},
+  {l:'颜色',row:COLS.map(([k,n,v])=>({sw:v,t:n,on:all(t=>(t.color||'')===k),f:each(t=>{if(k)t.color=k;else delete t.color})}))},
+  {l:'字号',row:SIZES.map(([v,n])=>({l:n,on:all(t=>(t.fs||0)===v),f:each(t=>{if(v)t.fs=v;else delete t.fs})}))},
+  ...(D.templates.length?[{l:'模板',row:D.templates.map(x=>({l:x.name,bg:tplBg(x),t:'套用：'+tplLabel(x),
+    f:each(t=>{if(x.color)t.color=x.color;else delete t.color;if(x.fs)t.fs=x.fs;else delete t.fs})}))}]:[]),
+  ...(ts.some(t=>t.w||t.h)?[{l:'恢复默认大小',f:each(t=>{delete t.w;delete t.h})}]:[]),
+  '-',
+  ...(ts.some(t=>!t.note)?[{l:'去掉小方框',f:each(t=>{if(!t.note){t.note=true;t.done=false;hist(t,'note')}})}]:[]),
+  ...(ts.some(t=>t.note)?[{l:'加上小方框（变成任务）',f:each(t=>{if(t.note){delete t.note;hist(t,'task')}})}]:[]),
+  '-',
+  {l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},
+  '-',
+  {l:'删除这 '+ts.length+' 张',k:'Delete',danger:true,f:()=>confirmDeleteMany(ids)}]}
 function taskMenu(id){const t=D.tasks[id];const nk=kids(id).length;return[
   {l:'编辑文字',k:'Enter',f:()=>startEdit(id)},
   {l:'添加子任务',k:'Tab',f:()=>addChild(id)},
   {l:'添加同级任务',f:()=>addSibling(id)},
   '-',
   {l:'记一条阻力',k:'R',f:()=>openRes(id)},
-  ...(t.note?[]:[{l:t.done?'取消封存':'封存',k:'空格',f:()=>setDone(id,!t.done)}]),
-  {l:t.note?'改回任务（加上小方框）':'改成笔记（去掉小方框）',f:()=>mutate(()=>{if(t.note)delete t.note;else{t.note=true;t.done=false;t.doneAt=null}hist(t,t.note?'note':'task');})},
+  {l:t.note?'加上小方框（变成任务）':'去掉小方框',f:()=>mutate(()=>{if(t.note)delete t.note;else{t.note=true;t.done=false}hist(t,t.note?'note':'task');})},
   {l:t.crit?'修改完成标准':'写完成标准',f:async()=>{const v=await ask('完成标准',t.crit,'做到什么程度就算完');if(v!==null)mutate(()=>{t.crit=v;hist(t,'crit',v)})}},
   {l:t.blk?'修改卡住原因':'标记为卡住',f:async()=>{const v=await ask('卡在哪里',t.blk,'在等谁、等什么');if(v!==null)mutate(()=>{t.blk=v;hist(t,'blocked',v)})}},
   ...(t.blk?[{l:'解除卡住',f:()=>mutate(()=>{t.blk='';hist(t,'unblocked')})}]:[]),
@@ -496,6 +567,7 @@ function home(){D.view={x:40,y:40,z:1};applyView();touch()}
 
 /* ---------- top bar ---------- */
 document.querySelectorAll('#top button').forEach(b=>b.addEventListener('mousedown',e=>e.preventDefault()));
+$('#tidyBtn').addEventListener('mousedown',e=>e.preventDefault());$('#tidyBtn').addEventListener('contextmenu',e=>e.preventDefault());$('#tidyBtn').onclick=()=>{if(ui.editing){commitEdit();renderCanvas()}tidy()};
 $('#reconnect').onclick=reconnect;
 function exportJSON(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'});const a=document.createElement('a');const d=new Date();a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'-X-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 $('#impFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const inc=norm(JSON.parse(await f.text()));mutate(()=>{D=merge(D,inc)});toast('已合并：较新的条目覆盖较旧的')}catch(err){toast('这个文件读不了：'+err.message)}};
