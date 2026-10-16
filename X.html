@@ -122,24 +122,68 @@ div.res{margin:7px 0 2px 20px;display:flex;flex-direction:column;gap:5px;cursor:
 .card:hover .nbk{opacity:.55}.card .nbk.has{opacity:.6}.card .nbk:hover{opacity:1;transform:scale(1.12)}
 .card.editing .nbk{opacity:0;pointer-events:none}
 .card .row{padding-right:10px}
-/* the notebook: a calm writing sheet modelled on Apple Notes */
-#nb{position:fixed;inset:0;z-index:45;display:flex;flex-direction:column;overflow:hidden;
-  background:var(--nb-bg);color:var(--nb-ink);animation:nbIn .18s ease-out;
-  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
-#nb .nb-bar{display:flex;align-items:center;gap:8px;height:48px;padding:0 16px 0 22px;border-bottom:.6px solid var(--nb-line);flex:none}
-#nb .nb-src{flex:1;min-width:0;font-size:12px;color:var(--nb-mute);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#nb .nb-done{border:0;background:none;color:var(--nb-acc);font-size:15px;font-weight:600;padding:4px 8px;cursor:pointer;border-radius:6px}
-#nb .nb-done:hover,#nb .nb-find:hover{background:var(--nb-hover)}
-#nb .nb-find{border:0;background:none;color:var(--nb-mute);font-size:14px;padding:4px 8px;cursor:pointer;border-radius:6px}
-#nb .nb-date{flex:none;text-align:center;font-size:12px;color:var(--nb-mute);padding:22px 0 6px}
-@keyframes nbIn{from{opacity:0;transform:scale(.985)}to{opacity:1;transform:none}}
-#nb .nb-ed{flex:1;overflow:auto;padding:8px max(28px,calc((100% - 760px)/2)) 30vh;font-size:17px;line-height:1.65;outline:none;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--nb-acc)}
-#nb .nb-ed::first-line{font-size:24px;font-weight:700;line-height:1.5}
-#nb .nb-ed:empty::before{content:"标题\A在这里写草稿…";white-space:pre;color:var(--nb-mute);pointer-events:none}
-#nb .nb-ed::selection{background:var(--nb-sel)}
-:root{--nb-bg:#fffefb;--nb-ink:#1d1d1f;--nb-mute:#8e8e93;--nb-line:rgba(0,0,0,.08);--nb-acc:#d9a300;--nb-hover:rgba(217,163,0,.1);--nb-sel:rgba(245,196,0,.35)}
-@media (prefers-color-scheme:dark){:root{--nb-bg:#1e1e1e;--nb-ink:#ececec;--nb-mute:#8d8d92;--nb-line:rgba(255,255,255,.1);--nb-acc:#e5b53a;--nb-hover:rgba(229,181,58,.14);--nb-sel:rgba(229,181,58,.35)}
-}
+/* the notebook, laid out like Apple Notes on the Mac: folders | note list | note */
+#nb{position:fixed;inset:0;z-index:45;display:grid;grid-template-columns:var(--nb-sw,212px) 300px 1fr;overflow:hidden;color:var(--nb-ink);background:var(--nb-bg);
+  font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue","Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:13px;animation:nbIn .16s ease-out;-webkit-font-smoothing:antialiased}
+#nb.noside{--nb-sw:0px}#nb.noside .nb-side{visibility:hidden}
+@keyframes nbIn{from{opacity:0}to{opacity:1}}
+#nb button{font:inherit;color:inherit;border:0;background:none;padding:0;cursor:pointer;border-radius:6px}
+#nb svg{display:block}
+/* sidebar */
+#nb .nb-side{background:var(--nb-side);border-right:.5px solid var(--nb-sep);display:flex;flex-direction:column;min-width:0;overflow:hidden;
+  -webkit-backdrop-filter:blur(30px) saturate(180%);backdrop-filter:blur(30px) saturate(180%)}
+#nb .nb-side-top{height:52px;flex:none}
+#nb .nb-acct{padding:6px 18px 4px;font-size:11px;font-weight:600;color:var(--nb-mute)}
+#nb .nb-fd{display:flex;align-items:center;gap:7px;margin:0 10px;padding:5px 8px;border-radius:6px;cursor:default;white-space:nowrap}
+#nb .nb-fd svg{width:16px;height:16px;flex:none;color:var(--nb-acc)}
+#nb .nb-fd span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis}
+#nb .nb-fd i{font-style:normal;color:var(--nb-mute);font-variant-numeric:tabular-nums}
+#nb .nb-fd.on{background:var(--nb-fsel)}
+/* right part: toolbar over list + note */
+#nb .nb-main{grid-column:2/4;display:grid;grid-template-columns:300px 1fr;grid-template-rows:52px 1fr;min-width:0;min-height:0}
+#nb .nb-tb{grid-column:1/3;display:flex;align-items:center;gap:2px;padding:0 12px 0 8px;border-bottom:.5px solid var(--nb-sep);background:var(--nb-bg)}
+#nb .nb-tb .ic{width:32px;height:28px;display:flex;align-items:center;justify-content:center;color:var(--nb-icon)}
+#nb .nb-tb .ic:hover{background:var(--nb-hover)}
+#nb .nb-tb .ic svg{width:18px;height:18px}
+#nb .nb-tb .gap{width:254px;flex:none}
+#nb .nb-tb .sp{flex:1}
+#nb .nb-q{display:flex;align-items:center;gap:5px;width:190px;height:26px;padding:0 8px;border-radius:7px;background:var(--nb-field);margin:0 8px 0 4px;color:var(--nb-mute)}
+#nb .nb-q svg{width:13px;height:13px;flex:none}
+#nb .nb-q input{flex:1;min-width:0;border:0;outline:none;background:transparent;font:inherit;font-size:13px;color:var(--nb-ink);padding:0}
+#nb .nb-q input:focus-visible{outline:none}
+#nb .nb-q:focus-within{box-shadow:0 0 0 3px var(--nb-ring)}
+#nb .nb-done{color:var(--nb-acc);font-size:14px;font-weight:600;padding:4px 8px}
+#nb .nb-done:hover{background:var(--nb-hover)}
+/* note list */
+#nb .nb-list{overflow:auto;border-right:.5px solid var(--nb-sep);padding:4px 10px 20px;background:var(--nb-bg)}
+#nb .nb-gh{font-size:12px;font-weight:700;color:var(--nb-ink);padding:14px 8px 6px}
+#nb .nb-it{padding:9px 10px 9px 12px;border-radius:7px;cursor:default;position:relative}
+#nb .nb-it+.nb-it::before{content:"";position:absolute;left:12px;right:10px;top:0;border-top:.5px solid var(--nb-sep)}
+#nb .nb-it.on,#nb .nb-it.on+.nb-it{}
+#nb .nb-it.on::before,#nb .nb-it.on+.nb-it::before{border-color:transparent}
+#nb .nb-it.on{background:var(--nb-isel)}
+#nb .nb-it b{display:block;font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:2px}
+#nb .nb-it .ln{display:flex;gap:8px;white-space:nowrap;overflow:hidden}
+#nb .nb-it .dt{color:var(--nb-ink);opacity:.85;flex:none;font-variant-numeric:tabular-nums}
+#nb .nb-it .pv{color:var(--nb-mute);overflow:hidden;text-overflow:ellipsis}
+#nb .nb-it .fl{display:flex;align-items:center;gap:4px;margin-top:3px;color:var(--nb-mute);font-size:12px}
+#nb .nb-it .fl svg{width:12px;height:12px}
+#nb .nb-it mark{background:var(--nb-mark);color:inherit;border-radius:2px}
+#nb .nb-empty{padding:40px 12px;text-align:center;color:var(--nb-mute)}
+/* note */
+#nb .nb-note{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--nb-bg)}
+#nb .nb-date{flex:none;text-align:center;font-size:12px;color:var(--nb-mute);padding:16px 0 2px}
+#nb .nb-ed{flex:1;overflow:auto;padding:8px max(36px,calc((100% - 720px)/2)) 30vh;font-size:16px;line-height:1.55;outline:none;white-space:pre-wrap;overflow-wrap:anywhere;caret-color:var(--nb-acc)}
+#nb .nb-ed::first-line{font-size:26px;font-weight:700;line-height:1.35}
+#nb .nb-ed:empty::before{content:"标题";color:var(--nb-mute);font-size:26px;font-weight:700;pointer-events:none}
+#nb .nb-ed::selection{background:var(--nb-mark)}
+#nb .nb-src{flex:none;text-align:center;font-size:11.5px;color:var(--nb-mute);padding:0 0 6px}
+#nb .nb-src a{color:inherit;text-decoration:none;border-bottom:.5px dotted currentColor;cursor:pointer}
+:root{--nb-bg:#ffffff;--nb-side:rgba(240,240,242,.92);--nb-ink:#1d1d1f;--nb-mute:#86868b;--nb-icon:#6e6e73;--nb-sep:rgba(0,0,0,.1);--nb-acc:#e0a800;--nb-hover:rgba(0,0,0,.05);
+  --nb-fsel:rgba(0,0,0,.08);--nb-isel:#fbe7a2;--nb-mark:rgba(255,214,10,.45);--nb-field:rgba(0,0,0,.055);--nb-ring:rgba(224,168,0,.35)}
+@media (prefers-color-scheme:dark){:root{--nb-bg:#1e1e1e;--nb-side:rgba(42,42,44,.92);--nb-ink:#f2f2f7;--nb-mute:#8d8d93;--nb-icon:#a1a1a6;--nb-sep:rgba(255,255,255,.1);--nb-acc:#ffcc1a;
+  --nb-hover:rgba(255,255,255,.07);--nb-fsel:rgba(255,255,255,.1);--nb-isel:rgba(255,204,26,.28);--nb-mark:rgba(255,204,26,.38);--nb-field:rgba(255,255,255,.08);--nb-ring:rgba(255,204,26,.35)}}
+@media (max-width:900px){#nb{--nb-sw:0px}#nb .nb-side{visibility:hidden}}
 /* draft search: a Spotlight-style box over a soft veil */
 #sx{position:fixed;inset:0;z-index:60;background:rgba(20,30,40,.18);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;justify-content:center;align-items:flex-start;padding-top:13vh}
 #sx .sx-box{width:min(640px,calc(100vw - 32px));max-height:68vh;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;
@@ -240,7 +284,7 @@ div.res{margin:7px 0 2px 20px;display:flex;flex-direction:column;gap:5px;cursor:
 <button id="tidyBtn" title="一键整理" aria-label="一键整理"></button>
 <div id="fbar" hidden></div>
 <div id="sx" hidden><div class="sx-box"><input class="sx-in" placeholder="搜索草稿…" spellcheck="false"><div class="sx-list"></div><div class="sx-foot">↑↓ 选择 · Enter 打开 · Esc 关闭 · 空格分开多个词</div></div></div>
-<div id="nb" hidden><div class="nb-bar"><span class="nb-src"></span><button class="nb-find" title="搜索草稿（Ctrl+F）">搜索</button><button class="nb-done">完成</button></div><div class="nb-date"></div><div class="nb-ed" contenteditable="true" spellcheck="false"></div></div>
+<div id="nb" hidden><div class="nb-side"><div class="nb-side-top"></div><div class="nb-acct">X</div><div class="nb-folders"></div></div><div class="nb-main"><div class="nb-tb"><button class="ic" data-a="side" title="显示或隐藏文件夹"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M7.5 4v12"/></svg></button><span class="gap"></span><button class="ic" data-a="trash" title="清空这份草稿"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13M8 5.5V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M5 5.5l.8 10.2a1.5 1.5 0 0 0 1.5 1.3h5.4a1.5 1.5 0 0 0 1.5-1.3L15 5.5M8.3 8.5v5.5M11.7 8.5v5.5"/></svg></button><button class="ic" data-a="new" title="新建备忘录"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 10.5v4.5a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h4.5"/><path d="M14.6 2.9a1.6 1.6 0 0 1 2.3 2.3L10 12.1l-3 .8.8-3z"/></svg></button><span class="sp"></span><button class="ic" data-a="export" title="导出全部草稿"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.8v10M6.5 6.2 10 2.8l3.5 3.4M6.5 9H5.3a1.8 1.8 0 0 0-1.8 1.8v4.4A1.8 1.8 0 0 0 5.3 17h9.4a1.8 1.8 0 0 0 1.8-1.8v-4.4A1.8 1.8 0 0 0 14.7 9h-1.2"/></svg></button><label class="nb-q"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6" cy="6" r="4.2"/><path d="M9.2 9.2 12.5 12.5"/></svg><input placeholder="搜索" spellcheck="false"></label><button class="nb-done">完成</button></div><div class="nb-list"></div><div class="nb-note"><div class="nb-date"></div><div class="nb-src"></div><div class="nb-ed" contenteditable="true" spellcheck="false"></div></div></div></div>
 <div id="menu"></div>
 <div id="dlg"><div class="box" id="dlgBox"></div></div>
 <div id="toast"></div>
@@ -473,24 +517,81 @@ function twinMenu(id){const k=tkey(D.tasks[id]),list=TWM[k]||[id];return[{head:'
   {l:'选中全部出现位置',f:()=>{ui.multi=new Set(list);ui.sel=id;paintSel();focusCards(list)}},
   '-',{l:'脱离为独立卡片',f:()=>unlinkTwin(id)},{l:'删除这一处',danger:true,f:()=>confirmDelete(id)}]}
 /* ---------- notebook (笔记本) ----------
-   Each card has a notebook for drafts. It opens as a sheet on the right; the first line is the
-   title. Typing saves as you go; one notebook session is one undo step. */
-const nb=$('#nb'),nbEd=nb.querySelector('.nb-ed');let nbId=null,nbSnapped=false;
+   Every card owns one note. The window works like Apple Notes on the Mac: folders on the
+   left (all drafts, then one per page), the notes list in the middle grouped by date, and the
+   note itself on the right. The first line is the title. Typing saves as you go; one visit to
+   a note is one undo step. */
+const FOLDER_SVG='<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><path d="M1.8 4.2c0-.8.6-1.4 1.4-1.4h3l1.4 1.5h5.2c.8 0 1.4.6 1.4 1.4v6.4c0 .8-.6 1.4-1.4 1.4H3.2c-.8 0-1.4-.6-1.4-1.4z"/><path d="M1.8 6.2h12.4"/></svg>';
+const nb=$('#nb'),nbEd=nb.querySelector('.nb-ed'),nbQ=nb.querySelector('.nb-q input'),nbList=nb.querySelector('.nb-list');
+let nbId=null,nbSnapped=false,nbFolder='all';
 function nbDate(iso){const d=iso?new Date(iso):new Date();return d.getFullYear()+'年'+(d.getMonth()+1)+'月'+d.getDate()+'日 '+hm(d)}
-function openNb(id,find){const t=D.tasks[id];if(!t)return;if(nbId&&nbId!==id)closeNb(true);nbId=id;nbSnapped=false;select(id);
-  nb.querySelector('.nb-src').textContent=(t.text||'（空）').split('\n')[0];nb.querySelector('.nb-date').textContent=nbDate(t.nbAt);
-  nbEd.textContent=t.nb||'';nb.hidden=false;nbEd.focus();const r=document.createRange();r.selectNodeContents(nbEd);r.collapse(false);
+const dayStart=d=>{const x=new Date(d);x.setHours(0,0,0,0);return x.getTime()};
+function nbGroup(iso){if(!iso)return'更早';const d=new Date(iso),n=(dayStart(Date.now())-dayStart(d))/864e5;
+  return n<=0?'今天':n===1?'昨天':n<7?'过去 7 天':n<30?'过去 30 天':d.getFullYear()+'年'+(d.getMonth()+1)+'月'}
+function nbShort(iso){if(!iso)return'';const d=new Date(iso),n=(dayStart(Date.now())-dayStart(d))/864e5;
+  return n<=0?hm(d):n===1?'昨天':n<7?'星期'+'日一二三四五六'[d.getDay()]:d.getFullYear()+'/'+(d.getMonth()+1)+'/'+d.getDate()}
+/* which page a note lives in: the first page holding any place of that card */
+function nbPageOf(t){const ids=TWM[tkey(t)]||[t.id];for(const f of D.frames||[]){const m=new Set(inFrame(f).map(x=>x.id));if(ids.some(i=>m.has(i)))return f}return null}
+function nbItems(){const list=drafts();if(nbId&&D.tasks[nbId]&&!list.some(t=>tkey(t)===tkey(D.tasks[nbId])))list.push(D.tasks[nbId]);
+  return list.map(t=>({t,f:nbPageOf(t)}))}
+function nbFolders(items){const fs=(D.frames||[]).slice().sort((a,b)=>a.y-b.y||a.x-b.x);
+  const row=(id,name,n)=>'<div class="nb-fd'+(nbFolder===id?' on':'')+'" data-f="'+id+'">'+FOLDER_SVG+'<span>'+esc(name)+'</span><i>'+n+'</i></div>';
+  nb.querySelector('.nb-folders').innerHTML=row('all','全部草稿',items.filter(x=>x.t.nb).length)+fs.map(f=>row(f.id,f.title||'页面',items.filter(x=>x.f===f&&x.t.nb).length)).join('')+
+    (fs.length?row('none','未分页',items.filter(x=>!x.f&&x.t.nb).length):'')}
+function nbRenderList(){const items=nbItems();nbFolders(items);
+  if(nbFolder!=='all'&&nbFolder!=='none'&&!(D.frames||[]).some(f=>f.id===nbFolder))nbFolder='all';
+  const q=nbQ.value.trim().toLowerCase(),terms=q?q.split(/\s+/):[];
+  let vis=items.filter(x=>nbFolder==='all'||(nbFolder==='none'?!x.f:x.f&&x.f.id===nbFolder));
+  if(terms.length)vis=vis.filter(x=>{const h=((x.t.nb||'')+'\n'+(x.t.text||'')).toLowerCase();return terms.every(w=>h.includes(w))});
+  vis.sort((a,b)=>(b.t.nbAt||'9').localeCompare(a.t.nbAt||'9'));
+  let html='',last='';const cur=nbId&&D.tasks[nbId]?tkey(D.tasks[nbId]):null;
+  for(const x of vis){const t=x.t,g=t.nb?nbGroup(t.nbAt):'今天';if(g!==last){html+='<div class="nb-gh">'+g+'</div>';last=g}
+    const lines=(t.nb||'').split('\n'),title=lines[0].trim()||'新备忘录',pv=lines.slice(1).join(' ').trim()||'没有其他文本';
+    html+='<div class="nb-it'+(tkey(t)===cur?' on':'')+'" data-id="'+t.id+'"><b>'+hl(title,terms)+'</b><div class="ln"><span class="dt">'+(t.nbAt?nbShort(t.nbAt):'')+'</span><span class="pv">'+hl(pv,terms)+'</span></div>'+
+      (nbFolder==='all'?'<div class="fl">'+FOLDER_SVG+esc(x.f?x.f.title||'页面':(t.text||'').split('\n')[0]||'卡片')+'</div>':'')+'</div>'}
+  nbList.innerHTML=html||'<div class="nb-empty">'+(terms.length?'没有找到':'没有备忘录')+'</div>'}
+function nbShow(t,find){nbId=t.id;nbSnapped=false;
+  nb.querySelector('.nb-date').textContent=nbDate(t.nbAt);
+  nb.querySelector('.nb-src').innerHTML='来自卡片 <a title="回到画布上的这张卡片">'+esc((t.text||'（空）').split('\n')[0])+'</a>';
+  nbEd.textContent=t.nb||'';nbEd.scrollTop=0;nbEd.focus();const r=document.createRange();r.selectNodeContents(nbEd);r.collapse(false);
   if(find){const w=document.createTreeWalker(nbEd,NodeFilter.SHOW_TEXT);let n;const f=find.toLowerCase();while(n=w.nextNode()){const i=n.data.toLowerCase().indexOf(f);if(i>=0){r.setStart(n,i);r.setEnd(n,i+find.length);break}}}
   const sl=getSelection();sl.removeAllRanges();sl.addRange(r);
-  if(find&&!r.collapsed){const b=r.getBoundingClientRect(),eb=nbEd.getBoundingClientRect();nbEd.scrollTop+=b.top-eb.top-eb.height/3}}
-function closeNb(keep){if(!nbId)return;nb.hidden=true;nbId=null;if(!keep)renderCanvas()}
+  if(find&&!r.collapsed){const b=r.getBoundingClientRect(),eb=nbEd.getBoundingClientRect();nbEd.scrollTop+=b.top-eb.top-eb.height/3}
+  nbRenderList()}
+function openNb(id,find){const t=D.tasks[id];if(!t)return;if(ui.editing){commitEdit();renderCanvas()}select(id);nb.hidden=false;nbShow(t,find)}
+function closeNb(keep){if(nb.hidden)return;if(nb.contains(document.activeElement))document.activeElement.blur();nb.hidden=true;const id=nbId;nbId=null;nbQ.value='';if(!keep){renderCanvas();if(id&&D.tasks[id])select(id)}}
 nbEd.addEventListener('input',()=>{const t=D.tasks[nbId];if(!t)return;if(!nbSnapped){snap();nbSnapped=true}
-  t.nb=nbEd.innerText.replace(/\n$/,'');if(!t.nb.trim())t.nb='';t.nbAt=now();t.updatedAt=now();nb.querySelector('.nb-date').textContent=nbDate(t.nbAt);touch();
+  t.nb=nbEd.innerText.replace(/\n$/,'');if(!t.nb.trim())t.nb='';t.nbAt=now();t.updatedAt=now();
+  if(t.autoT)t.text=t.nb.split('\n')[0].trim()||'新备忘录';
+  nb.querySelector('.nb-date').textContent=nbDate(t.nbAt);touch();nbRenderList();
   const k=cardEl(t.id)&&cardEl(t.id).querySelector('.nbk');if(k)k.classList.toggle('has',!!t.nb)});
 nbEd.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text/plain'))});
+nbList.addEventListener('click',e=>{const it=e.target.closest('.nb-it');if(it&&it.dataset.id!==nbId&&D.tasks[it.dataset.id])nbShow(D.tasks[it.dataset.id])});
+nb.querySelector('.nb-folders').addEventListener('click',e=>{const fd=e.target.closest('.nb-fd');if(fd){nbFolder=fd.dataset.f;nbRenderList()}});
+nbQ.addEventListener('input',nbRenderList);
+nbQ.addEventListener('keydown',e=>{if(e.isComposing||e.keyCode===229)return;
+  if(e.key==='Enter'){e.preventDefault();const it=nbList.querySelector('.nb-it');if(it)nbShow(D.tasks[it.dataset.id],nbQ.value.trim().split(/\s+/)[0])}
+  else if(e.key==='Escape'&&nbQ.value){e.preventDefault();e.stopPropagation();nbQ.value='';nbRenderList()}});
+nb.querySelector('.nb-src').addEventListener('click',e=>{if(!e.target.closest('a'))return;const id=nbId;closeNb();if(id&&D.tasks[id]){select(id);focusCards([id])}});
 nb.querySelector('.nb-done').onclick=()=>closeNb();
-nb.querySelector('.nb-find').onclick=()=>openSearch();
-nb.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeNb()}else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){e.preventDefault();openSearch()}});
+nb.querySelector('.nb-tb').addEventListener('click',async e=>{const b=e.target.closest('.ic');if(!b)return;const a=b.dataset.a;
+  if(a==='side')nb.classList.toggle('noside');
+  else if(a==='export')exportDrafts();
+  else if(a==='trash'){const t=D.tasks[nbId];if(!t||!t.nb)return;if(await askChoice('清空草稿','清空「'+(t.nb.split('\n')[0]||'新备忘录')+'」这份草稿？卡片本身保留，可以用 Ctrl+Z 撤回。',['取消','清空'])==='清空'){mutate(()=>{t.nb='';t.nbAt=now();t.updatedAt=now()});nb.hidden=false;nbShow(D.tasks[t.id])}}
+  else if(a==='new'){/* a new card at the middle of the view; its text follows the note's title until you rename the card */
+    const r=cv.getBoundingClientRect(),c=toWorld(r.left+r.width/2,r.top+r.height/2);let t;
+    mutate(()=>{t=newTask('新备忘录',null,Math.round(c.x-60),Math.round(freeY(c.x-60,c.y)));t.autoT=true});nb.hidden=false;nbShow(D.tasks[t.id])}});
+nb.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();closeNb()}else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){e.preventDefault();nbQ.focus();nbQ.select()}});
+/* every draft in the file as one Markdown file, newest first */
+function exportDrafts(){const items=drafts().map(t=>({t,f:nbPageOf(t)})).sort((a,b)=>(b.t.nbAt||'').localeCompare(a.t.nbAt||''));
+  if(!items.length)return toast('这个文件里还没有草稿');const d=new Date(),out=[];
+  const full=iso=>{const x=new Date(iso);return x.getFullYear()+'-'+pad(x.getMonth()+1)+'-'+pad(x.getDate())+' '+hm(x)};
+  out.push('# X 草稿合集','','导出时间：'+full(d.toISOString())+'　共 '+items.length+' 份','');
+  for(const{t,f}of items){const lines=t.nb.split('\n');out.push('---','','## '+(lines[0].trim()||'新备忘录'),'');
+    out.push('> 卡片：'+((t.text||'（空）').split('\n')[0])+(f?'　页面：'+(f.title||'页面'):'')+(t.nbAt?'　最后编辑：'+full(t.nbAt):''),'');
+    const body=lines.slice(1).join('\n').replace(/^\n+/,'');if(body)out.push(body,'')}
+  const b=new Blob([out.join('\n')],{type:'text/markdown'});const a=document.createElement('a');a.href=URL.createObjectURL(b);
+  a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-X-drafts.md';a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000);toast('已导出 '+items.length+' 份草稿')}
 /* ---------- draft search ----------
    Looks through every notebook (and the card it belongs to). Several words narrow it down.
    With nothing typed it lists drafts, newest first. Twins share one notebook, so each
@@ -509,7 +610,7 @@ function runSearch(){const q=sxIn.value.trim().toLowerCase(),terms=q?q.split(/\s
   sxList.innerHTML=sxRes.length?sxRes.map((r,i)=>'<div class="sx-it'+(i===0?' on':'')+'" data-i="'+i+'"><div class="sx-t">'+hl(r.title||'（无标题）',terms)+'</div><div class="sx-d">'+(r.t.nbAt?stamp(r.t.nbAt):'')+'</div><div class="sx-c">'+hl((r.t.text||'（空）').split('\n')[0],terms)+'</div>'+(r.snip?'<div class="sx-s">'+hl(r.snip,terms)+'</div>':'')+'</div>').join('')
     :'<div class="sx-none">'+(drafts().length?'没有找到包含这些词的草稿':'还没有草稿。选中卡片按 N 打开笔记本开始写')+'</div>'}
 function openSearch(){if(ui.editing){commitEdit();renderCanvas()}hideMenu();sx.hidden=false;sxIn.value='';runSearch();sxIn.focus()}
-function closeSearch(){sx.hidden=true;if(nbId)nbEd.focus()}
+function closeSearch(){sx.hidden=true;if(nbId&&!nb.hidden)nbEd.focus()}
 function pickSearch(i){const r=sxRes[i];if(!r)return;const q=sxIn.value.trim().split(/\s+/)[0]||'';closeSearch();openNb(r.t.id,q)}
 function markOn(i){sxOn=Math.max(0,Math.min(sxRes.length-1,i));sxList.querySelectorAll('.sx-it').forEach((el,j)=>el.classList.toggle('on',j===sxOn));const el=sxList.querySelector('.sx-it.on');el&&el.scrollIntoView({block:'nearest'})}
 sxIn.addEventListener('input',runSearch);
@@ -687,7 +788,7 @@ const isBlank=t=>!t.text&&!kids(t.id).length&&!t.crit&&!t.blk&&!(t.res||[]).leng
 function commitEdit(cancel){const id=ui.editing;if(!id)return false;ui.editing=null;const t=D.tasks[id];if(!t)return false;
   const tx=cardEl(id)&&cardEl(id).querySelector('.t');const v=tx?tx.innerText.replace(/\s+$/,''):t.text;
   if(cancel||!v){if(isBlank(t)){delete D.tasks[id];D.deleted[id]=now();if(ui.sel===id)select(null);touch();return false}return true}
-  if(v!==t.text){snap();t.text=v;hist(t,'text');touch()}return true}
+  if(v!==t.text){snap();t.text=v;delete t.autoT;hist(t,'text');touch()}return true}
 function addChild(id){let n;const p=D.tasks[id];snap();if(p.fold){p.fold=false;renderCanvas()}const ks=kids(id);const y=ks.length?Math.max(...ks.map(k=>k.y+H(k.id)))+GY:p.y;
   const nx=p.x+cw(p)+GAP;n=newTask('',id,nx,freeY(nx,y));touch();render();startEdit(n.id)}
 function addSibling(id){let n;const t=D.tasks[id];const x=t.x;const y=freeY(x,t.y+H(id)+GY);mutate(()=>{n=newTask('',t.parent,x,y)});startEdit(n.id)}
@@ -696,6 +797,7 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}saveNow();return}
   if($('#dlg').style.display==='flex')return;
   if(e.target.closest&&e.target.closest('#nb,#sx'))return;
+  if(!nb.hidden){if(e.key==='Escape'){e.preventDefault();closeNb()}else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){e.preventDefault();nbQ.focus();nbQ.select()}return}
   if(ui.editing){
     if(e.isComposing||e.keyCode===229)return;
     if(e.key==='Escape'){e.preventDefault();commitEdit(true);renderCanvas();return}
@@ -768,6 +870,7 @@ document.addEventListener('contextmenu',e=>{
     ...(CLIP?[{l:'在此处粘贴分身',k:'Ctrl+V',f:()=>pasteTwin(p)}]:[]),
     {l:'在这里新建卡片',k:'双击',f:()=>newAt(p.x,p.y)},
     {l:'搜索草稿',k:'Ctrl+F',f:openSearch},
+    {l:'导出全部草稿',f:exportDrafts},
     {l:'在这里新建页面',f:()=>newFrame(p)},
     ...(D.frames.length?[{l:'去页面',row:D.frames.slice().sort((a,b)=>a.y-b.y||a.x-b.x).map(f=>({l:f.title||'页面',t:'跳到这一页',f:()=>focusFrame(f)}))}]:[]),
     '-',
@@ -802,7 +905,7 @@ async function copyFlow(id){const txt=flowText(id);let ok=false;
   toast(ok?'已复制整条流程，去 Claude 里粘贴就行':'复制没成功，改用下载');if(!ok)downloadFlow(id)}
 function downloadFlow(id){const t=D.tasks[id];const b=new Blob([flowText(id)],{type:'text/markdown'});const a=document.createElement('a');const d=new Date();
   const nm=(t.text||'流程').split('\n')[0].replace(/[\\/:*?"<>|]/g,'').slice(0,30).trim()||'流程';
-  a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+nm+'.md';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+  a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+nm+'.md';a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 /* one menu for several cards: every change below applies to all of them in a single undo step */
 function multiMenu(ids){const ts=ids.map(i=>D.tasks[i]);
   const each=fn=>()=>mutate(()=>{for(const t of ts){fn(t);t.updatedAt=now()}});
@@ -852,7 +955,7 @@ function home(){D.view={x:40,y:40,z:1};applyView();touch()}
 document.querySelectorAll('#top button').forEach(b=>b.addEventListener('mousedown',e=>e.preventDefault()));
 $('#tidyBtn').addEventListener('mousedown',e=>e.preventDefault());$('#tidyBtn').addEventListener('contextmenu',e=>e.preventDefault());$('#tidyBtn').onclick=()=>{if(ui.editing){commitEdit();renderCanvas()}tidy()};
 $('#reconnect').onclick=reconnect;
-function exportJSON(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'});const a=document.createElement('a');const d=new Date();a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'-X-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function exportJSON(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'});const a=document.createElement('a');const d=new Date();a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'-X-backup.json';a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 $('#impFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const inc=norm(JSON.parse(await f.text()));mutate(()=>{D=merge(D,inc)});toast('已合并：较新的条目覆盖较旧的')}catch(err){toast('这个文件读不了：'+err.message)}};
 window.addEventListener('beforeunload',()=>{if(dirty&&fileHandle)writeFile()});
 
