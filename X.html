@@ -184,6 +184,37 @@ div.res{margin:7px 0 2px 20px;display:flex;flex-direction:column;gap:5px;cursor:
 @media (prefers-color-scheme:dark){:root{--nb-bg:#1e1e1e;--nb-side:rgba(42,42,44,.92);--nb-ink:#f2f2f7;--nb-mute:#8d8d93;--nb-icon:#a1a1a6;--nb-sep:rgba(255,255,255,.1);--nb-acc:#ffcc1a;
   --nb-hover:rgba(255,255,255,.07);--nb-fsel:rgba(255,255,255,.1);--nb-isel:rgba(255,204,26,.28);--nb-mark:rgba(255,204,26,.38);--nb-field:rgba(255,255,255,.08);--nb-ring:rgba(255,204,26,.35)}}
 @media (max-width:900px){#nb{--nb-sw:0px}#nb .nb-side{visibility:hidden}}
+/* 隐藏区: a quiet full-window list, grouped by when cards were hidden, nested by their links */
+#hz{position:fixed;inset:0;z-index:44;display:flex;flex-direction:column;background:var(--bg);color:var(--ink);animation:nbIn .16s ease-out}
+#hz .hz-tb{flex:none;height:52px;display:flex;align-items:center;gap:10px;padding:0 16px 0 24px;border-bottom:.5px solid var(--line)}
+#hz .hz-h{font-size:15px;font-weight:700}
+#hz .hz-n{font-size:12px;color:var(--muted)}
+#hz .hz-sp{flex:1}
+#hz .hz-q{display:flex;align-items:center;gap:5px;width:200px;height:26px;padding:0 8px;border-radius:7px;background:var(--tint);color:var(--muted)}
+#hz .hz-q svg{width:13px;height:13px;flex:none}
+#hz .hz-q input{flex:1;min-width:0;border:0;outline:none;background:transparent;font:inherit;font-size:13px;color:var(--ink);padding:0}
+#hz .hz-done{border:0;background:none;color:var(--accent);font-size:14px;font-weight:600;padding:4px 8px;cursor:pointer;border-radius:6px}
+#hz .hz-done:hover{background:var(--tint)}
+#hz .hz-body{flex:1;overflow:auto;padding:10px max(24px,calc((100% - 760px)/2)) 30vh}
+#hz .hz-gh{font-size:12px;font-weight:700;color:var(--muted);letter-spacing:.04em;padding:22px 4px 8px}
+#hz .hz-tree{background:var(--card);border-radius:12px;box-shadow:var(--shadow);margin-bottom:10px;padding:4px 0}
+#hz .hz-row{position:relative;display:flex;align-items:flex-start;gap:10px;padding:9px 14px 9px calc(16px + var(--d,0) * 22px)}
+#hz .hz-row+.hz-row{border-top:.5px solid var(--line)}
+#hz .hz-row[style*="--d"]::before{content:"";position:absolute;left:calc(9px + var(--d) * 22px);top:0;bottom:0;border-left:1px solid var(--tint-line)}
+#hz .hz-txt{flex:1;min-width:0}
+#hz .hz-t{font-size:14px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere}
+#hz .hz-row.root .hz-t{font-weight:600}
+#hz .hz-m{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:3px;font-size:11.5px;color:var(--muted)}
+#hz .hz-m .vis{color:var(--accent)}
+#hz .hz-act{display:flex;gap:2px;opacity:0;transition:opacity .12s;flex:none}
+#hz .hz-row:hover .hz-act{opacity:1}
+#hz .hz-act button{border:0;background:none;font:inherit;font-size:12px;color:var(--accent);padding:3px 7px;border-radius:6px;cursor:pointer;white-space:nowrap}
+#hz .hz-act button:hover{background:var(--tint)}
+#hz .hz-act button.del{color:var(--warn)}
+#hz .hz-empty{padding:80px 20px;text-align:center;color:var(--muted);line-height:1.9}
+#hz .hz-dot{width:6px;height:6px;border-radius:50%;margin-top:8px;flex:none;background:var(--tint-line)}
+#hz .hz-row.c-y .hz-dot{background:#e8c94a}#hz .hz-row.c-o .hz-dot{background:#ef9d4a}#hz .hz-row.c-r .hz-dot{background:#e27272}
+#hz .hz-row.c-p .hz-dot{background:#a98bdc}#hz .hz-row.c-b .hz-dot{background:#6aa5dc}#hz .hz-row.c-g .hz-dot{background:#66b885}#hz .hz-row.c-n .hz-dot{background:#9aa5ae}
 /* draft search: a Spotlight-style box over a soft veil */
 #sx{position:fixed;inset:0;z-index:60;background:rgba(20,30,40,.18);-webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);display:flex;justify-content:center;align-items:flex-start;padding-top:13vh}
 #sx .sx-box{width:min(640px,calc(100vw - 32px));max-height:68vh;display:flex;flex-direction:column;border-radius:14px;overflow:hidden;
@@ -283,6 +314,7 @@ div.res{margin:7px 0 2px 20px;display:flex;flex-direction:column;gap:5px;cursor:
 </div>
 <button id="tidyBtn" title="一键整理" aria-label="一键整理"></button>
 <div id="fbar" hidden></div>
+<div id="hz" hidden><div class="hz-tb"><span class="hz-h">隐藏区</span><span class="hz-n"></span><span class="hz-sp"></span><label class="hz-q"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6" cy="6" r="4.2"/><path d="M9.2 9.2 12.5 12.5"/></svg><input placeholder="搜索" spellcheck="false"></label><button class="hz-done">完成</button></div><div class="hz-body"></div></div>
 <div id="sx" hidden><div class="sx-box"><input class="sx-in" placeholder="搜索草稿…" spellcheck="false"><div class="sx-list"></div><div class="sx-foot">↑↓ 选择 · Enter 打开 · Esc 关闭 · 空格分开多个词</div></div></div>
 <div id="nb" hidden><div class="nb-side"><div class="nb-side-top"></div><div class="nb-acct">X</div><div class="nb-folders"></div></div><div class="nb-main"><div class="nb-tb"><button class="ic" data-a="side" title="显示或隐藏文件夹"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="4" width="15" height="12" rx="2.5"/><path d="M7.5 4v12"/></svg></button><span class="gap"></span><button class="ic" data-a="trash" title="清空这份草稿"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 5.5h13M8 5.5V4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M5 5.5l.8 10.2a1.5 1.5 0 0 0 1.5 1.3h5.4a1.5 1.5 0 0 0 1.5-1.3L15 5.5M8.3 8.5v5.5M11.7 8.5v5.5"/></svg></button><button class="ic" data-a="new" title="新建备忘录"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15.5 10.5v4.5a2 2 0 0 1-2 2h-8.5a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h4.5"/><path d="M14.6 2.9a1.6 1.6 0 0 1 2.3 2.3L10 12.1l-3 .8.8-3z"/></svg></button><span class="sp"></span><button class="ic" data-a="export" title="导出全部草稿"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2.8v10M6.5 6.2 10 2.8l3.5 3.4M6.5 9H5.3a1.8 1.8 0 0 0-1.8 1.8v4.4A1.8 1.8 0 0 0 5.3 17h9.4a1.8 1.8 0 0 0 1.8-1.8v-4.4A1.8 1.8 0 0 0 14.7 9h-1.2"/></svg></button><label class="nb-q"><svg viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="6" cy="6" r="4.2"/><path d="M9.2 9.2 12.5 12.5"/></svg><input placeholder="搜索" spellcheck="false"></label><button class="nb-done">完成</button></div><div class="nb-list"></div><div class="nb-note"><div class="nb-date"></div><div class="nb-src"></div><div class="nb-ed" contenteditable="true" spellcheck="false"></div></div></div></div>
 <div id="menu"></div>
@@ -415,7 +447,8 @@ function stamp(iso){if(!iso)return'';const d=new Date(iso);return pad(d.getMonth
 function toast(t){const e=$('#toast');e.textContent=t;e.style.display='block';clearTimeout(e._t);e._t=setTimeout(()=>e.style.display='none',2200)}
 const kids=id=>Object.values(D.tasks).filter(t=>t.parent===id).sort((a,b)=>a.y-b.y||a.x-b.x);
 /* folding was removed: every card is always visible */
-function hidden(t){return false}
+/* a hidden card (t.hid = when it was hidden) leaves the canvas and lives in the 隐藏区 */
+function hidden(t){return!!t.hid}
 function descendants(id){const out=[];const st=[id];while(st.length){const c=st.pop();for(const k of kids(c)){out.push(k.id);st.push(k.id)}}return out}
 function hist(t,ev,v){t.history.push({at:now(),ev,v});t.updatedAt=now()}
 const cardEl=id=>document.querySelector('.card[data-id="'+id+'"]');
@@ -464,7 +497,7 @@ function renderFrames(){$('#frames').innerHTML=(D.frames||[]).map(f=>'<div class
 function paintFrames(){document.querySelectorAll('.frame').forEach(el=>el.classList.toggle('sel',el.dataset.f===ui.frame))}
 function paintFrame(f){const el=frameEl(f.id);if(el)Object.assign(el.style,{left:f.x+'px',top:f.y+'px',width:f.w+'px',height:f.h+'px'})}
 /* a card belongs to the page its top-centre sits in */
-function inFrame(f){return Object.values(D.tasks).filter(t=>{const cx=t.x+cw(t)/2,cy=t.y+Math.min(H(t.id)/2,40);return cx>=f.x&&cx<=f.x+f.w&&cy>=f.y&&cy<=f.y+f.h})}
+function inFrame(f){return Object.values(D.tasks).filter(t=>{if(t.hid)return false;const cx=t.x+cw(t)/2,cy=t.y+Math.min(H(t.id)/2,40);return cx>=f.x&&cx<=f.x+f.w&&cy>=f.y&&cy<=f.y+f.h})}
 function boxOf(ids){let x1=1e9,y1=1e9,x2=-1e9,y2=-1e9;for(const id of ids){const t=D.tasks[id];if(!t)continue;x1=Math.min(x1,t.x);y1=Math.min(y1,t.y);x2=Math.max(x2,t.x+cw(t));y2=Math.max(y2,t.y+H(id))}return x1>x2?null:{x:x1,y:y1,w:x2-x1,h:y2-y1}}
 function growFrame(f,ids,pad){const b=boxOf(ids);if(!b)return;pad=pad||36;const x2=Math.max(f.x+f.w,b.x+b.w+pad),y2=Math.max(f.y+f.h,b.y+b.h+pad);
   f.x=Math.min(f.x,b.x-pad);f.y=Math.min(f.y,b.y-pad);f.w=Math.round(x2-f.x);f.h=Math.round(y2-f.y);f.updatedAt=now()}
@@ -572,7 +605,7 @@ nbQ.addEventListener('input',nbRenderList);
 nbQ.addEventListener('keydown',e=>{if(e.isComposing||e.keyCode===229)return;
   if(e.key==='Enter'){e.preventDefault();const it=nbList.querySelector('.nb-it');if(it)nbShow(D.tasks[it.dataset.id],nbQ.value.trim().split(/\s+/)[0])}
   else if(e.key==='Escape'&&nbQ.value){e.preventDefault();e.stopPropagation();nbQ.value='';nbRenderList()}});
-nb.querySelector('.nb-src').addEventListener('click',e=>{if(!e.target.closest('a'))return;const id=nbId;closeNb();if(id&&D.tasks[id]){select(id);focusCards([id])}});
+nb.querySelector('.nb-src').addEventListener('click',e=>{if(!e.target.closest('a'))return;const id=nbId;closeNb();if(id&&D.tasks[id]){if(D.tasks[id].hid){openHidden();return}select(id);focusCards([id])}});
 nb.querySelector('.nb-done').onclick=()=>closeNb();
 nb.querySelector('.nb-tb').addEventListener('click',async e=>{const b=e.target.closest('.ic');if(!b)return;const a=b.dataset.a;
   if(a==='side')nb.classList.toggle('noside');
@@ -620,6 +653,55 @@ sxIn.addEventListener('keydown',e=>{if(e.isComposing||e.keyCode===229)return;
 sxList.addEventListener('click',e=>{const it=e.target.closest('.sx-it');if(it)pickSearch(+it.dataset.i)});
 sxList.addEventListener('mousemove',e=>{const it=e.target.closest('.sx-it');if(it&&+it.dataset.i!==sxOn)markOn(+it.dataset.i)});
 sx.addEventListener('pointerdown',e=>{if(e.target===sx)closeSearch()});
+/* ---------- hiding (隐藏) ----------
+   Hiding takes a card off the canvas without losing it. The canvas keeps working as before
+   (a card whose parent is hidden simply stands on its own). Hidden cards are managed apart:
+   the 隐藏区 lists them newest first, grouped by day, with cards that are linked to each other
+   nested under one another. Putting a card back returns it to where it was. */
+const hz=$('#hz'),hzQ=hz.querySelector('.hz-q input'),hzBody=hz.querySelector('.hz-body');
+const hidCount=()=>Object.values(D.tasks).filter(t=>t.hid).length;
+function hideCards(ids,branch){const all=new Set();for(const i of ids){if(!D.tasks[i])continue;all.add(i);if(branch)for(const d of descendants(i))all.add(d)}
+  const todo=[...all].filter(i=>!D.tasks[i].hid);if(!todo.length)return;if(ui.editing)commitEdit();if(ui.resIn)ui.resIn=null;
+  const at=now();mutate(()=>{for(const i of todo){D.tasks[i].hid=at;D.tasks[i].updatedAt=at}});select(null);
+  toast('已隐藏 '+todo.length+' 张，右键空白处「隐藏区」可以找回')}
+/* hidden-only family tree */
+const hkids=id=>Object.values(D.tasks).filter(t=>t.hid&&t.parent===id).sort((a,b)=>a.y-b.y||a.x-b.x);
+function hdesc(id){const out=[],st=[id];while(st.length){const c=st.pop();for(const k of hkids(c)){out.push(k.id);st.push(k.id)}}return out}
+function showCards(ids){const back=new Set();for(const i of ids){back.add(i)}
+  mutate(()=>{for(const i of back){const t=D.tasks[i];if(!t)continue;delete t.hid;t.updatedAt=now()}
+    /* nudge a returning group down if something now sits where it was */
+    const tops=[...back].filter(i=>{const t=D.tasks[i];return t&&!(t.parent&&back.has(t.parent))});
+    for(const i of tops){const t=D.tasks[i];const y=freeY(t.x,t.y),dy=y-t.y;if(dy>0)for(const k of[i,...descendants(i)])if(back.has(k)||k===i)D.tasks[k].y+=dy}});
+  toast('已放回画布')}
+async function hzDelete(id){const ids=[id,...hdesc(id)];const t=D.tasks[id];
+  if(await askChoice('删除','删除「'+((t.text||'（空）').split('\n')[0])+'」'+(ids.length>1?'和它下面隐藏的 '+(ids.length-1)+' 张':'')+'？可以用 Ctrl+Z 撤回。',['取消','删除'])!=='删除')return;
+  const gone=new Set(ids),up=t.parent&&D.tasks[t.parent]?t.parent:null;
+  mutate(()=>{for(const o of Object.values(D.tasks))if(!gone.has(o.id)&&gone.has(o.parent))o.parent=up;for(const i of ids){delete D.tasks[i];D.deleted[i]=now()}})}
+function hzRender(){if(hz.hidden)return;const all=Object.values(D.tasks).filter(t=>t.hid);
+  hz.querySelector('.hz-n').textContent=all.length?all.length+' 张':'';
+  const q=hzQ.value.trim().toLowerCase(),terms=q?q.split(/\s+/):[];
+  const hit=t=>{const h=((t.text||'')+'\n'+(t.nb||'')+'\n'+(t.crit||'')+'\n'+(t.res||[]).map(r=>r.text).join('\n')).toLowerCase();return terms.every(w=>h.includes(w))};
+  const roots=all.filter(t=>!(t.parent&&D.tasks[t.parent]&&D.tasks[t.parent].hid));
+  /* a tree is kept if anything inside it matches */
+  const keep=r=>!terms.length||[r.id,...hdesc(r.id)].some(i=>hit(D.tasks[i]));
+  const list=roots.filter(keep).sort((a,b)=>(b.hid||'').localeCompare(a.hid||''));
+  if(!list.length){hzBody.innerHTML='<div class="hz-empty">'+(all.length?'没有找到':'这里还是空的<br>右键卡片选「隐藏」，它就会离开画布来到这里')+'</div>';return}
+  const row=(t,d)=>{const nk=hdesc(t.id).length,P=t.parent&&D.tasks[t.parent];const m=['隐藏于 '+stamp(t.hid)];
+    if(d===0&&P&&!P.hid)m.push('<span class="vis">原来在「'+esc((P.text||'（空）').split('\n')[0])+'」下面</span>');
+    if(t.blk)m.push('卡住：'+esc(t.blk));if((t.res||[]).length)m.push('阻力 '+t.res.length);if(t.nb&&t.nb.trim())m.push('有草稿');
+    const vk=kids(t.id).filter(k=>!k.hid).length;if(vk)m.push(vk+' 张子卡片还在画布上');
+    return '<div class="hz-row'+(d===0?' root':'')+(t.color?' c-'+t.color:'')+'" data-id="'+t.id+'"'+(d?' style="--d:'+d+'"':'')+'><span class="hz-dot"></span><div class="hz-txt"><div class="hz-t">'+hl(t.text||'（空）',terms)+'</div><div class="hz-m">'+m.join('<span>·</span>')+'</div></div>'+
+      '<div class="hz-act"><button data-a="back">放回</button>'+(nk?'<button data-a="branch">连同下面 '+nk+' 张放回</button>':'')+(t.nb&&t.nb.trim()?'<button data-a="nb">草稿</button>':'')+'<button data-a="del" class="del">删除</button></div></div>'};
+  const tree=(t,d)=>row(t,d)+hkids(t.id).map(k=>tree(k,d+1)).join('');
+  let html='',last='';for(const r of list){const g=nbGroup(r.hid);if(g!==last){html+='<div class="hz-gh">'+g+'</div>';last=g}html+='<div class="hz-tree">'+tree(r,0)+'</div>'}
+  hzBody.innerHTML=html}
+function openHidden(){if(ui.editing){commitEdit();renderCanvas()}hideMenu();hz.hidden=false;hzQ.value='';hzRender();hzBody.scrollTop=0}
+function closeHidden(){if(hz.hidden)return;if(hz.contains(document.activeElement))document.activeElement.blur();hz.hidden=true}
+hz.querySelector('.hz-done').onclick=closeHidden;
+hzQ.addEventListener('input',hzRender);
+hzQ.addEventListener('keydown',e=>{if(e.key==='Escape'&&hzQ.value){e.preventDefault();e.stopPropagation();hzQ.value='';hzRender()}});
+hzBody.addEventListener('click',e=>{const b=e.target.closest('.hz-act button');if(!b)return;const id=b.closest('.hz-row').dataset.id,a=b.dataset.a;
+  if(a==='back')showCards([id]);else if(a==='branch')showCards([id,...hdesc(id)]);else if(a==='nb')openNb(id);else if(a==='del')hzDelete(id)});
 /* ---------- floating toolbar ---------- */
 const FS=[12,13,14,15,16,18,20,22,24,28];
 const fbar=$('#fbar');
@@ -648,7 +730,7 @@ fbar.addEventListener('contextmenu',async e=>{e.preventDefault();const tp=e.targ
 window.addEventListener('resize',placeBar);
 let TWM={};
 function renderCanvas(){
-  const g=twinGroups();TWM={};for(const k in g)TWM[k]=g[k].map(t=>t.id);
+  const g=twinGroups();TWM={};for(const k in g){const v=g[k].filter(t=>!t.hid);if(v.length>1)TWM[k]=v.map(t=>t.id)}
   renderFrames();
   const vis=Object.values(D.tasks).filter(t=>!hidden(t));
   rendering=true;try{$('#cards').innerHTML=vis.map(cardHTML).join('')}finally{rendering=false}
@@ -656,6 +738,7 @@ function renderCanvas(){
   if(ui.editing){const el=cardEl(ui.editing);const tx=el&&el.querySelector('.t');if(tx){tx.focus();const r=document.createRange();r.selectNodeContents(tx);r.collapse(false);const s=getSelection();s.removeAllRanges();s.addRange(r)}}
   else if(ui.resIn){const ta=cardEl(ui.resIn)&&cardEl(ui.resIn).querySelector('.resIn');if(ta){ta.value=ui.resDraft;ta.focus();ta.selectionStart=ta.selectionEnd=ta.value.length}}
   if(nbId&&!D.tasks[nbId]){nb.hidden=true;nbId=null}
+  hzRender();
   updateBar()}
 function drawLinks(){let p='';
   for(const t of Object.values(D.tasks)){if(!t.parent||hidden(t))continue;const a=cardEl(t.parent),b=cardEl(t.id);if(!a||!b)continue;const P=D.tasks[t.parent];
@@ -749,7 +832,7 @@ window.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-dra
   if(drag.box){drag.moved=true;const r=drag.r,x1=Math.min(drag.sx,e.clientX),y1=Math.min(drag.sy,e.clientY),x2=Math.max(drag.sx,e.clientX),y2=Math.max(drag.sy,e.clientY);
     Object.assign(drag.box.style,{left:x1-r.left+'px',top:y1-r.top+'px',width:x2-x1+'px',height:y2-y1+'px'});
     const a=toWorld(x1,y1),b=toWorld(x2,y2);const hit=new Set(drag.base);
-    for(const t of Object.values(D.tasks))if(t.x<b.x&&t.x+cw(t)>a.x&&t.y<b.y&&t.y+H(t.id)>a.y)hit.add(t.id);
+    for(const t of Object.values(D.tasks))if(!t.hid&&t.x<b.x&&t.x+cw(t)>a.x&&t.y<b.y&&t.y+H(t.id)>a.y)hit.add(t.id);
     ui.multi=hit;ui.sel=hit.size?[...hit].pop():null;paintSel();return}
   if(drag.rz){if(!drag.moved){snap();drag.moved=true}const t=D.tasks[drag.rz],el=cardEl(drag.rz);if(!t||!el)return;
     t.w=Math.max(160,Math.min(900,Math.round(drag.ow+dx/D.view.z)));el.style.width=t.w+'px';el.style.maxWidth='none';
@@ -789,7 +872,7 @@ function commitEdit(cancel){const id=ui.editing;if(!id)return false;ui.editing=n
   const tx=cardEl(id)&&cardEl(id).querySelector('.t');const v=tx?tx.innerText.replace(/\s+$/,''):t.text;
   if(cancel||!v){if(isBlank(t)){delete D.tasks[id];D.deleted[id]=now();if(ui.sel===id)select(null);touch();return false}return true}
   if(v!==t.text){snap();t.text=v;delete t.autoT;hist(t,'text');touch()}return true}
-function addChild(id){let n;const p=D.tasks[id];snap();if(p.fold){p.fold=false;renderCanvas()}const ks=kids(id);const y=ks.length?Math.max(...ks.map(k=>k.y+H(k.id)))+GY:p.y;
+function addChild(id){let n;const p=D.tasks[id];snap();if(p.fold){p.fold=false;renderCanvas()}const ks=kids(id).filter(k=>!k.hid);const y=ks.length?Math.max(...ks.map(k=>k.y+H(k.id)))+GY:p.y;
   const nx=p.x+cw(p)+GAP;n=newTask('',id,nx,freeY(nx,y));touch();render();startEdit(n.id)}
 function addSibling(id){let n;const t=D.tasks[id];const x=t.x;const y=freeY(x,t.y+H(id)+GY);mutate(()=>{n=newTask('',t.parent,x,y)});startEdit(n.id)}
 
@@ -797,6 +880,8 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();if(ui.editing){commitEdit();renderCanvas()}saveNow();return}
   if($('#dlg').style.display==='flex')return;
   if(e.target.closest&&e.target.closest('#nb,#sx'))return;
+  if(!hz.hidden&&!e.target.closest('#hz,#nb')){if(e.key==='Escape'){e.preventDefault();closeHidden();return}if(!((e.ctrlKey||e.metaKey)&&/^[zy]$/i.test(e.key)))return}
+  if(e.target.closest&&e.target.closest('#hz'))return;
   if(!nb.hidden){if(e.key==='Escape'){e.preventDefault();closeNb()}else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='f'){e.preventDefault();nbQ.focus();nbQ.select()}return}
   if(ui.editing){
     if(e.isComposing||e.keyCode===229)return;
@@ -814,13 +899,14 @@ document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='v'&&CLIP){const r=cv.getBoundingClientRect();if(MOUSE.x>=r.left&&MOUSE.x<=r.right&&MOUSE.y>=r.top&&MOUSE.y<=r.bottom){e.preventDefault();pasteTwin(toWorld(MOUSE.x,MOUSE.y))}return}
   if(ui.frame&&(e.key==='Delete'||e.key==='Backspace')){e.preventDefault();const f=D.frames.find(z=>z.id===ui.frame);if(f)delFrame(f,false);return}
   if(ui.multi.size>1&&!(e.ctrlKey||e.metaKey||e.altKey)){const ids=selIds();
-    if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();confirmDeleteMany(ids)}return}
+    if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();confirmDeleteMany(ids)}else if(e.key.toLowerCase()==='h'||e.code==='KeyH'){e.preventDefault();hideCards(ids)}return}
   if(!ui.sel||!D.tasks[ui.sel])return;const id=ui.sel;
   if(e.ctrlKey||e.metaKey||e.altKey)return;
   if(e.key==='Enter'||e.key==='F2'){e.preventDefault();startEdit(id)}
   else if(e.key==='Tab'){e.preventDefault();addChild(id)}
   else if(e.key.toLowerCase()==='r'||e.code==='KeyR'){e.preventDefault();openRes(id)}
   else if(e.key.toLowerCase()==='n'||e.code==='KeyN'){e.preventDefault();openNb(id)}
+  else if(e.key.toLowerCase()==='h'||e.code==='KeyH'){e.preventDefault();hideCards([id])}
   else if(e.key==='Delete'||e.key==='Backspace'){e.preventDefault();confirmDelete(id)}
 });
 async function confirmDeleteMany(ids){const all=new Set();for(const i of ids){all.add(i);for(const d of descendants(i))all.add(d)}
@@ -830,14 +916,16 @@ async function confirmDelete(id){const n=descendants(id).length;const c=await as
 
 /* ---------- tidy: tree layout, each parent centred on its children ---------- */
 function layout(roots,ox,oy){const memo={};measureClosed=true;
-  const ks=t=>kids(t.id);
+  const ks=t=>kids(t.id).filter(k=>!k.hid);
   const size=t=>{if(memo[t.id]!=null)return memo[t.id];const k=ks(t);let s=H(t.id);if(k.length)s=Math.max(s,k.reduce((a,c)=>a+size(c),0)+GY*(k.length-1));return memo[t.id]=s};
   const place=(t,x,y0)=>{t.x=x;const h=H(t.id),sz=size(t),k=ks(t);if(!k.length){t.y=Math.round(y0);return}
     const cb=k.reduce((a,c)=>a+size(c),0)+GY*(k.length-1);let cy=y0+(sz-cb)/2;for(const c of k){place(c,x+cw(t)+GAP,cy);cy+=size(c)+GY}
     const f=k[0],l=k[k.length-1];const mid=(f.y+H(f.id)/2+l.y+H(l.id)/2)/2;t.y=Math.round(Math.min(Math.max(mid-h/2,y0),y0+sz-h))};
   try{let y=oy;for(const r of roots){size(r);place(r,ox,y);y+=size(r)+36}}finally{measureClosed=false}}
-function tidy(only){const pool=only?inFrame(only):Object.values(D.tasks);const roots=pool.filter(t=>!t.parent).sort((a,b)=>a.y-b.y||a.x-b.x);if(!roots.length)return;
-  const fr=(only?[only]:D.frames||[]).map(f=>[f,inFrame(f).filter(t=>!t.parent).map(t=>t.id)]);
+/* on the canvas a card whose parent is hidden counts as a main card */
+const vroot=t=>!t.hid&&(!t.parent||!D.tasks[t.parent]||D.tasks[t.parent].hid);
+function tidy(only){const pool=only?inFrame(only):Object.values(D.tasks);const roots=pool.filter(vroot).sort((a,b)=>a.y-b.y||a.x-b.x);if(!roots.length)return;
+  const fr=(only?[only]:D.frames||[]).map(f=>[f,inFrame(f).filter(vroot).map(t=>t.id)]);
   mutate(()=>{renderCanvas();for(const r of roots){const x0=r.x,y0=r.y;layout([r],x0,y0);const dy=y0-r.y;for(const d of[r.id,...descendants(r.id)])D.tasks[d].y+=dy}
     renderCanvas();for(const[f,rs]of fr)if(rs.length)growFrame(f,rs.flatMap(i=>[i,...descendants(i)]))});toast('已整理，主卡片位置不变')}
 /* lay out one branch, keeping its root card where it is */
@@ -876,7 +964,7 @@ document.addEventListener('contextmenu',e=>{
     '-',
     {l:'整理',f:tidy},{l:'回到原点',f:home},
     ...(D.view.z!==1?[{l:'缩放回 100%',k:Math.round(D.view.z*100)+'%',f:()=>{const r=cv.getBoundingClientRect();zoomAt(r.width/2,r.height/2,1)}}]:[]),
-    '-',{l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},'-',...fileItems()])}
+    '-',{l:'撤销',k:'Ctrl+Z',f:undo},{l:'还原',k:'Ctrl+Y',f:redo},'-',...fileItems(),'-',{l:'隐藏区',k:String(hidCount()||''),f:openHidden}])}
 });
 /* colour and text size, kept simple: one row each */
 const COLS=[['','默认','var(--card)'],['y','黄','var(--cy)'],['o','橙','var(--co)'],['r','红','var(--cr)'],['p','紫','var(--cp)'],['b','蓝','var(--cb)'],['g','绿','var(--cg)'],['n','灰','var(--cn)']];
@@ -893,7 +981,7 @@ function flowText(id){const d=new Date(),out=[];const root=D.tasks[id];
   out.push('[ ] 是没打勾的任务，[x] 是已打勾的任务，没有方框的是笔记。「标准」是完成标准，「卡住」是在等的东西，「阻力」是我记下的开始不了的原因，「笔记本」是我在这张卡片里写的草稿。');
   out.push('导出时间：'+d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+' '+hm(d),'');
   const one=(t,dep)=>{const ind='  '.repeat(dep),sub=ind+'  ';const box=t.note?'':t.done?'[x] ':'[ ] ';
-    const lines=(t.text||'（空）').split('\n');out.push(ind+'- '+box+lines[0]);for(const l of lines.slice(1))out.push(sub+l);
+    const lines=(t.text||'（空）').split('\n');out.push(ind+'- '+box+lines[0]+(t.hid?'（已隐藏）':''));for(const l of lines.slice(1))out.push(sub+l);
     if(t.nb&&t.nb.trim()){out.push(sub+'笔记本：');for(const l of t.nb.split('\n'))out.push(sub+'  '+l)}
     if(t.crit)out.push(sub+'标准：'+t.crit);if(t.blk)out.push(sub+'卡住：'+t.blk);
     for(const r of t.res||[])out.push(sub+'阻力（'+stamp(r.createdAt)+'）：'+r.text.replace(/\n/g,' '));
@@ -914,6 +1002,7 @@ function multiMenu(ids){const ts=ids.map(i=>D.tasks[i]);
   ...(ts.some(t=>!t.note)?[{l:'取消任务',f:each(t=>{if(!t.note){t.note=true;t.done=false;hist(t,'note')}})}]:[]),
   ...(ts.some(t=>t.w||t.h)?[{l:'恢复默认大小',f:each(t=>{delete t.w;delete t.h})}]:[]),
   '-',
+  {l:'隐藏这 '+ids.length+' 张',k:'H',f:()=>hideCards(ids)},
   {l:'创建分身',f:()=>makeTwin(ids)},
   {l:'放进新页面',f:()=>newFrame({x:0,y:0},ids)},
   '-',
@@ -939,6 +1028,8 @@ function taskMenu(id){const t=D.tasks[id];const nk=kids(id).length;return[
   ...(nk?[{l:'整理这一支',f:()=>tidyBranch(id)}]:[]),
   ...styleRows(t),
   '-',
+  {l:'隐藏',k:'H',f:()=>hideCards([id])},
+  ...(descendants(id).some(d=>!D.tasks[d].hid)?[{l:'隐藏这一支',f:()=>hideCards([id],true)}]:[]),
   {l:'创建分身',f:()=>makeTwin([id])},
   ...(TWM[tkey(t)]?[{l:'脱离分身',f:()=>unlinkTwin(id)}]:[]),
   '-',
