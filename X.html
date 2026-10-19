@@ -393,7 +393,7 @@ body.wbmode>*:not(#wb):not(#menu):not(#dlg):not(#toast){display:none!important}
 #wb .wb-bar .dot.on{box-shadow:0 0 0 1.5px var(--card),0 0 0 2.6px var(--accent)}
 @media (prefers-color-scheme:dark){#wb .wb-bar{background:linear-gradient(180deg,rgba(44,54,62,.78),rgba(30,38,44,.66));box-shadow:inset 0 0 0 .6px rgba(255,255,255,.14),inset 0 1px 0 rgba(255,255,255,.12),0 8px 20px -6px rgba(0,0,0,.6)}
   #wb .wb-bar .dot{box-shadow:inset 0 0 0 .7px rgba(255,255,255,.22)}}
-#wb .wc .dot{position:absolute;right:-.45em;top:50%;width:.9em;height:.9em;margin-top:-.45em;border-radius:50%;cursor:crosshair;opacity:0;transition:opacity .15s;
+#wb .wc .dot{position:absolute;right:-.45em;top:50%;width:.9em;height:.9em;margin-top:-.45em;border-radius:50%;cursor:crosshair;opacity:0;z-index:3;transition:opacity .15s;
   background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.95),rgba(205,220,232,.6) 55%,rgba(90,118,140,.55));box-shadow:inset 0 0 0 .5px rgba(40,65,88,.35),0 1px 2px rgba(15,30,45,.25)}
 #wb .wc:hover .dot{opacity:.9}
 #wb.ro .wc .dot,#wb.ro .wc .rz,#wb.ro .wz .wz-rs{display:none}
@@ -891,7 +891,8 @@ function wbApply(op){ensureWb();const pg=wbPage(),C=id=>pg.cards.find(c=>c.id===
 /* ---------- carrying a card to the workbench ---------- */
 let G=null;
 /* the copy keeps the card's size at the current zoom and stays under the same point of the card you grabbed */
-function carryStart(d,x,y){const ids=d.group?selIds():[d.id];d.carry=ids;const src=cardEl(d.id);if(!src)return;
+/* holding the pointer only from here on keeps clicks and double-clicks on cards working normally */
+function carryStart(d,x,y){const ids=d.group?selIds():[d.id];d.carry=ids;try{cv.setPointerCapture(d.pid)}catch(_){}const src=cardEl(d.id);if(!src)return;
   const r=src.getBoundingClientRect(),z=D.view.z,el=src.cloneNode(true);el.removeAttribute('data-id');el.classList.remove('sel','editing');el.classList.add('lift');
   el.style.width=src.offsetWidth+'px';if(ids.length>1){const n=document.createElement('span');n.className='lift-n';n.textContent=ids.length;el.appendChild(n)}
   document.body.appendChild(el);G={el,r,z,ox:x-r.left,oy:y-r.top,x,y,raf:0,ids};
@@ -1017,7 +1018,7 @@ cv.addEventListener('pointerdown',e=>{
     if(group)ui.sel=id;else select(id);const t=D.tasks[id];
     /* dragging a card carries its whole branch (and the other picked cards); hold Alt to move only the cards themselves */
     const mv=new Set();for(const g of group?selIds():[id]){mv.add(g);if(!e.altKey)for(const d of descendants(g))mv.add(d)}mv.delete(id);
-    drag={id,group,sx:e.clientX,sy:e.clientY,ox:t.x,oy:t.y,moved:false,sub:[...mv].map(d=>[d,D.tasks[d].x,D.tasks[d].y])};try{cv.setPointerCapture(e.pointerId)}catch(_){}
+    drag={id,group,sx:e.clientX,sy:e.clientY,ox:t.x,oy:t.y,moved:false,sub:[...mv].map(d=>[d,D.tasks[d].x,D.tasks[d].y]),pid:e.pointerId};
     /* holding still for a moment (only while the workbench is open) picks the card up as a twin instead of moving it */
     if(WBW&&!WBW.closed){const d=drag;d.lp=setTimeout(()=>{if(drag===d&&!d.moved)carryStart(d,e.clientX,e.clientY)},450)}return}
   if(ui.linking){stopLinking();return}
@@ -1418,19 +1419,20 @@ function wbBoot(){
     if(e.button===1||(!cd&&!zt)||RO()&&!(e.button===1)){if(cd&&RO()){sel=cd.dataset.c;paintSel()}
       if(linking&&!cd){linking=null;stage.classList.remove('linking')}if(!cd){sel=null;zsel=null;paintSel()}
       drag={pan:true,sx:e.clientX,sy:e.clientY,ox:LV.x,oy:LV.y};stage.classList.add('pan');stage.setPointerCapture(e.pointerId);return}
-    e.preventDefault();stage.setPointerCapture(e.pointerId);
+    e.preventDefault();const pid=e.pointerId;
     if(cd){const id=cd.dataset.c,c=pg.cards.find(x=>x.id===id);
       if(linking){if(linking!==id)send({t:'link',a:linking,b:id});linking=null;stage.classList.remove('linking');return}
       sel=id;zsel=null;paintSel();
-      if(e.target.closest('.rz'))drag={rz:id,sx:e.clientX,s0:c.s||1,w0:cd.offsetWidth};
-      else if(e.target.closest('.ew'))drag={ew:id,sx:e.clientX,w0:c.w||(c.kind==='trig'?12:15.5)};
-      else if(e.target.closest('.dot'))drag={ln:id};
-      else drag={mv:[[id,c.x,c.y]],sx:e.clientX,sy:e.clientY};return}
+      if(e.target.closest('.rz'))drag={rz:id,sx:e.clientX,s0:c.s||1,w0:cd.offsetWidth,pid};
+      else if(e.target.closest('.ew'))drag={ew:id,sx:e.clientX,w0:c.w||(c.kind==='trig'?12:15.5),pid};
+      else if(e.target.closest('.dot'))drag={ln:id,pid};
+      else drag={mv:[[id,c.x,c.y]],sx:e.clientX,sy:e.clientY,pid};return}
     const z=pg.zones.find(x=>x.id===zt.closest('.wz').dataset.z);zsel=z.id;sel=null;paintSel();
-    if(zt.matches('.wz-rs'))drag={zr:z.id,sx:e.clientX,sy:e.clientY,w0:z.w,h0:z.h};
+    if(zt.matches('.wz-rs'))drag={zr:z.id,sx:e.clientX,sy:e.clientY,w0:z.w,h0:z.h,pid};
     else{/* a zone carries the cards sitting inside it */const ins=pg.cards.filter(c=>{const b=box(c.id);if(!b)return false;const cx=b.x+b.w/2,cy=b.y+Math.min(b.h/2,30);return cx>=z.x&&cx<=z.x+z.w&&cy>=z.y&&cy<=z.y+z.h});
-      drag={mv:[[z.id,z.x,z.y],...ins.map(c=>[c.id,c.x,c.y])],sx:e.clientX,sy:e.clientY}}});
+      drag={mv:[[z.id,z.x,z.y],...ins.map(c=>[c.id,c.x,c.y])],sx:e.clientX,sy:e.clientY,pid}}});
   stage.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-drag.sx,dy=e.clientY-drag.sy;
+    if(drag.pid!=null&&!drag.cap&&(Math.abs(dx)+Math.abs(dy)>=3||drag.ln)){drag.cap=1;try{stage.setPointerCapture(drag.pid)}catch(_){}}
     if(drag.pan){LV.x=drag.ox+dx;LV.y=drag.oy+dy;applyV();return}
     const pg=page();
     if(drag.mv){if(!drag.moved&&Math.abs(dx)+Math.abs(dy)<3)return;drag.moved=true;
