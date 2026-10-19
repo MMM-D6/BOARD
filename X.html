@@ -872,7 +872,7 @@ function wbApply(op){ensureWb();const pg=wbPage(),C=id=>pg.cards.find(c=>c.id===
     else if(T==='width'){const c=C(op.id);if(c){if(op.w)c.w=op.w;else delete c.w}}
     else if(T==='color'){const c=C(op.id);if(c){if(op.color)c.color=op.color;else delete c.color}}
     else if(T==='text'){const c=C(op.id);if(c)c.text=op.text}
-    else if(T==='rule'){const c=C(op.id);if(c)c.rule={type:op.type,n:op.n}}
+    else if(T==='rule'){const c=C(op.id);if(c)c.rule={type:op.type,n:op.n,scope:op.scope==='page'?'page':'link'}}
     else if(T==='del'){pg.cards=pg.cards.filter(c=>!op.ids.includes(c.id));pg.links=pg.links.filter(l=>!op.ids.includes(l.a)&&!op.ids.includes(l.b))}
     else if(T==='link'){if(op.a!==op.b&&!pg.links.some(l=>(l.a===op.a&&l.b===op.b)||(l.a===op.b&&l.b===op.a)))pg.links.push({id:uid(),a:op.a,b:op.b})}
     else if(T==='unlink')pg.links=pg.links.filter(l=>l.id!==op.id)
@@ -1306,14 +1306,16 @@ function wbBoot(){
   const logOf=pg=>V?(PL[pg.id]||[]):S.log.filter(x=>x.t>=pg.start);
   const mmdd=iso=>{const d=new Date(iso);return(d.getMonth()+1)+'月'+d.getDate()+'日 '+hm(d)};
   const rangeOf=pg=>mmdd(pg.start)+' – '+(pg.end?mmdd(pg.end):'至今');
-  const RULES={min:['计时累计满',' 分钟',30],rounds:['完成',' 轮计时',2],words:['备忘录多写',' 字',300],tick:['打勾','',0],res:['记下',' 条阻力',1],hide:['被隐藏（做完收起）','',0],open:['打开过备忘录','',0]};
-  const ruleText=r=>{const R=RULES[r&&r.type]||RULES.min;return R[2]?R[0]+' '+(r.n||R[2])+R[1]:R[0]};
+/* every rule has its own number, so each threshold stays editable */
+  const RULES={min:['计时累计满',' 分钟',30],rounds:['完成',' 轮计时',2],words:['备忘录多写',' 字',300],tick:['打勾',' 次',1],res:['记下',' 条阻力',1],hide:['被隐藏（做完收起）',' 次',1],open:['打开备忘录',' 次',1]};
+  const ruleText=r=>{const R=RULES[r&&r.type]||RULES.min;return R[0]+' '+(r&&r.n||R[2])+R[1]};
   function linked(pg,id){return pg.links.filter(l=>l.a===id||l.b===id).map(l=>pg.cards.find(c=>c.id===(l.a===id?l.b:l.a))).filter(Boolean)}
   function evalPage(pg){const L=logOf(pg),by={};for(const x of L)(by[x.k]=by[x.k]||[]).push(x);const lit={};
     for(const c of pg.cards)if(c.kind==='twin')lit[c.id]=!!(by[c.k]&&by[c.k].length);
-    for(const c of pg.cards)if(c.kind==='trig'){const ks=linked(pg,c.id).filter(o=>o.kind==='twin').map(o=>o.k);const ev=ks.flatMap(k=>by[k]||[]);const r=c.rule||{type:'min',n:30},n=r.n||RULES[r.type][2]||1;
+    /* scope 'page' counts every card on this page; otherwise only the cards linked to it. A card with several twins counts once */
+    for(const c of pg.cards)if(c.kind==='trig'){const pool=c.rule&&c.rule.scope==='page'?pg.cards:linked(pg,c.id);const ks=[...new Set(pool.filter(o=>o.kind==='twin').map(o=>o.k))];const ev=ks.flatMap(k=>by[k]||[]);const r=c.rule||{type:'min',n:30},n=r.n||RULES[r.type][2]||1;
       const sum=e=>ev.filter(x=>x.e===e).reduce((a,x)=>a+(+x.v||0),0),cnt=(e,f)=>ev.filter(x=>x.e===e&&(!f||f(x))).length;
-      lit[c.id]=r.type==='min'?sum('timer')>=n:r.type==='rounds'?cnt('timer',x=>x.full)>=n:r.type==='words'?sum('words')>=n:r.type==='res'?cnt('res')>=n:cnt(r.type)>=1}
+      lit[c.id]=r.type==='min'?sum('timer')>=n:r.type==='rounds'?cnt('timer',x=>x.full)>=n:r.type==='words'?sum('words')>=n:r.type==='res'?cnt('res')>=n:cnt(r.type)>=n}
     for(const c of pg.cards)if(c.kind==='goal')lit[c.id]=linked(pg,c.id).some(o=>lit[o.id]);
     return{lit,by}}
 
@@ -1344,8 +1346,9 @@ function wbBoot(){
       if(tm.length||wd.length){const st=tm.reduce((a,x)=>a+(+x.v||0),0),sw=wd.reduce((a,x)=>a+(+x.v||0),0);
         h+='<div class="rec"><div class="col">'+tm.map(x=>'<span>'+x.v+'min</span>').join('')+'</div><div class="col">'+wd.map(x=>'<span>'+x.v+'word</span>').join('')+'</div>'+
           '<div class="sum"><span>'+(tm.length?st+'min':'')+'</span><span>'+(wd.length?sw+'word':'')+'</span></div></div>'}}
-    else if(c.kind==='trig'){const ln=linked(pg,c.id).filter(o=>o.kind==='twin').length;
-      h='<div class="k">触发</div><div class="tx">'+esc(c.text||ruleText(c.rule))+'</div><div class="rule">'+(ln?'看连着的 '+ln+' 张卡片':'还没有连到卡片')+(c.text?' · '+esc(ruleText(c.rule)):'')+'</div>'}
+    else if(c.kind==='trig'){const pageScope=c.rule&&c.rule.scope==='page',ln=new Set(linked(pg,c.id).filter(o=>o.kind==='twin').map(o=>o.k)).size;
+      const cap=pageScope?(c.text?esc(ruleText(c.rule)):''):(ln?'看连着的 '+ln+' 张卡片':'还没有连到卡片')+(c.text?' · '+esc(ruleText(c.rule)):'');
+      h='<div class="k">触发</div><div class="tx">'+esc(c.text||ruleText(c.rule))+'</div>'+(cap?'<div class="rule">'+cap+'</div>':'')}
     else h='<div class="k">目的</div><div class="tx">'+esc(c.text||'（写下这是为了什么）')+'</div>';
     return '<div class="'+cls.join(' ')+'" data-c="'+c.id+'" style="left:'+c.x+'px;top:'+c.y+'px;--s:'+(c.s||1)+';width:'+(c.w||(c.kind==='trig'?12:15.5))+'em">'+h+'<div class="ew" title="拖动改宽度"></div><div class="rz" title="拖动等比例缩放"></div><div class="dot" title="拖到另一张卡片上连线"></div></div>'}
   const cEl_=id=>cEl.querySelector('.wc[data-c="'+id+'"]');
@@ -1452,11 +1455,12 @@ function wbBoot(){
     if(!cd||e.target.closest('.rz,.dot'))return;const c=pg.cards.find(x=>x.id===cd.dataset.c);
     if(c.kind==='twin')send({t:'openNb',k:c.k});else editText(c)});
   async function editText(c){const v=await ask(c.kind==='goal'?'这是为了什么，最终为了什么':'这张触发卡写什么',c.text||'',c.kind==='goal'?'':'比如：撑过 30 分钟',true);if(v!==null)send({t:'text',id:c.id,text:v})}
-  function ruleDlg(c){const r=c.rule||{type:'min',n:30};
-    openDlg('<h3>触发规则</h3><div style="font-size:12.5px;color:var(--muted)">看的是和这张卡片连在一起的卡片，在这一页里发生的事</div><select id="rT" style="font:inherit;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink)">'+
-      Object.entries(RULES).map(([k,v])=>'<option value="'+k+'"'+(k===r.type?' selected':'')+'>'+v[0]+(v[2]?' N'+v[1]:'')+'</option>').join('')+'</select><input id="rN" type="number" min="1" value="'+(r.n||30)+'"><div class="btns" style="justify-content:flex-end"><button id="rNo">取消</button><button class="pri" id="rOk">确定</button></div>');
-    const sync=()=>{$('#rN').hidden=!RULES[$('#rT').value][2];if(!$('#rN').hidden&&$('#rT').value!==r.type)$('#rN').value=RULES[$('#rT').value][2]};sync();$('#rT').onchange=sync;
-    $('#rNo').onclick=closeDlg;$('#rOk').onclick=()=>{const t=$('#rT').value,n=Math.max(1,+$('#rN').value||1);closeDlg();send({t:'rule',id:c.id,type:t,n:RULES[t][2]?n:1})}}
+  function ruleDlg(c){const r=c.rule||{type:'min',n:30},sel_='font:inherit;padding:6px;border-radius:6px;border:1px solid var(--line);background:var(--card);color:var(--ink)';
+    openDlg('<h3>触发规则</h3><label style="font-size:12.5px;color:var(--muted)">看哪些卡片</label><select id="rS" style="'+sel_+'"><option value="link"'+(r.scope!=='page'?' selected':'')+'>和它连着的卡片</option><option value="page"'+(r.scope==='page'?' selected':'')+'>这一页上所有的卡片</option></select>'+
+      '<label style="font-size:12.5px;color:var(--muted)">条件（从这一页翻开时算起）</label><select id="rT" style="'+sel_+'">'+Object.entries(RULES).map(([k,v])=>'<option value="'+k+'"'+(k===r.type?' selected':'')+'>'+v[0]+' N'+v[1]+'</option>').join('')+'</select>'+
+      '<input id="rN" type="number" min="1" value="'+(r.n||RULES[r.type||'min'][2])+'"><div class="btns" style="justify-content:flex-end"><button id="rNo">取消</button><button class="pri" id="rOk">确定</button></div>');
+    $('#rT').onchange=()=>{$('#rN').value=RULES[$('#rT').value][2]};
+    $('#rNo').onclick=closeDlg;$('#rOk').onclick=()=>{const t=$('#rT').value,n=Math.max(1,+$('#rN').value||1),sc=$('#rS').value;closeDlg();send({t:'rule',id:c.id,type:t,n,scope:sc})}}
 
   /* ---------- menus ---------- */
   stage.addEventListener('contextmenu',e=>{e.preventDefault();if(!S||RO())return;const pg=page();
