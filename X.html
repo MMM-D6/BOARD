@@ -246,11 +246,14 @@ div.res{margin:7px 0 2px 20px;display:flex;flex-direction:column;gap:5px;cursor:
   box-shadow:inset 0 0 0 .6px rgba(255,255,255,.14),inset 0 1px 0 rgba(255,255,255,.1),0 24px 60px -16px rgba(0,0,0,.8)}
   #sx .sx-in{border-bottom-color:rgba(255,255,255,.1)}#sx .sx-foot{border-top-color:rgba(255,255,255,.08)}#sx .sx-it.on{background:rgba(229,181,58,.18)}}
 /* a card held for a moment lifts into a small glass chip that follows the mouse */
-#ghost{position:fixed;left:0;top:0;z-index:80;pointer-events:none;max-width:240px;padding:6px 11px;border-radius:10px;font-size:13px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
-  background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(248,250,252,.72));-webkit-backdrop-filter:blur(12px) saturate(160%);backdrop-filter:blur(12px) saturate(160%);
-  box-shadow:inset 0 0 0 .6px rgba(40,65,88,.18),inset 0 1px 0 rgba(255,255,255,.95),0 10px 26px -8px rgba(15,30,45,.35);animation:ghostIn .14s ease-out}
-@keyframes ghostIn{from{opacity:0;transform:scale(.96)}}
-@media (prefers-color-scheme:dark){#ghost{background:linear-gradient(180deg,rgba(48,56,64,.9),rgba(34,40,47,.82));box-shadow:inset 0 0 0 .6px rgba(255,255,255,.14),0 10px 26px -8px rgba(0,0,0,.6)}}
+/* long press: a copy of the card lifts off in place and follows the mouse; the original stays, faded */
+.card.lift{position:fixed!important;left:0!important;top:0!important;margin:0;z-index:80;pointer-events:none;transform-origin:0 0;will-change:transform;
+  transition:box-shadow .16s ease-out,opacity .16s ease-out}
+.card.lift.up{box-shadow:0 0 0 1px rgba(40,65,88,.10),0 14px 34px -10px rgba(15,30,45,.38),0 4px 10px -4px rgba(15,30,45,.18)}
+.card.lift.home{transition:transform .2s cubic-bezier(.2,.8,.2,1),box-shadow .2s,opacity .2s}
+.card.lift .addk,.card.lift .nbk,.card.lift .rz,.card.lift .twin{display:none}
+.card.lift .lift-n{position:absolute;right:-7px;top:-7px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:11px;line-height:18px;text-align:center;color:#fff;background:var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.card.carry-src{opacity:.38;transition:opacity .16s}
 #canvas.carrying{cursor:copy}
 /* small glass "+" used for adding a child card and for saving a template */
 .gplus{position:relative;width:20px;height:20px;padding:0;border:0;cursor:pointer;flex:none;background:transparent url("data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 20 20%22%3E%3Cdefs%3E%3ClinearGradient id=%22b%22 x1=%220%22 y1=%224%22 x2=%220%22 y2=%2216%22 gradientUnits=%22userSpaceOnUse%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%22.82%22/%3E%3Cstop offset=%22.45%22 stop-color=%22%23dfe8ef%22 stop-opacity=%22.42%22/%3E%3Cstop offset=%221%22 stop-color=%22%236f8ca4%22 stop-opacity=%22.62%22/%3E%3C/linearGradient%3E%3ClinearGradient id=%22r%22 x1=%220%22 y1=%224%22 x2=%220%22 y2=%2216%22 gradientUnits=%22userSpaceOnUse%22%3E%3Cstop offset=%220%22 stop-color=%22%23fff%22 stop-opacity=%22.95%22/%3E%3Cstop offset=%22.55%22 stop-color=%22%239fb4c5%22 stop-opacity=%22.7%22/%3E%3Cstop offset=%221%22 stop-color=%22%233d5a72%22 stop-opacity=%22.75%22/%3E%3C/linearGradient%3E%3Cfilter id=%22s%22 x=%22-40%25%22 y=%22-40%25%22 width=%22180%25%22 height=%22180%25%22%3E%3CfeGaussianBlur stdDeviation=%22.85%22/%3E%3C/filter%3E%3Cfilter id=%22g%22 x=%22-40%25%22 y=%22-40%25%22 width=%22180%25%22 height=%22180%25%22%3E%3CfeGaussianBlur stdDeviation=%22.45%22/%3E%3C/filter%3E%3C/defs%3E%3Cpath d=%22M8.3 5.6A1.7 1.7 0 0 1 11.7 5.6V8.3H14.4A1.7 1.7 0 0 1 14.4 11.7H11.7V14.4A1.7 1.7 0 0 1 8.3 14.4V11.7H5.6A1.7 1.7 0 0 1 5.6 8.3H8.3Z%22 fill=%22%230f1e2d%22 fill-opacity=%22.30%22 filter=%22url(%23s)%22 transform=%22translate(0 1.2)%22/%3E%3Cpath d=%22M8.3 5.6A1.7 1.7 0 0 1 11.7 5.6V8.3H14.4A1.7 1.7 0 0 1 14.4 11.7H11.7V14.4A1.7 1.7 0 0 1 8.3 14.4V11.7H5.6A1.7 1.7 0 0 1 5.6 8.3H8.3Z%22 fill=%22url(%23b)%22 stroke=%22url(%23r)%22 stroke-width=%22.7%22 stroke-linejoin=%22round%22/%3E%3Cpath d=%22M9.15 5.5V7.6M5.5 9.15H7.6%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.95%22 stroke-width=%22.75%22 stroke-linecap=%22round%22/%3E%3Cpath d=%22M10.85 13.4V14.3M13.4 10.85H14.3%22 fill=%22none%22 stroke=%22%23fff%22 stroke-opacity=%22.55%22 stroke-width=%22.9%22 stroke-linecap=%22round%22 filter=%22url(%23g)%22/%3E%3C/svg%3E") center/100% 100% no-repeat;
@@ -348,7 +351,8 @@ body.wbmode>*:not(#wb):not(#menu):not(#dlg):not(#toast){display:none!important}
 #wb .wc{position:absolute;width:15.5em;font-size:calc(14px * var(--s,1));padding:.62em .78em .55em;border-radius:.72em;user-select:none;
   background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(255,255,255,.82));color:var(--ink);
   box-shadow:inset 0 0 0 .6px rgba(40,65,88,.16),inset 0 1px 0 rgba(255,255,255,.95),0 1px 2px rgba(15,30,45,.06),0 .5em 1.4em -.6em rgba(15,30,45,.18);
-  -webkit-backdrop-filter:blur(10px) saturate(150%);backdrop-filter:blur(10px) saturate(150%);transition:box-shadow .5s,background .5s}
+  transition:box-shadow .12s ease-out,background .45s ease}
+#wb .wc.lit{transition:box-shadow .45s ease,background .45s ease}
 @media (prefers-color-scheme:dark){#wb .wc{background:linear-gradient(180deg,rgba(40,48,56,.94),rgba(32,38,45,.9));
   box-shadow:inset 0 0 0 .6px rgba(255,255,255,.12),inset 0 1px 0 rgba(255,255,255,.08),0 1px 2px rgba(0,0,0,.3),0 .5em 1.4em -.6em rgba(0,0,0,.5)}}
 #wb .wc.sel{box-shadow:inset 0 0 0 1.2px var(--accent),inset 0 1px 0 rgba(255,255,255,.9),0 .5em 1.4em -.6em rgba(15,30,45,.22)}
@@ -885,11 +889,22 @@ function wbApply(op){ensureWb();const pg=wbPage(),C=id=>pg.cards.find(c=>c.id===
       pg.end=now();pg.snap={};for(const c of pg.cards)if(c.kind==='twin'){const t=keyTask(c.k);pg.snap[c.k]=t?{text:t.text||'',color:t.color||''}:null}
       const id=uid();D.wb.pages.push({id,title:'',start:now(),end:null,cards:[],zones:[],links:[],view:{x:60,y:60,z:1}});D.wb.cur=id}})}
 /* ---------- carrying a card to the workbench ---------- */
-const ghost=document.createElement('div');ghost.id='ghost';ghost.hidden=true;document.body.appendChild(ghost);
-function carryStart(d,x,y){const ids=d.group?selIds():[d.id];d.carry=ids;const t=D.tasks[d.id];
-  ghost.textContent=((t.text||'（空）').split('\n')[0])+(ids.length>1?'  +'+(ids.length-1):'');ghost.hidden=false;ghostAt(x,y);cv.classList.add('carrying')}
-function ghostAt(x,y){ghost.style.transform='translate('+(x+12)+'px,'+(y+10)+'px)'}
-function ghostOff(){ghost.hidden=true;cv.classList.remove('carrying')}
+let G=null;
+/* the copy keeps the card's size at the current zoom and stays under the same point of the card you grabbed */
+function carryStart(d,x,y){const ids=d.group?selIds():[d.id];d.carry=ids;const src=cardEl(d.id);if(!src)return;
+  const r=src.getBoundingClientRect(),z=D.view.z,el=src.cloneNode(true);el.removeAttribute('data-id');el.classList.remove('sel','editing');el.classList.add('lift');
+  el.style.width=src.offsetWidth+'px';if(ids.length>1){const n=document.createElement('span');n.className='lift-n';n.textContent=ids.length;el.appendChild(n)}
+  document.body.appendChild(el);G={el,r,z,ox:x-r.left,oy:y-r.top,x,y,raf:0,ids};
+  for(const i of ids){const c=cardEl(i);c&&c.classList.add('carry-src')}
+  G.el.style.transform='translate3d('+r.left+'px,'+r.top+'px,0) scale('+z+')';
+  requestAnimationFrame(()=>{if(!G)return;G.el.classList.add('up');G.lift=1.025;paintLift()});cv.classList.add('carrying');fbar.hidden=true}
+function paintLift(){if(!G)return;G.raf=0;const s=G.z*(G.lift||1);G.el.style.transform='translate3d('+(G.x-G.ox)+'px,'+(G.y-G.oy)+'px,0) scale('+s+')'}
+function ghostAt(x,y){if(!G)return;G.x=x;G.y=y;if(!G.raf)G.raf=requestAnimationFrame(paintLift)}
+/* dropped somewhere else: fade out. Let go inside the canvas: glide back home */
+function ghostOff(back){if(!G)return;const g=G;G=null;cancelAnimationFrame(g.raf);cv.classList.remove('carrying');
+  const done=()=>{g.el.remove();for(const i of g.ids){const c=cardEl(i);c&&c.classList.remove('carry-src')}updateBar()};
+  if(back){g.el.classList.add('home');g.el.classList.remove('up');g.el.style.transform='translate3d('+g.r.left+'px,'+g.r.top+'px,0) scale('+g.z+')';setTimeout(done,210)}
+  else{g.el.style.opacity='0';setTimeout(done,170)}}
 /* ---------- floating toolbar ---------- */
 const FS=[12,13,14,15,16,18,20,22,24,28];
 const fbar=$('#fbar');
@@ -1037,9 +1052,8 @@ window.addEventListener('pointermove',e=>{if(!drag)return;const dx=e.clientX-dra
 window.addEventListener('pointerup',e=>{if(!drag)return;if(drag.pan)cv.classList.remove('panning');
   if(drag.lp)clearTimeout(drag.lp);
   /* a card picked up with a long press: let go over the workbench window to leave a twin there; anywhere else, nothing happens */
-  if(drag.carry){const d=drag;drag=null;ghostOff();
-    if(WBW&&!WBW.closed&&(e.clientX<0||e.clientY<0||e.clientX>innerWidth||e.clientY>innerHeight)){
-      try{WBW.postMessage({xwb:'drop',sx:e.screenX,sy:e.screenY,keys:[...new Set(d.carry.map(i=>tkey(D.tasks[i])))]},wbTarget())}catch(_){}}return}
+  if(drag.carry){const d=drag;drag=null;const out=e.clientX<0||e.clientY<0||e.clientX>innerWidth||e.clientY>innerHeight;ghostOff(!out);
+    if(out&&WBW&&!WBW.closed){try{WBW.postMessage({xwb:'drop',sx:e.screenX,sy:e.screenY,keys:[...new Set(d.carry.map(i=>tkey(D.tasks[i])))]},wbTarget())}catch(_){}}return}
   if(drag.fr){if(drag.moved){drag.fr.updatedAt=now();touch()}drag=null;return}
   if(drag.box){drag.box.remove();if(ui.multi.size<2){const one=[...ui.multi][0]||null;select(one)}drag=null;return}
   /* a plain click on one of several picked cards narrows the pick to that card */
@@ -1312,12 +1326,17 @@ function wbBoot(){
     rangeEl.innerHTML=esc(rangeOf(pg))+(RO()?'　<button class="wb-back" data-a="back">回到当前页</button>':'');
     root.querySelectorAll('.wb-tb button[data-a]:not(.wb-back)').forEach(b=>b.hidden=RO()&&b.dataset.a!=='atlas');
     const{lit,by}=evalPage(pg);
-    zEl.innerHTML=pg.zones.map(z=>'<div class="wz'+(zsel===z.id?' sel':'')+'" data-z="'+z.id+'" style="left:'+z.x+'px;top:'+z.y+'px;width:'+z.w+'px;height:'+z.h+'px"><div class="wz-t">'+esc(z.title||'板块')+'</div><div class="wz-rs"></div></div>').join('');
-    cEl.innerHTML=pg.cards.map(c=>cardHTML(pg,c,lit,by)).join('');
+    keyed(zEl,'z',pg.zones.map(z=>[z.id,'<div class="wz" data-z="'+z.id+'" style="left:'+z.x+'px;top:'+z.y+'px;width:'+z.w+'px;height:'+z.h+'px"><div class="wz-t">'+esc(z.title||'板块')+'</div><div class="wz-rs"></div></div>']));
+    keyed(cEl,'c',pg.cards.map(c=>[c.id,cardHTML(pg,c,lit,by)]));paintSel();
     emptyEl.hidden=!!(pg.cards.length||pg.zones.length);
     emptyEl.innerHTML=RO()?'这一页是空的':'从画布把卡片拖到这个窗口里，就会放一个分身<br>右键空白处可以新建触发卡、目的卡，或者放入板块';
     applyV();drawLinks();placeBar()}
-  function cardHTML(pg,c,lit,by){const cls=['wc',c.kind];if(c.color)cls.push('c-'+c.color);if(lit[c.id])cls.push('lit');if(sel===c.id)cls.push('sel');let h='';
+  /* only cards that actually changed are replaced, so hover, selection and the glass stay calm while updates arrive */
+  function keyed(box,attr,list){const old=new Map([...box.children].map(el=>[el.dataset[attr],el]));const keep=new Set();
+    for(const[id,html]of list){keep.add(id);const el=old.get(id);if(el&&el._h===html)continue;const t=document.createElement('div');t.innerHTML=html;const n=t.firstChild;n._h=html;
+      if(el)el.replaceWith(n);else box.appendChild(n)}
+    for(const[id,el]of old)if(!keep.has(id))el.remove()}
+  function cardHTML(pg,c,lit,by){const cls=['wc',c.kind];if(c.color)cls.push('c-'+c.color);if(lit[c.id])cls.push('lit');let h='';
     if(c.kind==='twin'){const info=V?(pg.snap&&pg.snap[c.k]):S.cards[c.k];if(info&&info.hid)cls.push('hid');if(info&&info.done)cls.push('done');
       const txt=info?info.text:'（这张卡片已经不在了）';
       h='<div class="tx">'+(info&&!V&&!info.note?'<span class="cb'+(info.done?' on':'')+'"></span>':'')+esc(txt||'（空）')+'</div>';
