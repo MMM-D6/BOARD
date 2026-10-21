@@ -463,7 +463,7 @@ body.wbmode>*:not(#wb):not(#menu):not(#dlg):not(#toast){display:none!important}
 'use strict';
 /* opened as the workbench window (#wb): it only shows data and sends changes back; it never saves */
 const WB=location.hash==='#wb';
-const XV=23;/* both windows must run the same version of this file */
+const XV=24;/* both windows must run the same version of this file */
 /* ---------- data ---------- */
 const now=()=>new Date().toISOString();
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -737,8 +737,16 @@ function nbRenderList(){const items=nbItems();nbFolders(items);
       (nbFolder==='all'?'<div class="fl">'+FOLDER_SVG+esc(x.f?x.f.title||'页面':(t.text||'').split('\n')[0]||'卡片')+'</div>':'')+'</div>'}
   nbList.innerHTML=html||'<div class="nb-empty">'+(terms.length?'没有找到':'没有备忘录')+'</div>'}
 let nbBase=null;
-/* words added to a note are written down when you leave it */
-function flushWords(){if(!nbBase)return;const t=D.tasks[nbBase.id];if(t){const d=plainLen(t.nb)-nbBase.len;if(d>0){logEv(t,'words',d);touch()}nbBase.len=plainLen(t.nb)}}
+/* the workbench counts what a note holds right now, so nothing is written down when you leave it.
+   Typing stays light: the note itself is kept up to date at once, the heavier work (saving, the
+   twins, the notes list, the workbench) runs once you pause, and always before the note closes */
+let nbT=0;
+function nbCommit(){clearTimeout(nbT);nbT=0;const t=D.tasks[nbId];if(!t||nb.hidden)return;
+  t.nb=nbEd.innerText.replace(/\n$/,'');if(!t.nb.trim())t.nb='';t.nbAt=now();t.updatedAt=now();
+  if(t.autoT)t.text=t.nb.split('\n')[0].trim()||'新备忘录';
+  nb.querySelector('.nb-date').textContent=nbDate(t.nbAt);touch();nbRenderList();
+  const k=cardEl(t.id)&&cardEl(t.id).querySelector('.nbk');if(k)k.classList.toggle('has',!!t.nb)}
+function flushWords(){if(nbT)nbCommit()}
 function nbShow(t,find){if(TM&&TM.id!==t.id)stopTimer(false);flushWords();nbId=t.id;nbSnapped=false;nbBase={id:t.id,len:plainLen(t.nb)};logEv(t,'open',1);touch();
   nb.querySelector('.nb-date').textContent=nbDate(t.nbAt);
   nb.querySelector('.nb-src').innerHTML='来自卡片 <a title="回到画布上的这张卡片">'+esc((t.text||'（空）').split('\n')[0])+'</a>';
@@ -750,11 +758,14 @@ function nbShow(t,find){if(TM&&TM.id!==t.id)stopTimer(false);flushWords();nbId=t
 function openNb(id,find){const t=D.tasks[id];if(!t)return;if(ui.editing){commitEdit();renderCanvas()}select(id);nb.hidden=false;nbShow(t,find)}
 function closeNb(keep){if(nb.hidden)return;if(TM)stopTimer(false);flushWords();nbBase=null;if(nb.contains(document.activeElement))document.activeElement.blur();nb.hidden=true;const id=nbId;nbId=null;nbQ.value='';if(!keep){renderCanvas();if(id&&D.tasks[id])select(id)}}
 nbEd.addEventListener('input',()=>{const t=D.tasks[nbId];if(!t)return;if(!nbSnapped){snap();nbSnapped=true}
-  t.nb=nbEd.innerText.replace(/\n$/,'');if(!t.nb.trim())t.nb='';t.nbAt=now();t.updatedAt=now();
-  if(t.autoT)t.text=t.nb.split('\n')[0].trim()||'新备忘录';
-  nb.querySelector('.nb-date').textContent=nbDate(t.nbAt);touch();nbRenderList();
-  const k=cardEl(t.id)&&cardEl(t.id).querySelector('.nbk');if(k)k.classList.toggle('has',!!t.nb)});
-nbEd.addEventListener('paste',e=>{e.preventDefault();document.execCommand('insertText',false,(e.clipboardData||window.clipboardData).getData('text/plain'))});
+  clearTimeout(nbT);nbT=setTimeout(nbCommit,350)});
+/* pasting goes in as plain text. Short pieces use the browser's own insert so Ctrl+Z inside the note
+   still works; a long piece is put in directly, because the browser's insert slows to a crawl on big text */
+nbEd.addEventListener('paste',e=>{e.preventDefault();const tx=((e.clipboardData||window.clipboardData).getData('text/plain')||'').replace(/\r\n?/g,'\n');if(!tx)return;
+  if(tx.length<1500){document.execCommand('insertText',false,tx);return}
+  const sl=getSelection();if(!sl.rangeCount)return;const r=sl.getRangeAt(0);if(!nbEd.contains(r.commonAncestorContainer))return;
+  r.deleteContents();const n=document.createTextNode(tx);r.insertNode(n);const c=document.createRange();c.setStartAfter(n);c.collapse(true);
+  sl.removeAllRanges();sl.addRange(c);nbEd.dispatchEvent(new Event('input'))});
 nbList.addEventListener('click',e=>{const it=e.target.closest('.nb-it');if(it&&it.dataset.id!==nbId&&D.tasks[it.dataset.id])nbShow(D.tasks[it.dataset.id])});
 nb.querySelector('.nb-folders').addEventListener('click',e=>{const fd=e.target.closest('.nb-fd');if(fd){nbFolder=fd.dataset.f;nbRenderList()}});
 nbQ.addEventListener('input',nbRenderList);
@@ -884,7 +895,7 @@ function ensureWb(){if(D.wb&&Array.isArray(D.wb.pages)&&D.wb.pages.length)return
 const wbPage=id=>D.wb.pages.find(p=>p.id===(id||D.wb.cur));
 function keyTask(k){let best=null;for(const t of Object.values(D.tasks))if(tkey(t)===k){if(!t.hid)return t;best=best||t}return best}
 function wbState(){ensureWb();const pg=wbPage();const cards={};
-  for(const c of pg.cards)if(c.kind==='twin'&&!cards[c.k]){const t=keyTask(c.k);cards[c.k]=t?{text:t.text||'',done:!!t.done,note:!!t.note,color:t.color||'',nb:!!(t.nb&&t.nb.trim()),hid:!!t.hid}:null}
+  for(const c of pg.cards)if(c.kind==='twin'&&!cards[c.k]){const t=keyTask(c.k);cards[c.k]=t?{text:t.text||'',done:!!t.done,note:!!t.note,color:t.color||'',nb:!!(t.nb&&t.nb.trim()),w:plainLen(t.nb),hid:!!t.hid}:null}
   return{v:XV,wb:D.wb,cards,log:(D.log||[]).filter(x=>x.t>=pg.start),clip:CLIP?CLIP.map(c=>c.key):null}}
 function wbSend(){if(!WBW||WBW.closed)return;try{WBW.postMessage({xwb:'state',s:wbState()},wbTarget())}catch(_){}}
 window.addEventListener('message',e=>{const m=e.data;if(WB||!m||!m.xwb||!okOrigin(e.origin))return;
@@ -931,7 +942,7 @@ function wbApply(op){ensureWb();const pg=wbPage(),C=id=>pg.cards.find(c=>c.id===
     else if(T==='ambStart'){if(!pg.ambRun&&[15,30,60].includes(op.len))pg.ambRun={t0:now(),len:op.len}}
     else if(T==='ambStop')ambEnd(pg,false)
     else if(T==='flip'){/* the page closes with a copy of each card's words, so it reads the same later */
-      ambEnd(pg,false);pg.end=now();pg.snap={};for(const c of pg.cards)if(c.kind==='twin'){const t=keyTask(c.k);pg.snap[c.k]=t?{text:t.text||'',color:t.color||''}:null}
+      ambEnd(pg,false);pg.end=now();pg.snap={};for(const c of pg.cards)if(c.kind==='twin'){const t=keyTask(c.k);pg.snap[c.k]=t?{text:t.text||'',color:t.color||'',w:plainLen(t.nb)}:null}
       const id=uid();D.wb.pages.push({id,title:'',start:now(),end:null,cards:[],zones:[],links:[],view:{x:60,y:60,z:1}});D.wb.cur=id}})}
 /* ---------- carrying a card to the workbench ---------- */
 let G=null;
@@ -1306,7 +1317,7 @@ $('#tidyBtn').addEventListener('mousedown',e=>e.preventDefault());$('#tidyBtn').
 $('#reconnect').onclick=reconnect;
 function exportJSON(){const b=new Blob([JSON.stringify(D,null,1)],{type:'application/json'});const a=document.createElement('a');const d=new Date();a.href=URL.createObjectURL(b);a.download=pad(d.getFullYear()%100)+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'-'+pad(d.getHours())+pad(d.getMinutes())+'-X-backup.json';a.style.display='none';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
 $('#impFile').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;try{const inc=norm(JSON.parse(await f.text()));mutate(()=>{D=merge(D,inc)});toast('已合并：较新的条目覆盖较旧的')}catch(err){toast('这个文件读不了：'+err.message)}};
-window.addEventListener('beforeunload',()=>{if(dirty&&fileHandle)writeFile()});
+window.addEventListener('beforeunload',()=>{flushWords();if(dirty&&fileHandle)writeFile()});
 
 /* ---------- boot ---------- */
 (async()=>{
@@ -1354,7 +1365,7 @@ function wbBoot(){
   const mmdd=iso=>{const d=new Date(iso);return(d.getMonth()+1)+'月'+d.getDate()+'日 '+hm(d)};
   const rangeOf=pg=>mmdd(pg.start)+' – '+(pg.end?mmdd(pg.end):'至今');
 /* every rule has its own number, so each threshold stays editable */
-  const RULES={min:['计时累计满',' 分钟',30],rounds:['完成',' 轮计时',2],words:['备忘录多写',' 字',300],tick:['打勾',' 次',1],res:['记下',' 条阻力',1],hide:['被隐藏（做完收起）',' 次',1],open:['打开备忘录',' 次',1],amb:['漫计时累计满',' 分钟',60],ambR:['完成',' 轮漫计时',2]};
+  const RULES={min:['计时累计满',' 分钟',30],rounds:['完成',' 轮计时',2],words:['备忘录写到',' 字',300],tick:['打勾',' 次',1],res:['记下',' 条阻力',1],hide:['被隐藏（做完收起）',' 次',1],open:['打开备忘录',' 次',1],amb:['漫计时累计满',' 分钟',60],ambR:['完成',' 轮漫计时',2]};
   const AMB=r=>r&&(r.type==='amb'||r.type==='ambR');
   const ruleText=r=>{const R=RULES[r&&r.type]||RULES.min;return R[0]+' '+(r&&r.n||R[2])+R[1]};
   function linked(pg,id){return pg.links.filter(l=>l.a===id||l.b===id).map(l=>pg.cards.find(c=>c.id===(l.a===id?l.b:l.a))).filter(Boolean)}
@@ -1362,9 +1373,9 @@ function wbBoot(){
   function evalPage(pg){const L=logOf(pg),by={};for(const x of L)(by[x.k]=by[x.k]||[]).push(x);const lit={},prog={};
     for(const c of pg.cards)if(c.kind==='twin')lit[c.id]=!!(by[c.k]&&by[c.k].length);
     /* scope 'page' counts every card on this page; otherwise only the cards linked to it. A card with several twins counts once */
-    for(const c of pg.cards)if(c.kind==='trig'){const pool=c.rule&&c.rule.scope==='page'?pg.cards:linked(pg,c.id);const ks=[...new Set(pool.filter(o=>o.kind==='twin').map(o=>o.k))];const ev=ks.flatMap(k=>by[k]||[]);const r=c.rule||{type:'min',n:30},n=r.n||RULES[r.type][2]||1;
+    for(const c of pg.cards)if(c.kind==='trig'){const pool=c.rule&&c.rule.scope==='page'?pg.cards:linked(pg,c.id);const ks=[...new Set(pool.filter(o=>o.kind==='twin').map(o=>o.k))];const ev=ks.flatMap(k=>by[k]||[]);const info=k=>V?(pg.snap&&pg.snap[k]):S.cards[k];const r=c.rule||{type:'min',n:30},n=r.n||RULES[r.type][2]||1;
       const sum=e=>ev.filter(x=>x.e===e).reduce((a,x)=>a+(+x.v||0),0),cnt=(e,f)=>ev.filter(x=>x.e===e&&(!f||f(x))).length;
-      const cur=r.type==='amb'?ambSum(pg):r.type==='ambR'?(pg.amb||[]).filter(x=>x.full).length:r.type==='min'?sum('timer'):r.type==='rounds'?cnt('timer',x=>x.full):r.type==='words'?sum('words'):cnt(r.type);
+      const cur=r.type==='amb'?ambSum(pg):r.type==='ambR'?(pg.amb||[]).filter(x=>x.full).length:r.type==='min'?sum('timer'):r.type==='rounds'?cnt('timer',x=>x.full):r.type==='words'?ks.reduce((a,k)=>a+((info(k)||{}).w||0),0):cnt(r.type);
       prog[c.id]={cur,n,u:UNIT[r.type]||''};lit[c.id]=cur>=n}
     for(const c of pg.cards)if(c.kind==='goal')lit[c.id]=linked(pg,c.id).some(o=>lit[o.id]);
     return{lit,by,prog}}
@@ -1393,10 +1404,11 @@ function wbBoot(){
     if(c.kind==='twin'){const info=V?(pg.snap&&pg.snap[c.k]):S.cards[c.k];if(info&&info.hid)cls.push('hid');if(info&&info.done)cls.push('done');
       const txt=info?info.text:'（这张卡片已经不在了）';
       h='<div class="tx">'+(info&&!V&&!info.note?'<span class="cb'+(info.done?' on':'')+'"></span>':'')+esc(txt||'（空）')+'</div>';
-      const ev=by[c.k]||[],tm=ev.filter(x=>x.e==='timer'),wd=ev.filter(x=>x.e==='words');
-      if(tm.length||wd.length){const st=tm.reduce((a,x)=>a+(+x.v||0),0),sw=wd.reduce((a,x)=>a+(+x.v||0),0);
-        h+='<div class="rec"><div class="col">'+tm.map(x=>'<span>'+x.v+'min</span>').join('')+'</div><div class="col">'+wd.map(x=>'<span>'+x.v+'word</span>').join('')+'</div>'+
-          '<div class="sum"><span>'+(tm.length?st+'min':'')+'</span><span>'+(wd.length?sw+'word':'')+'</span></div></div>'}}
+      /* left: each timer run; right: how many words the note holds right now */
+      const ev=by[c.k]||[],tm=ev.filter(x=>x.e==='timer'),wn=info&&info.w||0;
+      if(tm.length||wn){const st=tm.reduce((a,x)=>a+(+x.v||0),0);
+        h+='<div class="rec"><div class="col">'+tm.map(x=>'<span>'+x.v+'min</span>').join('')+'</div><div class="col">'+(wn?'<span>'+wn+'word</span>':'')+'</div>'+
+          (tm.length>1?'<div class="sum"><span>'+st+'min</span><span></span></div>':'')+'</div>'}}
     else if(c.kind==='trig'){const pageScope=c.rule&&(c.rule.scope==='page'||AMB(c.rule)),ln=new Set(linked(pg,c.id).filter(o=>o.kind==='twin').map(o=>o.k)).size;
       const cap=pageScope?(c.text?esc(ruleText(c.rule)):''):(ln?'看连着的 '+ln+' 张卡片':'还没有连到卡片')+(c.text?' · '+esc(ruleText(c.rule)):'');
       const pr=prog[c.id]||{cur:0,n:1,u:''},f=Math.min(1,pr.cur/pr.n);
