@@ -388,6 +388,18 @@ body.wbmode>*:not(#wb):not(#menu):not(#dlg):not(#toast){display:none!important}
 #wb .wc.twin.done .tx{opacity:.75}
 #wb .wc .cb{display:inline-block;width:.8em;height:.8em;border-radius:.2em;box-shadow:inset 0 0 0 1px var(--muted);margin-right:.35em;vertical-align:-.05em}
 #wb .wc .cb.on{background:var(--accent);box-shadow:none}
+/* trigger cards: the page's fixed metrics, cool glass with a slim progress bar */
+#wb .wc.trig{background:linear-gradient(180deg,rgba(238,245,251,.97),rgba(226,236,246,.92));
+  box-shadow:inset 0 0 0 .6px rgba(31,95,138,.24),inset 0 1px 0 rgba(255,255,255,.95),0 1px 2px rgba(15,30,45,.06),0 .5em 1.4em -.6em rgba(15,30,45,.18)}
+#wb .wc.trig .k{display:flex;justify-content:space-between;align-items:baseline;gap:.6em;color:rgba(31,95,138,.75)}
+#wb .wc.trig .pv{font-weight:600;letter-spacing:.02em;font-variant-numeric:tabular-nums;color:var(--ink);opacity:.7;white-space:nowrap}
+#wb .wc.trig .tx{font-weight:600}
+#wb .wc .pb{height:.34em;margin-top:.55em;border-radius:.2em;background:rgba(31,95,138,.12);overflow:hidden;box-shadow:inset 0 .5px 1px rgba(15,30,45,.1)}
+#wb .wc .pb i{display:block;height:100%;border-radius:.2em;background:linear-gradient(90deg,rgba(31,95,138,.55),rgba(64,140,190,.85));transition:width .6s cubic-bezier(.2,.8,.2,1)}
+#wb .wc.trig.lit .pb i{background:linear-gradient(90deg,#e2a93e,#f6d27e);box-shadow:0 0 .5em rgba(240,190,90,.6)}
+#wb .wc.trig.lit .k{color:#b07d1e}
+@media (prefers-color-scheme:dark){#wb .wc.trig{background:linear-gradient(180deg,rgba(36,50,62,.96),rgba(28,40,52,.92));box-shadow:inset 0 0 0 .6px rgba(124,182,222,.28),inset 0 1px 0 rgba(255,255,255,.08),0 .5em 1.4em -.6em rgba(0,0,0,.5)}
+  #wb .wc.trig .k{color:rgba(124,182,222,.8)}#wb .wc .pb{background:rgba(124,182,222,.14)}#wb .wc .pb i{background:linear-gradient(90deg,rgba(124,182,222,.55),rgba(124,182,222,.9))}}
 #wb .wc.goal{background:linear-gradient(180deg,rgba(255,255,255,.6),rgba(255,255,255,.35))}
 @media (prefers-color-scheme:dark){#wb .wc.goal{background:linear-gradient(180deg,rgba(255,255,255,.07),rgba(255,255,255,.03))}}
 /* records: two columns, one line per entry, faint totals under a hairline */
@@ -903,6 +915,9 @@ function wbApply(op){ensureWb();const pg=wbPage(),C=id=>pg.cards.find(c=>c.id===
     else if(T==='del'){pg.cards=pg.cards.filter(c=>!op.ids.includes(c.id));pg.links=pg.links.filter(l=>!op.ids.includes(l.a)&&!op.ids.includes(l.b))}
     else if(T==='link'){if(op.a!==op.b&&!pg.links.some(l=>(l.a===op.a&&l.b===op.b)||(l.a===op.b&&l.b===op.a)))pg.links.push({id:uid(),a:op.a,b:op.b})}
     else if(T==='unlink')pg.links=pg.links.filter(l=>l.id!==op.id)
+    else if(T==='tidyAll'){for(const[id,x,y]of op.pos){const c=C(id);if(c){c.x=Math.round(x);c.y=Math.round(y)}}
+      for(const[id,x,y,w,h]of op.zones){const z=Z(id);if(z)Object.assign(z,{x:Math.round(x),y:Math.round(y),w:Math.round(w),h:Math.round(h)})}
+      for(const l of pg.links){const p=op.ports[l.id];if(p){l.pa=p[0];l.pb=p[1]}else{delete l.pa;delete l.pb}}}
     else if(T==='ports'){for(const l of pg.links){const p=op.map[l.id];if(p){l.pa=p[0];l.pb=p[1]}}}
     else if(T==='zoneAdd'){for(const z of op.zones)pg.zones.push({id:uid(),x:Math.round(op.x+z.x),y:Math.round(op.y+z.y),w:z.w,h:z.h,title:z.title})}
     else if(T==='zone'){const z=Z(op.id);if(z)Object.assign(z,op.set)}
@@ -1310,7 +1325,7 @@ function wbBoot(){
   document.body.classList.add('wbmode');document.title='X 工作台';
   const root=$('#wb');root.hidden=false;
   root.innerHTML='<div class="wb-tb"><span class="wb-title" title="点一下改名"></span><span class="wb-range"></span><span class="wb-amb"></span><span class="wb-off" hidden>画布窗口没有连上</span><span class="wb-sp"></span>'+
-    '<button data-a="tidy" title="理顺连线，不动卡片">整理连线</button><button data-a="atlas">地图册</button></div>'+
+    '<button data-a="tidy" title="触发卡排到左上角，其他卡片按连线整理">整理</button><button data-a="atlas">地图册</button></div>'+
     '<div class="wb-stage"><div class="wb-world"><div class="wb-zones"></div><svg class="wb-links" width="1" height="1"></svg><div class="wb-cards"></div></div><div class="wb-empty" hidden></div></div><div class="wb-atlas" hidden></div><div class="wb-bar" hidden></div><div class="wb-ambl" hidden></div>';
   const stage=root.querySelector('.wb-stage'),world=root.querySelector('.wb-world'),zEl=root.querySelector('.wb-zones'),lEl=root.querySelector('.wb-links'),cEl=root.querySelector('.wb-cards'),
     atlas=root.querySelector('.wb-atlas'),emptyEl=root.querySelector('.wb-empty'),titleEl=root.querySelector('.wb-title'),rangeEl=root.querySelector('.wb-range'),offEl=root.querySelector('.wb-off');
@@ -1341,14 +1356,16 @@ function wbBoot(){
   const AMB=r=>r&&(r.type==='amb'||r.type==='ambR');
   const ruleText=r=>{const R=RULES[r&&r.type]||RULES.min;return R[0]+' '+(r&&r.n||R[2])+R[1]};
   function linked(pg,id){return pg.links.filter(l=>l.a===id||l.b===id).map(l=>pg.cards.find(c=>c.id===(l.a===id?l.b:l.a))).filter(Boolean)}
-  function evalPage(pg){const L=logOf(pg),by={};for(const x of L)(by[x.k]=by[x.k]||[]).push(x);const lit={};
+  const UNIT={min:'分钟',rounds:'轮',words:'字',tick:'次',res:'条',hide:'次',open:'次',amb:'分钟',ambR:'轮'};
+  function evalPage(pg){const L=logOf(pg),by={};for(const x of L)(by[x.k]=by[x.k]||[]).push(x);const lit={},prog={};
     for(const c of pg.cards)if(c.kind==='twin')lit[c.id]=!!(by[c.k]&&by[c.k].length);
     /* scope 'page' counts every card on this page; otherwise only the cards linked to it. A card with several twins counts once */
     for(const c of pg.cards)if(c.kind==='trig'){const pool=c.rule&&c.rule.scope==='page'?pg.cards:linked(pg,c.id);const ks=[...new Set(pool.filter(o=>o.kind==='twin').map(o=>o.k))];const ev=ks.flatMap(k=>by[k]||[]);const r=c.rule||{type:'min',n:30},n=r.n||RULES[r.type][2]||1;
       const sum=e=>ev.filter(x=>x.e===e).reduce((a,x)=>a+(+x.v||0),0),cnt=(e,f)=>ev.filter(x=>x.e===e&&(!f||f(x))).length;
-      lit[c.id]=r.type==='amb'?ambSum(pg)>=n:r.type==='ambR'?(pg.amb||[]).filter(x=>x.full).length>=n:r.type==='min'?sum('timer')>=n:r.type==='rounds'?cnt('timer',x=>x.full)>=n:r.type==='words'?sum('words')>=n:r.type==='res'?cnt('res')>=n:cnt(r.type)>=n}
+      const cur=r.type==='amb'?ambSum(pg):r.type==='ambR'?(pg.amb||[]).filter(x=>x.full).length:r.type==='min'?sum('timer'):r.type==='rounds'?cnt('timer',x=>x.full):r.type==='words'?sum('words'):cnt(r.type);
+      prog[c.id]={cur,n,u:UNIT[r.type]||''};lit[c.id]=cur>=n}
     for(const c of pg.cards)if(c.kind==='goal')lit[c.id]=linked(pg,c.id).some(o=>lit[o.id]);
-    return{lit,by}}
+    return{lit,by,prog}}
 
   /* ---------- drawing ---------- */
   function applyV(){const v=LV;if(typeof placeBar==='function')requestAnimationFrame(()=>placeBar());world.style.transform='translate('+v.x+'px,'+v.y+'px) scale('+v.z+')';const g=20*v.z;stage.style.backgroundSize=g+'px '+g+'px';stage.style.backgroundPosition=v.x+'px '+v.y+'px'}
@@ -1359,9 +1376,9 @@ function wbBoot(){
     paintAmb();
     rangeEl.innerHTML=esc(rangeOf(pg))+(RO()?'　<button class="wb-back" data-a="back">回到当前页</button>':'');
     root.querySelectorAll('.wb-tb button[data-a]:not(.wb-back)').forEach(b=>b.hidden=RO()&&b.dataset.a!=='atlas');
-    const{lit,by}=evalPage(pg);
+    const{lit,by,prog}=evalPage(pg);
     keyed(zEl,'z',pg.zones.map(z=>[z.id,'<div class="wz" data-z="'+z.id+'" style="left:'+z.x+'px;top:'+z.y+'px;width:'+z.w+'px;height:'+z.h+'px"><div class="wz-t">'+esc(z.title||'板块')+'</div><div class="wz-rs"></div></div>']));
-    keyed(cEl,'c',pg.cards.map(c=>[c.id,cardHTML(pg,c,lit,by)]));paintSel();
+    keyed(cEl,'c',pg.cards.map(c=>[c.id,cardHTML(pg,c,lit,by,prog)]));paintSel();
     emptyEl.hidden=!!(pg.cards.length||pg.zones.length);
     emptyEl.innerHTML=RO()?'这一页是空的':'从画布把卡片拖到这个窗口里，就会放一个分身<br>右键空白处可以新建触发卡、目的卡，或者放入板块';
     applyV();drawLinks();placeBar()}
@@ -1370,7 +1387,7 @@ function wbBoot(){
     for(const[id,html]of list){keep.add(id);const el=old.get(id);if(el&&el._h===html)continue;const t=document.createElement('div');t.innerHTML=html;const n=t.firstChild;n._h=html;
       if(el)el.replaceWith(n);else box.appendChild(n)}
     for(const[id,el]of old)if(!keep.has(id))el.remove()}
-  function cardHTML(pg,c,lit,by){const cls=['wc',c.kind];if(c.color)cls.push('c-'+c.color);if(lit[c.id])cls.push('lit');let h='';
+  function cardHTML(pg,c,lit,by,prog){const cls=['wc',c.kind];if(c.color)cls.push('c-'+c.color);if(lit[c.id])cls.push('lit');let h='';
     if(c.kind==='twin'){const info=V?(pg.snap&&pg.snap[c.k]):S.cards[c.k];if(info&&info.hid)cls.push('hid');if(info&&info.done)cls.push('done');
       const txt=info?info.text:'（这张卡片已经不在了）';
       h='<div class="tx">'+(info&&!V&&!info.note?'<span class="cb'+(info.done?' on':'')+'"></span>':'')+esc(txt||'（空）')+'</div>';
@@ -1380,12 +1397,15 @@ function wbBoot(){
           '<div class="sum"><span>'+(tm.length?st+'min':'')+'</span><span>'+(wd.length?sw+'word':'')+'</span></div></div>'}}
     else if(c.kind==='trig'){const pageScope=c.rule&&(c.rule.scope==='page'||AMB(c.rule)),ln=new Set(linked(pg,c.id).filter(o=>o.kind==='twin').map(o=>o.k)).size;
       const cap=pageScope?(c.text?esc(ruleText(c.rule)):''):(ln?'看连着的 '+ln+' 张卡片':'还没有连到卡片')+(c.text?' · '+esc(ruleText(c.rule)):'');
-      h='<div class="k">触发</div><div class="tx">'+esc(c.text||ruleText(c.rule))+'</div>'+(cap?'<div class="rule">'+cap+'</div>':'')}
+      const pr=prog[c.id]||{cur:0,n:1,u:''},f=Math.min(1,pr.cur/pr.n);
+      h='<div class="k"><span>触发</span><span class="pv">'+pr.cur+' / '+pr.n+' '+pr.u+'</span></div><div class="tx">'+esc(c.text||ruleText(c.rule))+'</div>'+
+        '<div class="pb"><i style="width:'+(f*100).toFixed(1)+'%"></i></div>'+(cap?'<div class="rule">'+cap+'</div>':'')}
     else h='<div class="k">目的</div><div class="tx">'+esc(c.text||'（写下这是为了什么）')+'</div>';
     return '<div class="'+cls.join(' ')+'" data-c="'+c.id+'" style="left:'+c.x+'px;top:'+c.y+'px;--s:'+(c.s||1)+';width:'+(c.w||(c.kind==='trig'?12:15.5))+'em">'+h+'<div class="ew" title="拖动改宽度"></div><div class="rz" title="拖动等比例缩放"></div><div class="dot" title="拖到另一张卡片上连线"></div></div>'}
   const cEl_=id=>cEl.querySelector('.wc[data-c="'+id+'"]');
   function box(id){const pg=page(),c=pg.cards.find(x=>x.id===id),el=cEl_(id);return c&&el?{x:c.x,y:c.y,w:el.offsetWidth,h:el.offsetHeight}:null}
   function side(a,b){const ax=a.x+a.w/2,ay=a.y+a.h/2,bx=b.x+b.w/2,by=b.y+b.h/2,dx=bx-ax,dy=by-ay;
+    if(b.x>=a.x+a.w+8||b.x+b.w<=a.x-8)return dx>0?['r','l']:['l','r'];
     return Math.abs(dx)*a.h>Math.abs(dy)*a.w?(dx>0?['r','l']:['l','r']):(dy>0?['b','t']:['t','b'])}
   function port(r,sd,f){f=f==null?.5:f;return sd==='r'?[r.x+r.w,r.y+r.h*f,1,0]:sd==='l'?[r.x,r.y+r.h*f,-1,0]:sd==='b'?[r.x+r.w*f,r.y+r.h,0,1]:[r.x+r.w*f,r.y,0,-1]}
   function curve(p,q){const d=Math.max(30,Math.hypot(q[0]-p[0],q[1]-p[1])*.4);return'M'+p[0]+' '+p[1]+' C'+(p[0]+p[2]*d)+' '+(p[1]+p[3]*d)+','+(q[0]+q[2]*d)+' '+(q[1]+q[3]*d)+','+q[0]+' '+q[1]}
@@ -1394,12 +1414,44 @@ function wbBoot(){
       s+='<path class="l" d="'+d+'"/><path class="hit" data-l="'+l.id+'" d="'+d+'"/>'}
     if(tmp)s+='<path class="tmp" d="'+tmp+'"/>';lEl.innerHTML=s}
   /* spread links that leave the same side of a card so they stop sitting on top of each other */
-  function tidyLinks(){const pg=page();const sides={};const reg=(id,sd,l,end,other)=>{const k=id+sd;(sides[k]=sides[k]||[]).push({l,end,o:other,sd})};
+  function portsMap(){const pg=page();const sides={};const reg=(id,sd,l,end,other)=>{const k=id+sd;(sides[k]=sides[k]||[]).push({l,end,o:other,sd})};
     for(const l of pg.links){const A=box(l.a),B=box(l.b);if(!A||!B)continue;const[sa,sb]=side(A,B);reg(l.a,sa,l,'pa',B);reg(l.b,sb,l,'pb',A)}
     const map={};for(const k in sides){const arr=sides[k];const vert=arr[0].sd==='l'||arr[0].sd==='r';
       arr.sort((p,q)=>vert?(p.o.y+p.o.h/2)-(q.o.y+q.o.h/2):(p.o.x+p.o.w/2)-(q.o.x+q.o.w/2));
       arr.forEach((e,i)=>{const m=map[e.l.id]=map[e.l.id]||[.5,.5];m[e.end==='pa'?0:1]=+((i+1)/(arr.length+1)).toFixed(3)})}
-    send({t:'ports',map});toast('连线已理顺')}
+    return map}
+  /* global tidy: trigger cards line up in the top-left as the page's metrics; everything else is laid
+     out from its links the way the canvas does it (a purpose card, or else the most linked card, on
+     the left, what it links to fanning out to the right), zone by zone, and the links are spread out */
+  function tidyAll(){const pg=page();if(!pg||RO())return;const all=[...pg.cards,...pg.zones];if(!all.length)return;
+    const B={};for(const c of pg.cards){const b=box(c.id);if(b)B[c.id]=b}
+    const x0=Math.min(...all.map(o=>o.x)),y0=Math.min(...all.map(o=>o.y)),GX=40,GY=14;
+    const trig=pg.cards.filter(c=>c.kind==='trig'&&B[c.id]).sort((a,b)=>a.y-b.y||a.x-b.x);
+    let x=x0,y=y0,rowH=0,n=0;for(const c of trig){if(n&&n%4===0){x=x0;y+=rowH+GY;rowH=0}c.x=x;c.y=y;x+=B[c.id].w+GY;rowH=Math.max(rowH,B[c.id].h);n++}
+    const top=trig.length?y+rowH+50:y0;
+    const rest=pg.cards.filter(c=>c.kind!=='trig'&&B[c.id]);
+    const inZ=z=>rest.filter(c=>{const cx=c.x+B[c.id].w/2,cy=c.y+Math.min(B[c.id].h/2,30);return cx>=z.x&&cx<=z.x+z.w&&cy>=z.y&&cy<=z.y+z.h});
+    const zc=pg.zones.map(z=>[z,inZ(z)]),zoned=new Set(zc.flatMap(([,cs])=>cs.map(c=>c.id)));
+    /* zones keep their arrangement, moved as a block below the metrics */
+    if(pg.zones.length){const zx=Math.min(...pg.zones.map(z=>z.x)),zy=Math.min(...pg.zones.map(z=>z.y)),dx=x0-zx,dy=top-zy;
+      for(const[z,cs]of zc){z.x+=dx;z.y+=dy;for(const c of cs){c.x+=dx;c.y+=dy}}}
+    const tree=(cs,ox,oy)=>{const ids=new Set(cs.map(c=>c.id)),adj={};for(const c of cs)adj[c.id]=[];
+      for(const l of pg.links)if(ids.has(l.a)&&ids.has(l.b)){adj[l.a].push(l.b);adj[l.b].push(l.a)}
+      const C=id=>pg.cards.find(c=>c.id===id),seen=new Set(),roots=[];
+      const order=cs.slice().sort((a,b)=>(a.kind==='goal'?0:1)-(b.kind==='goal'?0:1)||adj[b.id].length-adj[a.id].length||a.y-b.y||a.x-b.x);
+      const kids={};for(const r of order){if(seen.has(r.id))continue;roots.push(r.id);seen.add(r.id);const q=[r.id];
+        while(q.length){const u=q.shift();kids[u]=adj[u].filter(v=>!seen.has(v)).sort((a,b)=>C(a).y-C(b).y);for(const v of kids[u]){seen.add(v);q.push(v)}}}
+      roots.sort((a,b)=>C(a).y-C(b).y||C(a).x-C(b).x);
+      const memo={};const size=id=>memo[id]!=null?memo[id]:(memo[id]=Math.max(B[id].h,(kids[id]||[]).reduce((s,k)=>s+size(k),0)+GY*Math.max(0,(kids[id]||[]).length-1)));
+      const place=(id,px,py)=>{const c=C(id),k=kids[id]||[];c.x=px;if(!k.length){c.y=py;return}const sz=size(id),cb=k.reduce((s,q)=>s+size(q),0)+GY*(k.length-1);let cy=py+(sz-cb)/2;
+        for(const q of k){place(q,px+B[id].w+GX,cy);cy+=size(q)+GY}const f=C(k[0]),l=C(k[k.length-1]);c.y=Math.min(Math.max((f.y+B[k[0]].h/2+l.y+B[k[k.length-1]].h/2)/2-B[id].h/2,py),py+sz-B[id].h)};
+      let yy=oy,right=ox,bottom=oy;for(const r of roots){place(r,ox,yy);yy+=size(r)+36}
+      for(const c of cs){right=Math.max(right,c.x+B[c.id].w);bottom=Math.max(bottom,c.y+B[c.id].h)}return{right,bottom}};
+    for(const[z,cs]of zc){if(!cs.length)continue;const e=tree(cs,z.x+20,z.y+44);z.w=Math.max(z.w,e.right-z.x+20);z.h=Math.max(z.h,e.bottom-z.y+20)}
+    const free=rest.filter(c=>!zoned.has(c.id));
+    if(free.length){const ft=pg.zones.length?Math.max(...pg.zones.map(z=>z.y+z.h))+50:top;tree(free,x0,ft)}
+    drawLinks();const ports=portsMap();
+    send({t:'tidyAll',pos:pg.cards.map(c=>[c.id,c.x,c.y]),zones:pg.zones.map(z=>[z.id,z.x,z.y,z.w,z.h]),ports});toast('已整理')}
 
   /* ---------- 漫计时 ---------- */
   const ambEl=root.querySelector('.wb-amb'),ambL=root.querySelector('.wb-ambl');
@@ -1431,7 +1483,7 @@ function wbBoot(){
     if(a==='back'){V=null;LV=null;atlas.hidden=true;render()}
     else if(a==='atlas'){atlas.hidden=!atlas.hidden;if(!atlas.hidden)renderAtlas()}
     else if(RO())return;
-    else if(a==='tidy')tidyLinks();
+    else if(a==='tidy')tidyAll();
 });
   async function flip(){if(await askChoice('翻篇','收起这一页放进地图册，翻开新的空白一页？',['取消','翻篇'])==='翻篇'){send({t:'flip'});LV=null}}
   /* zones and templates in one place: a blank zone, every saved template, and the template tools */
@@ -1530,7 +1582,7 @@ function wbBoot(){
     const p=toW(e.clientX,e.clientY);
     showMenu(e.clientX,e.clientY,[...(S.clip?[{l:'在此处粘贴分身',f:()=>send({t:'addTwins',keys:S.clip,x:p.x,y:p.y})},'-']:[]),
       {l:'新建触发卡',f:()=>send({t:'addCard',kind:'trig',text:'',x:p.x,y:p.y})},{l:'新建目的卡',f:()=>send({t:'addCard',kind:'goal',text:'',x:p.x,y:p.y})},'-',
-      ...zoneItems(p),'-',{l:'整理连线',f:tidyLinks},{l:'撤销',k:'Ctrl+Z',f:()=>send({t:'undo'})},{l:'还原',k:'Ctrl+Y',f:()=>send({t:'redo'})},'-',{l:'翻篇…',f:flip}])});
+      ...zoneItems(p),'-',{l:'全局整理',f:tidyAll},{l:'撤销',k:'Ctrl+Z',f:()=>send({t:'undo'})},{l:'还原',k:'Ctrl+Y',f:()=>send({t:'redo'})},'-',{l:'翻篇…',f:flip}])});
   document.addEventListener('keydown',e=>{if($('#dlg').style.display==='flex'||!S)return;if(e.target.matches&&e.target.matches('input,textarea,select'))return;
     if(e.key==='Escape'){hideMenu();linking=null;stage.classList.remove('linking');if(!atlas.hidden)atlas.hidden=true;else{sel=null;zsel=null;paintSel()}return}
     if(RO())return;
