@@ -463,6 +463,7 @@ body.wbmode>*:not(#wb):not(#menu):not(#dlg):not(#toast){display:none!important}
 'use strict';
 /* opened as the workbench window (#wb): it only shows data and sends changes back; it never saves */
 const WB=location.hash==='#wb';
+const XV=23;/* both windows must run the same version of this file */
 /* ---------- data ---------- */
 const now=()=>new Date().toISOString();
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
@@ -884,7 +885,7 @@ const wbPage=id=>D.wb.pages.find(p=>p.id===(id||D.wb.cur));
 function keyTask(k){let best=null;for(const t of Object.values(D.tasks))if(tkey(t)===k){if(!t.hid)return t;best=best||t}return best}
 function wbState(){ensureWb();const pg=wbPage();const cards={};
   for(const c of pg.cards)if(c.kind==='twin'&&!cards[c.k]){const t=keyTask(c.k);cards[c.k]=t?{text:t.text||'',done:!!t.done,note:!!t.note,color:t.color||'',nb:!!(t.nb&&t.nb.trim()),hid:!!t.hid}:null}
-  return{wb:D.wb,cards,log:(D.log||[]).filter(x=>x.t>=pg.start),clip:CLIP?CLIP.map(c=>c.key):null}}
+  return{v:XV,wb:D.wb,cards,log:(D.log||[]).filter(x=>x.t>=pg.start),clip:CLIP?CLIP.map(c=>c.key):null}}
 function wbSend(){if(!WBW||WBW.closed)return;try{WBW.postMessage({xwb:'state',s:wbState()},wbTarget())}catch(_){}}
 window.addEventListener('message',e=>{const m=e.data;if(WB||!m||!m.xwb||!okOrigin(e.origin))return;
   if(m.xwb==='hello'){WBW=e.source;wbSend()}
@@ -1324,21 +1325,22 @@ window.addEventListener('beforeunload',()=>{if(dirty&&fileHandle)writeFile()});
 function wbBoot(){
   document.body.classList.add('wbmode');document.title='X 工作台';
   const root=$('#wb');root.hidden=false;
-  root.innerHTML='<div class="wb-tb"><span class="wb-title" title="点一下改名"></span><span class="wb-range"></span><span class="wb-amb"></span><span class="wb-off" hidden>画布窗口没有连上</span><span class="wb-sp"></span>'+
+  root.innerHTML='<div class="wb-tb"><span class="wb-title" title="点一下改名"></span><span class="wb-range"></span><span class="wb-amb"></span><span class="wb-off" hidden>画布窗口没有连上</span><span class="wb-off wb-old" hidden>画布窗口还是旧版本，请刷新一下画布窗口</span><span class="wb-sp"></span>'+
     '<button data-a="tidy" title="触发卡排到左上角，其他卡片按连线整理">整理</button><button data-a="atlas">地图册</button></div>'+
     '<div class="wb-stage"><div class="wb-world"><div class="wb-zones"></div><svg class="wb-links" width="1" height="1"></svg><div class="wb-cards"></div></div><div class="wb-empty" hidden></div></div><div class="wb-atlas" hidden></div><div class="wb-bar" hidden></div><div class="wb-ambl" hidden></div>';
   const stage=root.querySelector('.wb-stage'),world=root.querySelector('.wb-world'),zEl=root.querySelector('.wb-zones'),lEl=root.querySelector('.wb-links'),cEl=root.querySelector('.wb-cards'),
-    atlas=root.querySelector('.wb-atlas'),emptyEl=root.querySelector('.wb-empty'),titleEl=root.querySelector('.wb-title'),rangeEl=root.querySelector('.wb-range'),offEl=root.querySelector('.wb-off');
+    atlas=root.querySelector('.wb-atlas'),emptyEl=root.querySelector('.wb-empty'),titleEl=root.querySelector('.wb-title'),rangeEl=root.querySelector('.wb-range'),offEl=root.querySelector('.wb-off'),oldEl=root.querySelector('.wb-old');
+  const stale=()=>S&&S.v!==XV;
   let S=null,V=null,LV=null,sel=null,zsel=null,drag=null,linking=null,lastState=0,calX=null,calY=null,viewT=0;const PL={};
   const opener=window.opener;
   const target=wbTarget,ok=okOrigin;
   const alive=()=>opener&&!opener.closed;
-  function send(op){if(!alive())return toast('画布窗口已经关闭，改动没法保存');opener.postMessage({xwb:'op',op},target())}
+  function send(op){if(!alive())return toast('画布窗口已经关闭，改动没法保存');if(stale()&&op.t!=='undo'&&op.t!=='redo'&&op.t!=='view')return toast('画布窗口还是旧版本，请先刷新画布窗口');opener.postMessage({xwb:'op',op},target())}
   function hello(){if(alive())opener.postMessage({xwb:'hello'},target())}
   if(!opener){emptyEl.hidden=false;emptyEl.innerHTML='请从画布窗口右键空白处的「工作台」打开';return}
   hello();setInterval(()=>{const stale=Date.now()-lastState>4000;offEl.hidden=!stale||!S;if(stale)hello()},1500);
   window.addEventListener('message',e=>{const m=e.data;if(!m||!m.xwb||!ok(e.origin))return;
-    if(m.xwb==='state'){S=m.s;lastState=Date.now();offEl.hidden=true;if(!drag)render();if(!atlas.hidden)renderAtlas()}
+    if(m.xwb==='state'){S=m.s;lastState=Date.now();offEl.hidden=true;oldEl.hidden=!stale();if(!drag)render();if(!atlas.hidden)renderAtlas()}
     else if(m.xwb==='pagelog'){PL[m.id]=m.log;if(V===m.id)render()}
     else if(m.xwb==='drop')onDrop(m)});
   /* where this window's content sits on the screen, so a card let go over it lands where the mouse was */
@@ -1423,7 +1425,7 @@ function wbBoot(){
   /* global tidy: trigger cards line up in the top-left as the page's metrics; everything else is laid
      out from its links the way the canvas does it (a purpose card, or else the most linked card, on
      the left, what it links to fanning out to the right), zone by zone, and the links are spread out */
-  function tidyAll(){const pg=page();if(!pg||RO())return;const all=[...pg.cards,...pg.zones];if(!all.length)return;
+  function tidyAll(){const pg=page();if(!pg||RO())return;if(stale())return toast('画布窗口还是旧版本，请先刷新画布窗口');drag=null;const all=[...pg.cards,...pg.zones];if(!all.length)return;
     const B={};for(const c of pg.cards){const b=box(c.id);if(b)B[c.id]=b}
     const x0=Math.min(...all.map(o=>o.x)),y0=Math.min(...all.map(o=>o.y)),GX=40,GY=14;
     const trig=pg.cards.filter(c=>c.kind==='trig'&&B[c.id]).sort((a,b)=>a.y-b.y||a.x-b.x);
@@ -1451,7 +1453,7 @@ function wbBoot(){
     const free=rest.filter(c=>!zoned.has(c.id));
     if(free.length){const ft=pg.zones.length?Math.max(...pg.zones.map(z=>z.y+z.h))+50:top;tree(free,x0,ft)}
     drawLinks();const ports=portsMap();
-    send({t:'tidyAll',pos:pg.cards.map(c=>[c.id,c.x,c.y]),zones:pg.zones.map(z=>[z.id,z.x,z.y,z.w,z.h]),ports});toast('已整理')}
+    send({t:'tidyAll',pos:pg.cards.map(c=>[c.id,c.x,c.y]),zones:pg.zones.map(z=>[z.id,z.x,z.y,z.w,z.h]),ports});render();toast('已整理')}
 
   /* ---------- 漫计时 ---------- */
   const ambEl=root.querySelector('.wb-amb'),ambL=root.querySelector('.wb-ambl');
@@ -1541,7 +1543,7 @@ function wbBoot(){
     if(drag.rz){const c=pg.cards.find(x=>x.id===drag.rz);c.s=Math.max(.5,Math.min(3,+(drag.s0*(drag.w0+dx)/drag.w0).toFixed(3)));cEl_(c.id).style.setProperty('--s',c.s);drag.moved=true;drawLinks();return}
     if(drag.zr){const z=pg.zones.find(x=>x.id===drag.zr);z.w=Math.max(180,Math.round(drag.w0+dx/LV.z));z.h=Math.max(120,Math.round(drag.h0+dy/LV.z));const el=zEl.querySelector('.wz[data-z="'+z.id+'"]');el.style.width=z.w+'px';el.style.height=z.h+'px';drag.moved=true;return}
     if(drag.ln){const A=box(drag.ln),p=toW(e.clientX,e.clientY);const s=port(A,'r');drawLinks('M'+s[0]+' '+s[1]+' L'+p.x+' '+p.y)}});
-  stage.addEventListener('pointerup',e=>{const d=drag;drag=null;stage.classList.remove('pan');if(!d)return;const pg=page();
+  window.addEventListener('pointerup',e=>{const d=drag;drag=null;stage.classList.remove('pan');if(!d)return;const pg=page();
     if(d.pan){if(!RO()){clearTimeout(viewT);viewT=setTimeout(()=>send({t:'view',view:{x:Math.round(LV.x),y:Math.round(LV.y),z:LV.z}}),400)}return}
     if(d.mv&&d.moved)send({t:'move',list:d.mv.map(([id])=>{const o=pg.cards.find(c=>c.id===id)||pg.zones.find(z=>z.id===id);return[id,o.x,o.y]})});
     else if(d.rz&&d.moved){const c=pg.cards.find(x=>x.id===d.rz);send({t:'scale',id:c.id,s:c.s})}
