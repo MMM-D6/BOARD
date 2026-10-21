@@ -331,6 +331,23 @@ body.wbmode>*:not(#wb):not(#menu):not(#dlg):not(#toast){display:none!important}
 #wb .wb-tb button:hover{color:var(--ink);background:var(--tint)}
 #wb .wb-tb .wb-back{color:var(--accent)}
 #wb .wb-off{font-size:12px;color:var(--warn)}
+/* 漫计时 in the top-left: three small glass pills, a quiet countdown while running, and the page's entries */
+#wb .wb-amb{display:flex;align-items:center;gap:4px;margin-left:10px;padding-left:12px;border-left:.5px solid var(--line)}
+#wb .wb-amb .lbl{font-size:12px;color:var(--muted);margin-right:2px}
+#wb .wb-amb button[data-m]{min-width:30px;height:23px;padding:0 8px;border-radius:12px;font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted);
+  background:linear-gradient(180deg,rgba(255,255,255,.75),rgba(255,255,255,.35));box-shadow:inset 0 0 0 .6px rgba(40,65,88,.16),inset 0 1px 0 rgba(255,255,255,.9),0 1px 2px rgba(15,30,45,.06)}
+#wb .wb-amb button[data-m]:hover{color:var(--ink)}
+#wb .wb-amb .cd{font-size:13px;font-weight:600;font-variant-numeric:tabular-nums;color:var(--accent);min-width:46px;text-align:right}
+#wb .wb-amb .stop{height:23px;padding:0 9px;border-radius:12px;font-size:12px;color:var(--muted);box-shadow:inset 0 0 0 .6px var(--line)}
+#wb .wb-amb .tot{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums;padding:3px 6px;border-radius:6px;cursor:pointer}
+#wb .wb-amb .tot:hover{background:var(--tint);color:var(--ink)}
+@media (prefers-color-scheme:dark){#wb .wb-amb button[data-m]{background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04));box-shadow:inset 0 0 0 .6px rgba(255,255,255,.16),inset 0 1px 0 rgba(255,255,255,.12)}}
+#wb .wb-ambl{position:fixed;z-index:35;min-width:140px;padding:10px 14px 9px;border-radius:12px;font-size:12.5px;line-height:1.7;font-variant-numeric:tabular-nums;
+  background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(246,249,251,.86));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);
+  box-shadow:inset 0 0 0 .6px rgba(40,65,88,.16),inset 0 1px 0 rgba(255,255,255,.95),0 10px 26px -10px rgba(15,30,45,.3)}
+#wb .wb-ambl .s{border-top:.5px solid var(--tint-line);margin-top:4px;padding-top:3px;color:var(--muted)}
+#wb .wb-ambl .e{color:var(--muted)}
+@media (prefers-color-scheme:dark){#wb .wb-ambl{background:linear-gradient(180deg,rgba(44,54,62,.94),rgba(30,38,44,.9));box-shadow:inset 0 0 0 .6px rgba(255,255,255,.12),0 10px 26px -10px rgba(0,0,0,.6)}}
 #wb .wb-stage{flex:1;position:relative;overflow:hidden;background-color:var(--bg);background-image:radial-gradient(var(--grid) 1px,transparent 1px);background-size:20px 20px;touch-action:none}
 #wb .wb-stage.pan{cursor:grabbing}
 #wb .wb-stage.linking{cursor:crosshair}
@@ -482,7 +499,10 @@ function fileStatus(){if(!fileHandle)return'还没有文件，改动只存在浏
    group, so every place the card shows up shares the same record. Only things that happened
    are written; nothing is ever counted as missing. The workbench reads this. */
 function logEv(t,e,v,extra){if(!t||WB)return;(D.log||(D.log=[])).push(Object.assign({id:uid(),t:now(),k:tkey(t),e,v},extra||{}))}
-const plainLen=s=>(s||'').replace(/\s+/g,'').length;
+/* words written: each Chinese / Japanese / Korean character counts as one, and each run of
+   Latin letters or digits counts as one word (so "don't" and "well-known" are one each) */
+const plainLen=s=>{s=s||'';const cjk=(s.match(/[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af]/g)||[]).length;
+  const lat=(s.match(/[A-Za-z0-9\u00c0-\u024f]+(?:['\u2019\-][A-Za-z0-9\u00c0-\u024f]+)*/g)||[]).length;return cjk+lat};
 /* ---------- twins (分身) ----------
    A twin is another place where the same card shows up. Every twin keeps a full copy of the
    content (text, notes, criteria, blocked reason, checkbox, task/note) but has its own position,
@@ -860,6 +880,13 @@ window.addEventListener('message',e=>{const m=e.data;if(WB||!m||!m.xwb||!okOrigi
   else if(m.xwb==='need'){const pg=D.wb&&wbPage(m.id);if(pg)e.source.postMessage({xwb:'pagelog',id:pg.id,log:(D.log||[]).filter(x=>x.t>=pg.start&&(!pg.end||x.t<=pg.end))},wbTarget())}
   else if(m.xwb==='dropmiss')toast('没有落在工作台里')});
 /* changes coming from the workbench; each one is a normal undo step here */
+/* 漫计时: a 15 / 30 / 60 minute run that belongs to the whole workbench page. Time is taken from
+   the moment it started, so a window in the background, a locked screen or a closed window
+   still counts, but never more than the run's own length. Each run is written down as one entry. */
+function ambEnd(pg,full){const r=pg&&pg.ambRun;if(!r)return false;const ms=Math.min(r.len*60000,Date.now()-Date.parse(r.t0));delete pg.ambRun;
+  if(full||ms>=30000){(pg.amb||(pg.amb=[])).push({t:now(),start:r.t0,v:full?r.len:Math.max(1,Math.round(ms/60000)),len:r.len,full:full||ms>=r.len*60000?1:0})}D.wb.updatedAt=now();return true}
+function ambTick(){if(WB||!D.wb||!Array.isArray(D.wb.pages))return;const pg=wbPage();const r=pg&&pg.ambRun;if(r&&Date.now()-Date.parse(r.t0)>=r.len*60000){ambEnd(pg,true);touch()}}
+if(!WB)setInterval(ambTick,2000);
 function wbApply(op){ensureWb();const pg=wbPage(),C=id=>pg.cards.find(c=>c.id===id),Z=id=>pg.zones.find(z=>z.id===id);const T=op.t;
   if(T==='undo')return undo();if(T==='redo')return redo();
   if(T==='view'){pg.view=op.view;D.wb.updatedAt=now();touch();return}
@@ -885,8 +912,10 @@ function wbApply(op){ensureWb();const pg=wbPage(),C=id=>pg.cards.find(c=>c.id===
     else if(T==='tplName'){const x=D.wb.tpls.find(x=>x.id===op.id);if(x)x.name=op.name}
     else if(T==='tplSet'){const x=D.wb.tpls.find(x=>x.id===op.id);if(x&&pg.zones.length){const x0=Math.min(...pg.zones.map(z=>z.x)),y0=Math.min(...pg.zones.map(z=>z.y));x.zones=pg.zones.map(z=>({x:z.x-x0,y:z.y-y0,w:z.w,h:z.h,title:z.title}))}}
     else if(T==='title'){const p2=wbPage(op.id);if(p2)p2.title=op.title}
+    else if(T==='ambStart'){if(!pg.ambRun&&[15,30,60].includes(op.len))pg.ambRun={t0:now(),len:op.len}}
+    else if(T==='ambStop')ambEnd(pg,false)
     else if(T==='flip'){/* the page closes with a copy of each card's words, so it reads the same later */
-      pg.end=now();pg.snap={};for(const c of pg.cards)if(c.kind==='twin'){const t=keyTask(c.k);pg.snap[c.k]=t?{text:t.text||'',color:t.color||''}:null}
+      ambEnd(pg,false);pg.end=now();pg.snap={};for(const c of pg.cards)if(c.kind==='twin'){const t=keyTask(c.k);pg.snap[c.k]=t?{text:t.text||'',color:t.color||''}:null}
       const id=uid();D.wb.pages.push({id,title:'',start:now(),end:null,cards:[],zones:[],links:[],view:{x:60,y:60,z:1}});D.wb.cur=id}})}
 /* ---------- carrying a card to the workbench ---------- */
 let G=null;
@@ -1270,7 +1299,7 @@ window.addEventListener('beforeunload',()=>{if(dirty&&fileHandle)writeFile()});
   const h=await idbGet('handle');
   if(h){fileHandle=h;try{const p=await h.queryPermission({mode:'readwrite'});if(p==='granted'){D=merge(D,norm(JSON.parse(await(await h.getFile()).text())));loaded=true}else showReconnect()}catch(_){showReconnect()}}
   if(!loaded&&!h){seed();render();layout(Object.values(D.tasks).filter(t=>!t.parent),0,0);undoStack.length=0;render();return}
-  render();
+  render();ambTick();
 })();
 /* ================= workbench window (工作台) =================
    Runs when this file is opened with #wb. It keeps no data of its own: the canvas window sends
@@ -1280,9 +1309,9 @@ window.addEventListener('beforeunload',()=>{if(dirty&&fileHandle)writeFile()});
 function wbBoot(){
   document.body.classList.add('wbmode');document.title='X 工作台';
   const root=$('#wb');root.hidden=false;
-  root.innerHTML='<div class="wb-tb"><span class="wb-title" title="点一下改名"></span><span class="wb-range"></span><span class="wb-off" hidden>画布窗口没有连上</span><span class="wb-sp"></span>'+
+  root.innerHTML='<div class="wb-tb"><span class="wb-title" title="点一下改名"></span><span class="wb-range"></span><span class="wb-amb"></span><span class="wb-off" hidden>画布窗口没有连上</span><span class="wb-sp"></span>'+
     '<button data-a="tidy" title="理顺连线，不动卡片">整理连线</button><button data-a="atlas">地图册</button></div>'+
-    '<div class="wb-stage"><div class="wb-world"><div class="wb-zones"></div><svg class="wb-links" width="1" height="1"></svg><div class="wb-cards"></div></div><div class="wb-empty" hidden></div></div><div class="wb-atlas" hidden></div><div class="wb-bar" hidden></div>';
+    '<div class="wb-stage"><div class="wb-world"><div class="wb-zones"></div><svg class="wb-links" width="1" height="1"></svg><div class="wb-cards"></div></div><div class="wb-empty" hidden></div></div><div class="wb-atlas" hidden></div><div class="wb-bar" hidden></div><div class="wb-ambl" hidden></div>';
   const stage=root.querySelector('.wb-stage'),world=root.querySelector('.wb-world'),zEl=root.querySelector('.wb-zones'),lEl=root.querySelector('.wb-links'),cEl=root.querySelector('.wb-cards'),
     atlas=root.querySelector('.wb-atlas'),emptyEl=root.querySelector('.wb-empty'),titleEl=root.querySelector('.wb-title'),rangeEl=root.querySelector('.wb-range'),offEl=root.querySelector('.wb-off');
   let S=null,V=null,LV=null,sel=null,zsel=null,drag=null,linking=null,lastState=0,calX=null,calY=null,viewT=0;const PL={};
@@ -1308,7 +1337,8 @@ function wbBoot(){
   const mmdd=iso=>{const d=new Date(iso);return(d.getMonth()+1)+'月'+d.getDate()+'日 '+hm(d)};
   const rangeOf=pg=>mmdd(pg.start)+' – '+(pg.end?mmdd(pg.end):'至今');
 /* every rule has its own number, so each threshold stays editable */
-  const RULES={min:['计时累计满',' 分钟',30],rounds:['完成',' 轮计时',2],words:['备忘录多写',' 字',300],tick:['打勾',' 次',1],res:['记下',' 条阻力',1],hide:['被隐藏（做完收起）',' 次',1],open:['打开备忘录',' 次',1]};
+  const RULES={min:['计时累计满',' 分钟',30],rounds:['完成',' 轮计时',2],words:['备忘录多写',' 字',300],tick:['打勾',' 次',1],res:['记下',' 条阻力',1],hide:['被隐藏（做完收起）',' 次',1],open:['打开备忘录',' 次',1],amb:['漫计时累计满',' 分钟',60],ambR:['完成',' 轮漫计时',2]};
+  const AMB=r=>r&&(r.type==='amb'||r.type==='ambR');
   const ruleText=r=>{const R=RULES[r&&r.type]||RULES.min;return R[0]+' '+(r&&r.n||R[2])+R[1]};
   function linked(pg,id){return pg.links.filter(l=>l.a===id||l.b===id).map(l=>pg.cards.find(c=>c.id===(l.a===id?l.b:l.a))).filter(Boolean)}
   function evalPage(pg){const L=logOf(pg),by={};for(const x of L)(by[x.k]=by[x.k]||[]).push(x);const lit={};
@@ -1316,7 +1346,7 @@ function wbBoot(){
     /* scope 'page' counts every card on this page; otherwise only the cards linked to it. A card with several twins counts once */
     for(const c of pg.cards)if(c.kind==='trig'){const pool=c.rule&&c.rule.scope==='page'?pg.cards:linked(pg,c.id);const ks=[...new Set(pool.filter(o=>o.kind==='twin').map(o=>o.k))];const ev=ks.flatMap(k=>by[k]||[]);const r=c.rule||{type:'min',n:30},n=r.n||RULES[r.type][2]||1;
       const sum=e=>ev.filter(x=>x.e===e).reduce((a,x)=>a+(+x.v||0),0),cnt=(e,f)=>ev.filter(x=>x.e===e&&(!f||f(x))).length;
-      lit[c.id]=r.type==='min'?sum('timer')>=n:r.type==='rounds'?cnt('timer',x=>x.full)>=n:r.type==='words'?sum('words')>=n:r.type==='res'?cnt('res')>=n:cnt(r.type)>=n}
+      lit[c.id]=r.type==='amb'?ambSum(pg)>=n:r.type==='ambR'?(pg.amb||[]).filter(x=>x.full).length>=n:r.type==='min'?sum('timer')>=n:r.type==='rounds'?cnt('timer',x=>x.full)>=n:r.type==='words'?sum('words')>=n:r.type==='res'?cnt('res')>=n:cnt(r.type)>=n}
     for(const c of pg.cards)if(c.kind==='goal')lit[c.id]=linked(pg,c.id).some(o=>lit[o.id]);
     return{lit,by}}
 
@@ -1326,6 +1356,7 @@ function wbBoot(){
     if(!LV||LV._pg!==pg.id){LV=Object.assign({},pg.view||{x:60,y:60,z:1},{_pg:pg.id})}
     root.classList.toggle('ro',RO());
     titleEl.textContent=pg.title||'';titleEl.style.cursor=RO()?'default':'text';
+    paintAmb();
     rangeEl.innerHTML=esc(rangeOf(pg))+(RO()?'　<button class="wb-back" data-a="back">回到当前页</button>':'');
     root.querySelectorAll('.wb-tb button[data-a]:not(.wb-back)').forEach(b=>b.hidden=RO()&&b.dataset.a!=='atlas');
     const{lit,by}=evalPage(pg);
@@ -1347,7 +1378,7 @@ function wbBoot(){
       if(tm.length||wd.length){const st=tm.reduce((a,x)=>a+(+x.v||0),0),sw=wd.reduce((a,x)=>a+(+x.v||0),0);
         h+='<div class="rec"><div class="col">'+tm.map(x=>'<span>'+x.v+'min</span>').join('')+'</div><div class="col">'+wd.map(x=>'<span>'+x.v+'word</span>').join('')+'</div>'+
           '<div class="sum"><span>'+(tm.length?st+'min':'')+'</span><span>'+(wd.length?sw+'word':'')+'</span></div></div>'}}
-    else if(c.kind==='trig'){const pageScope=c.rule&&c.rule.scope==='page',ln=new Set(linked(pg,c.id).filter(o=>o.kind==='twin').map(o=>o.k)).size;
+    else if(c.kind==='trig'){const pageScope=c.rule&&(c.rule.scope==='page'||AMB(c.rule)),ln=new Set(linked(pg,c.id).filter(o=>o.kind==='twin').map(o=>o.k)).size;
       const cap=pageScope?(c.text?esc(ruleText(c.rule)):''):(ln?'看连着的 '+ln+' 张卡片':'还没有连到卡片')+(c.text?' · '+esc(ruleText(c.rule)):'');
       h='<div class="k">触发</div><div class="tx">'+esc(c.text||ruleText(c.rule))+'</div>'+(cap?'<div class="rule">'+cap+'</div>':'')}
     else h='<div class="k">目的</div><div class="tx">'+esc(c.text||'（写下这是为了什么）')+'</div>';
@@ -1370,9 +1401,25 @@ function wbBoot(){
       arr.forEach((e,i)=>{const m=map[e.l.id]=map[e.l.id]||[.5,.5];m[e.end==='pa'?0:1]=+((i+1)/(arr.length+1)).toFixed(3)})}
     send({t:'ports',map});toast('连线已理顺')}
 
+  /* ---------- 漫计时 ---------- */
+  const ambEl=root.querySelector('.wb-amb'),ambL=root.querySelector('.wb-ambl');
+  const ambSum=pg=>(pg.amb||[]).reduce((a,x)=>a+(+x.v||0),0);
+  function paintAmb(){const pg=page();if(!pg){ambEl.innerHTML='';return}const run=!V&&pg.ambRun,tot=ambSum(pg),n=(pg.amb||[]).length;
+    let h='<span class="lbl">漫计时</span>';
+    if(run){const left=Math.max(0,run.len*60000-(Date.now()-Date.parse(run.t0))),sx=Math.ceil(left/1000);h+='<span class="cd">'+Math.floor(sx/60)+':'+pad(sx%60)+'</span><button class="stop" data-a="ambStop" title="停下，已经过去的时间照样记下">停</button>'}
+    else if(!V)h+='<button data-m="15">15</button><button data-m="30">30</button><button data-m="60">60</button>';
+    if(n)h+='<span class="tot" title="点一下看每一笔">共 '+tot+'min</span>';
+    if(ambEl._h!==h){ambEl.innerHTML=h;ambEl._h=h}}
+  setInterval(()=>{if(S)paintAmb()},500);
+  ambEl.addEventListener('click',e=>{const b=e.target.closest('button[data-m]');if(b){send({t:'ambStart',len:+b.dataset.m});return}
+    if(e.target.closest('[data-a=ambStop]')){send({t:'ambStop'});return}
+    if(e.target.closest('.tot')){if(!ambL.hidden){ambL.hidden=true;return}const pg=page(),L=pg.amb||[];
+      ambL.innerHTML=L.map(x=>'<div>'+x.v+'min'+(x.full?'':' <span class="e">（提前停）</span>')+'</div>').join('')+'<div class="s">'+ambSum(pg)+'min</div>';
+      const r=e.target.getBoundingClientRect();ambL.style.left=r.left+'px';ambL.style.top=(r.bottom+6)+'px';ambL.hidden=false}});
+  document.addEventListener('pointerdown',e=>{if(!ambL.hidden&&!ambL.contains(e.target)&&!e.target.closest('.tot'))ambL.hidden=true},true);
   /* ---------- atlas ---------- */
   function renderAtlas(){const pages=S.wb.pages.slice().sort((a,b)=>b.start.localeCompare(a.start));
-    atlas.innerHTML='<h3>地图册</h3>'+(pages.length>1?pages.map(p=>'<div class="wb-pg'+(p.id===S.wb.cur?' cur':'')+'" data-p="'+p.id+'"><b>'+esc(p.title||(p.id===S.wb.cur?'当前这一页':rangeOf(p)))+'</b><span>'+esc(rangeOf(p))+'</span><span>'+p.cards.length+' 张</span></div>').join('')
+    atlas.innerHTML='<h3>地图册</h3>'+(pages.length>1?pages.map(p=>'<div class="wb-pg'+(p.id===S.wb.cur?' cur':'')+'" data-p="'+p.id+'"><b>'+esc(p.title||(p.id===S.wb.cur?'当前这一页':(new Date(p.start).getMonth()+1)+'月'+new Date(p.start).getDate()+'日'))+'</b><span>'+esc(rangeOf(p))+'</span>'+((p.amb||[]).length?'<span>漫计时 '+ambSum(p)+'min</span>':'')+'<span>'+p.cards.length+' 张</span></div>').join('')
       :'<div class="wb-none">还没有翻过页。点「翻篇」，这一页就会收进这里。</div>')}
   atlas.addEventListener('click',e=>{const it=e.target.closest('.wb-pg');if(!it)return;atlas.hidden=true;sel=null;zsel=null;
     if(it.dataset.p===S.wb.cur){V=null}else{V=it.dataset.p;if(!PL[V])opener.postMessage({xwb:'need',id:V},target())}LV=null;render()});
