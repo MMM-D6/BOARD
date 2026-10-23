@@ -756,6 +756,49 @@ group("pages 页面与层级", async (c) => {
   c.ok("移出页面后自动脱离归属", await c.run(() => frameOf(card("p1")) === null));
 });
 
+group("framefix 页面位置锁定", async (c) => {
+  await c.board(
+    [{ id: "a", x: 0, y: 0, w: 240, text: "甲", s: {} }],
+    [],
+    { frames: [{ id: "f1", x: -100, y: -100, w: 600, h: 400, title: "页" }], zoom1: true }
+  );
+  const ttl = () => c.run(() => { const r = document.querySelector('.frame[data-id="f1"] .ttl').getBoundingClientRect(); return { x: r.x + 6, y: r.y + r.height / 2 }; });
+  // 锁上
+  await c.run(() => setFrameFixed(S.frames[0], true));
+  await c.wait(200);
+  c.ok("锁定后页面框带 fixed 标记", await c.run(() => S.frames[0].fixed === true && document.querySelector('.frame[data-id="f1"]').classList.contains("fixed")));
+  let p = await ttl();
+  await c.page.mouse.move(p.x, p.y); await c.page.mouse.down();
+  await c.page.mouse.move(p.x + 120, p.y + 80, { steps: 8 }); await c.page.mouse.up();
+  await c.wait(250);
+  c.ok("锁定后拖标题不移动页面，也不带动卡片", await c.run(() => S.frames[0].x === -100 && S.frames[0].y === -100 && card("a").x === 0));
+  c.ok("锁定后仍能点选页面", await c.run(() => selFrame === "f1"));
+  c.ok("锁定后缩放把手隐藏", await c.run(() => getComputedStyle(document.querySelector('.frame[data-id="f1"] .fr-rs')).display === "none"));
+  await c.run(() => startFrameResize({ clientX: 0, clientY: 0 }, S.frames[0]));
+  c.ok("锁定后直接调用缩放也不生效", await c.run(() => S.frames[0].w === 600 && S.frames[0].h === 400));
+  c.ok("锁定后菜单里没有收拢到内容大小", await c.run(() => {
+    frameMenu(50, 50, S.frames[0]);
+    const items = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent);
+    closeMenus();
+    return !items.some((z) => z.includes(t("pageFit"))) && items.some((z) => z.includes(t("pageFix")));
+  }));
+  c.ok("卡片本身仍可单独移动", await c.run(() => { sel = ["a"]; movableSel().map(card).forEach((z) => (z.x += 30)); return card("a").x === 30; }));
+  c.ok("锁定状态随文件保存", (await c.run(() => bundle(null).frames[0].fixed)) === true);
+  c.ok("锁定状态经导入保留", await c.run(async () => { const d = JSON.parse(JSON.stringify(bundle(null))); await absorb(d, false); return S.frames[0].fixed === true; }));
+  // 撤销与解锁
+  await c.run(() => { render(); setFrameFixed(S.frames[0], false); });
+  await c.wait(200);
+  c.ok("解锁后字段被移除", await c.run(() => !("fixed" in S.frames[0])));
+  p = await ttl();
+  await c.page.mouse.move(p.x, p.y); await c.page.mouse.down();
+  await c.page.mouse.move(p.x + 100, p.y, { steps: 8 }); await c.page.mouse.up();
+  await c.wait(250);
+  c.ok("解锁后可以拖动页面", await c.run(() => S.frames[0].x !== -100));
+  await c.run(() => applyUndo(undo, redo)); await c.run(() => applyUndo(undo, redo));
+  c.ok("锁定可以撤销", await c.run(() => S.frames[0].fixed === true));
+  c.ok("中英文案都齐了", await c.run(() => ["pageFix", "pageFixOn", "pageFixOff"].every((k) => T.en[k] && T.zh[k])));
+});
+
 /* =====================================================================
    6. 编组与锁定
    ===================================================================== */
@@ -2763,129 +2806,6 @@ group("frameown 页面归属：不吃稿子、不看实测高度", async (c) => 
   });
   c.ok("删页面连同卡片，卡片确实删掉了", del.cards === 0 && del.frames === 0);
   c.ok("旁边稿子的段落一段都没被误删", del.docIds === 2 && del.alive);
-});
-
-group("fence 页面栅栏锁", async (c) => {
-  // 开了栅栏锁的页面：卡片不会被重叠页面、新建页面带走；拖进来自动进栅栏；
-  // 拖不出去，只能走右键菜单移出。没开栅栏时一切照旧、文件里不多任何字段。
-  await c.board([
-    { id: "a", x: 40, y: 40, w: 200, text: "甲", s: {} },
-    { id: "b", x: 300, y: 40, w: 200, text: "乙", s: {} },
-    { id: "out", x: 1400, y: 40, w: 200, text: "外面", s: {} },
-  ], [], { frames: [{ id: "F", x: 0, y: 0, w: 700, h: 400, title: "栅栏页" }], zoom1: true });
-
-  c.ok("没开栅栏时文件里没有栅栏字段", await c.run(() =>
-    !JSON.stringify(bundle(null)).includes("fenceIn") && !JSON.stringify(bundle(null)).includes('"fence"')));
-
-  await c.run(() => setFrameFence(S.frames[0], true));
-  c.ok("开栅栏：页内卡片进栅栏，页外的不进", await c.run(() =>
-    card("a").fenceIn === "F" && card("b").fenceIn === "F" && !card("out").fenceIn));
-  c.ok("页面有栅栏记号", await c.run(() => document.querySelector('.frame[data-id="F"]').classList.contains("fenced")));
-  c.ok("记号不改标题文字", await c.run(() => document.querySelector('.frame[data-id="F"] .ttl').textContent === "栅栏页"));
-
-  // 不小心新建一个压在上面的页面：卡片不被它带走
-  await c.run(() => { sel = ["a", "b"]; paintSel(); addFrame(); });
-  const nf = await c.run(() => {
-    const f2 = S.frames.find((z) => z.id !== "F");
-    return { kids: inFrame(f2).length, still: frameOf(card("a")).id === "F" && frameOf(card("b")).id === "F" };
-  });
-  c.ok("新建的重叠页面带不走栅栏里的卡片", nf.kids === 0 && nf.still);
-  const mv = await c.run(() => {
-    const f2 = S.frames.find((z) => z.id !== "F"), ax = card("a").x;
-    const kids = inFrame(f2); kids.forEach((z) => (z.x += 300)); f2.x += 300;
-    return card("a").x === ax;
-  });
-  c.ok("拖动重叠页面时栅栏里的卡片不跟着走", mv);
-  await c.run(() => { S.frames = S.frames.filter((z) => z.id === "F"); render(); camTo(-350, -200, 1, true); });
-  await c.wait(400);
-
-  // 真鼠标把卡片往页面外拖：拖到边上就停住
-  const p1 = await c.run(() => { const r = nodes.get("a").getBoundingClientRect(); return { x: r.x + 20, y: r.y + 8 }; });
-  await c.page.mouse.move(p1.x, p1.y); await c.page.mouse.down();
-  await c.page.mouse.move(p1.x - 600, p1.y - 300, { steps: 10 }); await c.page.mouse.up();
-  await c.wait(300);
-  c.ok("拖不出栅栏，停在页面边上", await c.run(() => {
-    const z = card("a"); return z.x === 0 && z.y === 0 && z.fenceIn === "F";
-  }));
-  await c.run(() => { sel = []; paintSel(); });
-  // 方向键也带不出去
-  await c.run(() => { sel = ["a"]; paintSel(); });
-  for (let i = 0; i < 3; i++) await c.page.keyboard.press("ArrowLeft");
-  c.ok("方向键带不出栅栏", await c.run(() => card("a").x === 0));
-  // 对齐也不行
-  await c.run(() => { card("out").y = 40; sel = ["b", "out"]; align("right"); });
-  c.ok("对齐带不出栅栏", await c.run(() => card("b").x + card("b").w <= 700 && card("b").fenceIn === "F"));
-  await c.run(() => { card("out").x = 900; card("out").y = 40; render(); });
-
-  // 页外的卡片拖进来：不用确认，自动进栅栏；撤销后回到不在栅栏里
-  await c.wait(300);
-  const p2 = await c.run(() => { const r = nodes.get("out").getBoundingClientRect(); return { x: r.x + 20, y: r.y + 8 }; });
-  await c.run(() => { sel = []; paintSel(); });
-  await c.page.mouse.move(p2.x, p2.y); await c.page.mouse.down();
-  await c.page.mouse.move(p2.x - 600, p2.y + 150, { steps: 10 }); await c.page.mouse.up();
-  await c.wait(2000);
-  c.ok("拖进栅栏页面自动进栅栏", await c.run(() => card("out").fenceIn === "F"));
-  await c.run(() => applyUndo(undo, redo));
-  c.ok("撤销后回到原位、也不在栅栏里", await c.run(() => card("out").x === 900 && !card("out").fenceIn));
-
-  // 右键菜单移出
-  await c.run(() => { sel = ["b"]; paintSel(); cardMenu(50, 50); });
-  const item = await c.run(() => [...document.querySelectorAll("#menu .mi")].some((z) => z.textContent.includes(t("fenceOut"))));
-  await c.run(() => closeMenus());
-  c.ok("右键菜单里有「移出页面栅栏」", item);
-  await c.run(() => { sel = ["b"]; fenceRelease(); render(); });
-  c.ok("移出后卡片在页面外、不再属于栅栏、重绘也不会被收回", await c.run(() =>
-    card("b").x > 700 && !card("b").fenceIn && frameOf(card("b")) === null));
-  c.ok("页外的卡片右键菜单里没有移出项", await c.run(() => {
-    sel = ["b"]; cardMenu(50, 50);
-    const has = [...document.querySelectorAll("#menu .mi")].some((z) => z.textContent.includes(t("fenceOut")));
-    closeMenus(); return !has;
-  }));
-
-  // 复制粘贴到远处：副本不带别人的栅栏标记
-  await c.run(() => { sel = ["a"]; clipCards("copy"); pasteClip({ x: 3000, y: 3000 }); });
-  c.ok("粘贴出的副本不继承栅栏", await c.run(() => { const n = card(sel[0]); return n && !n.fenceIn && frameOf(n) === null; }));
-  await c.run(() => { sel = ["a"]; dupe(); });
-  c.ok("复制一份不直接带上栅栏标记以外的归属（落在页内照常进栅栏）", await c.run(() => {
-    const n = card(sel[0]); return n && n.id !== "a" && n.fenceIn === "F";
-  }));
-
-  // 页面不能缩到把卡片关在外面
-  await c.run(() => { card("a").x = 500; card("a").y = 300; render(); });
-  await c.wait(300);
-  const rs = await c.run(() => { const r = document.querySelector('.frame[data-id="F"] .fr-rs');
-    const sel0 = document.querySelector('.frame[data-id="F"]'); sel0.classList.add("sel");
-    const q = r.getBoundingClientRect(); return { x: q.x + q.width / 2, y: q.y + q.height / 2 }; });
-  await c.page.mouse.move(rs.x, rs.y); await c.page.mouse.down();
-  await c.page.mouse.move(rs.x - 600, rs.y - 380, { steps: 8 }); await c.page.mouse.up();
-  c.ok("栅栏页面缩不到把卡片关在外面", await c.run(() => {
-    const f = S.frames[0], z = card("a"); return f.x + f.w >= z.x + z.w / 2 && f.y + f.h >= z.y + Math.min(hOf(z) / 2, 40);
-  }));
-
-  // 存档往返、合并导入换 id
-  const rt = await c.run(async () => {
-    const d = JSON.parse(await (await bundleBlob(null)).text());
-    const before = S.cards.length;
-    await absorb(JSON.parse(JSON.stringify(d)), true);
-    const added = S.cards.slice(before);
-    const nf2 = S.frames.find((z) => z.id !== "F" && z.fence);
-    return { saved: d.cards.find((z) => z.id === "a").fenceIn === "F" && d.frames[0].fence === true,
-      remap: !!nf2 && added.filter((z) => z.fenceIn).every((z) => z.fenceIn === nf2.id) && added.some((z) => z.fenceIn) };
-  });
-  c.ok("栅栏随文件保存", rt.saved);
-  c.ok("合并导入时栅栏归属跟着新页面 id", rt.remap);
-  await c.run(() => { S.frames = S.frames.filter((z) => z.id === "F"); S.cards = S.cards.filter((z) => ["a", "b", "out"].includes(z.id)); invalidateIndex(); render(); });
-
-  // 删页框只删页框；关掉栅栏卡片一张不动
-  const off = await c.run(() => {
-    const xs = S.cards.map((z) => z.x + "," + z.y).join("|");
-    setFrameFence(S.frames[0], false);
-    return { clean: S.cards.every((z) => !z.fenceIn), same: S.cards.map((z) => z.x + "," + z.y).join("|") === xs,
-      noFlag: !S.frames[0].fence };
-  });
-  c.ok("关掉栅栏：标记清干净，卡片一张不动", off.clean && off.same && off.noFlag);
-  c.ok("中英文案都齐了", await c.run(() => ["pageFence", "fenceOn", "fenceOff", "fenceOut", "fenceMoved"]
-    .every((k) => T.en[k] && T.zh[k])));
 });
 
 group("wrnum 用编号调位置", async (c) => {

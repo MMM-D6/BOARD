@@ -84,7 +84,7 @@ CHROME=/path/to/chrome node tests.js   # 用已有的 Chrome，免下载
 测试组一览：connectors 连线、text 文字格式、colors 颜色、twins 分身、
 wrorder 写作页里的顺序、wrback 定位只留给引文分身、fmtbar 写作页工具栏、
 wrver 版本复制到剪贴板、wrlevel 写作页里设定层级、wrexport 稿子导出、wrrefsel 引文可选中、wrcut 多选与剪切搬运、wrmarq 稿子里不许拉出画布的框选、wrwc 写作页字数统计、
-frameown 页面归属、fence 页面栅栏锁、wrnum 用编号调位置、wrenter 回车是段内换行、zotero 引注小尾巴、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 外部工具的入口、tiler 拼版工具、mac 平台差异、folder 文件夹模式、snapgb 大画布的快照、
+frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行、zotero 引注小尾巴、wrreford 引文长按调序、wrtitle 稿子标题点选、cutoutlink 外部工具的入口、tiler 拼版工具、mac 平台差异、folder 文件夹模式、snapgb 大画布的快照、
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
@@ -201,23 +201,16 @@ S = {
 且只有选中的卡片才亮出连接点，另外要求拖够 8px 才算真的想连线。
 这三条缺一不可，改动时不要只留其中一条。
 
+**页面位置锁定（`f.fixed`，2026-10）。** 页面框上一个可选字段，`true` 表示这个页面框不能移动、不能缩放：
+标题拖不动（只选中，拖超过 4px 时提示一次），右下角缩放把手隐藏，`startFrameMove` / `startFrameResize` 开头都直接返回，
+菜单里的「收拢到内容大小」也不出现。点选、右键菜单、双击改名、导出照常。切换走 `setFrameFixed`，进撤销栈。
+它只锁页面框本身，**不碰框里的卡片**（卡片仍可单独移动；要锁卡片用「锁定本页」，那是另一套 `c.lock`）。
+解锁时整个字段删掉，没锁过的页面数据与从前逐字节相同；不改 SCHEMA，旧版本打开带这个字段的文件也只是忽略它。
+「按比例缩放全部内容」是整份文档换尺度，锁定的页面框照样一起缩放，相对位置才不会乱。`framefix` 组守着这一条。
+
 **页面归属靠位置算，不存名单。** `frameOf(c)` 用卡片中心点判断落在哪个框里，
 配合 `frameIndex()` 的二分查找。拖进拖出自动生效，永远不会出现"名单和实际位置对不上"。
 批量锁定与批量改连线身份都以页面为单位，覆盖式写入，不做增量判断。
-
-**页面栅栏锁（2026-10）。** 页面可以单独开栅栏锁（`f.fence=true`，页面右键菜单）。开了之后，
-落在里面的卡片记 `c.fenceIn=页面 id`，`frameOf()` 先认这个标记再按位置判断，所以页面重叠、
-新建页面、拖动别的页面都带不走它们。移进来自动进栅栏（`fenceSync()`，在 `renderNow` 开头和拖动松手时跑，
-同时落在几个栅栏页面里时进最小的那个）；拖动、方向键、对齐、标准页拖动都经 `fenceClamp()` 限制在页面里
-（原本整张在里面的保持整张在里面，原本伸出边缘的只保证锚点不出去，不会被硬拽）；
-栅栏页面缩放时不能缩到把锚点关在外面。移出只走右键：「移出页面栅栏」（`fenceRelease`，挪到页面右侧外面）
-或「移动到…」（`sendTo` 里清掉标记）。几条容易漏的规矩：
-① `fenceIn` 是**位置属性，不是内容**：复制、粘贴、拷进稿子、版本复制都要删掉它（`pasteClip`、`dupe`、
-`wrCloneCard`、`wrClonesFromClip`、`verToClip`）；分身脱离、删源时扶正分身，要用那张卡片自己的 `fenceIn`，
-不能从源卡片抄过来。② 拖动的延后撤销快照（`snapLazy`）连 `fenceIn` 一起记，撤销才会回到"不在栅栏里"。
-③ 合并导入时页面换新 id，`fenceIn` 跟着换（`absorb` 里的 `fmap`）。④ 关栅栏、只删页框时清掉对应标记；
-页面不存在或栅栏已关时，残留的标记被 `fenceOf()` 忽略。⑤ 没有任何栅栏页面时，这一套全部立刻返回，
-文件里也不会多出字段；SCHEMA 没变（只是可选字段）。`fence` 组守着这些。
 
 **表格是卡片的一种形态。** `makeCard` 检测到 `c.tb` 时走 `buildTable`，
 然后与普通卡片共用 `finishCard`（选中框、控制点、连接点、右键）。

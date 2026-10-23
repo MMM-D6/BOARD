@@ -84,14 +84,14 @@
     color:var(--fr);white-space:pre;pointer-events:auto;cursor:move;padding:calc(2px * var(--iz)) 0}
   .frame.sel{border-color:var(--frame)}
   .frame.sel .ttl{color:var(--frame)}
-  /* 开了栅栏锁的页面：标题后面一个小栅栏记号（伪元素，不进标题文字），边框改成双线 */
-  .frame.fenced{border-style:double;border-width:calc(3px * var(--iz))}
-  .frame.fenced .ttl:after{content:"\00a0\25A6";opacity:.55}
   .frame .fr-rs{position:absolute;right:calc(-5px * var(--iz));bottom:calc(-5px * var(--iz));
     width:calc(11px * var(--iz));height:calc(11px * var(--iz));border-radius:50%;background:#fff;
     border:calc(1px * var(--iz)) solid var(--frame);cursor:nwse-resize;pointer-events:auto;display:none}
   .frame.sel .fr-rs{display:block}
   body.lock .frame .fr-rs{display:none !important}
+  /* 页面位置锁定（f.fixed）：不能拖动、不能缩放，标题仍可点选、右键、双击改名 */
+  .frame.fixed .fr-rs{display:none !important}
+  .frame.fixed .ttl{cursor:default}
   .card{position:absolute;user-select:none}
   .card img{width:100%;height:auto;display:block;border-radius:2px;pointer-events:none;
     box-shadow:0 1px 2px rgba(0,0,0,.06)}
@@ -920,8 +920,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   imgSize:"Image size on import",fitSel:"Resize selected images to this",
   fitAllImg:"Resize every image to this",px:"px",
   pageLock:"Lock this page",
-  pageFence:"Fence lock (cards stay on this page)",fenceOn:"Fence on, cards held:",fenceOff:"Fence off",
-  fenceOut:"Move out of the page fence",fenceMoved:"Moved out of the page fence:",
+  pageFix:"Lock page position (no moving or resizing)",pageFixOn:"Page position locked",pageFixOff:"Page position unlocked",
   pageEmpty:"This page has no cards",
   lockMenu:"Lock",lockText:"Lock the content only",lockAll:"Lock content and position",
   unlockPos:"Release the position",unlockAll:"Unlock completely",
@@ -1125,8 +1124,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   imgSize:"导入图片尺寸",fitSel:"把选中图片调成该尺寸",
   fitAllImg:"把所有图片调成该尺寸",px:"px",
   pageLock:"锁定本页",
-  pageFence:"栅栏锁（卡片不会被带出本页）",fenceOn:"栅栏已开，本页卡片：",fenceOff:"栅栏已关",
-  fenceOut:"移出页面栅栏",fenceMoved:"已移出页面栅栏：",
+  pageFix:"锁定页面位置（不能移动和缩放）",pageFixOn:"页面位置已锁定",pageFixOff:"已解除页面位置锁定",
   pageEmpty:"这个页面里没有卡片",
   lockMenu:"锁定",lockText:"仅锁定内容",lockAll:"锁定内容与位置",
   unlockPos:"解除位置锁定",unlockAll:"完全解锁",
@@ -1263,7 +1261,6 @@ function sendTo(target,mode){
       invalidateIndex();S.cards.push(n);ns.push(n.id);
     }else{
       c.x=p.x;c.y=p.y;ns.push(c.id);
-      delete c.fenceIn;                    // 「移动到…」本身就是右键菜单里的移出途径；落进别的栅栏页面会自动进那一个
     }
   });
   sel=ns;render();save();
@@ -1304,7 +1301,7 @@ function pasteClip(p){
     if(CLIP.mode==="twin"&&S.cards.some(z=>z.id===it.src)){
       invalidateIndex();S.cards.push({...base,ref:it.src,lock:"text"});  // 分身默认锁内容
     }else{
-      const cp={...it.snap,...base};delete cp.ref;delete cp.lock;delete cp.fenceIn;
+      const cp={...it.snap,...base};delete cp.ref;delete cp.lock;
       invalidateIndex();S.cards.push(cp);
     }
     ns.push(base.id);
@@ -1368,13 +1365,11 @@ function unlinkTwin(c){
   if(c.ref){                       // 分身脱离：就地固化为独立卡片
     const n={...o,id:c.id,x:c.x,y:c.y,w:c.w,s:c.s};
     delete n.ref;
-    if(c.fenceIn)n.fenceIn=c.fenceIn;else delete n.fenceIn;   // 栅栏归属是位置属性，跟着这张卡片自己
     S.cards[S.cards.indexOf(c)]=n;
   }else{                           // 源脱离：所有分身各自固化
     S.cards=S.cards.map(z=>{
       if(z.ref!==o.id)return z;
-      const n={...o,id:z.id,x:z.x,y:z.y,w:z.w,s:z.s};delete n.ref;
-      if(z.fenceIn)n.fenceIn=z.fenceIn;else delete n.fenceIn;return n;
+      const n={...o,id:z.id,x:z.x,y:z.y,w:z.w,s:z.s};delete n.ref;return n;
     });
   }
   render();save();
@@ -1587,7 +1582,7 @@ const UNDO_BUDGET=60e6;                   // 约 60M 字符（中文按两字节
 function snap(){lazySnap=null;pushSnap()}
 function snapLazy(items){
   // items: [{o,x,y}]，o 是卡片对象，x/y 是它此刻的位置
-  lazySnap=items.map(z=>({id:z.o.id,x:z.o.x,y:z.o.y,fi:z.o.fenceIn}));
+  lazySnap=items.map(z=>({id:z.o.id,x:z.o.x,y:z.o.y}));
 }
 function snapCommitIfMoved(moved){
   const before=lazySnap;lazySnap=null;
@@ -1595,12 +1590,10 @@ function snapCommitIfMoved(moved){
   // 快照本身在大画布上要两三百毫秒，放到空闲时做，松手立刻可以继续操作。
   // 记录的是移动前的位置，所以延后执行不影响撤销的正确性。
   const run=()=>{
-    // 栅栏标记（fenceIn）也一起还原：拖进栅栏的卡片撤销之后要回到"不在栅栏里"
-    const fiSet=(c,v)=>{if(v===undefined)delete c.fenceIn;else c.fenceIn=v};
-    const now=before.map(z=>{const c=card(z.id);return c?{c,x:c.x,y:c.y,fi:c.fenceIn,b:z}:null}).filter(Boolean);
-    now.forEach(z=>{z.c.x=z.b.x;z.c.y=z.b.y;fiSet(z.c,z.b.fi)});
+    const now=before.map(z=>{const c=card(z.id);return c?{c,x:c.x,y:c.y}:null}).filter(Boolean);
+    now.forEach((z,i)=>{z.c.x=before[i].x;z.c.y=before[i].y});
     pushSnap();
-    now.forEach(z=>{z.c.x=z.x;z.c.y=z.y;fiSet(z.c,z.fi)});
+    now.forEach(z=>{z.c.x=z.x;z.c.y=z.y});
   };
   if(window.requestIdleCallback)requestIdleCallback(run,{timeout:1500});
   else setTimeout(run,60);
@@ -1879,8 +1872,7 @@ function normCard(c){
   if(o.bib&&typeof o.bib!=="string")delete o.bib;
   if(o.ref&&typeof o.ref!=="string")delete o.ref;
   if(o.bg&&(typeof o.bg!=="string"||unsafeStr(o.bg)))delete o.bg;
-  ["ref","bib","wrIn","wrUnder","verOn","fenceIn"].forEach(k=>{if(unsafeStr(o[k]))delete o[k]});
-  if(o.fenceIn!=null&&typeof o.fenceIn!=="string")delete o.fenceIn;
+  ["ref","bib","wrIn","wrUnder","verOn"].forEach(k=>{if(unsafeStr(o[k]))delete o[k]});
   if(o.url&&typeof o.url!=="string")delete o.url;
   if(o.lock===true)o.lock="all";                    // 旧数据：布尔值等同全锁
   if(o.lock!=="text"&&o.lock!=="all")delete o.lock;
@@ -1948,12 +1940,10 @@ async function absorb(data,merge){
     if(nl.st!==true)delete nl.st;
     S.links.push(nl);
   }});
-  const fmap={};                          // 合并导入：页面换了新 id，卡片的栅栏归属跟着换
-  (data.frames||[]).forEach(f=>{if(!f)return;const fid=uid();if(f.id)fmap[f.id]=fid;
-    S.frames=(S.frames||[]).concat([{...f,id:fid,
+  (data.frames||[]).forEach(f=>{if(!f)return;
+    S.frames=(S.frames||[]).concat([{...f,id:uid(),
       x:Math.round((+f.x||0)-nb.x+ox),y:Math.round((+f.y||0)-nb.y+oy),
       w:Math.max(120,+f.w||400),h:Math.max(100,+f.h||300)}])});
-  cards.forEach(c=>{if(c.fenceIn){if(fmap[c.fenceIn])c.fenceIn=fmap[c.fenceIn];else delete c.fenceIn}});
   // 图片按需加载，不再在这里全部读进内存
   return cards.length;
 }
@@ -2461,7 +2451,6 @@ function renderNow(){
   document.body.style.setProperty("--pfg",dark?"#EFEFEC":"#111");
   document.body.style.setProperty("--pline",dark?"rgba(255,255,255,.16)":"rgba(0,0,0,.12)");
   document.body.style.setProperty("--phi",dark?"rgba(255,255,255,.09)":"rgba(0,0,0,.06)");
-  fenceSync();                              // 栅栏锁：落进栅栏页面的新卡片自动进栅栏（没有栅栏时立刻返回）
   markNumsDirty();computeNums();
   renderSheets();renderFrames();renderDocs();if(mapOn)mapSoon();
   nodes.forEach(el=>el.remove());nodes.clear();
@@ -3144,7 +3133,6 @@ function frameIndex(){                    // 页面按左边界排序，配合�
 //    改成锚在卡片顶部往下 40px 以内：量没量过都是同一个答案。
 const frameOf=c=>{
   if(docOnly(c))return null;
-  if(c.fenceIn){const ff=fenceOf(c);if(ff)return ff}   // 栅栏锁：已在栅栏里的卡片只认它的页面
   const fs=frameIndex();
   if(!fs.length)return null;
   const cx=c.x+c.w/2,cy=c.y+Math.min(hOf(c)/2,40);
@@ -3158,92 +3146,13 @@ const frameOf=c=>{
   return null;
 };
 const inFrame=f=>S.cards.filter(c=>frameOf(c)===f);
-/* ---------------- 页面栅栏锁（2026-10） ----------------
-   开了栅栏锁的页面（f.fence=true），里面的卡片记一个 c.fenceIn=页面 id：
-   ① 归属"粘住"：页面重叠、新建页面、别的页面拖动时，都不会把它带走（frameOf 先认 fenceIn）；
-   ② 拖动、方向键、对齐只能在页面范围内移动，拖到边上就停住；
-   ③ 移进来不用确认：卡片落进开了栅栏的页面，就自动进栅栏（fenceSync，在 render 与拖动松手时跑）；
-   ④ 移出去只能走右键菜单：「移出页面栅栏」或「移动到…」。
-   没开栅栏的页面一切照旧；画布上一个栅栏都没有时，这些函数立刻返回，不产生任何开销，
-   文件里也不会多出任何字段。 */
-let FENCEMAP=null,FENCEsrc=null,FENCEn=-1;
-function fenceMap(){
-  if(FENCEMAP&&FENCEsrc===S.frames&&FENCEn===(S.frames||[]).length)return FENCEMAP;
-  FENCEMAP=new Map();(S.frames||[]).forEach(f=>{if(f&&f.id)FENCEMAP.set(f.id,f)});
-  FENCEsrc=S.frames;FENCEn=(S.frames||[]).length;
-  return FENCEMAP;
-}
-// 卡片所在的栅栏页面；页面已删除或栅栏已关时返回 null（这时按位置判断，跟从前一样）
-function fenceOf(c){
-  if(!c||!c.fenceIn)return null;
-  const f=fenceMap().get(c.fenceIn);
-  return f&&f.fence?f:null;
-}
-const anyFence=()=>(S.frames||[]).some(f=>f&&f.fence);
-// 落进开了栅栏的页面、但还没进栅栏的卡片：自动进栅栏（判定点与 frameOf 相同，量没量过高度都一样）。
-// 同时落在几个栅栏页面里时，进最小的那个。已在某个有效栅栏里的卡片一概不动。
-function fenceSync(){
-  const fs=(S.frames||[]).filter(f=>f&&f.fence);
-  if(!fs.length)return false;
-  let ch=false;
-  for(const c of S.cards){
-    if(docOnly(c)||fenceOf(c))continue;
-    const cx=c.x+c.w/2,cy=c.y+Math.min(hOf(c)/2,40);
-    let hit=null;
-    for(const f of fs)if(cx>=f.x&&cx<=f.x+f.w&&cy>=f.y&&cy<=f.y+f.h&&(!hit||f.w*f.h<hit.w*hit.h))hit=f;
-    if(hit){c.fenceIn=hit.id;ch=true}
-    else if(c.fenceIn){delete c.fenceIn;ch=true}       // 指向已失效栅栏的旧标记顺手清掉
-  }
-  return ch;
-}
-// 卡片此刻是否整张都在栅栏页面里（决定拖动时是整张卡片不出框，还是只保证锚点不出框）
-function fenceFull(c){
-  const f=fenceOf(c);if(!f)return null;
-  const h=hOf(c)||0;
-  return c.x>=f.x&&c.y>=f.y&&c.x+c.w<=f.x+f.w&&c.y+h<=f.y+f.h;
-}
-// 把卡片限制在它的栅栏页面里。full=true：整张卡片不出框（放得下的话）；
-// 否则只保证判定点（锚点）不出框，原本就伸出边缘的卡片不会被硬拽进来
-function fenceClamp(c,full){
-  const f=fenceOf(c);if(!f)return false;
-  const h=hOf(c)||0,ay=Math.min(h/2,40),x0=c.x,y0=c.y;
-  if(full&&c.w<=f.w)c.x=clamp(c.x,f.x,f.x+f.w-c.w);
-  else c.x=clamp(c.x,f.x-c.w/2,f.x+f.w-c.w/2);
-  if(full&&h<=f.h)c.y=clamp(c.y,f.y,f.y+f.h-h);
-  else c.y=clamp(c.y,f.y-ay,f.y+f.h-ay);
-  c.x=Math.round(c.x);c.y=Math.round(c.y);
-  return c.x!==x0||c.y!==y0;
-}
-function setFrameFence(f,on){
-  snap();
-  if(on){f.fence=true;fenceSync()}
-  else{delete f.fence;S.cards.forEach(c=>{if(c.fenceIn===f.id)delete c.fenceIn})}
-  render();save();
-  toast(on?t("fenceOn")+" "+inFrame(f).length:t("fenceOff"));
-}
-// 右键菜单「移出页面栅栏」：解除栅栏，并把卡片挪到页面右侧外面（保持彼此的相对位置）。
-// 不挪出去的话，下一次 fenceSync 又会把它收回栅栏。
-function fenceRelease(ids){
-  const cs=(ids||sel).map(card).filter(Boolean).filter(c=>fenceOf(c)&&!isPinned(c.id));
-  if(!cs.length)return;
-  snap();
-  const groups=new Map();
-  cs.forEach(c=>{const f=fenceOf(c);if(!groups.has(f))groups.set(f,[]);groups.get(f).push(c)});
-  groups.forEach((list,f)=>{
-    const bx=Math.min(...list.map(c=>c.x));
-    const dx=f.x+f.w+40-bx;
-    list.forEach(c=>{delete c.fenceIn;c.x=Math.round(c.x+dx)});
-  });
-  render();save();
-  toast(t("fenceMoved")+" "+cs.length);
-}
 let selFrame=null;
 function renderFrames(){
   const box=$("frames");if(!box)return;
   box.innerHTML="";
   (S.frames||[]).forEach(f=>{
     const el=document.createElement("div");
-    el.className="frame"+(selFrame===f.id?" sel":"")+(f.fence?" fenced":"");
+    el.className="frame"+(selFrame===f.id?" sel":"")+(f.fixed?" fixed":"");
     el.dataset.id=f.id;
     Object.assign(el.style,{left:f.x+"px",top:f.y+"px",width:f.w+"px",height:f.h+"px"});
     const ttl=document.createElement("div");ttl.className="ttl";
@@ -3251,6 +3160,7 @@ function renderFrames(){
     ttl.addEventListener("pointerdown",e=>{
       if(lock||e.button!==0)return;
       e.stopPropagation();selFrame=f.id;sel=[];selLink=null;selDoc=null;paintDocSel();paintSel();renderFrames();
+      if(f.fixed){frameFixedHint(e);return}       // 页面位置已锁定：只选中，不拖动
       startFrameMove(e,f);
     });
     ttl.addEventListener("dblclick",e=>{
@@ -3264,12 +3174,26 @@ function renderFrames(){
     });
     el.appendChild(ttl);
     const rs=document.createElement("div");rs.className="fr-rs";
-    rs.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();startFrameResize(e,f)});
+    rs.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();if(f.fixed)return;startFrameResize(e,f)});
     el.appendChild(rs);
     box.appendChild(el);
   });
 }
+// 页面位置锁定：试图拖动锁定的页面标题时（拖动超过 4px）提示一次，单纯点选不打扰
+function frameFixedHint(e){
+  const sx=e.clientX,sy=e.clientY;let told=false;
+  const mv=ev=>{if(!told&&Math.abs(ev.clientX-sx)+Math.abs(ev.clientY-sy)>4){told=true;toast(t("pageFixOn"))}};
+  const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up)};
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+}
+function setFrameFixed(f,on){
+  snap();
+  if(on)f.fixed=true;else delete f.fixed;
+  renderFrames();save();
+  toast(on?t("pageFixOn"):t("pageFixOff"));
+}
 function startFrameMove(e,f){
+  if(f.fixed)return;
   snap();
   const kids=inFrame(f).map(c=>({c,x:c.x,y:c.y}));   // 页面整体移动时锁定卡片一起走
   const inSet=new Set(kids.map(z=>z.c.id));
@@ -3288,16 +3212,12 @@ function startFrameMove(e,f){
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
 function startFrameResize(e,f){
+  if(f.fixed)return;
   snap();
   const sx=e.clientX,sy=e.clientY,ow=f.w,oh=f.h;
-  // 栅栏页面不能缩到把自己的卡片关在外面：最小尺寸要盖住每张卡片的锚点
-  let minW=120,minH=100;
-  if(f.fence)inFrame(f).forEach(c=>{
-    minW=Math.max(minW,Math.ceil(c.x+c.w/2-f.x)+1);
-    minH=Math.max(minH,Math.ceil(c.y+Math.min(hOf(c)/2,40)-f.y)+1)});
   const mv=ev=>{
-    f.w=Math.round(Math.max(minW,ow+(ev.clientX-sx)/cam.z));
-    f.h=Math.round(Math.max(minH,oh+(ev.clientY-sy)/cam.z));
+    f.w=Math.round(Math.max(120,ow+(ev.clientX-sx)/cam.z));
+    f.h=Math.round(Math.max(100,oh+(ev.clientY-sy)/cam.z));
     renderFrames();
   };
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);save()};
@@ -3358,20 +3278,19 @@ function renderSheets(){
 }
 function startSheetMove(e,sh){
   snap();
-  const kids=inSheet(sh).filter(c=>!isPinned(c.id)).map(c=>({c,x:c.x,y:c.y,full:fenceFull(c)}));
+  const kids=inSheet(sh).filter(c=>!isPinned(c.id)).map(c=>({c,x:c.x,y:c.y}));
   const ids=new Set(kids.map(z=>z.c.id));
   const sx=e.clientX,sy=e.clientY,ox=sh.x,oy=sh.y;
   const mv=ev=>{
     const dx=(ev.clientX-sx)/cam.z,dy=(ev.clientY-sy)/cam.z;
     sh.x=Math.round(ox+dx);sh.y=Math.round(oy+dy);
-    kids.forEach(({c,x,y,full})=>{c.x=Math.round(x+dx);c.y=Math.round(y+dy);
-      if(full!==null)fenceClamp(c,full);           // 栅栏里的卡片不会被标准页带出页面
+    kids.forEach(({c,x,y})=>{c.x=Math.round(x+dx);c.y=Math.round(y+dy);
       const el2=nodes.get(c.id);if(el2){el2.style.left=c.x+"px";el2.style.top=c.y+"px"}});
     renderSheets();
     drawLinksLive(S.links.filter(l=>ids.has(l.a)||ids.has(l.b)));
   };
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
-    endLinksLive();if(fenceSync()&&S.autoNum)refreshNumsSoon();drawLinks();cullSoon();save()};
+    endLinksLive();drawLinks();cullSoon();save()};
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
 }
 function sheetMenu(x,y,sh){
@@ -3436,7 +3355,6 @@ function delFrame(f,withCards){
     S.links=S.links.filter(l=>!ids.includes(l.a)&&!ids.includes(l.b));
     invalidateIndex();S.cards=S.cards.filter(c=>!ids.includes(c.id));
   }
-  if(!withCards)S.cards.forEach(c=>{if(c.fenceIn===f.id)delete c.fenceIn});   // 页框没了，栅栏也一起没了
   S.frames=S.frames.filter(z=>z!==f);
   selFrame=null;sel=[];render();save();
 }
@@ -3461,14 +3379,14 @@ function frameMenu(x,y,f){
     {label:t("pageSelect"),on:()=>{sel=inFrame(f).map(c=>c.id);selFrame=null;render();paintSel()}},
     {label:t("pageLock"),sub:[{head:t("pageLock")},
       ...lockItems(()=>inFrame(f).map(z=>z.id))]},
-    {label:t("pageFence"),check:!!f.fence,on:()=>setFrameFence(f,!f.fence)},
+    {label:t("pageFix"),check:!!f.fixed,on:()=>setFrameFixed(f,!f.fixed)},
     {label:t("pageLinks"),sub:[{head:t("pageLinks")},
       {label:t("pageLinkStruct"),on:()=>setFrameLinks(f,true)},
       {label:t("pageLinkRelate"),on:()=>setFrameLinks(f,false)}]},
-    {label:t("pageFit"),on:()=>{const cs=inFrame(f);
+    ...(f.fixed?[]:[{label:t("pageFit"),on:()=>{const cs=inFrame(f);
       if(cs.length){const bb=bbox(cs);snap();
         f.x=Math.round(bb.x-70);f.y=Math.round(bb.y-70);
-        f.w=Math.round(bb.w+140);f.h=Math.round(bb.h+140);renderFrames();save()}}},
+        f.w=Math.round(bb.w+140);f.h=Math.round(bb.h+140);renderFrames();save()}}}]),
     "-",
     {label:t("pageExport"),on:()=>{sel=inFrame(f).map(c=>c.id);selFrame=null;
       render();paintSel();openExport(x,y)}},
@@ -3875,7 +3793,7 @@ function finishLinkClick(c){
 /* ================= drag and resize ================= */
 function startMove(e,onClick){
   if(lock)return;
-  const list=movableSel().map(card).filter(Boolean).map(o=>({o,x:o.x,y:o.y,full:fenceFull(o)}));
+  const list=movableSel().map(card).filter(Boolean).map(o=>({o,x:o.x,y:o.y}));
   if(!list.length)return;
   snapLazy(list);                          // 真的挪动了才写入撤销栈
   const moving=new Set(list.map(z=>z.o.id));
@@ -3885,8 +3803,7 @@ function startMove(e,onClick){
     let dx=(ev.clientX-sx)/cam.z,dy=(ev.clientY-sy)/cam.z;
     if(Math.abs(dx)+Math.abs(dy)>1)moved=true;
     if(ev.shiftKey){Math.abs(dx)>Math.abs(dy)?dy=0:dx=0}
-    list.forEach(({o,x,y,full})=>{o.x=Math.round(x+dx);o.y=Math.round(y+dy);
-      if(full!==null)fenceClamp(o,full);       // 栅栏锁：只能在本页范围里挪，拖到边上就停住
+    list.forEach(({o,x,y})=>{o.x=Math.round(x+dx);o.y=Math.round(y+dy);
       const el=nodes.get(o.id);
       if(el){el.style.left=o.x+"px";el.style.top=o.y+"px"}});
     if(liveLinks.length)drawLinksLive(liveLinks);   // 只动这几条，其余不重画
@@ -3897,9 +3814,7 @@ function startMove(e,onClick){
     endLinksLive();
     if(moved)drawLinks();
     if(!moved){onClick&&onClick();return}
-    const fenced=fenceSync();          // 拖进栅栏页面的卡片自动进栅栏
     save();
-    if(fenced&&!S.autoNum)renderFrames();
     // 位置变了可能影响阅读顺序，进而影响编号；但整页重建在大画布上要几百毫秒，
     // 所以只重算编号并就地更新徽标，不重建 DOM
     if(S.autoNum)refreshNumsSoon();
@@ -4178,10 +4093,8 @@ addEventListener("keydown",e=>{
   if(k==="0")camTo(tgt.x,tgt.y,1);
   if(k==="t"&&sel.length)syncBar();
   if(sel.length&&e.key.startsWith("Arrow")){e.preventDefault();const d=e.shiftKey?10:1;
-    movableSel().map(card).filter(Boolean).forEach(c=>{const full=fenceFull(c);
-      if(e.key==="ArrowUp")c.y-=d;if(e.key==="ArrowDown")c.y+=d;
-      if(e.key==="ArrowLeft")c.x-=d;if(e.key==="ArrowRight")c.x+=d;
-      if(full!==null)fenceClamp(c,full)});
+    movableSel().map(card).filter(Boolean).forEach(c=>{if(e.key==="ArrowUp")c.y-=d;if(e.key==="ArrowDown")c.y+=d;
+      if(e.key==="ArrowLeft")c.x-=d;if(e.key==="ArrowRight")c.x+=d});
     render();save()}
 });
 
@@ -4202,7 +4115,6 @@ function del(){
       if(!kids.length)return;
       const heir=kids[0];
       const n={...o,id:heir.id,x:heir.x,y:heir.y,w:heir.w,s:heir.s};delete n.ref;
-      if(heir.fenceIn)n.fenceIn=heir.fenceIn;else delete n.fenceIn;
       S.cards[S.cards.indexOf(heir)]=n;
       kids.slice(1).forEach(z=>z.ref=heir.id);
     });
@@ -4213,7 +4125,7 @@ function del(){
 }
 function dupe(){if(!sel.length||lock)return;snap();
   const ns=[];freeSel().map(card).filter(Boolean).forEach(c=>{
-    const n={...JSON.parse(JSON.stringify(c)),id:uid(),x:c.x+30,y:c.y+30};delete n.fenceIn;invalidateIndex();S.cards.push(n);ns.push(n.id)});
+    const n={...JSON.parse(JSON.stringify(c)),id:uid(),x:c.x+30,y:c.y+30};invalidateIndex();S.cards.push(n);ns.push(n.id)});
   sel=ns;render();save();
 }
 function order(dir){if(!sel.length)return;snap();
@@ -4224,7 +4136,6 @@ function align(mode){
   if(movableSel().length<2){if(sel.length)toast(t("lockedNote"));return}
   snap();
   const cs=movableSel().map(card).filter(Boolean),hh=hOf;
-  const fulls=new Map(cs.map(c=>[c.id,fenceFull(c)]));
   const mn=f=>cs.reduce((a,c)=>Math.min(a,f(c)),Infinity);
   const mx=f=>cs.reduce((a,c)=>Math.max(a,f(c)),-Infinity);
   if(mode==="left"){const v=mn(c=>c.x);cs.forEach(c=>c.x=v)}
@@ -4235,7 +4146,6 @@ function align(mode){
   if(mode==="cy"){const v=cs.reduce((a,c)=>a+c.y+hh(c)/2,0)/cs.length;cs.forEach(c=>c.y=Math.round(v-hh(c)/2))}
   if(mode==="rowgap"){cs.sort((a,b)=>a.x-b.x);let x=cs[0].x;cs.forEach(c=>{c.x=Math.round(x);x+=c.w+40})}
   if(mode==="colgap"){cs.sort((a,b)=>a.y-b.y);let y=cs[0].y;cs.forEach(c=>{c.y=Math.round(y);y+=hh(c)+40})}
-  cs.forEach(c=>{const fl=fulls.get(c.id);if(fl!==null)fenceClamp(c,fl)});   // 对齐也不能把卡片带出栅栏
   render();save();
 }
 function sizeImages(all){
@@ -4625,14 +4535,6 @@ const MANUAL=[
   <p><b>与分级标题的关系</b>：导出文档时可选<b>页面标题作为最高级标题</b>（默认开启）。此时页面标题占据最高一级，卡片的一级标题顺延为第二级，编号相应变成 1.1、1.2、2.1 这样，跨页连续不重复。这正好还原你摆卡片时的心理结构：你想的是"这一章里的一级标题"，而不是"全文的一级标题"。</p>
   <p>关掉该选项则回到平铺结构，页面只用于分组和分页导出，不进入文档层级。</p>
   <p>标题层级不再限定三级，需要更细时可继续往下推，导出时自动映射到 Word 的第四、五、六级标题。</p>
-  <p><b>栅栏锁</b>：右键页面标题勾选<b>栅栏锁</b>，标题后面会多一个小栅栏记号，边框变成双线。开了之后：</p>
-  <ul>
-    <li>本页的卡片不会被带走：页面重叠、新建页面、拖动别的页面，都不会改变它们的归属</li>
-    <li>卡片拖进这个页面不需要确认，落进来就自动进栅栏</li>
-    <li>栅栏里的卡片拖到页面边上就停住，方向键和对齐也带不出去；页面也不能缩到把卡片关在外面</li>
-    <li>要移出去，右键卡片选<b>移出页面栅栏</b>（卡片会挪到页面右侧外面），或者用<b>移动到…</b>送到别处</li>
-  </ul>
-  <p>再点一次可以关掉栅栏，卡片一张不动，回到按位置判断归属。</p>
   <p class="tip">页面回答的是"这些属于同一个输出单元"，是产出期的结构，与锁定、分身各管各的事，互不冲突。</p>`],
 
  ["连线备注","LIANXIANBEIZHU",`
@@ -8484,7 +8386,7 @@ function verToClip(c,vid){
   // wrIn 一定要去掉：它是"只活在这份稿子里"的标记，留着的话粘到画布上的那张卡片
   // 会被 syncCards / docOrder 一并跳过——看起来就是"复制了却什么也没发生"。
   // wrUnder 同理（那是挂在某一段折叠框下的位置），h 是别处量出来的高度也不能带走。
-  ["ref","vers","verOn","lock","bib","wrUnder","wrIn","h","fenceIn"].forEach(k=>delete sn[k]);
+  ["ref","vers","verOn","lock","bib","wrUnder","wrIn","h"].forEach(k=>delete sn[k]);
   if(!sn.rich)delete sn.rich;
   // 剪贴板条目要跟 clipCards 生成的形状一致：少了 w/s/bg，pasteClip 会拿 undefined
   // 去建卡片，粘出来的宽度和样式都是坏的。
@@ -8876,7 +8778,7 @@ function wrCloneCard(c,d){
   const snap0=JSON.parse(JSON.stringify(cleanCard(orig(c))));
   const n={...snap0,id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:c.w,
     s:{...(c.s||{})},wrIn:d.id};
-  delete n.ref;delete n.lock;delete n.fenceIn;
+  delete n.ref;delete n.lock;
   if(c.bg)n.bg=c.bg;else delete n.bg;
   return n;
 }
@@ -9563,7 +9465,7 @@ function wrClonesFromClip(d){
   return wrOrderItems(CLIP.items).map(it=>{
     const n={...it.snap,id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:it.w,
       s:{...it.s},wrIn:d.id};
-    delete n.ref;delete n.lock;delete n.fenceIn;
+    delete n.ref;delete n.lock;
     if(it.bg)n.bg=it.bg;else delete n.bg;
     invalidateIndex();S.cards.push(n);
     return n.id;
@@ -10499,7 +10401,6 @@ function cardItems(x,y){
     items.push({label:t("unbindBib"),on:unbindBib});
   items.push({label:t("clipTwinDo"),key:"⌘⇧C",on:()=>clipCards("twin")});
   items.push({label:t("clipCopyDo"),on:()=>clipCards("copy")});
-  if(sel.some(id=>fenceOf(card(id))))items.push({label:t("fenceOut"),on:()=>fenceRelease()});
   items.push({label:t("sendMove"),sub:sendItems("move")});
   if(anyTwin)items.push({label:t("twinGo"),on:()=>gotoTwin(card(sel[0]))},
     {label:t("twinSrc"),on:()=>gotoTwin(card(sel[0]),true)},
