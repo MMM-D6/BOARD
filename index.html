@@ -921,6 +921,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fitAllImg:"Resize every image to this",px:"px",
   pageLock:"Lock this page",
   pageFix:"Lock page position (no moving or resizing)",pageFixOn:"Page position locked",pageFixOff:"Page position unlocked",
+  pageNoOverlap:"Pages can't overlap",pageNewMoved:"New page placed in the nearest free space",
   pageEmpty:"This page has no cards",
   lockMenu:"Lock",lockText:"Lock the content only",lockAll:"Lock content and position",
   unlockPos:"Release the position",unlockAll:"Unlock completely",
@@ -1125,6 +1126,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fitAllImg:"把所有图片调成该尺寸",px:"px",
   pageLock:"锁定本页",
   pageFix:"锁定页面位置（不能移动和缩放）",pageFixOn:"页面位置已锁定",pageFixOff:"已解除页面位置锁定",
+  pageNoOverlap:"页面不能叠放",pageNewMoved:"新页面放到了旁边的空位",
   pageEmpty:"这个页面里没有卡片",
   lockMenu:"锁定",lockText:"仅锁定内容",lockAll:"锁定内容与位置",
   unlockPos:"解除位置锁定",unlockAll:"完全解锁",
@@ -3192,6 +3194,11 @@ function setFrameFixed(f,on){
   renderFrames();save();
   toast(on?t("pageFixOn"):t("pageFixOff"));
 }
+// 页面不许叠放（2026-10）：卡片归属按位置算，两页一叠，重叠区的卡片就会串页。
+// 有面积重叠才算叠放，边贴边不算。旧文件里本来就叠着的页面不拦（skip），方便把它们拖开。
+const frHit=(a,b)=>a.x<b.x+b.w&&b.x<a.x+a.w&&a.y<b.y+b.h&&b.y<a.y+a.h;
+const frHitAny=(r,skip)=>(S.frames||[]).some(g=>!(skip&&skip.has(g))&&frHit(r,g));
+const frSkip=f=>new Set([f,...(S.frames||[]).filter(g=>g!==f&&frHit(f,g))]);
 function startFrameMove(e,f){
   if(f.fixed)return;
   snap();
@@ -3199,9 +3206,17 @@ function startFrameMove(e,f){
   const inSet=new Set(kids.map(z=>z.c.id));
   const fLinks=S.links.some(l=>inSet.has(l.a)||inSet.has(l.b));
   const sx=e.clientX,sy=e.clientY,ox=f.x,oy=f.y;
+  const skip=frSkip(f);let lx=ox,ly=oy,told=false;
+  const fits=(x,y)=>!frHitAny({x,y,w:f.w,h:f.h},skip);
   const mv=ev=>{
-    const dx=(ev.clientX-sx)/cam.z,dy=(ev.clientY-sy)/cam.z;
-    f.x=Math.round(ox+dx);f.y=Math.round(oy+dy);
+    let nx=Math.round(ox+(ev.clientX-sx)/cam.z),ny=Math.round(oy+(ev.clientY-sy)/cam.z);
+    if(!fits(nx,ny)){                      // 会叠上别的页面：能沿一个方向滑就滑，否则停在上一个能放的位置
+      if(fits(nx,ly))ny=ly;else if(fits(lx,ny))nx=lx;else{nx=lx;ny=ly}
+      if(!told){told=true;toast(t("pageNoOverlap"))}
+    }
+    lx=nx;ly=ny;
+    const dx=nx-ox,dy=ny-oy;
+    f.x=nx;f.y=ny;
     kids.forEach(({c,x,y})=>{c.x=Math.round(x+dx);c.y=Math.round(y+dy);
       const el2=nodes.get(c.id);if(el2){el2.style.left=c.x+"px";el2.style.top=c.y+"px"}});
     renderFrames();
@@ -3215,9 +3230,20 @@ function startFrameResize(e,f){
   if(f.fixed)return;
   snap();
   const sx=e.clientX,sy=e.clientY,ow=f.w,oh=f.h;
+  // 缩小不能把本页卡片露到框外（原本就露在外面的，最多保持现状，不会被强行撑大）；拉大不能叠上别的页面
+  const kb=bbox(inFrame(f)),M=10;
+  const minW=Math.max(120,kb?Math.min(ow,Math.ceil(kb.x+kb.w-f.x+M)):0);
+  const minH=Math.max(100,kb?Math.min(oh,Math.ceil(kb.y+kb.h-f.y+M)):0);
+  const skip=frSkip(f);let lw=ow,lh=oh,told=false;
+  const fits=(w,h)=>!frHitAny({x:f.x,y:f.y,w,h},skip);
   const mv=ev=>{
-    f.w=Math.round(Math.max(120,ow+(ev.clientX-sx)/cam.z));
-    f.h=Math.round(Math.max(100,oh+(ev.clientY-sy)/cam.z));
+    let nw=Math.round(Math.max(minW,ow+(ev.clientX-sx)/cam.z));
+    let nh=Math.round(Math.max(minH,oh+(ev.clientY-sy)/cam.z));
+    if(!fits(nw,nh)){
+      if(fits(nw,lh))nh=lh;else if(fits(lw,nh))nw=lw;else{nw=lw;nh=lh}
+      if(!told){told=true;toast(t("pageNoOverlap"))}
+    }
+    lw=nw;lh=nh;f.w=nw;f.h=nh;
     renderFrames();
   };
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);save()};
@@ -3340,12 +3366,22 @@ function addFrame(){
   const ctr=toW(innerWidth/2,innerHeight/2);
   const bb=cs.length?bbox(cs):{x:ctr.x-320,y:ctr.y-220,w:640,h:440};
   const p=cs.length?70:0;
-  snap();
   const f={id:uid(),x:Math.round(bb.x-p),y:Math.round(bb.y-p),
     w:Math.round(bb.w+p*2),h:Math.round(bb.h+p*2),
     title:t("pageDefault")+" "+((S.frames||[]).length+1)};
+  let moved=false;
+  if(frHitAny(f)){
+    if(cs.length){toast(t("pageNoOverlap"));return}  // 包住选中内容的新页面会叠上已有页面：不建
+    for(let i=0;i<500;i++){                // 空白新页面：往右挪到第一个不叠的空位
+      const g=(S.frames||[]).find(z=>frHit(f,z));if(!g)break;
+      f.x=Math.round(g.x+g.w+40);moved=true;
+    }
+    if(frHitAny(f))return;
+  }
+  snap();
   S.frames=(S.frames||[]).concat(f);
   selFrame=f.id;sel=[];
+  if(moved){camTo(-(f.x+f.w/2)*cam.z,-(f.y+f.h/2)*cam.z,cam.z);toast(t("pageNewMoved"))}
   render();save();
 }
 function delFrame(f,withCards){
@@ -3384,7 +3420,10 @@ function frameMenu(x,y,f){
       {label:t("pageLinkStruct"),on:()=>setFrameLinks(f,true)},
       {label:t("pageLinkRelate"),on:()=>setFrameLinks(f,false)}]},
     ...(f.fixed?[]:[{label:t("pageFit"),on:()=>{const cs=inFrame(f);
-      if(cs.length){const bb=bbox(cs);snap();
+      if(cs.length){const bb=bbox(cs);
+        const r={x:Math.round(bb.x-70),y:Math.round(bb.y-70),w:Math.round(bb.w+140),h:Math.round(bb.h+140)};
+        if(frHitAny(r,frSkip(f))){toast(t("pageNoOverlap"));return}
+        snap();
         f.x=Math.round(bb.x-70);f.y=Math.round(bb.y-70);
         f.w=Math.round(bb.w+140);f.h=Math.round(bb.h+140);renderFrames();save()}}}]),
     "-",

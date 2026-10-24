@@ -799,6 +799,77 @@ group("framefix 页面位置锁定", async (c) => {
   c.ok("中英文案都齐了", await c.run(() => ["pageFix", "pageFixOn", "pageFixOff"].every((k) => T.en[k] && T.zh[k])));
 });
 
+group("framenolap 页面不叠放、不串页", async (c) => {
+  const setup = (extra) => c.board(
+    [{ id: "a", x: 40, y: 40, w: 200, text: "甲", s: {} },
+     { id: "b", x: 640, y: 40, w: 200, text: "乙", s: {} }],
+    [],
+    { frames: [{ id: "f1", x: 0, y: 0, w: 400, h: 300, title: "一" },
+               { id: "f2", x: 600, y: 0, w: 400, h: 300, title: "二" }].concat(extra || []), zoom1: true }
+  );
+  // 用合成指针事件驱动拖动：mode 是 "move" 或 "resize"
+  const drag = (id, mode, pts) => c.run(async (id, mode, pts) => {
+    const f = S.frames.find((z) => z.id === id);
+    (mode === "move" ? startFrameMove : startFrameResize)({ clientX: 0, clientY: 0 }, f);
+    for (const [x, y] of pts) dispatchEvent(new PointerEvent("pointermove", { clientX: x * cam.z, clientY: y * cam.z }));
+    dispatchEvent(new PointerEvent("pointerup", {}));
+  }, id, mode, pts);
+  const fr = (id) => c.run((id) => { const f = S.frames.find((z) => z.id === id); return { x: f.x, y: f.y, w: f.w, h: f.h, keys: Object.keys(f).sort().join() }; }, id);
+  const own = () => c.run(() => S.cards.map((z) => z.id + ":" + ((frameOf(z) || {}).id || "-")).join());
+  const noLap = () => c.run(() => S.frames.every((a, i) => S.frames.every((b, j) => i === j || !frHit(a, b))));
+
+  await setup();
+  await c.wait(200);
+  c.ok("起始：甲在一页、乙在二页", (await own()) === "a:f1,b:f2");
+  await drag("f1", "move", [[100, 0], [300, 0], [500, 0]]);
+  let f1 = await fr("f1");
+  c.ok("把一页往二页上拖：停在贴边处，不叠上去", f1.x + f1.w <= 600 && (await noLap()));
+  c.ok("拖动后卡片不串页", (await own()) === "a:f1,b:f2");
+  c.ok("甲跟着一页走", await c.run(() => card("a").x - S.frames[0].x === 40));
+  const sx0 = f1.x;
+  await drag("f1", "move", [[300, 100]]);
+  f1 = await fr("f1");
+  c.ok("斜着被挡时能沿另一个方向滑开", f1.x === sx0 && f1.y === 100 && (await noLap()));
+  c.ok("页面对象没有多出任何字段", f1.keys === "h,id,title,w,x,y");
+
+  await setup();
+  await c.wait(200);
+  await drag("f1", "resize", [[-200, -200], [-400, -300]]);
+  f1 = await fr("f1");
+  const kb = await c.run(() => bbox([card("a")]));
+  c.ok("缩小不会把卡片露到框外", f1.x + f1.w >= kb.x + kb.w && f1.y + f1.h >= kb.y + kb.h);
+  c.ok("缩小后甲仍在一页", (await own()) === "a:f1,b:f2");
+  await drag("f1", "resize", [[100, 0], [500, 0]]);
+  f1 = await fr("f1");
+  c.ok("拉大不会叠上二页", f1.x + f1.w <= 600 && (await noLap()));
+  c.ok("拉大后二页的卡片没被吞进来", (await own()) === "a:f1,b:f2");
+
+  await setup();
+  await c.wait(200);
+  await c.run(() => { camTo(-200 * cam.z, -150 * cam.z, cam.z, true); sel = []; addFrame(); });
+  c.ok("在页面上新建空白页：自动挪到不叠的空位", (await c.run(() => S.frames.length)) === 3 && (await noLap()));
+  c.ok("新建空白页不抢卡片", (await own()) === "a:f1,b:f2");
+  await c.run(() => { sel = ["a"]; addFrame(); });
+  c.ok("包住已在页面里的卡片新建页：会叠上就不建", (await c.run(() => S.frames.length)) === 3);
+  c.ok("拒建之后归属不变", (await own()) === "a:f1,b:f2");
+
+  await setup();
+  await c.run(() => { card("b").x = 450; card("b").w = 400; render(); });   // 乙向左伸出，收拢会叠上一页
+  await c.wait(200);
+  const before = await fr("f2");
+  await c.run(() => { frameMenu(10, 10, S.frames[1]); const m = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("pageFit"))); m && m.click(); closeMenus(); });
+  const after = await fr("f2");
+  c.ok("收拢到内容大小会叠上别页时不执行", before.x === after.x && before.w === after.w);
+
+  // 旧文件里本来就叠着的两页：不拦着，可以拖开
+  await setup([{ id: "f3", x: 300, y: 100, w: 200, h: 150, title: "叠" }]);
+  await c.wait(200);
+  await drag("f3", "move", [[0, 200], [0, 400]]);
+  const f3 = await fr("f3");
+  c.ok("原本就叠着的页面能拖开", f3.y === 500);
+  c.ok("中英文案都齐了", await c.run(() => ["pageNoOverlap", "pageNewMoved"].every((k) => T.en[k] && T.zh[k])));
+});
+
 /* =====================================================================
    6. 编组与锁定
    ===================================================================== */
