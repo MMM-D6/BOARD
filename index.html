@@ -286,6 +286,16 @@
   .pop .ti{width:100%;height:30px;border:1px solid var(--pline);background:none;
     border-radius:7px;padding:0 8px;font-size:12.5px}
   .pop .note{font-size:11px;opacity:.42;margin:8px 0 0;line-height:1.5}
+  /* 我想我写：只出现在这个面板里，画布上不画任何东西 */
+  .pop .tkh{font-size:11px;opacity:.5;margin:-4px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pop .tk-list{max-height:280px;overflow:auto}
+  .pop .tk{padding:7px 0;border-bottom:1px solid var(--pline)}
+  .pop .tk .tm{display:flex;align-items:center;font:400 9.5px/1 "IBM Plex Mono",monospace;opacity:.5}
+  .pop .tk .tm button{margin-left:auto;border:none;background:none;color:inherit;cursor:pointer;font-size:11px;padding:0 2px;opacity:.7}
+  .pop .tk .tm button.arm{color:#c0392b;opacity:1}
+  .pop .tk .tx{white-space:pre-wrap;word-break:break-word;margin-top:5px;line-height:1.55;cursor:text}
+  .pop textarea.tki{display:block;width:100%;min-height:76px;margin-top:8px;padding:6px 8px;box-sizing:border-box;resize:vertical;
+    border:1px solid var(--pline);border-radius:6px;background:none;color:inherit;font:inherit;line-height:1.55;outline:none}
   #man{position:fixed;inset:0;z-index:120;display:none;background:rgba(0,0,0,.28);
     backdrop-filter:blur(3px)}
   #man.on{display:flex;align-items:center;justify-content:center}
@@ -922,6 +932,9 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pageLock:"Lock this page",
   pageFix:"Lock page position (no moving or resizing)",pageFixOn:"Page position locked",pageFixOff:"Page position unlocked",
   pageNoOverlap:"Pages can't overlap",pageNewMoved:"New page placed in the nearest free space",
+  thinkMenu:"I think, I write",thinkPh:"Write whatever comes to mind. Messy and unfinished is fine.",
+  thinkHint:"Saved as you type · \u2318/Ctrl+Enter starts a new entry · Click an entry to edit it",
+  thinkDel:"Delete",thinkDelSure:"Delete?",thinkDeleted:"Thought deleted (you can undo this)",expThink:"Include \u201CI think, I write\u201D",
   pageEmpty:"This page has no cards",
   lockMenu:"Lock",lockText:"Lock the content only",lockAll:"Lock content and position",
   unlockPos:"Release the position",unlockAll:"Unlock completely",
@@ -1127,6 +1140,9 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pageLock:"锁定本页",
   pageFix:"锁定页面位置（不能移动和缩放）",pageFixOn:"页面位置已锁定",pageFixOff:"已解除页面位置锁定",
   pageNoOverlap:"页面不能叠放",pageNewMoved:"新页面放到了旁边的空位",
+  thinkMenu:"我想我写",thinkPh:"想到什么就写什么，乱一点、不完整都没关系",
+  thinkHint:"打字即保存 · \u2318/Ctrl+Enter 另起一条 · 点已有的一条可以修改",
+  thinkDel:"删除",thinkDelSure:"确定删除？",thinkDeleted:"已删除这条想法（可以撤销）",expThink:"带上「我想我写」",
   pageEmpty:"这个页面里没有卡片",
   lockMenu:"锁定",lockText:"仅锁定内容",lockAll:"锁定内容与位置",
   unlockPos:"解除位置锁定",unlockAll:"完全解锁",
@@ -1290,7 +1306,7 @@ function clipCards(mode){
   if(!cs.length){toast(t("clipNeed"));return}
   const b=bbox(cs);
   CLIP={mode,items:cs.map(c=>({src:orig(c).id,dx:c.x-b.x,dy:c.y-b.y,w:c.w,
-    s:{...(c.s||{})},bg:c.bg||"",snap:JSON.parse(JSON.stringify(cleanCard(orig(c))))}))};
+    s:{...(c.s||{})},bg:c.bg||"",snap:noThink(JSON.parse(JSON.stringify(cleanCard(orig(c)))))}))};
   toast((mode==="twin"?t("clipTwin"):t("clipCopy"))+" "+cs.length);
 }
 function pasteClip(p){
@@ -1366,12 +1382,12 @@ function unlinkTwin(c){
   snap();
   if(c.ref){                       // 分身脱离：就地固化为独立卡片
     const n={...o,id:c.id,x:c.x,y:c.y,w:c.w,s:c.s};
-    delete n.ref;
+    delete n.ref;noThink(n);                 // 我想我写留在源卡片上，固化出来的副本不带
     S.cards[S.cards.indexOf(c)]=n;
   }else{                           // 源脱离：所有分身各自固化
     S.cards=S.cards.map(z=>{
       if(z.ref!==o.id)return z;
-      const n={...o,id:z.id,x:z.x,y:z.y,w:z.w,s:z.s};delete n.ref;return n;
+      const n={...o,id:z.id,x:z.x,y:z.y,w:z.w,s:z.s};delete n.ref;noThink(n);return n;
     });
   }
   render();save();
@@ -1869,6 +1885,11 @@ function normCard(c){
     if(!o.vers.length)delete o.vers;
   }
   if(o.verOn&&!(o.vers||[]).some(v=>v.id===o.verOn))delete o.verOn;
+  if(o.think!=null){                                // 我想我写：只认 {t,x}，坏数据丢掉，空了就整个去掉
+    o.think=Array.isArray(o.think)?o.think.filter(e=>e&&typeof e==="object"&&typeof e.x==="string"&&e.x.trim())
+      .map(e=>({t:Number.isFinite(+e.t)&&+e.t>0?+e.t:0,x:e.x})):[];
+    if(!o.think.length)delete o.think;
+  }
   if(o.wrUnder&&typeof o.wrUnder!=="string")delete o.wrUnder;
   if(o.wrIn&&typeof o.wrIn!=="string")o.wrIn=String(o.wrIn);
   if(o.bib&&typeof o.bib!=="string")delete o.bib;
@@ -4164,7 +4185,7 @@ function del(){
 }
 function dupe(){if(!sel.length||lock)return;snap();
   const ns=[];freeSel().map(card).filter(Boolean).forEach(c=>{
-    const n={...JSON.parse(JSON.stringify(c)),id:uid(),x:c.x+30,y:c.y+30};invalidateIndex();S.cards.push(n);ns.push(n.id)});
+    const n=noThink({...JSON.parse(JSON.stringify(c)),id:uid(),x:c.x+30,y:c.y+30});invalidateIndex();S.cards.push(n);ns.push(n.id)});
   sel=ns;render();save();
 }
 function order(dir){if(!sel.length)return;snap();
@@ -5157,6 +5178,7 @@ function openExport(x,y,pre){
       <label class="opt"><input type="checkbox" id="ex1" checked> ${t("expImg")}</label>
       <label class="opt"><input type="checkbox" id="ex2" checked> ${t("expTags")}</label>
       <label class="opt"><input type="checkbox" id="ex5" checked> ${t("byPageDoc")}</label>
+      <label class="opt"><input type="checkbox" id="ex6"> ${t("expThink")}</label>
     </div>
     <div id="eximg" style="display:none">
       <label class="opt"><input type="checkbox" id="exbp" checked> ${t("byPage")}</label>
@@ -5220,7 +5242,7 @@ function openExport(x,y,pre){
       shots:!!p.querySelector("#exshot")?.checked,
       title:stampName(p.querySelector("#exn").value.trim()||"Board"),
       img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
-      byPageDoc:!!p.querySelector("#ex5")?.checked};
+      byPageDoc:!!p.querySelector("#ex5")?.checked,think:!!p.querySelector("#ex6")?.checked};
     p.classList.remove("on","wide");
     toast(o.fmt==="jpg"||o.fmt==="pdfview"?t("expShot"):t("expWork"));
     setTimeout(()=>doExport(o),60);
@@ -5484,13 +5506,22 @@ async function exportDocx(D,o,tree){
       if(tg.length)kids.push(new Paragraph({children:[new TextRun({
         text:tg.map(x=>"#"+x).join("  "),italics:true,size:18,color:"888888"})]}))}
   };
+  const tkSeen=new Set();                   // 我想我写：只在勾选时输出，同一张源卡片只写一次
+  const emitT=n=>{emit(n);
+    const L=o.think?thinkOf(n.c):[],sid=orig(n.c).id;
+    if(!L.length||tkSeen.has(sid))return;tkSeen.add(sid);
+    kids.push(new Paragraph({indent:{left:360},children:[new TextRun({text:t("thinkMenu"),italics:true,size:18,color:"888888"})]}));
+    L.forEach(e=>kids.push(new Paragraph({indent:{left:360},children:[
+      ...(e.t?[new TextRun({text:thinkStamp(e.t)+"  ",size:16,color:"999999"})]:[]),
+      ...e.x.split("\n").map((ln,j)=>new TextRun({text:ln,size:18,color:"555555",...(j?{break:1}:{})}))]})));
+  };
   if(o.byPageDoc){
     // 页面标题作为最高一级，页内卡片层级整体下移一级
     pageGroups(null).forEach((g,gi)=>{
       kids.push(new Paragraph({text:(gi+1)+"  "+g.title,heading:HeadingLevel.HEADING_1}));
-      buildTree(g.cards,1,gi+1).flat.forEach(emit);
+      buildTree(g.cards,1,gi+1).flat.forEach(emitT);
     });
-  }else tree.flat.forEach(emit);
+  }else tree.flat.forEach(emitT);
   const doc=new Document({sections:[{children:kids}]});
   const blob=await Packer.toBlob(doc);
   dl(blob,o.title+".docx");
@@ -5736,12 +5767,22 @@ function docMD(o,tree){
     if(o.tags){const tg=cardTags(oc);if(tg.length)lines.push(tg.map(x=>"#"+x).join(" "),"")}
     if(o2u(oc))lines.push("<"+o2u(oc)+">","");
   };
+  // 我想我写：只在勾选时输出，同一张源卡片（含分身）只写一次
+  const tkSeen=new Set();
+  const emitT=n=>{emit(n);
+    const L=o.think?thinkOf(n.c):[],sid=orig(n.c).id;
+    if(!L.length||tkSeen.has(sid))return;tkSeen.add(sid);
+    lines.push("> *"+t("thinkMenu")+"*",">");
+    L.forEach((e,i)=>{if(i)lines.push(">");
+      e.x.split("\n").forEach((ln,j)=>lines.push("> "+(j?"":(e.t?thinkStamp(e.t)+"  ":""))+ln))});
+    lines.push("");
+  };
   if(o.byPageDoc){
     pageGroups(null).forEach((g,gi)=>{
       lines.push("## "+(gi+1)+"  "+g.title,"");
-      buildTree(g.cards,1,gi+1).flat.forEach(emit);
+      buildTree(g.cards,1,gi+1).flat.forEach(emitT);
     });
-  }else tree.flat.forEach(emit);
+  }else tree.flat.forEach(emitT);
   return lines.join("\n");
 }
 function docHTML(o,tree,forPrint){
@@ -5755,6 +5796,8 @@ function docHTML(o,tree,forPrint){
   table.tbx td,table.tbx th{border:1px solid #999;padding:4pt 6pt;text-align:left;vertical-align:top}
   table.tbx th{background:#f0f0f0;font-weight:600}
   p.bib{margin:10pt 0 4pt 0;padding-left:18pt;text-indent:-18pt;font-weight:600}
+  .tkb{border-left:2px solid #ccc;padding-left:8pt;margin:4pt 0 10pt;color:#555;font-size:9.5pt}
+  .tkb p{margin:2pt 0}.tkb .tkt{color:#999}
   img{max-width:460px;height:auto}</style></head><body><h1>${esc(o.title)}</h1>`;
   const emit=(n)=>{
     const c=n.c;
@@ -5789,12 +5832,19 @@ function docHTML(o,tree,forPrint){
     if(wrapBg)h+="</div>";
     if(o.tags){const tg=cardTags(c);if(tg.length)h+=`<p class="tg">${esc(tg.map(x=>"#"+x).join("  "))}</p>`}
   };
+  const tkSeen=new Set();                   // 我想我写：只在勾选时输出，同一张源卡片只写一次
+  const emitT=n=>{emit(n);
+    const L=o.think?thinkOf(n.c):[],sid=orig(n.c).id;
+    if(!L.length||tkSeen.has(sid))return;tkSeen.add(sid);
+    h+=`<div class="tkb"><p><i>${esc(t("thinkMenu"))}</i></p>`+L.map(e=>`<p>`
+      +(e.t?`<span class="tkt">${thinkStamp(e.t)}</span>  `:"")+esc(e.x).replace(/\n/g,"<br>")+`</p>`).join("")+`</div>`;
+  };
   if(o.byPageDoc){
     pageGroups(null).forEach((g,gi)=>{
       h+=`<h2>${esc((gi+1)+"  "+g.title)}</h2>`;
-      buildTree(g.cards,1,gi+1).flat.forEach(emit);
+      buildTree(g.cards,1,gi+1).flat.forEach(emitT);
     });
-  }else tree.flat.forEach(emit);
+  }else tree.flat.forEach(emitT);
   h+="</body></html>";
   return h;
 }
@@ -7990,6 +8040,101 @@ function openTags(x,y){
     inp.value=parts.join(", ");b.classList.toggle("on");apply();
   };
 }
+/* ================= 我想我写（2026-10） =================
+   每张卡片可以挂一串随手写下的想法：c.think=[{t:写下的时间(毫秒),x:文字}]。
+   ① 只记在原卡片上（orig）：画布上的分身、写作页折叠框里的引文分身，打开的都是同一份。
+   ② 写作页正文段落（docOnly）不提供：它们是独立副本，想法记在那里会和原卡片脱钩。
+   ③ 想法不是卡片内容：卡片锁定照样能写。复制卡片（拷贝粘贴、⌘D、拷进稿子、分身脱离）不带走，
+      这是和分身的区别；源卡片被删、分身被扶正时（del 里的 heir）想法跟着内容一起留下。
+   ④ 打字即保存，没有"草稿"这一说，所以面板被点外面关掉也不会丢字。
+      清空一条已有的记录不会删掉它（离开时恢复原文）；删除只能点"删除"再点"确定删除？"，并且可以撤销。
+   ⑤ 画布上不显示任何东西，所以网页快照和截图天然不带；Word/PDF/Markdown 导出默认不带，勾选才带。
+   没写过想法的卡片没有这个字段，数据与从前逐字节相同。 */
+const thinkOf=c=>{const o=c&&orig(c);return o&&Array.isArray(o.think)?o.think:[]};
+const noThink=n=>{if(n)delete n.think;return n};
+function thinkStamp(ms){const d=new Date(ms),p=v=>String(v).padStart(2,"0");
+  return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())}
+function openThink(x,y,c){
+  const s0=c&&orig(c);if(!s0||docOnly(s0))return;
+  const sid=s0.id,src=()=>card(sid);         // 每次现取：撤销会换掉卡片对象
+  const p=$("pop");
+  // 输入框里的按键、粘贴、复制不能漏到画布上（否则 Delete 会删卡片、粘贴会贴进表格）
+  const guard=el=>["keydown","paste","copy","cut"].forEach(k=>el.addEventListener(k,e=>{
+    e.stopPropagation();
+    if(k==="keydown"&&e.key==="Escape"){e.preventDefault();p.classList.remove("on","wide")}
+  }));
+  const close=()=>p.classList.remove("on","wide");
+  p.innerHTML=`<div class="hd"><b>${esc(t("thinkMenu"))}</b><button id="pcx">\u00D7</button></div>
+    <div class="tkh">${esc(snippet(s0,40)||"")}</div>
+    <div class="tk-list" id="tkl"></div>
+    <textarea class="tki" id="tkin" placeholder="${escA(t("thinkPh"))}" spellcheck="false"></textarea>
+    <p class="note">${esc(t("thinkHint"))}</p>`;
+  p.classList.add("wide");
+  place(p,Math.min(x,innerWidth-330),Math.min(y,innerHeight-440));
+  p.classList.add("on");
+  p.querySelector("#pcx").onclick=close;
+  const box=p.querySelector("#tkl"),inp=p.querySelector("#tkin");
+  const paintList=()=>{
+    const L=thinkOf(src());
+    box.style.display=L.length?"":"none";
+    box.innerHTML=L.map((e,i)=>`<div class="tk" data-i="${i}"><div class="tm">${thinkStamp(e.t)}`
+      +`<button type="button" data-del="${i}">${esc(t("thinkDel"))}</button></div>`
+      +`<div class="tx">${esc(e.x)}</div></div>`).join("");
+    box.scrollTop=box.scrollHeight;
+  };
+  paintList();
+  // 新的一条：打第一个字时才建（这时记一次撤销点），之后的字直接写进去
+  let cur=null;
+  guard(inp);
+  inp.addEventListener("input",()=>{
+    const o=src();if(!o)return;
+    const v=inp.value;
+    if(!cur){
+      if(!v.trim())return;
+      snap();cur={t:Date.now(),x:v};o.think=(Array.isArray(o.think)?o.think:[]).concat(cur);
+    }else if(!v.trim()){                     // 正在写的这一条又被删光：当作没写过
+      o.think=(o.think||[]).filter(z=>z!==cur);if(!o.think.length)delete o.think;cur=null;
+    }else cur.x=v;
+    save();
+  });
+  inp.addEventListener("keydown",e=>{
+    if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){
+      e.preventDefault();
+      if(cur){cur=null;inp.value="";paintList()}
+    }
+  });
+  box.addEventListener("click",e=>{
+    const o=src();if(!o||!Array.isArray(o.think))return;
+    const del=e.target.closest("button[data-del]");
+    if(del){
+      if(!del.classList.contains("arm")){       // 第一次只是"上膛"，三秒内再点才真删
+        del.classList.add("arm");del.textContent=t("thinkDelSure");
+        setTimeout(()=>{if(del.isConnected){del.classList.remove("arm");del.textContent=t("thinkDel")}},3000);
+        return;
+      }
+      const ent=o.think[+del.dataset.del];if(!ent)return;
+      snap();o.think=o.think.filter(z=>z!==ent);if(!o.think.length)delete o.think;
+      if(ent===cur)cur=null;
+      save();paintList();toast(t("thinkDeleted"));
+      return;
+    }
+    const tx=e.target.closest(".tx");if(!tx)return;
+    const ent=o.think[+tx.parentNode.dataset.i];if(!ent)return;
+    const before=ent.x;let snapped=false;
+    const ta=document.createElement("textarea");ta.className="tki";ta.value=ent.x;ta.spellcheck=false;
+    guard(ta);tx.replaceWith(ta);ta.focus();
+    ta.addEventListener("input",()=>{
+      if(!ta.value.trim())return;              // 删光了先不写进去，离开时恢复原文
+      if(!snapped){snap();snapped=true}
+      ent.x=ta.value;save();
+    });
+    ta.addEventListener("blur",()=>{
+      if(!ta.value.trim()&&ent.x!==before){ent.x=before;save()}
+      paintList();
+    });
+  });
+  setTimeout(()=>inp.focus(),0);
+}
 function searchTag(x){
   S.findMode="tag";$("find").classList.add("on");$("findq").value=x;syncFindMode();runFind();
 }
@@ -8425,7 +8570,7 @@ function verToClip(c,vid){
   // wrIn 一定要去掉：它是"只活在这份稿子里"的标记，留着的话粘到画布上的那张卡片
   // 会被 syncCards / docOrder 一并跳过——看起来就是"复制了却什么也没发生"。
   // wrUnder 同理（那是挂在某一段折叠框下的位置），h 是别处量出来的高度也不能带走。
-  ["ref","vers","verOn","lock","bib","wrUnder","wrIn","h"].forEach(k=>delete sn[k]);
+  ["ref","vers","verOn","lock","bib","wrUnder","wrIn","h","think"].forEach(k=>delete sn[k]);
   if(!sn.rich)delete sn.rich;
   // 剪贴板条目要跟 clipCards 生成的形状一致：少了 w/s/bg，pasteClip 会拿 undefined
   // 去建卡片，粘出来的宽度和样式都是坏的。
@@ -8817,7 +8962,7 @@ function wrCloneCard(c,d){
   const snap0=JSON.parse(JSON.stringify(cleanCard(orig(c))));
   const n={...snap0,id:uid(),x:Math.round(d.x),y:Math.round(d.y),w:c.w,
     s:{...(c.s||{})},wrIn:d.id};
-  delete n.ref;delete n.lock;
+  delete n.ref;delete n.lock;delete n.think;
   if(c.bg)n.bg=c.bg;else delete n.bg;
   return n;
 }
@@ -9587,6 +9732,7 @@ function wrRefMenu(x,y,twinId,d){
       if(wrOpenState())closeWrite();
       sel=[id];selLink=null;paintSel();focusOn([card(id)]);
     }},
+    {label:t("thinkMenu"),on:()=>openThink(x,y,twin)},
     "-",
     ...(CLIP?[{label:t("wrRefPaste"),on:()=>wrPasteTwin(twin.wrUnder,d)}]:[]),
     {label:t("wrRefDrop"),danger:true,on:()=>{
@@ -10396,6 +10542,7 @@ function cardItems(x,y){
   const items=[
     {label:t("zoomTo"),key:"Z",on:focusSel},
     {label:t("tagsMenu"),on:()=>openTags(x,y)},
+    ...(one&&!docOnly(one)?[{label:t("thinkMenu"),on:()=>openThink(x,y,one)}]:[]),
     {label:t("level"),sub:[{head:t("level")},
       ...[[0,"lvNone"],[1,"lv1"],[2,"lv2"],[3,"lv3"]].map(([v,k])=>({label:t(k),
         check:!card(sel[0])?.role&&(card(sel[0])?.level||0)===v,on:()=>setLevel(v)})),

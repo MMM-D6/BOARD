@@ -870,6 +870,129 @@ group("framenolap 页面不叠放、不串页", async (c) => {
   c.ok("中英文案都齐了", await c.run(() => ["pageNoOverlap", "pageNewMoved"].every((k) => T.en[k] && T.zh[k])));
 });
 
+group("think 我想我写", async (c) => {
+  await c.board([
+    { id: "a", x: 0, y: 0, w: 260, text: "原卡片的笔记", s: {} },
+    { id: "z", x: 600, y: 0, w: 260, text: "没写过想法的卡片", s: {} },
+  ], [], { zoom1: true });
+  const before = await c.run(() => JSON.stringify(S.cards.find((x) => x.id === "z")));
+  const menuHas = await c.run(() => { sel = ["a"]; const it = cardItems(10, 10).map((z) => z && z.label); return it.includes(t("thinkMenu")); });
+  c.ok("卡片右键菜单里有「我想我写」", menuHas);
+
+  // 打开并真的用键盘打字
+  await c.run(() => { sel = ["a"]; paintSel(); openThink(100, 100, card("a")); });
+  await c.wait(80);
+  await c.page.keyboard.type("first idea");
+  await c.page.keyboard.press("Backspace");           // 退格不能漏到画布去删卡片
+  await c.wait(50);
+  c.ok("打字即保存成一条记录", await c.run(() => card("a").think && card("a").think.length === 1 && card("a").think[0].x === "first ide"));
+  c.ok("在输入框里按退格不会删掉选中的卡片", await c.run(() => !!card("a") && S.cards.length === 2));
+  c.ok("记录带有时间", await c.run(() => card("a").think[0].t > 1.7e12));
+  await c.page.keyboard.down("Control"); await c.page.keyboard.press("Enter"); await c.page.keyboard.up("Control");
+  await c.page.keyboard.type("second");
+  c.ok("Ctrl+Enter 另起一条", await c.run(() => card("a").think.length === 2 && card("a").think[1].x === "second"));
+  c.ok("面板里列出了之前的一条", await c.run(() => document.querySelectorAll("#pop .tk").length === 1));
+  await c.page.keyboard.press("Escape");
+  c.ok("Esc 关闭面板", await c.run(() => !$("pop").classList.contains("on")));
+  c.ok("画布上不显示任何想法文字", await c.run(() => !$("world").innerText.includes("second") && !$("world").innerText.includes("first ide")));
+  c.ok("没写过的卡片数据一个字节都没变", (await c.run(() => JSON.stringify(S.cards.find((x) => x.id === "z")))) === before);
+
+  // 分身共用原卡片的记录
+  const tw = await c.run(() => { sel = ["a"]; clipCards("twin"); pasteClip({ x: 0, y: 400 }); return sel[0]; });
+  c.ok("画布分身看到同一份", await c.run((tw) => thinkOf(card(tw)).length === 2 && !("think" in card(tw)), tw));
+  await c.run((tw) => openThink(100, 100, card(tw)), tw);
+  await c.wait(80);
+  await c.page.keyboard.type("from twin");
+  c.ok("在分身上写，记到原卡片上", await c.run((tw) => card("a").think.length === 3 && !("think" in card(tw)), tw));
+  await c.run(() => $("pop").classList.remove("on", "wide"));
+
+  // 锁定的卡片照样能写
+  await c.run(() => { card("a").lock = "all"; openThink(100, 100, card("a")); });
+  await c.wait(80);
+  await c.page.keyboard.type("locked ok");
+  c.ok("卡片锁定时照样能写", await c.run(() => card("a").think.length === 4));
+  await c.run(() => { $("pop").classList.remove("on", "wide"); delete card("a").lock; });
+
+  // 复制不带走
+  const cp = await c.run(() => {
+    sel = ["a"]; clipCards("copy"); pasteClip({ x: 0, y: 800 }); const pasted = card(sel[0]);
+    sel = ["a"]; dupe(); const dup = card(sel[0]);
+    return { pasted: "think" in pasted, dup: "think" in dup, pastedText: orig(pasted).text };
+  });
+  c.ok("拷贝粘贴出来的卡片不带想法", !cp.pasted && cp.pastedText === "原卡片的笔记");
+  c.ok("⌘D 复制出来的卡片不带想法", !cp.dup);
+  const ul = await c.run((tw) => { unlinkTwin(card(tw)); return { twin: "think" in card(tw), src: card("a").think.length }; }, tw);
+  c.ok("分身脱离成独立卡片后不带想法，源卡片上的还在", !ul.twin && ul.src === 4);
+
+  // 写作页：正文段落是拷贝，不带、也不给入口；折叠框里的引文分身有入口、读同一份
+  const wr = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -4000, y: -3000 }, "稿子");
+    sel = ["a"]; clipCards("copy"); wrPasteMain(d, 0);
+    const blk = card(d.ids[0]);
+    wrBlockMenu(60, 60, blk, 0, d);
+    const blkItems = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    closeMenus();
+    sel = ["a"]; clipCards("twin"); wrPasteTwin(d.ids[0], d);
+    const rt = S.cards.find((z) => z.ref === "a" && z.wrUnder === d.ids[0]);
+    wrRefMenu(60, 60, rt.id, d);
+    const refItems = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
+    closeMenus();
+    return { blkThink: "think" in blk, blkMenu: blkItems.some((z) => z.includes(t("thinkMenu"))),
+      refMenu: refItems.some((z) => z.includes(t("thinkMenu"))), refSees: thinkOf(rt).length, rt: rt.id };
+  });
+  c.ok("拷进稿子的正文段落不带想法", !wr.blkThink);
+  c.ok("正文段落的菜单里没有「我想我写」", !wr.blkMenu);
+  c.ok("折叠框里的引文分身菜单里有「我想我写」", wr.refMenu);
+  c.ok("引文分身看到的是原卡片那一份", wr.refSees === 4);
+
+  // 删除：点一次只上膛，再点才删；可以撤销
+  await c.run(() => openThink(100, 100, card("a")));
+  await c.wait(80);
+  await c.run(() => document.querySelector('#pop button[data-del="0"]').click());
+  c.ok("点一次删除不会删", await c.run(() => card("a").think.length === 4 && document.querySelector('#pop button[data-del="0"]').classList.contains("arm")));
+  await c.run(() => document.querySelector('#pop button[data-del="0"]').click());
+  c.ok("再点一次才删掉", await c.run(() => card("a").think.length === 3 && card("a").think[0].x === "second"));
+  await c.run(() => applyUndo(undo, redo));
+  c.ok("删除可以撤销", await c.run(() => card("a").think.length === 4 && card("a").think[0].x === "first ide"));
+
+  // 修改：清空已有的一条不会删掉它
+  await c.run(() => openThink(100, 100, card("a")));
+  await c.wait(80);
+  await c.run(() => document.querySelector("#pop .tk .tx").click());
+  await c.page.keyboard.type(" plus");
+  c.ok("点已有的一条可以修改，原时间不变", await c.run(() => card("a").think[0].x === "first ide plus"));
+  await c.run(() => { const ta = document.querySelector("#pop .tk textarea"); ta.value = ""; ta.dispatchEvent(new Event("input")); ta.blur(); });
+  c.ok("把一条清空后离开，恢复原文而不是删除", await c.run(() => card("a").think.length === 4 && card("a").think[0].x === "first ide"));
+  await c.run(() => $("pop").classList.remove("on", "wide"));
+
+  // 保存与读回
+  c.ok("保存文件时完整带上", await c.run(() => { const b = bundle(null); const x = b.cards.find((z) => z.id === "a"); return x.think.length === 4; }));
+  c.ok("坏数据在导入时被清掉", await c.run(() => {
+    const n = normCard({ id: "q", x: 0, y: 0, w: 300, text: "", think: [{ t: 5, x: "ok" }, null, { x: 3 }, { t: "bad", x: "keep" }, { x: "  " }] });
+    const m = normCard({ id: "r", x: 0, y: 0, w: 300, text: "", think: "nope" });
+    return n.think.length === 2 && n.think[1].t === 0 && !("think" in m);
+  }));
+  c.ok("经导入后记录还在", await c.run(async () => { const d = JSON.parse(JSON.stringify(bundle(null))); await absorb(d, false); return card("a").think.length === 4; }));
+
+  // 导出：默认不带，勾选才带，源卡片和它的分身只写一次
+  const ex = await c.run(() => {
+    sel = ["a"]; clipCards("twin"); pasteClip({ x: 0, y: 1200 });
+    const tree = buildTree(null);
+    const o0 = { title: "T", img: false, tags: false, byPageDoc: false };
+    const md0 = docMD(o0, tree), md1 = docMD({ ...o0, think: true }, tree);
+    const h0 = docHTML(o0, tree), h1 = docHTML({ ...o0, think: true }, tree);
+    const count = (s, k) => s.split(k).length - 1;
+    return { md0: md0.includes("first ide"), md1: count(md1, "locked ok"), h0: h0.includes("first ide"), h1: count(h1, "locked ok") };
+  });
+  c.ok("Markdown 默认不带想法", !ex.md0);
+  c.ok("Markdown 勾选后带上，且只出现一次", ex.md1 === 1);
+  c.ok("Word/PDF 文档默认不带想法", !ex.h0);
+  c.ok("Word/PDF 文档勾选后带上，且只出现一次", ex.h1 === 1);
+  c.ok("导出面板有这个选项且默认不勾", await c.run(() => { openExport(10, 10); const b = $("ex6"); const r = !!b && !b.checked; $("pop").classList.remove("on", "wide"); return r; }));
+  c.ok("中英文案都齐了", await c.run(() => ["thinkMenu", "thinkPh", "thinkHint", "thinkDel", "thinkDelSure", "thinkDeleted", "expThink"].every((k) => T.en[k] && T.zh[k])));
+});
+
 /* =====================================================================
    6. 编组与锁定
    ===================================================================== */
