@@ -625,6 +625,9 @@
     -webkit-box-decoration-break:clone;box-decoration-break:clone;cursor:default}
   /* 摘词状态：这一条引文换一圈虚线，表示"现在在这里划选" */
   .blk .ref.picking{opacity:1;outline:1px dashed var(--frame);outline-offset:3px;border-radius:3px}
+  ::highlight(mqhit){background-color:rgba(0,0,0,.16)}
+  body.isdark ::highlight(mqhit){background-color:rgba(255,255,255,.24)}
+  .blk .ref.mqlit{opacity:1}
   #mqgo{position:fixed;z-index:85;display:none;height:26px;padding:0 11px;border-radius:7px;cursor:pointer;
     border:1px solid var(--pline);background:var(--panel);color:var(--pfg);font:500 12px/1 "IBM Plex Sans",sans-serif;
     box-shadow:0 6px 18px rgba(0,0,0,.14)}
@@ -946,9 +949,9 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pageNoOverlap:"Pages can't overlap",pageNewMoved:"New page placed in the nearest free space",
   thinkMenu:"I think, I write",thinkPh:"Write whatever comes to mind. Messy and unfinished is fine.",
   thinkHint:"Saved as you type · \u2318/Ctrl+Enter starts a new entry · Click an entry to edit it",
-  mqPick:"Pick words",mqGo:"Insert",mqHint:"Select the words you want, then press Enter or click Insert. Esc cancels.",
+  mqPick:"Pick words",mqGo:"Take",mqHint:"Select the words you want, then press Enter or click Take. Esc cancels.",
+  mqTaken:"Taken. Right-click where you want it in your text and choose Paste mini twin",mqPaste:"Paste mini twin",
   mqGoto:"Go to source card",mqGone:"The source card no longer exists",mqNoRef:"There is no matching citation in this draft",mqDel:"Delete excerpt",
-  mqLocked:"The paragraph above is locked, so nothing was inserted",
   mqNoDel1:"This card has {n} excerpt(s) in your drafts, so it can't be deleted",
   mqNoDelN:"These cards have {n} excerpt(s) in your drafts, so they can't be deleted",
   thinkDel:"Delete",thinkDelSure:"Delete?",thinkDeleted:"Thought deleted (you can undo this)",expThink:"Include \u201CI think, I write\u201D",
@@ -1159,9 +1162,9 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pageNoOverlap:"页面不能叠放",pageNewMoved:"新页面放到了旁边的空位",
   thinkMenu:"我想我写",thinkPh:"想到什么就写什么，乱一点、不完整都没关系",
   thinkHint:"打字即保存 · \u2318/Ctrl+Enter 另起一条 · 点已有的一条可以修改",
-  mqPick:"摘词",mqGo:"摘入",mqHint:"划选要摘的词，按 Enter 或点「摘入」；Esc 取消",
+  mqPick:"摘词",mqGo:"摘下",mqHint:"划选要摘的词，按 Enter 或点「摘下」；Esc 取消",
+  mqTaken:"已摘下，到正文里要放的位置右键「粘贴迷你分身」",mqPaste:"粘贴迷你分身",
   mqGoto:"跳到原卡片",mqGone:"原卡片已不存在",mqNoRef:"这份稿子里没有对应的引文",mqDel:"删除摘录",
-  mqLocked:"上方这一段已锁定，没有插入",
   mqNoDel1:"这张卡片在稿子里有 {n} 处摘录，不能删除",
   mqNoDelN:"这些卡片在稿子里共有 {n} 处摘录，不能删除",
   thinkDel:"删除",thinkDelSure:"确定删除？",thinkDeleted:"已删除这条想法（可以撤销）",expThink:"带上「我想我写」",
@@ -2499,6 +2502,7 @@ function renderNow(){
   document.body.style.background=S.bg;
   const dark=isDark(S.bg);
   document.body.classList.toggle("lock",lock);
+  document.body.classList.toggle("isdark",dark);   // 只给摘录对应词的加深色分明暗两档用
   document.body.style.setProperty("--sel",dark?"#EDEDEA":"#111");
   document.body.style.setProperty("--frame",dark?"#C9C9C4":"#5A5F66");
   document.body.style.setProperty("--glass",dark?"rgba(28,28,28,.62)":"rgba(255,255,255,.62)");
@@ -9808,26 +9812,22 @@ function wrRefMenu(x,y,twinId,d){
 }
 /* ================= 迷你分身：摘词（2026-10） =================
    在折叠框的引文分身上右键「摘词」→ 这一条进入摘词状态（虚线框，长按调序暂停）→ 划选几个词 →
-   Enter 或点「摘入」→ 插进上方那一段：插在最后一次停过光标的位置，没停过就接到段末。Esc 或点别处退出，什么都不改。
+   Enter 或点「摘下」→ 摘下来放进 MQCLIP（只在内存里，下一次摘下才换掉，可以反复粘贴）。Esc 或点别处退出，什么都不改。
+   回到正文，在要放的位置右键「粘贴迷你分身」→ 插在右键时光标所在的地方（划选了一段就插在划选末尾，光标不在这一段就接到段末）。
+   （最早是摘完直接插进上方那一段，用起来不顺手，2026-10 改成摘下再粘贴。）
    摘录是 <span class="mq" data-q="源卡片id" contenteditable="false">定格的文字</span>：
    ① 文字定格，原卡片以后怎么改都不影响正文；② 整块，光标进不去，退格一次删整块；
    ③ 走 execCommand 插入和删除，进浏览器自己的编辑历史，Ctrl+Z 一步撤回；
    ④ safeRich 只放行这一种形状；导出 Word/PDF/Markdown 时 plainMq 把它变回普通文字；
    ⑤ 正文里有摘录指着的源卡片不许删（del、删页面连同卡片），合并文件时 data-q 跟着换 id。 */
-let mqCaret=null,mqPick=null;
-// 记住最后一次光标停在写作页哪一段的第几个字（按文字偏移记，段落重绘之后照样用得上）。
-// 只认"人亲手放的光标"：在段落里点、按键、打字之后才记。不用 selectionchange：
-// 在折叠框的引文上按一下，浏览器会顺手把光标挪到上方段落的开头，那不是人放的，记了就会插错地方。
-function mqRemember(e){
-  if(mqPick)return;
-  const cap=e.target&&e.target.closest&&e.target.closest("#docs .cap[data-id],#wrmain .cap[data-id]");
-  if(!cap||!cap.isContentEditable)return;
-  const s=getSelection();if(!s||!s.rangeCount||!cap.contains(s.focusNode))return;
+let mqPick=null,MQCLIP=null;   // MQCLIP = {q:源卡片id, text:带引号的定格文字}
+// 右键那一刻光标在这一段的第几个字；光标不在这一段返回 Infinity（= 段末）
+function mqOffsetNow(cap){
+  const s=getSelection();if(!cap||!s||!s.rangeCount||!cap.contains(s.focusNode))return Infinity;
   const r=document.createRange();r.selectNodeContents(cap);
-  try{r.setEnd(s.focusNode,s.focusOffset)}catch(err){return}
-  mqCaret={id:cap.dataset.id,off:r.toString().length};
+  try{r.setEnd(s.focusNode,s.focusOffset)}catch(err){return Infinity}
+  return r.toString().length;
 }
-["pointerup","keyup","input"].forEach(k=>document.addEventListener(k,mqRemember,true));
 function mqSelText(ref){
   const s=getSelection();
   if(!ref||!s||!s.rangeCount||s.isCollapsed||!ref.contains(s.anchorNode)||!ref.contains(s.focusNode))return "";
@@ -9880,23 +9880,28 @@ function mqStart(twinId){
   const s=getSelection();if(s)s.removeAllRanges();
   toast(t("mqHint"));
 }
+// 摘下：只记进 MQCLIP，不动正文
 function mqCommit(){
   if(!mqPick)return;
   const {ref,twinId}=mqPick,text=mqSelText(ref);
   mqStop();
   const tw=card(twinId);if(!text||!tw)return;
-  const src=orig(tw),hostId=tw.wrUnder,root=ref.closest("#wrmain")||ref.closest(".doc");
-  const cap=root&&hostId&&root.querySelector('.cap[data-id="'+hostId+'"]');
-  if(!cap||!cap.isContentEditable||isLocked(hostId)){toast(t("mqLocked"));return}
-  const rg=mqRangeAt(cap,mqCaret&&mqCaret.id===hostId?mqCaret.off:Infinity);
-  cap.focus();
-  const s=getSelection();s.removeAllRanges();s.addRange(rg);
-  // 插入会触发 input，正文的 input 处理会把 rich/text 同步回卡片并保存
   // 自动带上双引号（2026-10）：引号在摘录这一整块里面，跟文字一起定格、一起删、一起导出。
   // 划选时已经带了引号的先去掉，免得变成两层
   const core=text.replace(/^[\u201C"\u300C\u300E]+|[\u201D"\u300D\u300F]+$/g,"")||text;
+  MQCLIP={q:orig(tw).id,text:"\u201C"+core+"\u201D"};
+  getSelection().removeAllRanges();
+  toast(t("mqTaken"));
+}
+// 粘贴迷你分身：插在这一段第 off 个字的位置。走 execCommand，进浏览器的编辑历史，Ctrl+Z 一步撤回；
+// 插入会触发 input，正文的 input 处理会把 rich/text 同步回卡片并保存
+function mqPaste(cap,off){
+  if(!MQCLIP||!cap||!cap.isConnected||!cap.isContentEditable)return;
+  const rg=mqRangeAt(cap,off);
+  cap.focus();
+  const s=getSelection();s.removeAllRanges();s.addRange(rg);
   document.execCommand("insertHTML",false,
-    `<span class="mq" data-q="${escA(src.id)}" contenteditable="false">${esc("\u201C"+core+"\u201D")}</span>`);
+    `<span class="mq" data-q="${escA(MQCLIP.q)}" contenteditable="false">${esc(MQCLIP.text)}</span>`);
 }
 function mqMenu(x,y,el){
   const src=card(el.dataset.q),cap=el.closest(".cap");
@@ -9916,7 +9921,8 @@ function mqMenu(x,y,el){
     }}]:[])
   ]);
 }
-// 双击摘录：在当前视图里（画布上的稿子或专注模式，不切换）找到下方折叠框里对应的那条引文，亮一下。
+// 双击摘录：在当前视图里（画布上的稿子或专注模式，不切换）找到下方折叠框里对应的那条引文，
+// 把引文里跟这条摘录对应的那几个词加深约 4 秒（mqLight）；原文里找不到这几个词（源卡片后来改过）就整条闪一下。
 // 优先找挂在同一段下面的；没有就找这份稿子里任意一条指向同一张源卡片的。
 // 折叠框关着就打开（跟 revealRef 一样记进 d.open）；不在视野里才滚过去，免得把正在写的那一段滚走。
 function mqReveal(el){
@@ -9936,10 +9942,12 @@ function mqReveal(el){
   };
   let ref=pick();
   if(!ref){toast(t("mqNoRef"));return}
+  const core=(el.textContent||"").replace(/^\u201C/,"").replace(/\u201D$/,"").trim();
   const flash=ref=>{
     const box=ref.closest(".dbody")||$("wrmain");
     if(box){const br=box.getBoundingClientRect(),er=ref.getBoundingClientRect();
       if(er.top<br.top||er.bottom>br.bottom)scrollBlockInto(box,ref)}
+    if(mqLight(ref,core))return;
     ref.classList.remove("flash");void ref.offsetWidth;ref.classList.add("flash");
     setTimeout(()=>ref.classList.remove("flash"),1400);
   };
@@ -9951,6 +9959,35 @@ function mqReveal(el){
     return;
   }
   flash(ref);
+}
+// 在引文里找到这几个词。摘下时空白被压成了一个空格，这里也按同样的规矩把引文的文字拼起来，
+// 同时记下每个字落在哪个文字节点的第几位，找到之后再换算回真实的位置
+function mqWordRange(ref,core){
+  if(!core)return null;
+  const map=[];let str="",sp=true,n;
+  const w=document.createTreeWalker(ref,NodeFilter.SHOW_TEXT);
+  while((n=w.nextNode())){
+    const v=n.nodeValue;
+    for(let i=0;i<v.length;i++){
+      if(/\s/.test(v[i])){if(sp)continue;str+=" ";map.push([n,i]);sp=true}
+      else{str+=v[i];map.push([n,i]);sp=false}
+    }
+  }
+  const at=str.indexOf(core);if(at<0)return null;
+  const a=map[at],b=map[at+core.length-1];
+  const r=document.createRange();r.setStart(a[0],a[1]);r.setEnd(b[0],b[1]+1);
+  return r;
+}
+// 加深那几个词：用浏览器的高亮（CSS.highlights），不改动任何文字和数据，约 4 秒后自己退掉
+let mqHitT=null,mqHitRef=null;
+function mqLight(ref,core){
+  const r=mqWordRange(ref,core);
+  if(!r||!window.CSS||!CSS.highlights||typeof Highlight==="undefined")return false;
+  clearTimeout(mqHitT);if(mqHitRef)mqHitRef.classList.remove("mqlit");
+  CSS.highlights.set("mqhit",new Highlight(r));
+  ref.classList.add("mqlit");mqHitRef=ref;
+  mqHitT=setTimeout(()=>{CSS.highlights.delete("mqhit");ref.classList.remove("mqlit");mqHitRef=null},4000);
+  return true;
 }
 // 导出时把摘录变回普通文字：不带颜色、不带任何标记
 function plainMq(html){
@@ -10090,6 +10127,11 @@ function wrBlockMenu(x,y,c,i,d){
   // 光标停在文字中间（没有划选）时，右键点的就是这个具体位置——
   // 剪贴板里的卡片可以直接插进光标这个缝隙，而不是只能贴在整段的最前面或最后面
   const caretHere=cap&&d&&!lock&&!isLocked(c.id)&&s&&s.rangeCount&&s.isCollapsed&&cap.contains(s.anchorNode);
+  // 粘贴迷你分身：放在最上面，好找。插在右键时光标所在的位置（划选了一段就插在划选末尾）
+  if(MQCLIP&&cap&&!lock&&!isLocked(c.id)&&cap.isContentEditable){
+    const off=mqOffsetNow(cap),tx=MQCLIP.text;
+    items.push({label:t("mqPaste")+"  "+(tx.length>22?tx.slice(0,21)+"\u2026\u201D":tx),on:()=>mqPaste(cap,off)},"-");
+  }
   if(hasSel)
     items.push({label:t("wrSelToCard"),on:()=>wrSelToCard(d,c,cap)},"-");
   if(d)items.push({label:t("wrInsertAbove"),on:()=>wrInsertAt(d,i)},
