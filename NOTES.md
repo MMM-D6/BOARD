@@ -673,7 +673,9 @@ Zotero 的「带引注复制」会在引文后面缀一段 markdown 链接：
 划选 → Enter 或点「摘入」（`#mqgo`）→ 插进上方那一段（`twin.wrUnder`）。Esc 或点别处退出，什么都不改。
 插入位置是最后一次**人亲手放的**光标（`mqRemember` 只听段落里的 pointerup / keyup / input；不能用 selectionchange，
 因为在引文上按一下浏览器会顺手把光标挪到上方段落开头），没放过就接到段末。
-摘录的形状是 `<span class="mq" data-q="源卡片id" contenteditable="false">定格的文字</span>`：文字定格不跟源卡片变；
+摘录的形状是 `<span class="mq" data-q="源卡片id" contenteditable="false">“定格的文字”</span>`：
+**自动带上双引号 “ ”**，引号在这一整块里面，跟文字一起定格、一起删、一起导出；划选时已经带了引号的先去掉，不会变成两层。
+文字定格不跟源卡片变；
 整块，退格一次删整块；插入和删除都走 execCommand，进浏览器的编辑历史，Ctrl+Z 一步撤回。
 **`safeRich` 只放行这一种形状**，class 和 contenteditable 由它重新写，data-q 只认 `[\w-]`；导出（`docHTML`、`wrHTML`）经 `plainMq` 变回普通文字，
 Word 走 `richRuns` 本来就只认样式，Markdown 用 text。字体 Newsreader（中文退到系统宋体），底色是文字颜色的 8%，只在 `.blk .cap` 里有样式。

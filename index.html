@@ -9890,8 +9890,11 @@ function mqCommit(){
   cap.focus();
   const s=getSelection();s.removeAllRanges();s.addRange(rg);
   // 插入会触发 input，正文的 input 处理会把 rich/text 同步回卡片并保存
+  // 自动带上双引号（2026-10）：引号在摘录这一整块里面，跟文字一起定格、一起删、一起导出。
+  // 划选时已经带了引号的先去掉，免得变成两层
+  const core=text.replace(/^[\u201C"\u300C\u300E]+|[\u201D"\u300D\u300F]+$/g,"")||text;
   document.execCommand("insertHTML",false,
-    `<span class="mq" data-q="${escA(src.id)}" contenteditable="false">${esc(text)}</span>`);
+    `<span class="mq" data-q="${escA(src.id)}" contenteditable="false">${esc("\u201C"+core+"\u201D")}</span>`);
 }
 function mqMenu(x,y,el){
   const src=card(el.dataset.q),cap=el.closest(".cap");

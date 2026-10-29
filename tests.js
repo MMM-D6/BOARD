@@ -1129,8 +1129,8 @@ group("mq 迷你分身：摘词", async (c) => {
   c.ok("划选之后出现「摘入」按钮", await c.run(() => { const b = $("mqgo"); return !!b && b.style.display === "block"; }));
   await c.page.keyboard.press("Enter"); await c.wait(250);
   const r1 = await c.run((p1) => { const cap = document.querySelector('#docs .cap[data-id="' + p1 + '"]'); const ch = cap.querySelector(".mq"); return { ch: ch ? { q: ch.dataset.q, ce: ch.getAttribute("contenteditable"), tx: ch.textContent } : null, before: cap.innerText.slice(0, 5), rich: card(p1).rich || "", text: card(p1).text, picking: !!document.querySelector(".ref.picking"), go: !!$("mqgo") }; }, ids.p1);
-  c.ok("按 Enter 插进上方那一段", !!r1.ch && r1.ch.tx === "digital garments");
-  c.ok("插在记住的光标位置", r1.before === "Hello" && r1.text.indexOf("digital garments") === 5);
+  c.ok("按 Enter 插进上方那一段，自动带上双引号", !!r1.ch && r1.ch.tx === "\u201Cdigital garments\u201D");
+  c.ok("插在记住的光标位置", r1.before === "Hello" && r1.text.indexOf("\u201Cdigital garments") === 5);
   c.ok("摘录指向源卡片、是不可编辑的整块", r1.ch && r1.ch.q === "q" && r1.ch.ce === "false");
   c.ok("写回了卡片数据", r1.rich.includes('data-q="q"'));
   c.ok("插完退出摘词状态", !r1.picking && !r1.go);
@@ -1157,7 +1157,17 @@ group("mq 迷你分身：摘词", async (c) => {
   await c.run((tw) => mqStart(tw), ids.tw3); await selWords(ids.tw3, "site of design"); await c.wait(100);
   const gp = await c.run(() => { const r = $("mqgo").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
   await c.page.mouse.click(gp.x, gp.y); await c.wait(250);
-  c.ok("点「摘入」也能插入；没停过光标的段落接到段末", await c.run((p2) => /site of design\s*$/.test(card(p2).text) && card(p2).text.startsWith("Second paragraph here."), ids.p2));
+  c.ok("点「摘入」也能插入；没停过光标的段落接到段末", await c.run((p2) => /\u201Csite of design\u201D\s*$/.test(card(p2).text) && card(p2).text.startsWith("Second paragraph here."), ids.p2));
+
+  // 划选时已经带了引号：不会变成两层
+  await c.run(() => { const q = card("q2"); q.text = "He said \u201Cavatars matter\u201D today."; render(); });
+  await c.wait(150);
+  const tw2 = await c.run(() => S.cards.find((z) => z.ref === "q2").id);
+  await c.run((tw2) => mqStart(tw2), tw2);
+  await c.run((tw2) => { const ref = document.querySelector('#docs .ref[data-id="' + tw2 + '"]'); const tn = [...ref.childNodes].find((n) => n.nodeType === 3); const i = tn.nodeValue.indexOf("\u201C"); const r = document.createRange(); r.setStart(tn, i); r.setEnd(tn, tn.nodeValue.indexOf("\u201D") + 1); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }, tw2);
+  await c.wait(80); await c.page.keyboard.press("Enter"); await c.wait(200);
+  c.ok("原文自带引号时只留一层", await c.run((p1) => card(p1).text.includes("\u201Cavatars matter\u201D") && !card(p1).text.includes("\u201C\u201C"), ids.p1));
+  await c.page.keyboard.down("Control"); await c.page.keyboard.press("z"); await c.page.keyboard.up("Control"); await c.wait(150);
 
   // 整块：紧跟在摘录后面按退格，一次删掉整块；Ctrl+Z 撤回
   await c.run((p2) => { const cap = document.querySelector('#docs .cap[data-id="' + p2 + '"]'); const ch = cap.querySelector(".mq"); cap.focus(); const r = document.createRange(); r.setStartAfter(ch); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }, ids.p2);
@@ -1240,14 +1250,14 @@ group("mq 迷你分身：摘词", async (c) => {
     const a = card(p1).rich || "", nid = d.ids[d.ids.indexOf(p1) + 1], b = (card(nid).rich || "") + "|" + card(nid).text;
     return { a, b, nid };
   }, ids.p1);
-  c.ok("在摘录后面切段：摘录完整留在前一段", sp.a.includes('data-q="q"') && sp.a.includes(">digital garments</span>") && !sp.b.includes("data-q"));
+  c.ok("在摘录后面切段：摘录完整留在前一段", sp.a.includes('data-q="q"') && sp.a.includes(">\u201Cdigital garments\u201D</span>") && !sp.b.includes("data-q"));
   const mgB = await c.run(([p1, nid]) => {
     const d = docs()[0];
     const i = d.ids.indexOf(nid);
     wrMergeBack(d, card(nid), document.querySelector('#docs .cap[data-id="' + nid + '"]'), i);
     return card(p1).rich || "";
   }, [ids.p1, sp.nid]);
-  c.ok("合并回去：摘录仍是整块、仍指着源卡片", mgB.includes('data-q="q"') && mgB.includes(">digital garments</span>"));
+  c.ok("合并回去：摘录仍是整块、仍指着源卡片", mgB.includes('data-q="q"') && mgB.includes(">\u201Cdigital garments\u201D</span>"));
   await c.wait(150);
   c.ok("合并后重画，摘录仍然不可编辑", await c.run((p1) => { const ch = document.querySelector('#docs .cap[data-id="' + p1 + '"] .mq'); return !!ch && ch.getAttribute("contenteditable") === "false"; }, ids.p1));
 
