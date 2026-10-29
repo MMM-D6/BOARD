@@ -661,6 +661,27 @@ Zotero 的「带引注复制」会在引文后面缀一段 markdown 链接：
 而引文分身的菜单里必须有那一项，跳过去之后**按屏幕位置**量，镜头要正对原文
 （世界坐标对不对不算数，看得见才算数）。
 
+**写作页的撤销分两本账（2026-10 修）。** 光标在正文段落里时，打字和划选后的局部格式走浏览器自己的编辑历史；
+整段级别的改动（没划选时的字号加减、套模板、整段底色等）走程序的 `undo` 栈。原来段落里的 Ctrl+Z 一律交给浏览器，
+整段改动撤不回来，段落一重绘浏览器的历史又清空了，表现为"撤销卡在某个点"。现在 `wrUndoKey`（挂在 `bindBody` 的 keydown 里，
+因为那里会 stopPropagation，全局 keydown 收不到）比较 `appEditAt`（`pushSnap` 时记）和 `natEditAt`（捕获阶段的 input 记），
+谁更晚撤谁；浏览器 `queryCommandEnabled("undo")` 为假时也退回程序的栈。撤完把这一段重新选上，工具栏数字不会变成短横。
+只作用于 `#docs .cap` / `#wrmain .cap`，画布卡片和表格格子不变。
+`applyTemplate` 之后在专注模式下补一次 `drawWrite()`：`render()` 不重画专注模式，行内旧字号原来要切换模式才消失。`wrundo` 组守着。
+
+**迷你分身：摘词（2026-10）。** 折叠框里的引文分身右键「摘词」→ 进入摘词状态（`.ref.picking`，虚线框，长按调序暂停）→
+划选 → Enter 或点「摘入」（`#mqgo`）→ 插进上方那一段（`twin.wrUnder`）。Esc 或点别处退出，什么都不改。
+插入位置是最后一次**人亲手放的**光标（`mqRemember` 只听段落里的 pointerup / keyup / input；不能用 selectionchange，
+因为在引文上按一下浏览器会顺手把光标挪到上方段落开头），没放过就接到段末。
+摘录的形状是 `<span class="mq" data-q="源卡片id" contenteditable="false">定格的文字</span>`：文字定格不跟源卡片变；
+整块，退格一次删整块；插入和删除都走 execCommand，进浏览器的编辑历史，Ctrl+Z 一步撤回。
+**`safeRich` 只放行这一种形状**，class 和 contenteditable 由它重新写，data-q 只认 `[\w-]`；导出（`docHTML`、`wrHTML`）经 `plainMq` 变回普通文字，
+Word 走 `richRuns` 本来就只认样式，Markdown 用 text。字体 Newsreader（中文退到系统宋体），底色是文字颜色的 8%，只在 `.blk .cap` 里有样式。
+右键摘录（`mqMenu`）只有「跳到原卡片」（只定位不闪）和「删除摘录」；原卡片不在了就提示，没有跳转项。**刻意不提供"转成普通文字"。**
+这跟上面"正文段落不回溯画布"那一条不矛盾：回溯挂在摘出来的那几个词上，指向源卡片本身，跟折叠框里的引文分身一样是活引用。
+**有摘录指着的源卡片不许删**（`mqProtect`，用在 `del` 和 `delFrame` 连同卡片），所以分身扶正的机制不用改；
+合并文件时 `absorb` 把 data-q 跟着换成新 id。`mq` 组守着这些。
+
 **`c.wrIn` = 这张卡片只活在某一份稿子里。** 判定用 `docOnly(c)`。
 现在**稿子里能看到的段落全部带这个标记**：不管是 `wrImport` / `wrPasteMain` /
 `wrPasteAtCaret` 从画布或剪贴板拷贝进来的，还是稿子里自己新插入的段落
