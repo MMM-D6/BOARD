@@ -947,7 +947,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   thinkMenu:"I think, I write",thinkPh:"Write whatever comes to mind. Messy and unfinished is fine.",
   thinkHint:"Saved as you type · \u2318/Ctrl+Enter starts a new entry · Click an entry to edit it",
   mqPick:"Pick words",mqGo:"Insert",mqHint:"Select the words you want, then press Enter or click Insert. Esc cancels.",
-  mqGoto:"Go to source card",mqGone:"The source card no longer exists",mqDel:"Delete excerpt",
+  mqGoto:"Go to source card",mqGone:"The source card no longer exists",mqNoRef:"There is no matching citation in this draft",mqDel:"Delete excerpt",
   mqLocked:"The paragraph above is locked, so nothing was inserted",
   mqNoDel1:"This card has {n} excerpt(s) in your drafts, so it can't be deleted",
   mqNoDelN:"These cards have {n} excerpt(s) in your drafts, so they can't be deleted",
@@ -1160,7 +1160,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   thinkMenu:"我想我写",thinkPh:"想到什么就写什么，乱一点、不完整都没关系",
   thinkHint:"打字即保存 · \u2318/Ctrl+Enter 另起一条 · 点已有的一条可以修改",
   mqPick:"摘词",mqGo:"摘入",mqHint:"划选要摘的词，按 Enter 或点「摘入」；Esc 取消",
-  mqGoto:"跳到原卡片",mqGone:"原卡片已不存在",mqDel:"删除摘录",
+  mqGoto:"跳到原卡片",mqGone:"原卡片已不存在",mqNoRef:"这份稿子里没有对应的引文",mqDel:"删除摘录",
   mqLocked:"上方这一段已锁定，没有插入",
   mqNoDel1:"这张卡片在稿子里有 {n} 处摘录，不能删除",
   mqNoDelN:"这些卡片在稿子里共有 {n} 处摘录，不能删除",
@@ -9472,6 +9472,8 @@ function bindBody(root,getDoc){
     wrMoveToNumber(d,nb.dataset.id,v);
   });
   root.addEventListener("dblclick",e=>{if(!lock)e.stopPropagation()});
+  // 双击摘录：下方折叠框里对应的那条引文亮一下（mqReveal）
+  root.addEventListener("dblclick",e=>{const mq=e.target.closest&&e.target.closest(".cap .mq");if(mq){e.preventDefault();mqReveal(mq)}});
   root.addEventListener("focusin",e=>{
     const el=e.target.closest(".cap");if(!el)return;
     if(ctxKeep&&sel.includes(el.dataset.id)){ctxKeep=false;syncFmtBars();return}
@@ -9913,6 +9915,42 @@ function mqMenu(x,y,el){
       document.execCommand("delete");
     }}]:[])
   ]);
+}
+// 双击摘录：在当前视图里（画布上的稿子或专注模式，不切换）找到下方折叠框里对应的那条引文，亮一下。
+// 优先找挂在同一段下面的；没有就找这份稿子里任意一条指向同一张源卡片的。
+// 折叠框关着就打开（跟 revealRef 一样记进 d.open）；不在视野里才滚过去，免得把正在写的那一段滚走。
+function mqReveal(el){
+  const cap=el.closest(".cap");if(!cap)return;
+  const inFocus=!!el.closest("#wrmain"),docEl=el.closest(".doc");
+  const host=cap.dataset.id,q=el.dataset.q;
+  const hostC=card(host),d=hostC&&docs().find(z=>z.id===hostC.wrIn);
+  if(!d){toast(t("mqNoRef"));return}
+  // 把光标放到摘录后面，免得双击把摘录里的字选成一片
+  if(cap.isContentEditable){const r=document.createRange();r.setStartAfter(el);r.collapse(true);
+    const s=getSelection();s.removeAllRanges();s.addRange(r)}
+  const pick=()=>{
+    const root=inFocus?$("wrmain"):(docEl&&docEl.isConnected?docEl:document.querySelector('#docs .doc[data-id="'+d.id+'"]'));
+    if(!root)return null;
+    const refs=[...root.querySelectorAll(".ref[data-id]")].filter(r=>{const c=card(r.dataset.id);return c&&orig(c).id===q});
+    return refs.find(r=>card(r.dataset.id).wrUnder===host)||refs[0]||null;
+  };
+  let ref=pick();
+  if(!ref){toast(t("mqNoRef"));return}
+  const flash=ref=>{
+    const box=ref.closest(".dbody")||$("wrmain");
+    if(box){const br=box.getBoundingClientRect(),er=ref.getBoundingClientRect();
+      if(er.top<br.top||er.bottom>br.bottom)scrollBlockInto(box,ref)}
+    ref.classList.remove("flash");void ref.offsetWidth;ref.classList.add("flash");
+    setTimeout(()=>ref.classList.remove("flash"),1400);
+  };
+  const fold=ref.closest(".fold");
+  if(fold&&!fold.classList.contains("on")){
+    const under=card(ref.dataset.id).wrUnder;
+    d.open=d.open||{};d.open[under]=true;save();redrawDocs();
+    requestAnimationFrame(()=>{const r2=pick();if(r2)flash(r2)});
+    return;
+  }
+  flash(ref);
 }
 // 导出时把摘录变回普通文字：不带颜色、不带任何标记
 function plainMq(html){

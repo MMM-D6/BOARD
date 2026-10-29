@@ -1261,6 +1261,35 @@ group("mq 迷你分身：摘词", async (c) => {
   await c.wait(150);
   c.ok("合并后重画，摘录仍然不可编辑", await c.run((p1) => { const ch = document.querySelector('#docs .cap[data-id="' + p1 + '"] .mq'); return !!ch && ch.getAttribute("contenteditable") === "false"; }, ids.p1));
 
+  // 双击摘录：下方折叠框里对应的那条引文亮一下
+  // count 是新版 puppeteer 的连点次数，clickCount 留给旧版；两边都能真的触发一次双击
+  const dblAt = (pt) => c.page.mouse.click(pt.x, pt.y, { count: 2, clickCount: 2 });
+  await c.run(() => { camTo(2700, -300, 1, true); redrawDocs(); });   // 前面"跳到原卡片"把镜头带走了，先回到稿子
+  await c.wait(200);
+  const chipPt = (pid) => c.run((pid) => { const r = document.querySelector('#docs .cap[data-id="' + pid + '"] .mq').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, pid);
+  await dblAt(await chipPt(ids.p1)); await c.wait(120);
+  c.ok("双击摘录：同一段下面对应的那条引文亮一下", await c.run((tw) => document.querySelector('#docs .ref[data-id="' + tw + '"]').classList.contains("flash"), ids.tw));
+  c.ok("别的引文不亮", await c.run((tw) => [...document.querySelectorAll("#docs .ref.flash")].every((r) => r.dataset.id === tw), ids.tw));
+  c.ok("双击不会改动正文", await c.run((p1) => card(p1).text.includes("\u201Cdigital garments\u201D"), ids.p1));
+  await c.wait(1500);
+  c.ok("亮一下之后自己消失", await c.run(() => !document.querySelector("#docs .ref.flash")));
+  // 折叠框关着：先打开再亮
+  await c.run((p1) => { const d = docs()[0]; d.open[p1] = false; redrawDocs(); }, ids.p1);
+  await c.wait(150);
+  await dblAt(await chipPt(ids.p1)); await c.wait(200);
+  c.ok("折叠框关着时先打开它，再亮", await c.run(([p1, tw]) => docs()[0].open[p1] === true && document.querySelector('#docs .fold[data-id="' + p1 + '"]').classList.contains("on") && document.querySelector('#docs .ref[data-id="' + tw + '"]').classList.contains("flash"), [ids.p1, ids.tw]));
+  // 没有对应引文时提示
+  const nr = await c.run((p2) => {
+    const cap = document.querySelector('#docs .cap[data-id="' + p2 + '"]');
+    const sp2 = document.createElement("span"); sp2.className = "mq"; sp2.dataset.q = "q2"; sp2.textContent = "x";
+    const keep = S.cards.filter((z) => z.ref === "q2"); S.cards = S.cards.filter((z) => z.ref !== "q2"); invalidateIndex();
+    cap.appendChild(sp2); mqReveal(sp2); sp2.remove();
+    S.cards = S.cards.concat(keep); invalidateIndex();
+    return { toast: $("toast").textContent, want: t("mqNoRef") };
+  }, ids.p2);
+  c.ok("稿子里没有对应引文时给一句提示", nr.toast.includes(nr.want));
+  await c.run(() => redrawDocs()); await c.wait(150);
+
   // 原卡片不存在时（比如旧文件或合并进来的数据），右键提示
   const gone = await c.run((p2) => {
     const cap = document.querySelector('#docs .cap[data-id="' + p2 + '"]');
@@ -1287,9 +1316,12 @@ group("mq 迷你分身：摘词", async (c) => {
   await c.run((tw3) => { const ref = document.querySelector('#wrmain .ref[data-id="' + tw3 + '"]'); const tn = [...ref.childNodes].find((n) => n.nodeType === 3); const r = document.createRange(); r.setStart(tn, 0); r.setEnd(tn, 7); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }, ids.tw3);
   await c.wait(100); await c.page.keyboard.press("Enter"); await c.wait(250);
   c.ok("专注模式里摘词插入上方段落", await c.run((p2) => (card(p2).rich || "").split('data-q="q"').length >= 3 && !!document.querySelector('#wrmain .cap[data-id="' + p2 + '"] .mq'), ids.p2));
+  const fpt = await c.run((p2) => { const r = document.querySelector('#wrmain .cap[data-id="' + p2 + '"] .mq').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, ids.p2);
+  await dblAt(fpt); await c.wait(120);
+  c.ok("专注模式里双击摘录也能让对应引文亮一下", await c.run(() => !!document.querySelector("#wrmain .ref.flash")));
   await c.run(() => closeWrite());
 
-  c.ok("中英文案都齐了", await c.run(() => ["mqPick", "mqGo", "mqHint", "mqGoto", "mqGone", "mqDel", "mqLocked", "mqNoDel1", "mqNoDelN"].every((k) => T.en[k] && T.zh[k])));
+  c.ok("中英文案都齐了", await c.run(() => ["mqPick", "mqGo", "mqNoRef", "mqHint", "mqGoto", "mqGone", "mqDel", "mqLocked", "mqNoDel1", "mqNoDelN"].every((k) => T.en[k] && T.zh[k])));
 });
 
 /* =====================================================================
