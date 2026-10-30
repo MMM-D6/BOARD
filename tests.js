@@ -1830,6 +1830,7 @@ group("thinkmark 我想我写：面板放大、卡片标记（2026-10）", async
   c.ok("标记在卡片右下角外面", mk.right && mk.below);
   c.ok("比链接图标小，跟它不重叠", mk.smaller && mk.noOverlap);
   c.ok("颜色很淡", mk.op > 0 && mk.op < 0.5);
+  c.ok("形状是小三角", await c.run(() => { const m = nodes.get("a").querySelector(".thk"); const r = m.getBoundingClientRect(); return !!m.querySelector('svg path[d="M10 0V10H0Z"]') && r.width <= 8; }));
   // 点标记打开面板
   const mp = await c.run(() => { $("pop").classList.remove("on", "tk"); const r = nodes.get("a").querySelector(".thk").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
   await c.page.mouse.click(mp.x, mp.y); await c.wait(150);
