@@ -1336,6 +1336,87 @@ group("mq 迷你分身：摘下再粘贴", async (c) => {
   c.ok("旧的「直接插入」相关文案已经去掉", await c.run(() => T.en.mqLocked === undefined && T.zh.mqLocked === undefined));
 });
 
+group("lv5 标题层级加到五级（2026-10）", async (c) => {
+  await c.board([
+    { id: "h1", x: 0, y: 0, w: 400, text: "Chapter", s: {} },
+    { id: "h2", x: 0, y: 100, w: 400, text: "Section", s: {} },
+    { id: "h3", x: 0, y: 200, w: 400, text: "Sub", s: {} },
+    { id: "h4", x: 0, y: 300, w: 400, text: "Fourth level", s: {} },
+    { id: "h5", x: 0, y: 400, w: 400, text: "Fifth level", s: {} },
+    { id: "p", x: 0, y: 500, w: 400, text: "Body text.", s: {} },
+  ], []);
+  // 画布右键菜单：正文 + 五级
+  const cm = await c.run(() => { sel = ["h1"]; const it = cardItems(10, 10).find((z) => z && z.label === t("level")); return { labels: it.sub.filter((z) => z.label).map((z) => z.label), want: ["lv1", "lv2", "lv3", "lv4", "lv5"].map((k) => t(k)) }; });
+  c.ok("画布右键「层级」里有一到五级", cm.want.every((k) => cm.labels.includes(k)));
+  const st = await c.run(() => {
+    [["h1", 1], ["h2", 2], ["h3", 3], ["h4", 4], ["h5", 5]].forEach(([id, v]) => { sel = [id]; setLevel(v); });
+    return ["h1", "h2", "h3", "h4", "h5", "p"].map((id) => { const x = { ...DEF, ...S.textDef, ...(card(id).s || {}) }; return { lv: card(id).level || 0, size: x.size, weight: x.weight }; });
+  });
+  c.ok("能设成四级、五级标题，不报错", st[3].lv === 4 && st[4].lv === 5);
+  c.ok("字号逐级递减，五级不小于正文", st[0].size > st[1].size && st[1].size > st[2].size && st[2].size > st[3].size && st[3].size >= st[4].size && st[4].size >= st[5].size);
+  c.ok("四五级是加粗的", st[3].weight >= 600 && st[4].weight >= 600);
+  c.ok("画布上四五级卡片带层级竖条", await c.run(() => ["h4", "h5"].every((id) => { const el = nodes.get(id); const hb = el && el.querySelector(".hbar"); return !!hb && parseFloat(getComputedStyle(hb).width) > 0; })));
+
+  // 写作页：编号、目录、样式
+  const w = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: 1500, y: 0 }, "稿子");
+    sel = ["h1", "h2", "h3", "h4", "h5", "p"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = []; render();
+    const nums = wrNums(d.ids.map(card));
+    const nav = [...document.querySelectorAll("#docs .wrnav")].map((b) => b.className);
+    const caps = d.ids.map((id) => document.querySelector('#docs .cap[data-id="' + id + '"]').className);
+    return { nums, nav, caps, ids: d.ids.slice() };
+  });
+  c.ok("写作页编号到 1.1.1.1.1", w.nums.join("|") === "1|1.1|1.1.1|1.1.1.1|1.1.1.1.1|");
+  c.ok("侧栏目录有五级，四五级缩进不同", w.nav.length === 5 && w.nav[3].includes("l4") && w.nav[4].includes("l5"));
+  c.ok("正文里四五级各自的样式类", w.caps[3].includes("lv4") && w.caps[4].includes("lv5"));
+  c.ok("目录五级比四级缩进更深", await c.run(() => { const n = [...document.querySelectorAll("#docs .wrnav")]; return parseFloat(getComputedStyle(n[4]).paddingLeft) > parseFloat(getComputedStyle(n[3]).paddingLeft); }));
+
+  // 写作页工具栏：层级弹层有六档，标签显示「标题 5」
+  const fb = await c.run((id5) => {
+    sel = [id5]; paintSel(); syncFmtBars();
+    const lab = document.querySelector("#docs #wflv").textContent;
+    const trig = [...document.querySelectorAll("#docs .fmtbar .fx")].find((z) => z.title === t("level"));
+    trig.click();
+    const opts = [...trig.parentElement.querySelectorAll(".fpop .item")].map((z) => z.textContent);
+    closeFmtPops();
+    return { lab, opts, want: t("lvShort5") };
+  }, w.ids[4]);
+  c.ok("写作页工具栏层级有六档", fb.opts.length === 6);
+  c.ok("当前段落是五级时标签显示五级", fb.lab === fb.want);
+  c.ok("统一格式里也有四五级可选", await c.run(() => { sel = ["h1"]; paintSel(); syncBar(); const b = $("bar"); const trig = [...b.querySelectorAll(".cell")].find((z) => z.textContent.includes(t("unify"))); if (!trig) return false; trig.querySelector("button, .tr, *").click(); const seg = [...document.querySelectorAll("#bar .pp .seg button, #bar .seg button")].map((z) => z.textContent); return seg.includes(t("lvShort4")) && seg.includes(t("lvShort5")); }));
+
+  // 导出：Word/PDF 用真的 h 标签，Markdown 用对应个数的 #
+  const ex = await c.run(() => {
+    const d = docs()[0];
+    const h = wrHTML(d, {});
+    const tree = buildTree(["h1", "h2", "h3", "h4", "h5", "p"].map(card));
+    const md = docMD({ title: "T", img: false, tags: false, byPageDoc: false }, tree);
+    return { h5: /<h5[^>]*>[\s\S]*Fifth level/.test(h) || /<h6[^>]*>[\s\S]*Fifth level/.test(h), md: md };
+  });
+  c.ok("写作页导出里五级是真正的标题标签", ex.h5);
+  c.ok("Markdown 里四五级有更多的 #", /^#{5} .*Fourth level/m.test(ex.md) && /^#{6} .*Fifth level/m.test(ex.md));
+
+  // 存取：四五级保留；更深的收到五级；非法的去掉
+  c.ok("读文件时四五级保留", await c.run(() => normCard({ id: "x", level: 4 }).level === 4 && normCard({ id: "y", level: 5 }).level === 5));
+  c.ok("超过五级的当作非法值去掉（跟从前对超范围值的处理一样）", await c.run(() => !("level" in normCard({ id: "z", level: 6 })) && !("level" in normCard({ id: "z2", level: 9 }))));
+  c.ok("非法层级去掉（0 跟从前一样当作正文）", await c.run(() => !normCard({ id: "w", level: 0 }).level && !("level" in normCard({ id: "v", level: "abc" })) && !("level" in normCard({ id: "u", level: -2 }))));
+  c.ok("一到三级原样不变", await c.run(() => [1, 2, 3].every((v) => normCard({ id: "k" + v, level: v }).level === v)));
+  c.ok("经导出再导入，四五级还在", await c.run(async () => { const d = JSON.parse(JSON.stringify(bundle(null))); await absorb(d, false); return card("h4").level === 4 && card("h5").level === 5; }));
+
+  // 按编号移动整节：可以移成五级，不会超过五级
+  const mv = await c.run(() => {
+    const d = docs()[0];
+    window.prompt = () => "1.1.1.1.2";
+    const id = d.ids[3];                 // 四级那一段
+    wrMoveToNumber(d, id, "1.1.1.1.2");
+    return { lv: card(id).level, max: Math.max(...d.ids.map((z) => card(z).level || 0)) };
+  });
+  c.ok("按编号移动后层级不超过五级", mv.max <= 5);
+  c.ok("中英文案都齐了", await c.run(() => ["lv4", "lv5", "lvShort4", "lvShort5"].every((k) => T.en[k] && T.zh[k])));
+});
+
 /* =====================================================================
    6. 编组与锁定
    ===================================================================== */
@@ -4188,7 +4269,7 @@ group("wrlevel 写作页里设定层级", async (c) => {
       lv2: c2.level, lab: document.querySelector("#wflv").textContent,
       body: card(doc.ids[2]).level };
   });
-  c.ok("工具栏上有层级这一项，四档都在", r.opts.length === 4);
+  c.ok("工具栏上有层级这一项，六档都在（正文加一到五级）", r.opts.length === 6);
   c.ok("没设过层级时显示正文", r.lab0 === "正文" || /body/i.test(r.lab0));
   c.ok("能把一段设成一级标题", r.lv1 === 1);
   c.ok("层级带来的字号也一并套上了", r.size1 > 20);

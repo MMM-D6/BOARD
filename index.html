@@ -273,6 +273,8 @@
   .card.h1 .hbar{width:calc(4px * var(--iz));height:100%;opacity:.5}
   .card.h2 .hbar{width:calc(2.5px * var(--iz));height:68%;opacity:.38}
   .card.h3 .hbar{width:calc(1.5px * var(--iz));height:42%;opacity:.3}
+  .card.h4 .hbar{width:calc(1px * var(--iz));height:28%;opacity:.26}
+  .card.h5 .hbar{width:calc(1px * var(--iz));height:18%;opacity:.22}
   body.lock .card .hbar{display:none}
   .card .tags{margin-top:7px;display:flex;flex-wrap:wrap;gap:5px}
   .card .tg{font:400 .68em/1.5 "IBM Plex Mono",monospace;padding:1px 7px;border-radius:99px;
@@ -447,6 +449,7 @@
   .wrnav.l2{padding-left:22px;opacity:.9}
   .wrnav.l3{padding-left:38px;opacity:.75;font-size:12px}
   .wrnav.l4{padding-left:52px;opacity:.65;font-size:11.5px}
+  .wrnav.l5{padding-left:64px;opacity:.58;font-size:11.5px}
   #wrbody{flex:1;display:flex;flex-direction:column;min-width:0}
   #wrbar{display:flex;align-items:center;gap:1px;padding:3px 14px;
     border-bottom:1px solid var(--wline);font-size:12px}
@@ -644,6 +647,7 @@
   .blk .cap.lv2{margin:26px 0 5px}
   .blk .cap.lv3{margin:20px 0 4px}
   .blk .cap.lv4{margin:16px 0 3px}
+  .blk .cap.lv5{margin:14px 0 3px}
   .wrempty{max-width:660px;margin:60px auto;opacity:.4;font-size:13px;text-align:center;
     line-height:2}
   #marq{position:fixed;z-index:30;display:none;border:1px solid var(--sel);
@@ -813,13 +817,13 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pageSelect:"Select everything on this page",pageFit:"Shrink to fit contents",
   pageExport:"Export this page…",pageDelete:"Remove frame, keep cards",
   pageDeleteAll:"Delete frame and cards",pageDelConfirm:"Delete this page and everything on it?",
-  level:"Heading level",lvNone:"Body text",lv1:"Heading 1",lv2:"Heading 2",lv3:"Heading 3",
+  level:"Heading level",lvNone:"Body text",lv1:"Heading 1",lv2:"Heading 2",lv3:"Heading 3",lv4:"Heading 4",lv5:"Heading 5",
   exportDoc:"Export…",expTitle:"Export",expName:"Document title",
   grpEn:"Latin",grpZh:"Chinese",
   trackShort:"Track",leadShort:"Lead",cardBg:"Card background",hlNone:"No highlight",
   unifyHint:"Style one card first, then apply it to every card of that level.",
   clearFmt:"Clear",unify:"Unify",unifyGo:"Apply to level",bodyShort:"Body",
-  lvShort1:"Level 1",lvShort2:"Level 2",lvShort3:"Level 3",
+  lvShort1:"Level 1",lvShort2:"Level 2",lvShort3:"Level 3",lvShort4:"Level 4",lvShort5:"Level 5",
   exclManual:"skip cards styled by hand",unifyDone:"Cards updated:",needTextSel:"Select some text first",textBar:"Text toolbar",
   zoomTo:"Zoom to this",
   clipTwinDo:"Put a twin on the clipboard",clipCopyDo:"Copy card to the clipboard",
@@ -877,7 +881,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   fmtAlign:"Alignment",fmtClear:"Clear formatting",fmtHtml:"HTML",
   fmtSpacing:"Spacing",fmtNeedSel:"Select a paragraph first",
   fmtInk:"Text colour",fmtHL:"Highlight",
-  lvShortNone:"Body",lvShort1:"H1",lvShort2:"H2",lvShort3:"H3",
+  lvShortNone:"Body",lvShort1:"H1",lvShort2:"H2",lvShort3:"H3",lvShort4:"H4",lvShort5:"H5",
   wcWords:"words",wcSel:"selected",wcTitle:"Words in this draft",
   numGo:"Type a number to move this section",numAsk:"Move this section to which number?",
   numBad:"Use digits and dots, like 2 or 3.1",
@@ -1025,13 +1029,13 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pageSelect:"选中本页全部内容",pageFit:"收拢到内容大小",
   pageExport:"导出本页…",pageDelete:"仅删除页框，保留卡片",
   pageDeleteAll:"连同卡片一起删除",pageDelConfirm:"删除这个页面及其中全部内容？",
-  level:"层级",lvNone:"正文",lv1:"一级标题",lv2:"二级标题",lv3:"三级标题",
+  level:"层级",lvNone:"正文",lv1:"一级标题",lv2:"二级标题",lv3:"三级标题",lv4:"四级标题",lv5:"五级标题",
   exportDoc:"导出…",expTitle:"导出",expName:"文档标题",
   grpEn:"英文",grpZh:"中文",
   trackShort:"字距",leadShort:"行距",cardBg:"卡片底色",hlNone:"取消高亮",
   unifyHint:"先把一张卡片调好，再统一到该层级的全部卡片",
   clearFmt:"清除",unify:"分级统一",unifyGo:"统一该层级",bodyShort:"正文",
-  lvShort1:"一级",lvShort2:"二级",lvShort3:"三级",
+  lvShort1:"一级",lvShort2:"二级",lvShort3:"三级",lvShort4:"四级",lvShort5:"五级",
   exclManual:"跳过手动调整过的",unifyDone:"已统一卡片：",needTextSel:"请先划选文字",textBar:"文字工具条",
   zoomTo:"放大居中",
   clipTwinDo:"把分身放入剪贴板",clipCopyDo:"复制卡片到剪贴板",
@@ -1089,7 +1093,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   fmtAlign:"对齐",fmtClear:"清除格式",fmtHtml:"HTML 网页",
   fmtSpacing:"间距",fmtNeedSel:"先选中一段文字",
   fmtInk:"文字颜色",fmtHL:"标记颜色",
-  lvShortNone:"正文",lvShort1:"标题 1",lvShort2:"标题 2",lvShort3:"标题 3",
+  lvShortNone:"正文",lvShort1:"标题 1",lvShort2:"标题 2",lvShort3:"标题 3",lvShort4:"标题 4",lvShort5:"标题 5",
   wcWords:"字",wcSel:"选中",wcTitle:"这份稿子的字数",
   numGo:"输入编号，把这一节移过去",numAsk:"把这一节移到哪个编号？",
   numBad:"只能用数字和点，比如 2 或 3.1",
@@ -1228,6 +1232,8 @@ const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 /* ================= state ================= */
 const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",italic:false,color:"#111111"};
 const DEFLINK={kind:"curve",arrow:"none",w:1.4,color:"#8A8A85"};
+// 标题层级上限（2026-10 由三级加到五级）。所有"最多几级"的地方都读它，不要再写死数字
+const LVMAX=5;
 let S={bg:"#F4F4F2",cards:[],links:[],sheets:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"all",linkLabel:"dot"};
 let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 // 当前选中的稿子（画布上的一份稿子被当作一个整体选中时）。
@@ -1918,7 +1924,7 @@ function normCard(c){
   if(o.rich&&typeof o.rich!=="string")delete o.rich;
   if(o.rich)o.rich=defangRich(o.rich);
   o.s=(o.s&&typeof o.s==="object")?o.s:{};
-  if(o.level&&![1,2,3].includes(+o.level))delete o.level;
+  if(o.level&&!(Number.isInteger(+o.level)&&+o.level>=1&&+o.level<=LVMAX))delete o.level;   // 有效范围 1 到 LVMAX，其余当作非法值去掉（规矩跟从前一样，只是范围从 3 放宽到 5）
   if(o.role&&!["apx","aside","bib"].includes(o.role))delete o.role;
   if(o.vers&&!Array.isArray(o.vers))delete o.vers;
   if(Array.isArray(o.vers)){
@@ -4273,14 +4279,14 @@ function sizeImages(all){
   });
   render();save();
 }
-const LVSCALE={1:[2.1,700],2:[1.55,600],3:[1.22,500]};
+const LVSCALE={1:[2.1,700],2:[1.55,600],3:[1.22,500],4:[1.1,600],5:[1,600]};
 function levelStyle(v){
   if(S.lvStyle&&S.lvStyle[v])return {...S.lvStyle[v]};
   const base={...DEF,...S.textDef};
   if(!v)return {size:base.size,weight:base.weight,spacing:base.spacing};
-  const [k,w]=LVSCALE[v];
+  const [k,w]=LVSCALE[Math.min(Math.max(1,v),LVMAX)];
   return {size:Math.round(base.size*k),weight:w,
-    spacing:Math.max(-0.02,+(base.spacing-(v===1?0.02:v===2?0.012:0.006)).toFixed(3))};
+    spacing:Math.max(-0.02,+(base.spacing-(v===1?0.02:v===2?0.012:v===3?0.006:0)).toFixed(3))};
 }
 // 文献条目与原文之间是归属关系，不是画布上的走向，所以用数据字段而不是连线表达。
 // 原文卡片记 c.src = 文献条目 id，画布上不画任何线。
@@ -7893,7 +7899,7 @@ function buildBar(){
     pop.appendChild(h);
     const seg=document.createElement("div");seg.className="seg";
     let lv=0;
-    [[0,t("bodyShort")],[1,t("lvShort1")],[2,t("lvShort2")],[3,t("lvShort3")]].forEach(([v,txt],i)=>{
+    [[0,t("bodyShort")],[1,t("lvShort1")],[2,t("lvShort2")],[3,t("lvShort3")],[4,t("lvShort4")],[5,t("lvShort5")]].forEach(([v,txt],i)=>{
       const x=document.createElement("button");x.textContent=txt;
       if(i===0)x.classList.add("on");
       x.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});
@@ -8509,7 +8515,7 @@ function wrOutlineHTML(list,nums){
   let sh="";
   list.forEach((c,i)=>{
     const lv=wrLevelOf(c);if(!lv)return;
-    sh+=`<button class="wrnav l${Math.min(lv,4)}" data-i="${i}">
+    sh+=`<button class="wrnav l${Math.min(lv,LVMAX)}" data-i="${i}">
       <span class="n">${nums[i]}</span><span class="t">${esc(snippet(orig(c),40)||t("wrUntitled"))}</span></button>`;
   });
   return sh||`<div class="wrempty">${esc(t("wrNoHead"))}</div>`;
@@ -8823,7 +8829,7 @@ function buildFmtBar(host){
   const lvl=popCell(`<span class="lbl lvl" id="wflv">${esc(t("lvShortNone"))}</span>${car}`,pop=>{
     const c=barCard();if(!c)return;
     const o=orig(c),now=o.role?-1:(o.level||0);
-    [[0,"lvShortNone"],[1,"lvShort1"],[2,"lvShort2"],[3,"lvShort3"]].forEach(([v,k])=>{
+    [[0,"lvShortNone"],[1,"lvShort1"],[2,"lvShort2"],[3,"lvShort3"],[4,"lvShort4"],[5,"lvShort5"]].forEach(([v,k])=>{
       const it=document.createElement("button");
       it.className="item"+(now===v?" on":"");
       it.textContent=t(k);
@@ -8945,7 +8951,7 @@ function syncFmtBars(){
       const c0=barCard(),o0=c0?orig(c0):null;
       const v=o0&&!o0.role?(o0.level||0):0;
       lvEl.textContent=o0&&o0.role?t("roleHead"):
-        t(["lvShortNone","lvShort1","lvShort2","lvShort3"][v]||"lvShortNone");
+        t(["lvShortNone","lvShort1","lvShort2","lvShort3","lvShort4","lvShort5"][v]||"lvShortNone");
       lvEl.classList.toggle("ishd",!!(o0&&!o0.role&&o0.level));
     }
     const wcEl=host.querySelector(".fwc");
@@ -9096,7 +9102,7 @@ function docBodyHTML(d,extNums){
           <img src="${imgSrc?escA(imgSrc):""}" data-ih="${escA(o.ih)}" draggable="false"
             style="max-width:100%;height:auto;display:block;border-radius:3px;${o.ar?"aspect-ratio:1 / "+o.ar:""}">
         </div>`
-      :`<div class="cap${lv?" hd lv"+Math.min(lv,4):""}"
+      :`<div class="cap${lv?" hd lv"+Math.min(lv,LVMAX):""}"
           contenteditable="${edit}" data-id="${c.id}" data-ph="${esc(t("placeholder"))}" spellcheck="false"
           >${o.rich?safeRich(o.rich):esc(o.text||"")}</div>`;
     if(ctx){
@@ -10229,7 +10235,7 @@ function wrMoveToNumber(d,id,raw){
   const [a,b]=wrSectionRange(list,i);
   const block=d.ids.slice(a,b);
   const rest=d.ids.slice(0,a).concat(d.ids.slice(b));
-  const lvNew=Math.min(want.split(".").length,6);
+  const lvNew=Math.min(want.split(".").length,LVMAX);
   const shift=lvNew-lv0;
   // 试着插在每一个位置，看哪一位能算出目标编号。位置数最多是段落数，
   // 每次 wrNums 是一遍线性扫描——稿子几百段的量级完全够用。
@@ -10237,7 +10243,7 @@ function wrMoveToNumber(d,id,raw){
     const ids=rest.slice(0,k).concat(block,rest.slice(k));
     const cs=ids.map(card);
     const saved=block.map(z=>{const c=card(z);return c?c.level:null});
-    block.forEach(z=>{const c=card(z);if(c&&c.level)c.level=Math.max(1,Math.min(6,c.level+shift))});
+    block.forEach(z=>{const c=card(z);if(c&&c.level)c.level=Math.max(1,Math.min(LVMAX,c.level+shift))});
     const n=wrNums(cs)[k];
     block.forEach((z,q)=>{const c=card(z);if(c&&saved[q]!=null)c.level=saved[q]});
     return n;
@@ -10257,7 +10263,7 @@ function wrMoveToNumber(d,id,raw){
   const landed=probe(at)||"";
   if(at===a&&landed===nowNum){toast(t("numSame"));return}
   snap();
-  block.forEach(z=>{const c=card(z);if(c&&c.level)c.level=Math.max(1,Math.min(6,c.level+shift))});
+  block.forEach(z=>{const c=card(z);if(c&&c.level)c.level=Math.max(1,Math.min(LVMAX,c.level+shift))});
   d.ids=rest.slice(0,at).concat(block,rest.slice(at));
   sel=[id];selLink=null;
   save();redrawDocs();paintSel();syncFmtBars();
@@ -10822,7 +10828,7 @@ function cardItems(x,y){
     {label:t("tagsMenu"),on:()=>openTags(x,y)},
     ...(one&&!docOnly(one)?[{label:t("thinkMenu"),on:()=>openThink(x,y,one)}]:[]),
     {label:t("level"),sub:[{head:t("level")},
-      ...[[0,"lvNone"],[1,"lv1"],[2,"lv2"],[3,"lv3"]].map(([v,k])=>({label:t(k),
+      ...[[0,"lvNone"],[1,"lv1"],[2,"lv2"],[3,"lv3"],[4,"lv4"],[5,"lv5"]].map(([v,k])=>({label:t(k),
         check:!card(sel[0])?.role&&(card(sel[0])?.level||0)===v,on:()=>setLevel(v)})),
       {head:t("roleHead")},
       {label:t("roleApx"),check:card(sel[0])?.role==="apx",on:()=>setRole("apx")},
@@ -11077,9 +11083,9 @@ function buildStyleHeadMap(stylesXml){
     if(baEl)based[id]=baEl.getAttribute("w:val")||"";
     if(olEl){
       const lv=+olEl.getAttribute("w:val");
-      if(lv>=0&&lv<=5)map[id]=lv+1;   // outlineLvl 0=H1, 1=H2 …
+      if(lv>=0&&lv<=5)map[id]=Math.min(LVMAX,lv+1);   // outlineLvl 0=H1, 1=H2 …
     }else if(/^heading\s*([1-6])$/i.test(nm)){
-      map[id]=Math.min(3,+nm.match(/([1-6])$/)[1]);
+      map[id]=Math.min(LVMAX,+nm.match(/([1-6])$/)[1]);
     }else if(/^title$/i.test(nm)){
       map[id]=1;
     }
@@ -11115,12 +11121,12 @@ function docxItems(xmlStr,rels,styleHeadMap){
   function headLevel(styleName){
     if(!styleName)return 0;
     // 优先用 styles.xml 的映射（精确，处理中文 Word 的数字 styleId）
-    if(styleHeadMap&&styleHeadMap[styleName]!==undefined)return Math.min(3,styleHeadMap[styleName]);
+    if(styleHeadMap&&styleHeadMap[styleName]!==undefined)return Math.min(LVMAX,styleHeadMap[styleName]);
     // 退回正则（没有 styles.xml 的老文档，或 styleId 本身就是可读名称）
     const m=styleName.match(/[Hh]eading\s*([1-6])/)||
               styleName.match(/^标题\s*([1-6])$/)||
               (/^[Tt]itle$/.test(styleName)&&[null,"1"]);
-    return m?Math.min(3,+m[1]):0;
+    return m?Math.min(LVMAX,+m[1]):0;
   }
 
   function processRun(r){
