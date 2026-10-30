@@ -265,7 +265,7 @@ group("colors 颜色", async (c) => {
 group("twins 分身", async (c) => {
   await c.board(
     [
-      { id: "a", x: -600, y: -100, w: 300, text: "源卡片 #核心", s: {} },
+      { id: "a", x: -600, y: -100, w: 300, text: "源卡片 #核心", role: "bib", tags: ["核心"], s: {} },
       { id: "b", x: 400, y: 200, w: 300, text: "别处", s: {} },
     ],
     [],
@@ -1649,6 +1649,156 @@ group("docdup 复制与锁定整份稿子（2026-10）", async (c) => {
   c.ok("中英文案都齐了", await L(() => ["docDup", "docCopySuffix", "docDupDone", "docLock", "docUnlock", "docLockOn", "docLockOff", "docLockedNote"].every((k) => T.en[k] && T.zh[k])));
 });
 
+group("bib 文献信息、标签、删除图片、文献表（2026-10）", async (c) => {
+  const ih = await c.run(async () => {
+    const cv = document.createElement("canvas"); cv.width = 80; cv.height = 50;
+    const g2 = cv.getContext("2d"); g2.fillStyle = "#1B4F9C"; g2.fillRect(0, 0, 80, 50);
+    return (await putImg(cv.toDataURL("image/png"))).h;
+  });
+  await c.board([
+    { id: "b1", x: 0, y: 0, w: 300, text: "Scholar screenshot notes", role: "bib", ih, ar: 50 / 80, iw: 80, s: {} },
+    { id: "b2", x: 400, y: 0, w: 300, text: "Second entry", role: "bib", s: {} },
+    { id: "b3", x: 800, y: 0, w: 300, text: "Third entry", role: "bib", s: {} },
+    { id: "q1", x: 0, y: 300, w: 300, text: "A quote", bib: "b1", s: {} },
+    { id: "q2", x: 400, y: 300, w: 300, text: "Another quote", bib: "b1", s: {} },
+    { id: "n1", x: 0, y: 600, w: 300, text: "Plain note #oldtag", tags: ["legacy"], s: {} },
+    { id: "pg", x: 400, y: 600, w: 300, text: "", ih, ar: 50 / 80, pt: [{ s: "word", x: 0.1, y: 0.1, w: 0.2, h: 0.1 }], s: {} },
+  ], [], { zoom1: true });
+  const items = (id) => c.run((id) => { sel = [id]; return cardItems(10, 10).filter((z) => z && z.label).map((z) => z.label); }, id);
+  const L = await c.run(() => ({ drop: t("imgDrop"), bm: t("bmMenu"), tags: t("tagsMenu") }));
+
+  // ---- 删除图片、保留文字 ----
+  let it = await items("b1");
+  c.ok("带图片的卡片右键有「删除图片，保留文字」", it.includes(L.drop));
+  c.ok("PDF 页面卡片没有这一项", !(await items("pg")).includes(L.drop));
+  c.ok("纯文字卡片没有这一项", !(await items("b2")).includes(L.drop));
+  const tw = await c.run(() => { sel = ["b1"]; makeTwin(); return sel[0]; });
+  await c.run(() => { dropImage(card("b1")); });
+  const dr = await c.run((tw) => ({ img: hasImg(card("b1")), text: card("b1").text, kids: bibKids("b1").length, twinImg: !!nodes.get(tw) && !!nodes.get(tw).querySelector("img"), noAr: !("ar" in card("b1")) && !("iw" in card("b1")) }), tw);
+  c.ok("图片删掉了，文字原样留着，还是同一张卡片", !dr.img && dr.text === "Scholar screenshot notes" && dr.noAr);
+  c.ok("绑定在它名下的原文还在", dr.kids === 2);
+  c.ok("分身也跟着没了图片", !dr.twinImg);
+  await c.run(() => applyUndo(undo, redo));
+  c.ok("可以撤销", await c.run(() => hasImg(card("b1"))));
+  await c.run(() => { applyUndo(redo, undo); render(); });
+
+  // ---- 标签只给文献条目 ----
+  it = await items("n1");
+  c.ok("普通卡片右键菜单里没有「标签」", !it.includes(L.tags));
+  c.ok("文献条目有「标签」和「文献信息」", (await items("b2")).includes(L.tags) && (await items("b2")).includes(L.bm));
+  c.ok("普通卡片没有「文献信息」", !(await items("n1")).includes(L.bm));
+  c.ok("正文里的 #词 不再当标签，普通卡片上的旧标签不显示", await c.run(() => cardTags(card("n1")).length === 0 && !nodes.get("n1").querySelector(".tags")));
+  c.ok("普通卡片的旧标签数据原样留着", await c.run(() => JSON.stringify(card("n1").tags) === '["legacy"]'));
+  await c.run(() => { sel = ["b2"]; setCardTags(card("b2"), ["theory", "Fashion"]); setCardTags(card("b3"), ["theory"]); render(); });
+  c.ok("文献条目可以加标签", await c.run(() => cardTags(card("b2")).join() === "theory,fashion"));
+  c.ok("标签检索只搜到文献条目", await c.run(() => { S.findMode = "tag"; showFind(true); $("findq").value = "legacy"; runFind(); const a = hits.length; $("findq").value = "theory"; runFind(); const b = hits.map((z) => z.id).sort().join(); $("findq").value = ""; runFind(); showFind(false); S.findMode = "all"; return a === 0 && b === "b2,b3"; }));
+
+  // ---- 文献信息表单：真的打字 ----
+  const rect = await c.run(() => { const r = nodes.get("b1").getBoundingClientRect(); return { x: r.x + 20, y: r.y + 10 }; });
+  await c.run(() => { sel = ["b1"]; paintSel(); openBm(200, 120, card("b1")); });
+  await c.wait(120);
+  const type = async (id, txt) => { await c.run((id) => { const el = $("bm_" + id); el.focus(); el.select && el.select(); }, id); await c.page.keyboard.type(txt); };
+  c.ok("表单打开，栏名是英文", await c.run(() => [...document.querySelectorAll("#pop .bmf label")].map((z) => z.textContent).join("|") === "Type|Title|Name(s)|Year|Citation|Cited by|Link|Notes"));
+  c.ok("备注里就是卡片原来的文字", await c.run(() => $("bm_notes").value === "Scholar screenshot notes"));
+  await type("title", "Digital 3D fashion designers");
+  await c.page.keyboard.press("Backspace");      // 退格只删字，不会删卡片
+  await c.page.keyboard.type("s");
+  await type("type", "Journal article");
+  await c.run(() => { $("bm_names").focus(); });
+  await c.page.keyboard.type("Särmäkari, Natalia"); await c.page.keyboard.press("Enter"); await c.page.keyboard.type("Smelik, Anneke");
+  await type("year", "2021");
+  await type("cite", "(Särmäkari, 2021)");
+  await type("cn", "123");
+  await type("url", "scholar.google.com/x");
+  const bm = await c.run(() => card("b1").bm);
+  c.ok("各栏写进卡片", bm.title === "Digital 3D fashion designers" && bm.type === "Journal article" && bm.year === "2021" && bm.cite === "(Särmäkari, 2021)");
+  c.ok("作者每行一位，原样不缩写", JSON.stringify(bm.names) === JSON.stringify(["Särmäkari, Natalia", "Smelik, Anneke"]));
+  c.ok("被引次数记下当天日期", bm.cn === 123 && bm.cd === (await c.run(() => todayStr())));
+  c.ok("链接就是卡片自己的链接", await c.run(() => card("b1").url === "https://scholar.google.com/x"));
+  c.ok("在表单里按退格没有删掉卡片", await c.run(() => !!card("b1")));
+  c.ok("卡片原来的文字（备注）没被动过", await c.run(() => card("b1").text === "Scholar screenshot notes"));
+  await c.page.keyboard.press("Escape"); await c.wait(200);
+  const look = await c.run(() => { const el = nodes.get("b1"); const bt = el.querySelector(".cap .bt"), bc = el.querySelector(".cap .bc"); return { cls: el.classList.contains("bibm"), bt: bt && bt.textContent, bc: bc && bc.textContent, big: bt && parseFloat(getComputedStyle(bt).fontSize) > parseFloat(getComputedStyle(el.querySelector(".cap")).fontSize), small: bc && parseFloat(getComputedStyle(bc).fontSize) < parseFloat(getComputedStyle(bt).fontSize), txt: el.querySelector(".cap").textContent, frame: getComputedStyle(el, "::before").borderTopWidth }; });
+  c.ok("卡片上只显示标题和 Citation", look.cls && look.bt === "Digital 3D fashion designers" && look.bc === "(Särmäkari, 2021)" && !look.txt.includes("Scholar screenshot"));
+  c.ok("标题比默认字号大，Citation 比标题小", look.big && look.small);
+  c.ok("外面有一圈细框", look.frame === "1px");
+  c.ok("分身显示的跟主卡片一样", await c.run((tw) => nodes.get(tw).querySelector(".cap .bt").textContent === "Digital 3D fashion designers", tw));
+  // 双击不进入打字
+  await c.run(() => { editText(card("b1")); });
+  c.ok("双击不进入打字，提示用右键修改", await c.run(() => !editing && $("toast").textContent === t("bmNoEdit")));
+  // 检索能搜到标题、作者、Citation
+  c.ok("检索能搜到标题、作者、Citation", await c.run(() => { S.findMode = "all"; showFind(true); const r = ["3d fashion", "smelik", "2021)"].map((q) => { $("findq").value = q; runFind(); return hits.some((z) => z.id === "b1"); }); $("findq").value = ""; runFind(); showFind(false); return r.every(Boolean); }));
+  // 类型建议来自别的条目
+  await c.run(() => { card("b2").bm = { type: "Book" }; openBm(200, 120, card("b3")); });
+  c.ok("Type 的建议列表来自其他条目已经用过的类型", await c.run(() => [...document.querySelectorAll("#bm_types option")].map((z) => z.value).join() === "Book,Journal article"));
+  await c.run(() => { $("pop").classList.remove("on", "bm"); });
+  // 撤销
+  await c.run(() => applyUndo(undo, redo)); 
+  c.ok("一次撤销回到填表之前", await c.run(() => !card("b1").bm && !card("b1").url));
+  await c.run(() => { applyUndo(redo, undo); render(); });
+  // 取消文献角色：恢复显示原文，信息留着
+  await c.run(() => { sel = ["b1"]; setRole("bib"); });
+  c.ok("取消文献角色：卡片显示原来的文字，文献信息留在数据里", await c.run(() => !card("b1").role && nodes.get("b1").querySelector(".cap").textContent === "Scholar screenshot notes" && card("b1").bm.title === "Digital 3D fashion designers"));
+  await c.run(() => { sel = ["b1"]; setRole("bib"); });
+  c.ok("重新设回文献条目：又显示标题和 Citation", await c.run(() => nodes.get("b1").classList.contains("bibm")));
+  // 标题和 Citation 都清空：照旧显示原文
+  await c.run(() => { openBm(200, 120, card("b2")); const el = $("bm_type"); el.value = ""; el.dispatchEvent(new Event("input")); $("pop").classList.remove("on", "bm"); render(); });
+  c.ok("所有栏都空了，文献信息整个去掉，卡片照旧", await c.run(() => !card("b2").bm && !nodes.get("b2").classList.contains("bibm")));
+  // 表单的宽度不会带到下一个弹层
+  await c.run(() => { openBm(200, 120, card("b1")); sel = ["b2"]; openTags(200, 120); });
+  c.ok("表单关掉后，下一个弹层不带它的宽度", await c.run(() => !$("pop").classList.contains("bm")));
+  await c.run(() => $("pop").classList.remove("on"));
+
+  // ---- 导出 ----
+  const ex = await c.run(() => { const tree = buildTree(["b1", "b2"].map(card)); const o = { title: "T", img: false, tags: false, byPageDoc: false }; return { md: docMD(o, tree), h: docHTML(o, tree) }; });
+  c.ok("导出：填了信息的文献条目输出「标题 Citation」", ex.md.includes("Digital 3D fashion designers (Särmäkari, 2021)") && ex.h.includes("Digital 3D fashion designers (Särmäkari, 2021)") && !ex.md.includes("Scholar screenshot"));
+  c.ok("导出：没填信息的文献条目照旧输出原文", ex.md.includes("Second entry"));
+
+  // ---- 校验 ----
+  c.ok("读文件时坏的文献信息被清掉", await c.run(() => { const b = bmNorm({ title: "  T ", names: ["A", 3, "", null], cn: "abc", cd: "x", junk: 1, cite: { x: 1 } }); return b.title === "T" && JSON.stringify(b.names) === '["A","3"]' && !("cn" in b) && !("junk" in b) && !("cite" in b) && bmNorm({ cn: -1 }) === null; }));
+  c.ok("文献信息随文件保存并能读回", await c.run(async () => { const d = JSON.parse(JSON.stringify(bundle(null))); await absorb(d, false); return card("b1").bm.title === "Digital 3D fashion designers" && card("b1").bm.cn === 123; }));
+
+  // ---- 文献表 ----
+  await c.run(() => { render(); card("b3").bm = { title: "Avatars", year: "2019", type: "Book", cite: "=HYPERLINK(1)", cn: 5 }; card("b2").bm = { title: "Bodies", year: "2023", type: "Journal article" }; render(); });
+  const bmenu = await c.run(() => { boardMenu(20, 20); const r = [...document.querySelectorAll("#menu .mi")].some((z) => z.textContent.includes(t("bmTable"))); closeMenus(); return r; });
+  c.ok("画布右键菜单里有「文献表」", bmenu);
+  await c.run(() => openBibTable()); await c.wait(150);
+  const rows = () => c.run(() => [...document.querySelectorAll("#bibt tbody tr")].map((r) => r.dataset.id));
+  c.ok("全屏打开，列名是英文", await c.run(() => $("bibt").classList.contains("on") && [...document.querySelectorAll("#bibt th[data-k]")].map((z) => z.textContent.replace(/[↑↓]/g, "")).join("|") === "Title|Name(s)|Year|Type|Citation|Cited by|Tags|Quotes|Page"));
+  c.ok("每条文献一行，分身不重复", (await rows()).sort().join() === "b1,b2,b3");
+  c.ok("绑定原文数", await c.run(() => [...document.querySelectorAll('#bibt tr[data-id="b1"] td')][7].textContent === "2"));
+  const clickTh = (k) => c.run((k) => document.querySelector('#bibt th[data-k="' + k + '"]').click(), k);
+  await clickTh("year");
+  c.ok("点列名按年份排序", (await rows()).join() === "b3,b1,b2");
+  await clickTh("year");
+  c.ok("再点一次倒序", (await rows()).join() === "b2,b1,b3");
+  await c.run(() => { const q = document.querySelector("#bibt .q"); q.value = "smelik"; q.dispatchEvent(new Event("input")); });
+  c.ok("搜索作者", (await rows()).join() === "b1");
+  await c.run(() => { const q = document.querySelector("#bibt .q"); q.value = ""; q.dispatchEvent(new Event("input")); document.querySelector('#bibt button[data-ty="Journal article"]').click(); });
+  c.ok("按类型筛选", (await rows()).sort().join() === "b1,b2");
+  await c.run(() => { document.querySelector('#bibt button[data-ty="Journal article"]').click(); document.querySelector('#bibt button[data-tg="theory"]').click(); document.querySelector('#bibt button[data-tg="fashion"]').click(); });
+  c.ok("按标签筛选（多选要全都有）", (await rows()).join() === "b2");
+  const csv = await c.run(async () => { let got = null; const keep = window.dl; window.dl = (b) => { got = b; }; exportBibCSV(); window.dl = keep; const u = new Uint8Array(await got.arrayBuffer()); return { bom: u[0] === 0xef && u[1] === 0xbb && u[2] === 0xbf, txt: await got.text() }; });
+  c.ok("导出 CSV：只有当前筛选的结果，带 BOM", csv.bom && csv.txt.includes("Bodies") && !csv.txt.includes("Avatars"));
+  await c.run(() => { BT.tags.clear(); drawBibTable(); });
+  const csv2 = await c.run(() => { let got = null; const keep = window.dl; window.dl = (b) => { got = b; }; exportBibCSV(); window.dl = keep; return got.text(); });
+  c.ok("CSV 里以 = 开头的格子前面加了 '，不会被 Excel 当公式执行", csv2.includes(`"'=HYPERLINK(1)"`));
+  // 双击一行打开表单，改完表格跟着刷新
+  const rowPt = await c.run(() => { const r = document.querySelector('#bibt tr[data-id="b3"] td').getBoundingClientRect(); return { x: r.x + 10, y: r.y + r.height / 2 }; });
+  await c.page.mouse.click(rowPt.x, rowPt.y, { count: 2, clickCount: 2 }); await c.wait(150);
+  c.ok("双击一行打开那张卡片的文献信息", await c.run(() => $("pop").classList.contains("on") && $("bm_title").value === "Avatars"));
+  c.ok("表单打开时光标在标题末尾", await c.run(() => document.activeElement === $("bm_title") && $("bm_title").selectionStart === $("bm_title").value.length));
+  await c.page.keyboard.type(" online");
+  await c.page.keyboard.press("Escape"); await c.wait(150);
+  c.ok("Esc 先关表单，表格还开着，并且刷新了", await c.run(() => $("bibt").classList.contains("on") && !$("pop").classList.contains("on") && document.querySelector('#bibt tr[data-id="b3"] td').textContent === "Avatars online"));
+  await c.page.keyboard.press("Escape"); await c.wait(100);
+  c.ok("再按 Esc 关掉表格", await c.run(() => !$("bibt").classList.contains("on")));
+  await c.run(() => openBibTable());
+  await c.run(() => document.querySelector('#bibt button[data-go="b2"]').click()); await c.wait(300);
+  c.ok("行尾箭头：关掉表格，跳到画布上那张卡片", await c.run(() => !$("bibt").classList.contains("on") && sel.length === 1 && sel[0] === "b2"));
+  c.ok("中英文案都齐了", await c.run(() => ["imgDrop", "imgDropped", "bmMenu", "bmHead", "bmTable", "bmNoEdit", "bmNotesRich", "btSearch", "btExport", "btEmpty", "btNone", "btGo", "btCount"].every((k) => T.en[k] && T.zh[k])));
+});
+
 /* =====================================================================
    6. 编组与锁定
    ===================================================================== */
@@ -1947,8 +2097,8 @@ group("templates 模板", async (c) => {
 group("search 检索与链接", async (c) => {
   await c.board(
     [
-      { id: "a", x: -300, y: 0, w: 300, text: "方法论笔记 #方法", s: {} },
-      { id: "b", x: 200, y: 0, w: 300, text: "待读材料 #待读", s: {} },
+      { id: "a", x: -300, y: 0, w: 300, text: "方法论笔记", role: "bib", tags: ["方法"], s: {} },
+      { id: "b", x: 200, y: 0, w: 300, text: "待读材料", role: "bib", tags: ["待读"], s: {} },
     ],
     []
   );
@@ -6307,11 +6457,11 @@ group("safety 注入与越权排查", async (c) => {
     window.__x = 0;
     const bad = '"><img src=x onerror="window.__x=1">';
     const keep = JSON.parse(JSON.stringify({ c: S.cards, f: S.frames, l: S.links }));
-    S.cards = [{ id: "a", x: 0, y: 0, w: 300, text: "hi", tags: [bad], s: { ...DEF } }];
+    S.cards = [{ id: "a", x: 0, y: 0, w: 300, text: "hi", role: "bib", tags: [bad], s: { ...DEF } }];
     S.frames = [{ id: "f", x: -50, y: -50, w: 600, h: 400, title: bad }];
     S.links = []; S.docs = []; invalidateIndex(); render(); refreshTagList();
     const out = {};
-    out.taglist = !/onerror="window/.test($("taglist").innerHTML);
+    out.taglist = !/onerror="window/.test($("taglist").innerHTML) && $("taglist").options.length === 1;
     menuAt(40, 40, [{ label: bad, on: () => {} }, { label: "ok", key: bad }]);
     out.menu = !/<img/i.test($("menu").innerHTML) && $("menu").textContent.includes("<img");
     closeMenus();
@@ -6338,7 +6488,7 @@ group("safety 注入与越权排查", async (c) => {
 
   const snap = await c.run(async () => {
     const keep = S.cards.slice();
-    S.cards = [{ id: "s", x: 0, y: 0, w: 300, text: "x", tags: ['"><script>alert(1)<\/script>'], s: { ...DEF } }];
+    S.cards = [{ id: "s", x: 0, y: 0, w: 300, text: "x", role: "bib", tags: ['"><script>alert(1)<\/script>'], s: { ...DEF } }];
     S.frames = []; S.links = []; invalidateIndex(); render();
     const html = await buildWebSnap("t");
     S.cards = keep; invalidateIndex(); render();

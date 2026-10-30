@@ -248,6 +248,12 @@
   .card .twin:hover{opacity:1}
   .card .twin .twd{padding:0 2px}
   .card.isTwin .cap{box-shadow:calc(-3px * var(--iz)) 0 0 var(--tw)}
+  /* 文献条目显示标题与 Citation 时（2026-10）：标题稍大，Citation 小一号、淡一点，外面一圈很细的浅框。
+     框画在 ::before 上、离卡片 5px，选中时的 .ring 在 7px 外，两者不打架 */
+  .card.bibm::before{content:"";position:absolute;inset:-5px;border-radius:4px;pointer-events:none;
+    border:1px solid color-mix(in srgb,var(--frame) 28%,transparent)}
+  .card.bibm .cap .bt{font-size:1.15em;font-weight:600;line-height:1.3}
+  .card.bibm .cap .bc{font-size:.8em;font-weight:400;opacity:.62;margin-top:4px}
   body.lock .card .twin{display:none}
   .card .lvl{position:absolute;left:0;top:calc(-16px * var(--iz));opacity:.38;
     font:500 calc(9px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
@@ -291,6 +297,41 @@
   /* 我想我写：只出现在这个面板里，画布上不画任何东西 */
   .pop .tkh{font-size:11px;opacity:.5;margin:-4px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .pop .tk-list{max-height:280px;overflow:auto}
+  /* 文献表：全屏、只看不改（2026-10） */
+  #bibt{position:fixed;inset:0;z-index:86;display:none;flex-direction:column;background:var(--wbg);color:var(--pfg);font-size:12.5px}
+  #bibt.on{display:flex}
+  #bibt .bth{display:flex;align-items:center;gap:10px;padding:14px 18px 8px}
+  #bibt .bth b{font:500 14px/1 "IBM Plex Sans",sans-serif}
+  #bibt .bth .n{opacity:.45;font:400 11px/1 "IBM Plex Mono",monospace}
+  #bibt .bth input{flex:1;max-width:360px;height:28px;border:1px solid var(--pline);border-radius:7px;background:none;color:inherit;padding:0 9px;font:inherit;outline:none}
+  #bibt .bth button{height:28px;border:1px solid var(--pline);border-radius:7px;background:none;color:inherit;cursor:pointer;padding:0 10px;font:inherit}
+  #bibt .bth .x{margin-left:auto;border:none;font-size:16px;opacity:.5}
+  #bibt .btf{display:flex;flex-wrap:wrap;gap:5px;padding:0 18px 10px}
+  #bibt .btf button{border:1px solid var(--pline);background:none;color:inherit;border-radius:99px;padding:2px 9px;cursor:pointer;font-size:11.5px}
+  #bibt .btf button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+  #bibt .btf .lab{opacity:.45;font:400 10px/22px "IBM Plex Mono",monospace;margin-right:2px}
+  #bibt .btw{flex:1;overflow:auto;padding:0 18px 18px}
+  #bibt table{border-collapse:collapse;width:100%;min-width:900px}
+  #bibt th{position:sticky;top:0;background:var(--wbg);text-align:left;font:500 11px/1.2 "IBM Plex Sans",sans-serif;
+    padding:8px 8px;border-bottom:1px solid var(--pline);cursor:pointer;white-space:nowrap;user-select:none}
+  #bibt th .ar{opacity:.5;margin-left:3px}
+  #bibt td{padding:7px 8px;border-bottom:1px solid var(--wline);vertical-align:top;line-height:1.45}
+  #bibt td.t{max-width:340px}
+  #bibt td.dim{opacity:.4;font-style:italic}
+  #bibt td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+  #bibt tr.on td{background:var(--whi)}
+  #bibt tbody tr{cursor:default}
+  #bibt .go{border:none;background:none;color:inherit;cursor:pointer;opacity:.45;font-size:14px;padding:0 4px}
+  #bibt .go:hover{opacity:1}
+  #bibt .empty{padding:40px 0;text-align:center;opacity:.45}
+  /* 文献信息表单 */
+  .pop.bm{width:340px;max-height:calc(100vh - 24px);overflow:auto}
+  .pop .bmf{display:grid;grid-template-columns:74px 1fr;gap:6px 8px;align-items:start}
+  .pop .bmf label{font:400 10.5px/26px "IBM Plex Mono",monospace;opacity:.55;letter-spacing:.02em}
+  .pop .bmf input,.pop .bmf textarea{width:100%;box-sizing:border-box;border:1px solid var(--pline);border-radius:6px;
+    background:none;color:inherit;font:inherit;padding:4px 7px;line-height:1.45;outline:none;resize:vertical}
+  .pop .bmf input{height:28px}
+  .pop .bmf .sub{grid-column:2;font-size:10.5px;opacity:.45;margin-top:-3px}
   .pop .tk{padding:7px 0;border-bottom:1px solid var(--pline)}
   .pop .tk .tm{display:flex;align-items:center;font:400 9.5px/1 "IBM Plex Mono",monospace;opacity:.5}
   .pop .tk .tm button{margin-left:auto;border:none;background:none;color:inherit;cursor:pointer;font-size:11px;padding:0 2px;opacity:.7}
@@ -963,7 +1004,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   expRender:"Rendering…",expImg:"Include images",expTags:"Include tags",
   errCDN:"The rendering library could not be loaded.",errShot:"Canvas export failed.",
   expGo:"Export",expWork:"Building the document…",expDone:"Document exported",
-  tagsMenu:"Tags…",tagTitle:"Tags",tagsPh:"tag1, tag2",allTags:"Tags on this board",tagHint:"Also picks up #tag written in the text",
+  tagsMenu:"Tags…",tagTitle:"Tags",tagsPh:"tag1, tag2",allTags:"Tags on this board",tagHint:"Tags are for bibliography entries only",
   imgSize:"Image size on import",fitSel:"Resize selected images to this",
   fitAllImg:"Resize every image to this",px:"px",
   pageLock:"Lock this page",
@@ -971,6 +1012,11 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pageNoOverlap:"Pages can't overlap",pageNewMoved:"New page placed in the nearest free space",
   thinkMenu:"I think, I write",thinkPh:"Write whatever comes to mind. Messy and unfinished is fine.",
   thinkHint:"Saved as you type · \u2318/Ctrl+Enter starts a new entry · Click an entry to edit it",
+  imgDrop:"Remove image, keep text",imgDropped:"Image removed; the text stays",
+  bmMenu:"Reference details",bmHead:"Reference details",bmTable:"Bibliography table",bmNoEdit:"Edit this entry with right-click \u2192 Reference details",
+  bmNotesRich:"Editing the notes here removes their formatting",
+  btSearch:"Search title, names, citation, notes",btExport:"Export table",btEmpty:"No bibliography entries yet. Give a card the Bibliography entry role to list it here.",
+  btNone:"Nothing matches",btGo:"Show on the canvas",btCount:"{n} of {m}",
   docDup:"Duplicate this draft",docCopySuffix:" (copy)",docDupDone:"Duplicated as \u201C{t}\u201D",
   docLock:"Lock this draft (content and position)",docUnlock:"Unlock this draft",docLockOn:"Draft locked",docLockOff:"Draft unlocked",
   docLockedNote:"This draft is locked. Right-click its title to unlock it.",
@@ -1183,7 +1229,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   expRender:"正在渲染…",expImg:"包含图片",expTags:"包含标签",
   errCDN:"渲染库加载失败，请检查网络连接。",errShot:"画面导出未完成。",
   expGo:"导出",expWork:"正在生成文档…",expDone:"文档已导出",
-  tagsMenu:"标签…",tagTitle:"标签",tagsPh:"标签1, 标签2",allTags:"画布中已有标签",tagHint:"正文里写的 #标签 也会自动识别",
+  tagsMenu:"标签…",tagTitle:"标签",tagsPh:"标签1, 标签2",allTags:"画布中已有标签",tagHint:"标签只用于文献条目",
   imgSize:"导入图片尺寸",fitSel:"把选中图片调成该尺寸",
   fitAllImg:"把所有图片调成该尺寸",px:"px",
   pageLock:"锁定本页",
@@ -1191,6 +1237,11 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pageNoOverlap:"页面不能叠放",pageNewMoved:"新页面放到了旁边的空位",
   thinkMenu:"我想我写",thinkPh:"想到什么就写什么，乱一点、不完整都没关系",
   thinkHint:"打字即保存 · \u2318/Ctrl+Enter 另起一条 · 点已有的一条可以修改",
+  imgDrop:"删除图片，保留文字",imgDropped:"图片已删除，文字留着",
+  bmMenu:"文献信息",bmHead:"Reference details",bmTable:"文献表",bmNoEdit:"用右键「文献信息」修改这条文献",
+  bmNotesRich:"在这里改备注会去掉其中的格式",
+  btSearch:"搜标题、作者、Citation、备注",btExport:"导出表格",btEmpty:"还没有文献条目。给卡片设上「文献条目」角色，它就会出现在这里。",
+  btNone:"没有符合的条目",btGo:"在画布上显示",btCount:"{n} / {m}",
   docDup:"复制这份稿子",docCopySuffix:" 副本",docDupDone:"已复制为「{t}」",
   docLock:"锁定这份稿子（内容与位置）",docUnlock:"解锁这份稿子",docLockOn:"稿子已锁定",docLockOff:"稿子已解锁",
   docLockedNote:"这份稿子已锁定，先在标题上右键解锁",
@@ -1978,6 +2029,7 @@ function normCard(c){
     if(!o.vers.length)delete o.vers;
   }
   if(o.verOn&&!(o.vers||[]).some(v=>v.id===o.verOn))delete o.verOn;
+  if(o.bm!=null){const b=bmNorm(o.bm);if(b)o.bm=b;else delete o.bm}   // 文献信息：只认这几栏，坏值丢掉
   if(o.think!=null){                                // 我想我写：只认 {t,x}，坏数据丢掉，空了就整个去掉
     o.think=Array.isArray(o.think)?o.think.filter(e=>e&&typeof e==="object"&&typeof e.x==="string"&&e.x.trim())
       .map(e=>({t:Number.isFinite(+e.t)&&+e.t>0?+e.t:0,x:e.x})):[];
@@ -3021,7 +3073,7 @@ function syncCap(c0,cap){
 function makeCard(c){
   const s={...S.textDef,...(c.s||{})};
   const el=document.createElement("div");
-  el.className="card"+(c.role==="bib"?" bib":"")+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
+  el.className="card"+(c.role==="bib"?" bib":"")+(bibShows(c)?" bibm":"")+(c.level&&!c.role?" h"+c.level:"")+(sel.includes(c.id)?" sel":"")+(sel.length>1&&sel.includes(c.id)?" multi":"")+(isLocked(c.id)?" lk":"")+(isPinned(c.id)?" lkpos":"");
   el.dataset.id=c.id;
   el.style.left=c.x+"px";el.style.top=c.y+"px";el.style.width=c.w+"px";
   if(c.bg){el.style.background=c.bg;el.style.padding="14px";el.style.borderRadius="3px"}
@@ -3055,7 +3107,10 @@ function makeCard(c){
   if(oc.pdfbook)buildPdfNav(el,c,oc);
   }
   const cap=document.createElement("div");cap.className="cap";
-  if(oc.rich)cap.innerHTML=oc.rich;else cap.textContent=oc.text||"";
+  if(bibShows(c)){                         // 文献条目：只显示标题与 Citation；原来的文字是备注，留在数据里不动
+    const b=oc.bm;
+    cap.innerHTML=(b.title?`<div class="bt">${esc(b.title)}</div>`:"")+(b.cite?`<div class="bc">${esc(b.cite)}</div>`:"");
+  }else if(oc.rich)cap.innerHTML=oc.rich;else cap.textContent=oc.text||"";
   cap.spellcheck=false;cap.dataset.ph=t("placeholder");
   Object.assign(cap.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",fontWeight:s.weight,
     lineHeight:s.lh,letterSpacing:s.spacing+"em",textAlign:s.align,color:s.color,
@@ -3634,6 +3689,7 @@ function measure(){
 function editText(c,ev,elOverride){
   if(lock)return;
   if(isLocked(c.id)){toast(t("lockedNote"));return}
+  if(bibShows(c)&&!elOverride){toast(t("bmNoEdit"));return}   // 画布上显示的是标题与 Citation，不是能直接改的那段文字
   c._tg=cardTags(c).join(",");
   const el=elOverride||nodes.get(c.id)?.querySelector(".cap");if(!el)return;
   editing=true;el.contentEditable="true";el.focus();
@@ -5580,7 +5636,7 @@ async function exportDocx(D,o,tree){
       }
       return;
     }
-    const oc2=orig(c);
+    const oc2=bibView(orig(c),c);
     const txt=(oc2.text||"").split(/\n+/).filter(z=>z.trim());
     const rich=oc2.rich?paraFrom(oc2,D,n.out?{heading:hl(n.out)}:null):null;
     if(rich&&rich.length){
@@ -5866,7 +5922,7 @@ function docMD(o,tree){
     }
     // 存档包里图片原件按真实格式存成 .png 或 .jpg，这里的链接要跟着同一个扩展名（从前一律写 .png，JPEG 的链接是断的）
     if(o.img&&hasImg(oc))lines.push("!["+(t("expImg"))+"]("+(oc.ih?("assets/"+oc.ih+"."+((IMGEXT&&IMGEXT.get(oc.ih))||"png")):"embedded")+")","");
-    const txt=(oc.text||"").split(/\n+/).filter(z=>z.trim());
+    const txt=(bibView(oc,c).text||"").split(/\n+/).filter(z=>z.trim());
     if(n.out){
       lines.push("#".repeat(Math.min(6,n.out+1))+" "+(n.num?n.num+" ":"")+(txt[0]||snippet(oc)),"");
       txt.slice(1).forEach(z=>lines.push(z,""));
@@ -5927,7 +5983,7 @@ function docHTML(o,tree,forPrint){
       return;
     }
     if(o.img&&srcOf(c)){const d=imgDims(c);h+=`<p><img src="${srcOf(c)}" width="${d.w}" height="${d.h}"></p>`}
-    const oc2=orig(c);
+    const oc2=bibView(orig(c),c);
     const txt=(oc2.text||"").split(/\n+/).filter(z=>z.trim());
     if(oc2.rich){
       const body=plainMq(safeRich(oc2.rich));
@@ -8102,12 +8158,11 @@ function syncBar(){
 }
 
 /* ================= tags ================= */
-const TAGRE=/#([\p{L}\p{N}_\-]{1,40})/gu;
+// 标签只属于文献条目（2026-10）：别的卡片即使数据里留着旧标签，也不显示、不参与检索；正文里的 #词 不再当标签
 function cardTags(c0){
+  if(!bibOn(c0))return [];
   const c=orig(c0);
-  const out=new Set((c.tags||[]).map(x=>x.toLowerCase()));
-  (c.text||"").replace(TAGRE,(m,g)=>{out.add(g.toLowerCase());return m});
-  return [...out];
+  return [...new Set((c.tags||[]).map(x=>x.toLowerCase()))];
 }
 function allTags(){
   const m=new Map();
@@ -8119,13 +8174,13 @@ function refreshTagList(){
   $("taglist").innerHTML=allTags().map(([x])=>`<option value="${escA(x)}">`).join("");
 }
 function setCardTags(c,list){
-  const inText=new Set();(c.text||"").replace(TAGRE,(m,g)=>{inText.add(g.toLowerCase());return m});
-  c.tags=[...new Set(list.map(x=>x.trim().replace(/^#/,"").toLowerCase()).filter(Boolean))]
-    .filter(x=>!inText.has(x));
+  const o=orig(c);
+  o.tags=[...new Set(list.map(x=>x.trim().replace(/^#/,"").toLowerCase()).filter(Boolean))];
+  if(!o.tags.length)delete o.tags;
 }
 function openTags(x,y){
   $("pop").classList.remove("wide");
-  const cs=targets().filter(c=>!isLocked(c.id));
+  const cs=targets().filter(c=>!isLocked(c.id)&&bibOn(c));
   if(lock||!cs.length)return;
   const p=$("pop");
   const cur=cs.length===1?cardTags(cs[0]):[];
@@ -8166,6 +8221,222 @@ const thinkOf=c=>{const o=c&&orig(c);return o&&Array.isArray(o.think)?o.think:[]
 const noThink=n=>{if(n)delete n.think;return n};
 function thinkStamp(ms){const d=new Date(ms),p=v=>String(v).padStart(2,"0");
   return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())}
+/* ================= 文献条目的信息（2026-10） =================
+   c.bm = {type,title,names:[…],year,cite,cn,cd}，挂在源卡片上（orig），分身看到同一份。每一栏都可以空着；全空就整个去掉。
+   cite 是正文里的简短引注（如 (Boughlala and Smelik, 2025)），手填。cn 被引次数只存最新一次，cd 是改数字那天的本地日期。
+   链接就是卡片自己的 url，备注就是卡片原来的文字（text/rich），都不另起一套。
+   只有文献条目（bibOn）且填了 title 或 cite 时，画布上才换成「标题 + Citation」显示（bibShows）；
+   取消文献角色时自然恢复显示原文，bm 留在数据里，重新设回文献条目就回来。
+   导出时文献条目输出看到的那一行（bibView）；写作页里的拷贝不管（那是独立段落）。 */
+const bibOn=c=>!!c&&(c.role==="bib"||orig(c).role==="bib");
+const bibShows=c=>{if(!bibOn(c))return false;const b=orig(c).bm;return !!(b&&(b.title||b.cite))};
+function bibView(o,c){
+  if(!bibShows(c))return o;
+  const b=o.bm,v={...o,text:[b.title,b.cite].filter(Boolean).join(" ")};
+  delete v.rich;return v;
+}
+const bmText=o=>{const b=o&&o.bm;if(!b)return "";
+  return [b.type,b.title,(b.names||[]).join(" "),b.year,b.cite].filter(Boolean).join(" ").toLowerCase()};
+function todayStr(){const d=new Date(),p=v=>String(v).padStart(2,"0");return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())}
+function bmNorm(b){
+  if(!b||typeof b!=="object")return null;
+  const str=(v,n)=>typeof v==="string"?v.slice(0,n):(typeof v==="number"&&isFinite(v)?String(v).slice(0,n):"");
+  const o={};
+  ["type","title","year","cite"].forEach(k=>{const v=str(b[k],k==="title"?2000:300).trim();if(v)o[k]=v});
+  if(Array.isArray(b.names)){const n=b.names.map(x=>str(x,300).trim()).filter(Boolean).slice(0,200);if(n.length)o.names=n}
+  if(b.cn!=null&&b.cn!==""&&Number.isFinite(+b.cn)&&+b.cn>=0){o.cn=Math.round(+b.cn);
+    if(typeof b.cd==="string"&&/^\d{4}-\d{2}-\d{2}$/.test(b.cd))o.cd=b.cd}
+  return Object.keys(o).length?o:null;
+}
+// 删除图片、保留文字
+function dropImage(c){
+  const o=orig(c);if(!hasImg(o)||(o.pt&&o.pt.length)||o.pdfbook)return;
+  if(isLocked(c.id)){toast(t("lockedNote"));return}
+  snap();
+  ["ih","src","ar","iw"].forEach(k=>delete o[k]);
+  S.cards.forEach(z=>{if(z===o||z.ref===o.id)delete z.h});   // 量过的高度是带图的，作废，重新量
+  render();save();toast(t("imgDropped"));
+}
+// 文献信息表单：打字即保存，第一次改动时记一次撤销点；关掉时把画布刷一下
+function openBm(x,y,c,onClose){
+  const o0=orig(c);if(!o0||!bibOn(c)||lock)return;
+  const id=o0.id,src=()=>card(id);
+  const ro=isLocked(c.id);
+  const p=$("pop");
+  const b=o0.bm||{};
+  const types=[...new Set(S.cards.filter(z=>bibOn(z)&&!z.ref&&z.bm&&z.bm.type).map(z=>z.bm.type))].sort((a,b2)=>a.localeCompare(b2));
+  const notes=o0.rich?(()=>{const tp=document.createElement("template");tp.innerHTML=o0.rich;return tp.content.textContent})():(o0.text||"");
+  const row=(k,lab,html)=>`<label for="bm_${k}">${lab}</label>${html}`;
+  const inp=(k,v,extra)=>`<input id="bm_${k}" value="${escA(v||"")}" spellcheck="false" ${extra||""} ${ro?"disabled":""}>`;
+  const ta=(k,v,rows)=>`<textarea id="bm_${k}" rows="${rows}" spellcheck="false" ${ro?"disabled":""}>${esc(v||"")}</textarea>`;
+  p.innerHTML=`<div class="hd"><b>${esc(t("bmHead"))}</b><button id="pcx">\u00D7</button></div>
+    <div class="bmf">
+      ${row("type","Type",inp("type",b.type,'list="bm_types" autocomplete="off"'))}
+      <datalist id="bm_types">${types.map(v=>`<option value="${escA(v)}">`).join("")}</datalist>
+      ${row("title","Title",ta("title",b.title,2))}
+      ${row("names","Name(s)",ta("names",(b.names||[]).join("\n"),2))}
+      <div class="sub">One name per line</div>
+      ${row("year","Year",inp("year",b.year))}
+      ${row("cite","Citation",inp("cite",b.cite,'placeholder="(Author, Year)"'))}
+      ${row("cn","Cited by",inp("cn",b.cn!=null?String(b.cn):"",'inputmode="numeric"'))}
+      <div class="sub" id="bm_cd">${b.cd?"Updated "+esc(b.cd):""}</div>
+      ${row("url","Link",inp("url",o0.url,'placeholder="https://"'))}
+      ${row("notes","Notes",ta("notes",notes,4))}
+      ${o0.rich?`<div class="sub">${esc(t("bmNotesRich"))}</div>`:""}
+    </div>`;
+  p.classList.remove("wide");p.classList.add("bm");
+  p.dataset.bmNow="1";place(p,Math.min(x,innerWidth-360),Math.max(12,Math.min(y,innerHeight-560)));delete p.dataset.bmNow;
+  p.classList.add("on");
+  let snapped=false,dirty=false;
+  const close=()=>{p.classList.remove("on","bm");if(dirty){render();save()}if(onClose)onClose()};
+  p.querySelector("#pcx").onclick=close;
+  if(ro){if(onClose){const o2=e=>{if(!p.contains(e.target)){removeEventListener("pointerdown",o2,true);setTimeout(onClose,0)}};addEventListener("pointerdown",o2,true)}return}
+  const touch=()=>{if(!snapped){snap();snapped=true}dirty=true};
+  const set=(k,v)=>{
+    const o=src();if(!o)return;
+    const nb={...(o.bm||{})};
+    if(k==="names")nb.names=v.split("\n").map(z=>z.trim()).filter(Boolean);
+    else if(k==="cn"){const n=v.trim();
+      if(n===""){delete nb.cn;delete nb.cd}
+      else if(Number.isFinite(+n)&&+n>=0){if(+n!==nb.cn){nb.cn=Math.round(+n);nb.cd=todayStr()}}
+      else return;
+      const cdEl=p.querySelector("#bm_cd");if(cdEl)cdEl.textContent=nb.cd?"Updated "+nb.cd:"";}
+    else nb[k]=v;
+    const clean=bmNorm(nb);if(clean)o.bm=clean;else delete o.bm;
+  };
+  ["type","title","names","year","cite","cn"].forEach(k=>{
+    const el=p.querySelector("#bm_"+k);
+    el.addEventListener("input",()=>{touch();set(k,el.value);save()});
+  });
+  const urlEl=p.querySelector("#bm_url");
+  urlEl.addEventListener("input",()=>{touch();const o=src();if(!o)return;const u=normUrl(urlEl.value.trim());if(u)o.url=u;else delete o.url;save()});
+  const nEl=p.querySelector("#bm_notes");
+  nEl.addEventListener("input",()=>{touch();const o=src();if(!o)return;o.text=nEl.value;delete o.rich;save()});
+  // 表单里的按键、粘贴不能漏到画布上（Delete 会删卡片）；Esc 关闭
+  p.querySelectorAll("input,textarea").forEach(el=>["keydown","paste","copy","cut"].forEach(k=>el.addEventListener(k,e=>{
+    e.stopPropagation();
+    if(k==="keydown"&&e.key==="Escape"){e.preventDefault();close()}
+  })));
+  // 点到面板外面也算关闭：刷新画布让卡片换上新的显示
+  const outside=e=>{if(!p.contains(e.target)){removeEventListener("pointerdown",outside,true);
+    if(dirty){dirty=false;setTimeout(()=>{render();save()},0)}if(onClose)setTimeout(onClose,0)}};
+  addEventListener("pointerdown",outside,true);
+  setTimeout(()=>{const f=p.querySelector("#bm_title");if(f){f.focus();f.selectionStart=f.selectionEnd=f.value.length}},0);   // 光标放到末尾，接着写不会插到前面
+}
+/* ---- 文献表 ----
+   所有文献条目（只算源卡片，分身不重复）一行一条。只看不改：双击一行打开「文献信息」，行尾箭头跳到画布上那张卡片。
+   点列名排序（再点倒序），搜索框搜标题、作者、Citation、备注、类型、年份；类型按钮多选时满足其一即可，标签按钮多选时要全都有。
+   「导出表格」导出当前筛选、排序后的结果为 CSV（带 BOM，Excel 直接认中文），只出不进。列名中英文都用英文。 */
+const BT={sort:"title",dir:1,q:"",types:new Set(),tags:new Set(),sel:null};
+function btRows(){
+  return S.cards.filter(c=>c.role==="bib"&&!c.ref).map(c=>{
+    const b=c.bm||{},f=frameOf(c);
+    return {c,id:c.id,title:b.title||"",fallback:b.title?"":snippet(c,60),names:(b.names||[]).join("; "),year:b.year||"",
+      type:b.type||"",cite:b.cite||"",cn:b.cn!=null?b.cn:null,cd:b.cd||"",tags:cardTags(c),quotes:bibKids(c.id).length,
+      page:f?(f.title||t("pageDefault")):"",url:c.url||"",notes:c.rich?(()=>{const tp=document.createElement("template");tp.innerHTML=c.rich;return tp.content.textContent})():(c.text||"")};
+  });
+}
+function btView(){
+  const q=BT.q.trim().toLowerCase();
+  let rows=btRows().filter(r=>{
+    if(BT.types.size&&!BT.types.has(r.type))return false;
+    for(const g of BT.tags)if(!r.tags.includes(g))return false;
+    if(q&&![r.title,r.fallback,r.names,r.cite,r.notes,r.type,r.year].join(" ").toLowerCase().includes(q))return false;
+    return true;
+  });
+  const k=BT.sort,num=k==="cn"||k==="quotes"||k==="year";
+  const val=r=>k==="title"?(r.title||r.fallback):k==="tags"?r.tags.join(" "):r[k];
+  rows.sort((a,b)=>{
+    const x=val(a),y=val(b),ex=x===null||x==="",ey=y===null||y==="";
+    if(ex||ey)return ex&&ey?0:ex?1:-1;                  // 空的永远排在最后
+    const d=num&&Number.isFinite(parseFloat(x))&&Number.isFinite(parseFloat(y))?parseFloat(x)-parseFloat(y)
+      :String(x).localeCompare(String(y),undefined,{numeric:true,sensitivity:"base"});
+    return d*BT.dir;
+  });
+  return rows;
+}
+const BTCOLS=[["title","Title"],["names","Name(s)"],["year","Year"],["type","Type"],["cite","Citation"],["cn","Cited by"],
+  ["tags","Tags"],["quotes","Quotes"],["page","Page"]];
+function drawBibTable(){
+  const box=$("bibt");if(!box)return;
+  const all=btRows(),rows=btView();
+  const types=[...new Set(all.map(r=>r.type).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const tags=[...new Set(all.flatMap(r=>r.tags))].sort((a,b)=>a.localeCompare(b));
+  [...BT.types].forEach(v=>{if(!types.includes(v))BT.types.delete(v)});
+  [...BT.tags].forEach(v=>{if(!tags.includes(v))BT.tags.delete(v)});
+  const cell=r=>[
+    r.title?`<td class="t">${esc(r.title)}</td>`:`<td class="t dim">${esc(r.fallback)}</td>`,
+    `<td>${esc(r.names)}</td>`,`<td class="num">${esc(r.year)}</td>`,`<td>${esc(r.type)}</td>`,`<td>${esc(r.cite)}</td>`,
+    `<td class="num">${r.cn!=null?esc(String(r.cn))+(r.cd?` <span style="opacity:.45">${esc(r.cd)}</span>`:""):""}</td>`,
+    `<td>${esc(r.tags.join(", "))}</td>`,`<td class="num">${r.quotes||""}</td>`,`<td>${esc(r.page)}</td>`,
+    `<td><button class="go" data-go="${escA(r.id)}" title="${escA(t("btGo"))}">\u2192</button></td>`].join("");
+  box.querySelector(".btw").innerHTML=!all.length?`<div class="empty">${esc(t("btEmpty"))}</div>`
+    :`<table><thead><tr>${BTCOLS.map(([k,l])=>`<th data-k="${k}">${l}${BT.sort===k?`<span class="ar">${BT.dir>0?"\u2191":"\u2193"}</span>`:""}</th>`).join("")}<th></th></tr></thead>
+      <tbody>${rows.map(r=>`<tr data-id="${escA(r.id)}" class="${BT.sel===r.id?"on":""}">${cell(r)}</tr>`).join("")}</tbody></table>
+      ${rows.length?"":`<div class="empty">${esc(t("btNone"))}</div>`}`;
+  box.querySelector(".btf").innerHTML=(types.length?`<span class="lab">Type</span>`+types.map(v=>`<button data-ty="${escA(v)}" class="${BT.types.has(v)?"on":""}">${esc(v)}</button>`).join(""):"")
+    +(tags.length?`<span class="lab" style="margin-left:10px">Tags</span>`+tags.map(v=>`<button data-tg="${escA(v)}" class="${BT.tags.has(v)?"on":""}">${esc(v)}</button>`).join(""):"");
+  box.querySelector(".n").textContent=all.length?t("btCount").replace("{n}",rows.length).replace("{m}",all.length):"";
+}
+function openBibTable(){
+  let box=$("bibt");
+  if(!box){
+    box=document.createElement("div");box.id="bibt";
+    box.innerHTML=`<div class="bth"><b>Bibliography</b><span class="n"></span>
+      <input class="q" spellcheck="false"><button class="ex"></button><button class="x" title="Esc">\u00D7</button></div>
+      <div class="btf"></div><div class="btw"></div>`;
+    document.body.appendChild(box);
+    const q=box.querySelector(".q");
+    q.addEventListener("input",()=>{BT.q=q.value;drawBibTable()});
+    ["keydown","paste","copy","cut"].forEach(k=>q.addEventListener(k,e=>e.stopPropagation()));
+    box.querySelector(".x").onclick=closeBibTable;
+    box.querySelector(".ex").onclick=exportBibCSV;
+    box.addEventListener("pointerdown",e=>e.stopPropagation());   // 表里的按下不往画布上冒（框选、拖动）
+    box.addEventListener("contextmenu",e=>{e.preventDefault();e.stopPropagation()});
+    box.addEventListener("wheel",e=>e.stopPropagation(),{passive:true});
+    box.addEventListener("click",e=>{
+      const th=e.target.closest("th[data-k]");
+      if(th){const k=th.dataset.k;if(BT.sort===k)BT.dir=-BT.dir;else{BT.sort=k;BT.dir=1}drawBibTable();return}
+      const ty=e.target.closest("button[data-ty]");
+      if(ty){const v=ty.dataset.ty;BT.types.has(v)?BT.types.delete(v):BT.types.add(v);drawBibTable();return}
+      const tg=e.target.closest("button[data-tg]");
+      if(tg){const v=tg.dataset.tg;BT.tags.has(v)?BT.tags.delete(v):BT.tags.add(v);drawBibTable();return}
+      const go=e.target.closest("button[data-go]");
+      if(go){const c=card(go.dataset.go);closeBibTable();if(c){sel=[c.id];selLink=null;paintSel();focusOn([c])}return}
+      const tr=e.target.closest("tr[data-id]");
+      if(tr){BT.sel=tr.dataset.id;box.querySelectorAll("tr.on").forEach(z=>z.classList.remove("on"));tr.classList.add("on")}
+    });
+    box.addEventListener("dblclick",e=>{
+      const tr=e.target.closest("tr[data-id]");if(!tr||e.target.closest("button"))return;
+      const c=card(tr.dataset.id);if(!c)return;
+      openBm(Math.min(e.clientX,innerWidth-360),e.clientY,c,()=>{if($("bibt").classList.contains("on"))drawBibTable()});
+    });
+  }
+  box.querySelector(".q").placeholder=t("btSearch");box.querySelector(".q").value=BT.q;
+  box.querySelector(".ex").textContent=t("btExport");
+  if(wrOpenState())closeWrite();
+  box.classList.add("on");
+  drawBibTable();
+  addEventListener("keydown",btKey,true);
+}
+function btKey(e){
+  if(e.key!=="Escape")return;
+  if($("pop").classList.contains("on"))return;     // 表单开着：Esc 先关表单（表单自己处理）
+  e.preventDefault();e.stopPropagation();closeBibTable();
+}
+function closeBibTable(){
+  const box=$("bibt");if(box)box.classList.remove("on");
+  removeEventListener("keydown",btKey,true);
+}
+// CSV：当前筛选、排序后的结果。以 = + - @ 开头的格子前面加一个 '，免得 Excel 把它当公式执行
+function exportBibCSV(){
+  const rows=btView();
+  const cell=v=>{let x=v==null?"":String(v);if(/^[=+\-@\t\r]/.test(x))x="'"+x;return '"'+x.replace(/"/g,'""')+'"'};
+  const head=["Title","Name(s)","Year","Type","Citation","Cited by","Cited by date","Tags","Quotes","Page","Link","Notes"];
+  const lines=[head.map(cell).join(",")].concat(rows.map(r=>[r.title,r.names,r.year,r.type,r.cite,r.cn,r.cd,r.tags.join("; "),
+    r.quotes,r.page,r.url,r.notes].map(cell).join(",")));
+  dl(new Blob(["\uFEFF"+lines.join("\r\n")],{type:"text/csv;charset=utf-8"}),"Bibliography "+todayStr()+".csv");
+}
 function openThink(x,y,c){
   const s0=c&&orig(c);if(!s0||docOnly(s0))return;
   const sid=s0.id,src=()=>card(sid);         // 每次现取：撤销会换掉卡片对象
@@ -8270,6 +8541,7 @@ function runFind(){
   hits=!q?[]:S.cards.filter(c=>S.findMode==="tag"
     ? cardTags(c).some(x=>x.includes(q))
     : ((orig(c).text||"").toLowerCase().includes(q)||(orig(c).url||"").toLowerCase().includes(q)
+       ||(bibOn(c)&&bmText(orig(c)).includes(q))
        ||cardTags(c).some(x=>x.includes(q))));
   if(S.findMerge){                       // 合并同一内容，只保留源或第一处
     const seen=new Set();
@@ -10857,6 +11129,7 @@ addEventListener("pointermove",e=>{
   if(inside)keepSub();else{clearTimeout(subT);subT=setTimeout(()=>closeFrom(1),320)}
 },true);
 function place(el,x,y){
+  if(el&&el.id==="pop"&&!el.dataset.bmNow)el.classList.remove("bm");   // 文献信息表单的宽度只给它自己用
   el.classList.add("on");el.style.left="0px";el.style.top="0px";el.scrollTop=0;
   const r=el.getBoundingClientRect();
   el.style.left=Math.max(6,Math.min(x,innerWidth-r.width-8))+"px";
@@ -11043,6 +11316,7 @@ function boardMenu(x,y){
     {label:t("zoom100"),key:"0",on:()=>camTo(tgt.x,tgt.y,1)},
     {label:t("search"),key:"⌘F",on:()=>showFind(true)},
     {label:t("mapMenu"),key:"M",check:mapOn,on:toggleMap},
+    {label:t("bmTable"),on:openBibTable},
     "-",
     {label:t("fileMenu"),sub:fileItems(x,y)},
     {label:t("viewMenu"),sub:viewItems(x,y)},
@@ -11069,7 +11343,9 @@ function cardItems(x,y){
   const one=sel.length===1?card(sel[0]):null;
   const items=[
     {label:t("zoomTo"),key:"Z",on:focusSel},
-    {label:t("tagsMenu"),on:()=>openTags(x,y)},
+    // 标签只给文献条目（2026-10）；文献条目多一项「文献信息」
+    ...(sel.length&&sel.map(card).every(z=>z&&bibOn(z))?[{label:t("tagsMenu"),on:()=>openTags(x,y)}]:[]),
+    ...(one&&bibOn(one)?[{label:t("bmMenu"),on:()=>openBm(x,y,one)}]:[]),
     ...(one&&!docOnly(one)?[{label:t("thinkMenu"),on:()=>openThink(x,y,one)}]:[]),
     {label:t("level"),sub:[{head:t("level")},
       ...[[0,"lvNone"],[1,"lv1"],[2,"lv2"],[3,"lv3"],[4,"lv4"],[5,"lv5"]].map(([v,k])=>({label:t(k),
@@ -11084,6 +11360,9 @@ function cardItems(x,y){
   // PDF 页面：选中就能划选；锁定则是"钉住不动，随时能划选"，适合长时间读一页
   if(one&&one.pt&&one.pt.length)items.push({label:t("pdfRead"),check:isPinned(one.id),
     on:()=>setCardLock([one.id],isPinned(one.id)?null:"all")});
+  // 删除图片、保留文字：同一张卡片，绑定、分身、连线都不断。PDF 页面不给（文字层是贴在图上的）
+  if(one&&hasImg(orig(one))&&!(orig(one).pt&&orig(one).pt.length)&&!orig(one).pdfbook)
+    items.push({label:t("imgDrop"),on:()=>dropImage(one)});
   if(one&&hasImg(one))items.push({label:t("replaceImage"),on:()=>{
     const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
     inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,async(d,w,h)=>{snap();
@@ -11209,7 +11488,7 @@ function setStyle(k,v){
 }
 addEventListener("pointerdown",e=>{
   if(!e.target.closest("#pop")&&!e.target.closest("#menu")&&!e.target.closest("#submenu"))
-    $("pop").classList.remove("on");
+    $("pop").classList.remove("on","bm");     // bm 是文献信息表单自己的宽度，关掉时一起去掉，免得带到下一个弹层
   if(!e.target.closest("#bar")){endSizeEdit(false);closePops()}
   else if(!e.target.closest("#szi"))endSizeEdit(false);
 },true);
