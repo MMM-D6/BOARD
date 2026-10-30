@@ -254,6 +254,7 @@
     border:1px solid color-mix(in srgb,var(--frame) 28%,transparent)}
   .card.bibm .cap .bt{font-size:1.15em;font-weight:600;line-height:1.3}
   .card.bibm .cap .bc{font-size:.8em;font-weight:400;opacity:.62;margin-top:4px}
+  .card.bibm .cap .bn{font-size:.72em;font-weight:400;opacity:.45;margin-top:2px}
   body.lock .card .twin{display:none}
   .card .lvl{position:absolute;left:0;top:calc(-16px * var(--iz));opacity:.38;
     font:500 calc(9px * var(--iz))/1 "IBM Plex Mono",monospace;letter-spacing:.12em}
@@ -3109,7 +3110,8 @@ function makeCard(c){
   const cap=document.createElement("div");cap.className="cap";
   if(bibShows(c)){                         // 文献条目：只显示标题与 Citation；原来的文字是备注，留在数据里不动
     const b=oc.bm;
-    cap.innerHTML=(b.title?`<div class="bt">${esc(b.title)}</div>`:"")+(b.cite?`<div class="bc">${esc(b.cite)}</div>`:"");
+    cap.innerHTML=(b.title?`<div class="bt">${esc(b.title)}</div>`:"")+(b.cite?`<div class="bc">${esc(b.cite)}</div>`:"")
+      +(b.cn!=null?`<div class="bn">Cited by ${esc(String(b.cn))}</div>`:"");   // 被引次数：灰色小字，只显示数字，日期在表单和文献表里
   }else if(oc.rich)cap.innerHTML=oc.rich;else cap.textContent=oc.text||"";
   cap.spellcheck=false;cap.dataset.ph=t("placeholder");
   Object.assign(cap.style,{fontFamily:famCSS(s.family),fontSize:s.size+"px",fontWeight:s.weight,

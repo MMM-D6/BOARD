@@ -1722,6 +1722,8 @@ group("bib 文献信息、标签、删除图片、文献表（2026-10）", async
   c.ok("卡片上只显示标题和 Citation", look.cls && look.bt === "Digital 3D fashion designers" && look.bc === "(Särmäkari, 2021)" && !look.txt.includes("Scholar screenshot"));
   c.ok("标题比默认字号大，Citation 比标题小", look.big && look.small);
   c.ok("外面有一圈细框", look.frame === "1px");
+  const cnl = await c.run(() => { const el = nodes.get("b1"), bn = el.querySelector(".cap .bn"), bc = el.querySelector(".cap .bc"); return bn && { tx: bn.textContent, smaller: parseFloat(getComputedStyle(bn).fontSize) < parseFloat(getComputedStyle(bc).fontSize), lighter: +getComputedStyle(bn).opacity < +getComputedStyle(bc).opacity, last: bn === el.querySelector(".cap").lastElementChild }; });
+  c.ok("卡片上显示 Cited by 数字：灰色小字，在 Citation 下面", !!cnl && cnl.tx === "Cited by 123" && cnl.smaller && cnl.lighter && cnl.last);
   c.ok("分身显示的跟主卡片一样", await c.run((tw) => nodes.get(tw).querySelector(".cap .bt").textContent === "Digital 3D fashion designers", tw));
   // 双击不进入打字
   await c.run(() => { editText(card("b1")); });
@@ -1734,6 +1736,8 @@ group("bib 文献信息、标签、删除图片、文献表（2026-10）", async
   await c.run(() => { $("pop").classList.remove("on", "bm"); });
   // 撤销
   await c.run(() => applyUndo(undo, redo)); 
+  c.ok("没填被引次数的文献卡片不显示这一行", await c.run(() => { card("b3").bm = { title: "No count" }; render(); const r = !nodes.get("b3").querySelector(".cap .bn"); delete card("b3").bm; render(); return r; }));
+  c.ok("导出不带被引次数（只输出标题和 Citation）", await c.run(() => !docMD({ title: "T", img: false, tags: false, byPageDoc: false }, buildTree([card("b1")])).includes("Cited by")));
   c.ok("一次撤销回到填表之前", await c.run(() => !card("b1").bm && !card("b1").url));
   await c.run(() => { applyUndo(redo, undo); render(); });
   // 取消文献角色：恢复显示原文，信息留着
