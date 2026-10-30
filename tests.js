@@ -1417,6 +1417,238 @@ group("lv5 标题层级加到五级（2026-10）", async (c) => {
   c.ok("中英文案都齐了", await c.run(() => ["lv4", "lv5", "lvShort4", "lvShort5"].every((k) => T.en[k] && T.zh[k])));
 });
 
+group("wrjump 写作页重绘不跳（2026-10）", async (c) => {
+  // 切换版本、改层级、点 + 之后，眼前那一段要留在原地，不能被往上或往下弹一截
+  const long = "Long version. " + "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(8);
+  const setup = (focus) => c.run(([focus, long]) => {
+    const cs = []; for (let i = 0; i < 40; i++) cs.push({ id: "p" + i, x: 0, y: i * 100, w: 400, text: "Paragraph " + i + " short.", s: {} });
+    S.cards = cs; S.links = []; S.frames = []; render(); S.docs = [];
+    const d = addDoc({ x: -3000, y: 0 }, "稿子");
+    sel = cs.map((z) => z.id); clipCards("copy"); wrPasteMain(d, 0);
+    // 每段两个版本：第二版长很多
+    d.ids.forEach((id) => { const c = card(id); verNew(c, true); const o = orig(c); o.text = long; delete o.rich; verStash(o); });
+    sel = []; render(); camTo(2400, 0, 1, true);
+    if (focus) openWrite(d.id);
+    return d.ids.slice();
+  }, [focus, long]);
+  const boxSel = (focus) => (focus ? "#wrmain" : "#docs .dbody");
+  for (const focus of [false, true]) {
+    const name = focus ? "专注模式" : "画布上的稿子";
+    await setup(focus); await c.wait(700);
+    await c.run((b) => { document.querySelector(b).scrollTop = 2500; }, boxSel(focus)); await c.wait(200);
+    // 视野中间一段的「第一版」按钮（当前是第二版，切回去会变短）
+    const tgt = await c.run((b) => {
+      const bx = document.querySelector(b), br = bx.getBoundingClientRect();
+      const blk = [...bx.querySelectorAll(".blk")].find((z) => { const r = z.getBoundingClientRect(); return r.top > br.top + 120 && r.top < br.bottom - 200 && z.querySelector(".vv"); });
+      const v = [...blk.querySelectorAll(".vv")].find((z) => !z.classList.contains("on"));
+      const r = v.getBoundingClientRect();
+      return { id: blk.dataset.id, x: r.x + r.width / 2, y: r.y + r.height / 2, top: blk.getBoundingClientRect().top };
+    }, boxSel(focus));
+    await c.page.mouse.click(tgt.x, tgt.y); await c.wait(300);
+    const after = await c.run(([b, id]) => document.querySelector(b + ' .blk[data-id="' + id + '"]').getBoundingClientRect().top, [boxSel(focus), tgt.id]);
+    c.ok(name + "：切换版本后这一段留在原地", Math.abs(after - tgt.top) <= 2);
+    // 改层级、点 +：同一段仍在原地
+    await c.run((id) => { sel = [id]; paintSel(); setLevel(2); }, tgt.id); await c.wait(300);
+    const after2 = await c.run(([b, id]) => document.querySelector(b + ' .blk[data-id="' + id + '"]').getBoundingClientRect().top, [boxSel(focus), tgt.id]);
+    c.ok(name + "：改层级后这一段留在原地", Math.abs(after2 - tgt.top) <= 2);
+    if (focus) await c.run(() => closeWrite());
+  }
+});
+
+group("hstyle 每份稿子的标题样式（2026-10）", async (c) => {
+  await c.board([
+    { id: "h1", x: 0, y: 0, w: 400, text: "Chapter", s: {} },
+    { id: "h2", x: 0, y: 100, w: 400, text: "Section", s: {} },
+    { id: "h5", x: 0, y: 200, w: 400, text: "Fifth", s: {} },
+    { id: "p", x: 0, y: 300, w: 400, text: "Body text.", s: {} },
+    { id: "cv", x: 0, y: 500, w: 400, text: "Canvas heading", s: {} },
+  ], []);
+  const ids = await c.run(() => {
+    [["h1", 1], ["h2", 2], ["h5", 5], ["cv", 2]].forEach(([id, v]) => { sel = [id]; setLevel(v); });
+    S.docs = [];
+    const d = addDoc({ x: -3000, y: 0 }, "稿子 A");
+    sel = ["h1", "h2", "h5", "p"]; clipCards("copy"); wrPasteMain(d, 0);
+    const d2 = addDoc({ x: -3000, y: 1500 }, "稿子 B");
+    sel = ["h2"]; clipCards("copy"); wrPasteMain(d2, 0);
+    // 第一段标题里有一段局部的字号和颜色，加一处加粗和高亮
+    const o = card(d.ids[0]); o.rich = 'Ch<span style="font-size: 40px; color: rgb(200, 0, 0);">ap</span><b>ter</b><span style="background-color: rgb(255, 242, 160);">!</span>'; o.text = "Chapter!";
+    // 第二段有两个版本
+    verNew(card(d.ids[1]), true);
+    sel = []; render(); camTo(2400, 0, 1, true); undo.length = 0;
+    return { d: d.id, d2: d2.id, a: d.ids.slice(), b: d2.ids.slice() };
+  });
+  await c.wait(400);
+  const before = await c.run((d) => JSON.stringify(docs().find((z) => z.id === d)), ids.d);
+  const pane = (d) => c.run((d) => { const root = document.querySelector('#docs .doc[data-id="' + d + '"]'); const trig = [...root.querySelectorAll(".fmtbar .fx")].find((z) => z.title === t("hsMenu")); const r = trig.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, d);
+  const clickIn = (d, sel2, idx) => c.run(([d, sel2, idx]) => { const root = document.querySelector('#docs .doc[data-id="' + d + '"] .fpop.hs'); const el = root.querySelectorAll(sel2)[idx || 0]; el.scrollIntoView({ block: "nearest" }); const r = el.getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, [d, sel2, idx]);
+  const click = async (pt) => { await c.page.mouse.click(pt.x, pt.y); await c.wait(80); };
+
+  let p = await pane(ids.d); await click(p);
+  const open1 = await c.run((d) => { const pop = document.querySelector('#docs .doc[data-id="' + d + '"] .fpop.hs'); return { on: pop.classList.contains("on"), prev: pop.querySelectorAll(".hsprev").length }; }, ids.d);
+  c.ok("写作页工具栏上有「标题样式」，打开后五级预览都在", open1.on && open1.prev === 5);
+  c.ok("面板整个落在稿子的可见范围里（不会被切掉）", await c.run((d) => { const root = document.querySelector('#docs .doc[data-id="' + d + '"]'); const pop = root.querySelector(".fpop.hs").getBoundingClientRect(), w = root.querySelector(".dwrap").getBoundingClientRect(); return pop.bottom <= w.bottom + 1 && pop.right <= w.right + 1; }, ids.d));
+  c.ok("只是打开面板，稿子数据一个字节都没变", (await c.run((d) => JSON.stringify(docs().find((z) => z.id === d)), ids.d)) === before);
+
+  // 选二级：字号 +3、改蓝色、关加粗、开斜体、换字体
+  await click(await clickIn(ids.d, ".hsprev", 1));
+  for (let i = 0; i < 3; i++) await click(await clickIn(ids.d, ".hsrow button.k", 1));
+  await click(await clickIn(ids.d, ".hsrow .sws button", 8));
+  await click(await clickIn(ids.d, ".hsrow button.k", 2));
+  await click(await clickIn(ids.d, ".hsrow button.k", 3));
+  await click(await clickIn(ids.d, ".hsrow button.k", 4));
+  const ff = await c.run((d) => { const items = [...document.querySelectorAll('#docs .doc[data-id="' + d + '"] .fpop.hs .scroll .item')]; const i = items.findIndex((z) => z.textContent === famName("newsreader")); return i; }, ids.d);
+  await click(await clickIn(ids.d, ".scroll .item", ff));
+  const hs = await c.run((d) => docs().find((z) => z.id === d).hs, ids.d);
+  c.ok("改动点了就记进这份稿子：二级蓝色、不加粗、斜体、Newsreader", hs && hs[2].color === "#1B4F9C" && hs[2].bold === false && hs[2].italic === true && hs[2].family === "newsreader");
+  c.ok("五级都定下来了", hs && [1, 2, 3, 4, 5].every((v) => hs[v] && hs[v].size));
+  c.ok("面板一直开着，可以连续调", await c.run((d) => document.querySelector('#docs .doc[data-id="' + d + '"] .fpop.hs').classList.contains("on"), ids.d));
+  c.ok("还没点套用，段落都没变", await c.run((a) => !card(a[1]).s.hsw && !card(a[0]).s.hsw, ids.a));
+  const size2 = hs[2].size;
+  // 五级改成与正文同大、蓝色
+  await click(await clickIn(ids.d, ".hsprev", 4));
+  await click(await clickIn(ids.d, ".hsrow .sws button", 8));
+  await click(await clickIn(ids.d, ".go"));
+  await c.wait(200);
+  const ap = await c.run((a) => a.map((id) => ({ s: card(id).s, rich: card(id).rich || "", vers: (card(id).vers || []).map((v) => v.s) })), ids.a);
+  c.ok("套用：二级段落拿到字号、颜色、斜体、字体、不加粗", ap[1].s.size === size2 && ap[1].s.color === "#1B4F9C" && ap[1].s.italic === true && ap[1].s.family === "newsreader" && ap[1].s.weight === 400 && ap[1].s.hsw === 1);
+  c.ok("套用：二级段落的各个版本也一起改了", ap[1].vers.length >= 2 && ap[1].vers.every((v) => v.color === "#1B4F9C" && v.size === size2));
+  c.ok("套用：五级蓝色", ap[2].s.color === "#1B4F9C");
+  c.ok("套用：正文段落完全没动", !ap[3].s.hsw && ap[3].s.color !== "#1B4F9C");
+  c.ok("标题里局部的字号和颜色被清掉，加粗和高亮留着", !/font-size|rgb\(200, 0, 0\)/.test(ap[0].rich) && /<b>ter<\/b>/.test(ap[0].rich) && /background-color/.test(ap[0].rich));
+  const shown = await c.run((a) => { const el = document.querySelector('#docs .cap[data-id="' + a[1] + '"]'); const cs = getComputedStyle(el); return { w: cs.fontWeight, col: cs.color, it: cs.fontStyle }; }, ids.a);
+  c.ok("写作页里看到的就是设定：不加粗、蓝色、斜体", shown.w === "400" && shown.col === "rgb(27, 79, 156)" && shown.it === "italic");
+  c.ok("另一份稿子不受影响", await c.run((b) => !card(b[0]).s.hsw && !docs().find((z) => z.id !== docs()[0].id).hs, ids.b));
+  c.ok("画布上的卡片不受影响", await c.run(() => !card("cv").s.hsw && !card("h2").s.hsw));
+  // 切换版本：样式不回去
+  await c.run((a) => { const c0 = card(a[1]); const v = c0.vers.find((z) => z.id !== c0.verOn); verUse(c0, v.id); redrawDocs(); }, ids.a);
+  c.ok("切到另一个版本，标题样式不会回去", await c.run((a) => card(a[1]).s.color === "#1B4F9C" && card(a[1]).s.hsw === 1, ids.a));
+  // 撤销一步回到套用之前
+  await c.run(() => applyUndo(undo, redo)); await c.run(() => applyUndo(undo, redo));
+  c.ok("Ctrl+Z 撤回套用", await c.run((a) => !card(a[1]).s.hsw && /font-size/.test(card(a[0]).rich || ""), ids.a));
+  await c.run(() => applyUndo(redo, undo)); await c.run(() => applyUndo(redo, undo));
+
+  // 新设成标题的段落自动套用
+  await c.run((a) => { sel = [a[3]]; setLevel(2); }, ids.a);
+  c.ok("这份稿子里新设成二级的段落自动套用二级样式", await c.run((a) => card(a[3]).s.color === "#1B4F9C" && card(a[3]).s.hsw === 1, ids.a));
+  await c.run((a) => { sel = [a[3]]; setLevel(0); }, ids.a);
+  c.ok("改回正文：颜色、斜体、字体回到正文默认", await c.run((a) => { const s = card(a[3]).s, b = { ...DEF, ...S.textDef }; return !s.hsw && s.color === b.color && !!s.italic === !!b.italic && s.family === b.family; }, ids.a));
+  await c.run((b) => { sel = [b[0]]; setLevel(3); }, ids.b);
+  c.ok("没设过标题样式的稿子，设层级跟从前一样", await c.run((b) => !card(b[0]).s.hsw, ids.b));
+
+  // 单独微调一段仍然生效；再套用就重新统一
+  await c.run((a) => { sel = [a[1]]; paintSel(); setStyle("size", 50); }, ids.a);
+  c.ok("套用之后单独改一段的字号照样生效", await c.run((a) => card(a[1]).s.size === 50, ids.a));
+  await c.run((d) => hsApply(docs().find((z) => z.id === d)), ids.d);
+  c.ok("再点套用重新统一", await c.run(([a, sz]) => card(a[1]).s.size === sz, [ids.a, size2]));
+
+  // 锁定的段落跳过
+  await c.run((a) => { card(a[2]).lock = "text"; const d = docs()[0]; d.hs[5].color = "#A01B14"; hsApply(d); }, ids.a);
+  c.ok("锁定的段落套用时跳过", await c.run((a) => card(a[2]).s.color === "#1B4F9C", ids.a));
+  await c.run((a) => { delete card(a[2]).lock; }, ids.a);
+
+  // 画布上的「分级统一」不再碰写作页的段落
+  await c.run(() => { sel = ["cv"]; paintSel(); card("cv").s = { ...card("cv").s, color: "#7A1F6B" }; unifyLevel(2, false); });
+  c.ok("画布的「分级统一」只改画布，不碰稿子里的标题", await c.run((a) => card("cv").s.color === "#7A1F6B" && card("h2").s.color === "#7A1F6B" && card(a[1]).s.color === "#1B4F9C", ids.a));
+
+  // 导出：网页/PDF 跟着样式走；Word 用的格式参数
+  const ex = await c.run(() => wrHTML(docs()[0], {}));
+  c.ok("网页/PDF 导出里二级标题是蓝色、斜体、不加粗", /color:\s*#1B4F9C/i.test(ex) && /font-style:\s*italic/.test(ex) && /font-weight:\s*400/.test(ex));
+  const run = await c.run((a) => hsRun(card(a[1]), 2), ids.a);
+  c.ok("Word 导出带上字号、颜色、斜体、字体，不加粗", run && run.size === Math.round(size2 * 1.5) && run.color === "1b4f9c" && run.italics === true && run.bold === false && run.font === "Newsreader");
+  c.ok("没套用过的标题，Word 导出跟从前一样不额外带格式", await c.run((b) => hsRun(card(b[0]), 3) === null, ids.b));
+
+  // 存取
+  c.ok("标题样式随文件保存并能读回", await c.run(async () => { const b = JSON.parse(JSON.stringify(bundle(null))); await absorb(b, false); return !!docs()[0].hs && docs()[0].hs[2].color === "#1B4F9C"; }));
+  c.ok("读文件时坏的标题样式被清掉", await c.run(() => { const r = hsNorm({ 1: { size: 30, bold: 1, color: "javascript:x", family: "nope" }, 2: { size: "abc" }, 9: { size: 20 } }); return r && Object.keys(r).join() === "1" && r[1].bold === true && r[1].color !== "javascript:x" && FONTS.some((f) => f[0] === r[1].family) && hsNorm({ 2: { size: 1 } }) === null; }));
+  c.ok("hsCleanRich 只剩纯文字时返回空，迷你分身保留", await c.run(() => hsCleanRich('<span style="color: red;">a</span>') === "" && hsCleanRich('<span class="mq" data-q="q" contenteditable="false">x</span>').includes('data-q="q"')));
+  c.ok("中英文案都齐了", await c.run(() => ["hsMenu", "hsHead", "hsApply", "hsApplied", "hsSkipped", "hsNone", "hsSize", "hsColour", "hsFont", "hsNote"].every((k) => T.en[k] && T.zh[k])));
+});
+
+group("docdup 复制与锁定整份稿子（2026-10）", async (c) => {
+  await c.board([
+    { id: "src", x: 0, y: -1500, w: 400, text: "Source note with digital garments.", s: {} },
+    { id: "h1", x: 0, y: 0, w: 400, text: "Chapter", s: {} },
+    { id: "p", x: 0, y: 100, w: 400, text: "Body text.", s: {} },
+  ], []);
+  const ids = await c.run(() => {
+    sel = ["h1"]; setLevel(1);
+    S.docs = [];
+    const d = addDoc({ x: -3000, y: 0 }, "原稿");
+    sel = ["h1", "p"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = ["src"]; clipCards("twin"); wrPasteTwin(d.ids[1], d);
+    const p = card(d.ids[1]); verNew(p, true); p.text = "Body text, second version."; verStash(p);
+    p.rich = 'Body <span class="mq" data-q="src" contenteditable="false">“digital garments”</span> text.'; p.text = "Body “digital garments” text.";
+    d.open = { [d.ids[1]]: true }; d.hs = { 1: { size: 30, bold: true, italic: false, color: "#1B4F9C", family: "sans" } };
+    sel = []; render(); camTo(2400, 0, 1, true);
+    return { d: d.id, a: d.ids.slice() };
+  });
+  await c.wait(300);
+  const menu = await c.run((d) => { docMenu(40, 40, docs().find((z) => z.id === d)); const it = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent); closeMenus(); return { it, dup: t("docDup"), lk: t("docLock") }; }, ids.d);
+  c.ok("稿子标题右键菜单里有「复制这份稿子」和「锁定这份稿子」", menu.it.some((z) => z.includes(menu.dup)) && menu.it.some((z) => z.includes(menu.lk)));
+
+  // 复制
+  const before = await c.run(() => S.cards.length);
+  const dup = await c.run((d) => {
+    const o = docs().find((z) => z.id === d);
+    docDup(o);
+    const nd = docs().find((z) => z.id !== d);
+    const cs = nd.ids.map(card);
+    const twins = S.cards.filter((z) => z.ref && z.wrIn === nd.id);
+    return { title: nd.title, n: nd.ids.length, ids: nd.ids.slice(), allNew: nd.ids.every((id) => !o.ids.includes(id)),
+      docOnly: cs.every((z) => docOnly(z) && z.wrIn === nd.id), lv: cs[0].level, vers: (cs[1].vers || []).length, rich: cs[1].rich,
+      twins: twins.map((z) => ({ ref: z.ref, under: z.wrUnder })), open: nd.open[nd.ids[1]] === true, hs: nd.hs && nd.hs[1].color,
+      overlap: Math.abs(nd.x - o.x) < DOCW + SIDEW, lock: "lock" in nd };
+  }, ids.d);
+  c.ok("复制出一份新稿子，名字带「副本」", /副本|copy/.test(dup.title) && dup.n === 2);
+  c.ok("副本里的段落都是全新的、属于副本自己", dup.allNew && dup.docOnly);
+  c.ok("层级、版本、迷你分身都复制过来了", dup.lv === 1 && dup.vers >= 2 && /data-q="src"/.test(dup.rich));
+  c.ok("折叠框里的引文分身也复制了，挂在副本对应的段落下面，仍然指向源卡片", dup.twins.length === 1 && dup.twins[0].ref === "src" && dup.twins[0].under === dup.ids[1]);
+  c.ok("折叠开关和标题样式一起复制", dup.open && dup.hs === "#1B4F9C");
+  c.ok("副本不压在原稿上，也没有整稿锁定", !dup.overlap && !dup.lock);
+  c.ok("改副本不影响原稿", await c.run(([a, b]) => { const o = card(b[1]); o.text = "Changed in copy"; delete o.rich; return card(a[1]).text.includes("digital garments"); }, [ids.a, dup.ids]));
+  c.ok("一步撤销就把副本撤掉", await c.run((n0) => { applyUndo(undo, redo); return docs().length === 1 && S.cards.length === n0; }, before));
+  await c.run(() => applyUndo(redo, undo));
+
+  // 锁定
+  await c.run((d) => docSetLock(docs().find((z) => z.id === d), true), ids.d);
+  await c.wait(200);
+  const L = (fn, arg) => c.run(fn, arg);
+  c.ok("锁定后段落不能打字", await L((a) => document.querySelector('#docs .cap[data-id="' + a[0] + '"]').getAttribute("contenteditable") === "false", ids.a));
+  c.ok("标题旁边有锁的小图标", await L((d) => !!document.querySelector('#docs .doc[data-id="' + d + '"] .dlk'), ids.d));
+  const snapBefore = await L((d) => JSON.stringify([docs().find((z) => z.id === d), docs().find((z) => z.id === d).ids.map((id) => card(id))]), ids.d);
+  await L(([d, a]) => {
+    const o = docs().find((z) => z.id === d);
+    window.prompt = () => "改名";
+    CLIP = CLIP || { mode: "copy", items: [] };
+    wrInsertAt(o, 0); wrPasteMain(o, 0); wrDropAt(o, 0); wrMoveToNumber(o, a[0], "2");
+    wrCutBlocks(o, [a[0]]); verNew(card(a[1]), true); verUse(card(a[1]), card(a[1]).vers[0].id);
+    hsSet(o, 1, { color: "#A01B14" }); hsApply(o);
+    sel = [a[0]]; setLevel(3); setStyle("size", 60); del();
+  }, [ids.d, ids.a]);
+  c.ok("锁定后插入、粘贴、移除、按编号移动、剪切、版本、标题样式、层级、字号、删除都不生效", (await L((d) => JSON.stringify([docs().find((z) => z.id === d), docs().find((z) => z.id === d).ids.map((id) => card(id))]), ids.d)) === snapBefore);
+  // 位置：拖标题不动
+  const pos0 = await L((d) => { const o = docs().find((z) => z.id === d); return [o.x, o.y]; }, ids.d);
+  const tp = await L((d) => { const r = document.querySelector('#docs .doc[data-id="' + d + '"] .dt').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, ids.d);
+  await c.page.mouse.move(tp.x, tp.y); await c.page.mouse.down(); await c.page.mouse.move(tp.x + 200, tp.y + 100, { steps: 6 }); await c.page.mouse.up(); await c.wait(150);
+  c.ok("锁定后拖标题，稿子不挪", JSON.stringify(await L((d) => { const o = docs().find((z) => z.id === d); return [o.x, o.y]; }, ids.d)) === JSON.stringify(pos0));
+  const m2 = await L((d) => { docMenu(40, 40, docs().find((z) => z.id === d)); const it = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent); closeMenus(); return { it, del: t("wrDocDel"), ren: t("wrDocRename"), ul: t("docUnlock"), exp: t("wrDocExport"), dup: t("docDup") }; }, ids.d);
+  c.ok("锁定后菜单里没有改名和删除，有解锁、导出、复制", !m2.it.some((z) => z.includes(m2.del)) && !m2.it.some((z) => z.includes(m2.ren)) && m2.it.some((z) => z.includes(m2.ul)) && m2.it.some((z) => z.includes(m2.exp)) && m2.it.some((z) => z.includes(m2.dup)));
+  c.ok("锁定的稿子仍能导出", await L((d) => wrHTML(docs().find((z) => z.id === d), {}).includes("Chapter"), ids.d));
+  c.ok("锁定的稿子仍能摘词（只读）", await L((a) => { const tw = S.cards.find((z) => z.ref === "src" && z.wrUnder === a[1]); redrawDocs(); mqStart(tw.id); const ok = !!mqPick; mqStop(); return ok; }, ids.a));
+  c.ok("复制锁定的稿子：副本可以编辑", await L((d) => { docDup(docs().find((z) => z.id === d)); const nd = docs()[docs().length - 1]; redrawDocs(); return !nd.lock && document.querySelector('#docs .cap[data-id="' + nd.ids[0] + '"]').getAttribute("contenteditable") === "true"; }, ids.d));
+  // 专注模式里也锁着
+  await L((d) => openWrite(d), ids.d); await c.wait(600);
+  c.ok("专注模式里锁定的稿子：段落和标题都不能编辑", await L((a) => document.querySelector('#wrmain .cap[data-id="' + a[0] + '"]').getAttribute("contenteditable") === "false" && $("wrtitle").contentEditable === "false", ids.a));
+  await L(() => closeWrite());
+  // 解锁
+  await L((d) => docSetLock(docs().find((z) => z.id === d), false), ids.d); await c.wait(150);
+  c.ok("解锁后字段删掉、段落恢复可编辑", await L(([d, a]) => !("lock" in docs().find((z) => z.id === d)) && document.querySelector('#docs .cap[data-id="' + a[0] + '"]').getAttribute("contenteditable") === "true", [ids.d, ids.a]));
+  c.ok("锁定、解锁都能撤销", await L((d) => { applyUndo(undo, redo); const on = docs().find((z) => z.id === d).lock === true; applyUndo(redo, undo); return on; }, ids.d));
+  c.ok("锁定状态随文件保存，读回来还是锁着", await L(async (d) => { docSetLock(docs().find((z) => z.id === d), true); const b = JSON.parse(JSON.stringify(bundle(null))); if (b.docs.find((z) => z.id === d).lock !== true) return false; await absorb(b, false); return docs().find((z) => z.id === d).lock === true; }, ids.d));
+  c.ok("读文件时只认 lock:true，别的值不当锁定", await L(async () => { const b = JSON.parse(JSON.stringify(bundle(null))); b.docs.forEach((z) => { z.lock = "yes"; }); await absorb(b, false); return docs().every((z) => !("lock" in z)); }));
+  c.ok("中英文案都齐了", await L(() => ["docDup", "docCopySuffix", "docDupDone", "docLock", "docUnlock", "docLockOn", "docLockOff", "docLockedNote"].every((k) => T.en[k] && T.zh[k])));
+});
+
 /* =====================================================================
    6. 编组与锁定
    ===================================================================== */

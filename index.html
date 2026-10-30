@@ -549,6 +549,24 @@
   .fmtbar .fpop .rowp .val{width:26px;text-align:right;opacity:.5;
     font:400 10px/1 "IBM Plex Mono",monospace}
   .fmtbar .lockic svg{display:block}
+  .doc .dlk{display:inline-flex;vertical-align:middle;margin-left:calc(5px * var(--iz));opacity:.55}
+  .doc .dlk svg{width:calc(12px * var(--iz));height:calc(12px * var(--iz))}
+  /* 标题样式面板（每份稿子一套） */
+  .fmtbar .fpop.hs{width:252px;max-height:360px;overflow:auto}   /* 画布上的稿子会把伸出去的部分切掉，所以面板自己限高、内部滚动 */
+  .fmtbar .fpop.hs .scroll{max-height:132px}
+  .fmtbar .fpop .hsprev{display:block;width:100%;text-align:left;border:none;background:none;color:inherit;
+    cursor:pointer;border-radius:6px;padding:3px 6px;line-height:1.25;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .fmtbar .fpop .hsprev:hover{background:var(--whi)}
+  .fmtbar .fpop .hsprev.on{box-shadow:inset 0 0 0 1px var(--pfg)}
+  .fmtbar .fpop .hsrow{display:flex;align-items:center;gap:4px;margin:6px 1px}
+  .fmtbar .fpop .hsrow label{width:34px;flex:none;opacity:.5;font-size:10.5px}
+  .fmtbar .fpop .hsrow button.k{height:24px;min-width:24px;border:1px solid var(--pline);background:none;color:inherit;
+    border-radius:6px;cursor:pointer;font-size:12px;padding:0 6px}
+  .fmtbar .fpop .hsrow button.k.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+  .fmtbar .fpop .hsrow .n{min-width:26px;text-align:center;font:400 11px/1 "IBM Plex Mono",monospace}
+  .fmtbar .fpop .hsrow .sws button.on{box-shadow:0 0 0 2px var(--panel),0 0 0 3px var(--pfg)}
+  .fmtbar .fpop .go{display:block;width:100%;height:28px;margin-top:8px;border:none;border-radius:7px;cursor:pointer;
+    background:var(--pfg);color:var(--panel);font-size:12px}
   .blk{position:relative;max-width:660px;margin:0 auto 6px;padding:1px 0}
   /* 版本栏竖排：横排时每加一版就往左长一截，早先的版本最终会溢出到抓不到的地方。
      竖排之后宽度恒定（34px），无论多少版都停在原地。 */
@@ -953,6 +971,13 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pageNoOverlap:"Pages can't overlap",pageNewMoved:"New page placed in the nearest free space",
   thinkMenu:"I think, I write",thinkPh:"Write whatever comes to mind. Messy and unfinished is fine.",
   thinkHint:"Saved as you type · \u2318/Ctrl+Enter starts a new entry · Click an entry to edit it",
+  docDup:"Duplicate this draft",docCopySuffix:" (copy)",docDupDone:"Duplicated as \u201C{t}\u201D",
+  docLock:"Lock this draft (content and position)",docUnlock:"Unlock this draft",docLockOn:"Draft locked",docLockOff:"Draft unlocked",
+  docLockedNote:"This draft is locked. Right-click its title to unlock it.",
+  hsMenu:"Heading styles",hsHead:"Heading styles for this draft",hsApply:"Apply to this draft",
+  hsApplied:"Applied to {n} heading(s)",hsSkipped:" ({n} locked paragraph(s) left as they were)",hsNone:"This draft has no headings yet",
+  hsSize:"Size",hsColour:"Colour",hsFont:"Font",
+  hsNote:"Kept with this draft only. Paragraphs change when you click Apply; paragraphs you make headings afterwards use these styles automatically.",
   mqPick:"Pick words",mqGo:"Take",mqHint:"Select the words you want, then press Enter or click Take. Esc cancels.",
   mqTaken:"Taken. Right-click where you want it in your text and choose Paste mini twin",mqPaste:"Paste mini twin",
   mqGoto:"Go to source card",mqGone:"The source card no longer exists",mqNoRef:"There is no matching citation in this draft",mqDel:"Delete excerpt",
@@ -1166,6 +1191,13 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pageNoOverlap:"页面不能叠放",pageNewMoved:"新页面放到了旁边的空位",
   thinkMenu:"我想我写",thinkPh:"想到什么就写什么，乱一点、不完整都没关系",
   thinkHint:"打字即保存 · \u2318/Ctrl+Enter 另起一条 · 点已有的一条可以修改",
+  docDup:"复制这份稿子",docCopySuffix:" 副本",docDupDone:"已复制为「{t}」",
+  docLock:"锁定这份稿子（内容与位置）",docUnlock:"解锁这份稿子",docLockOn:"稿子已锁定",docLockOff:"稿子已解锁",
+  docLockedNote:"这份稿子已锁定，先在标题上右键解锁",
+  hsMenu:"标题样式",hsHead:"本稿的标题样式",hsApply:"套用到本稿",
+  hsApplied:"已套用到 {n} 个标题",hsSkipped:"（{n} 个锁定的段落没有改）",hsNone:"这份稿子里还没有标题",
+  hsSize:"字号",hsColour:"颜色",hsFont:"字体",
+  hsNote:"设定只存在这份稿子里；点「套用到本稿」才会改动段落。之后新设成标题的段落会自动套用。",
   mqPick:"摘词",mqGo:"摘下",mqHint:"划选要摘的词，按 Enter 或点「摘下」；Esc 取消",
   mqTaken:"已摘下，到正文里要放的位置右键「粘贴迷你分身」",mqPaste:"粘贴迷你分身",
   mqGoto:"跳到原卡片",mqGone:"原卡片已不存在",mqNoRef:"这份稿子里没有对应的引文",mqDel:"删除摘录",
@@ -1535,7 +1567,12 @@ async function migrateInline(cards){
 // 两级锁定：
 //   "text" 仅锁内容，仍可移动、缩放、连线，但改不动文字与格式，也删不掉
 //   "all"  内容与位置都锁，完全不动
-const lockOf=id=>{const c=card(id);return c&&c.lock?c.lock:null};
+const lockOf=id=>{const c=card(id);if(!c)return null;if(c.lock)return c.lock;
+  return (c.wrIn&&docLk(docOfCard(c)))?"text":null};
+// 整份稿子锁定（d.lock，2026-10）：内容和位置都不动。直接读 S.docs，不经过 docs()，启动早期也能调用
+const docOfCard=c=>c&&c.wrIn?((Array.isArray(S.docs)?S.docs:[]).find(z=>z.id===c.wrIn)||null):null;
+const docLk=d=>!!(d&&d.lock);
+function docLkStop(d){if(docLk(d)){toast(t("docLockedNote"));return true}return false}
 const isLocked=id=>!!lockOf(id);                       // 内容层面的锁（含两种）
 const isPinned=id=>lockOf(id)==="all";                 // 位置层面的锁
 // 只有结构连线随卡片一同锁定，因为它决定文档骨架，误删会改变章节结构。
@@ -1997,7 +2034,9 @@ async function absorb(data,merge){
         title:typeof z.title==="string"&&z.title?z.title:"稿子",
         ids:Array.isArray(z.ids)?z.ids.filter(q=>typeof q==="string"):[],
         mode:z.mode==="ctx"?"ctx":"iter",
-        open:(z.open&&typeof z.open==="object")?z.open:{}}));
+        open:(z.open&&typeof z.open==="object")?z.open:{},
+        ...(hsNorm(z.hs)?{hs:hsNorm(z.hs)}:{}),
+        ...(z.lock===true?{lock:true}:{})}));
     data.sheets=(data.sheets||[]).filter(z=>z&&PAPER[z.kind])
       .map(z=>({id:(z.id&&!unsafeStr(z.id))?z.id:uid(),kind:z.kind,x:+z.x||0,y:+z.y||0,
         title:typeof z.title==="string"?z.title:""}));
@@ -4346,6 +4385,10 @@ function setLevel(v){
     delete c.role;c.sMan=false;
     if(v)c.level=v;else delete c.level;
     c.s={...DEF,...S.textDef,...(c.s||{}),...ls};
+    const hd=docOnly(c)&&docs().find(z=>z.id===c.wrIn);
+    if(v&&hd&&hd.hs)hsPut(c,hsGet(hd,v));
+    else if(!v&&c.s.hsw){const b={...DEF,...S.textDef};
+      c.s.color=b.color;c.s.italic=b.italic;c.s.family=b.family;delete c.s.hsw}
   });
   // 层级现在也能在写作页里改，所以专注模式那一份也要跟着重画：
   // render() 只管画布（renderDocs），#wrmain 是另一棵树
@@ -5482,7 +5525,7 @@ function richRuns(html){
 }
 // pre 是可选的前缀（写作页的标题编号用它）：作为一个独立的 TextRun 插在
 // 第一段最前面，原有的富文本一个字都不动。不传就跟以前完全一样。
-function paraFrom(c,D,extra,pre){
+function paraFrom(c,D,extra,pre,base){
   const {Paragraph,TextRun}=D;
   if(!c.rich)return null;
   const runs=richRuns(c.rich);
@@ -5491,12 +5534,12 @@ function paraFrom(c,D,extra,pre){
   runs.forEach(r=>{
     r.text.split("\n").forEach((piece,i)=>{
       if(i){paras.push(cur);cur=[]}
-      if(piece)cur.push(new TextRun({...r,text:piece}));
+      if(piece)cur.push(new TextRun({...(base||{}),...r,text:piece}));
     });
   });
   if(cur.length)paras.push(cur);
   const out=paras.filter(p=>p.length);
-  if(pre&&out.length)out[0].unshift(new TextRun({text:pre}));
+  if(pre&&out.length)out[0].unshift(new TextRun({...(base||{}),text:pre}));
   return out.map(p=>new Paragraph({children:p,...(extra||{})}));
 }
 async function exportDocx(D,o,tree){
@@ -7972,6 +8015,7 @@ function unifyLevel(lv,excludeManual){
   let n=0;
   S.cards.forEach(z=>{
     if(isLocked(z.id))return;
+    if(docOnly(z))return;                 // 写作页里的段落由各稿子自己的「标题样式」管（2026-10），这里只管画布
     const zl=z.role?0:(z.level||0);
     if(zl!==lv)return;
     if(excludeManual&&z.sMan&&z.id!==c.id)return;
@@ -8522,6 +8566,26 @@ function wrOutlineHTML(list,nums){
 }
 // 把稿子直接画在画布上：正文就地可编辑，放大只是看得更清楚，不切换到别的界面。
 // 非专注状态下同样显示大纲侧栏，正文本身固定高度、内部滚动，不再无限拉长。
+// 重绘写作页时让眼前那一段原地不动（2026-10）：只补回 scrollTop 不够——
+// 补回之后段落样式才套上、或者上面某一段换了版本变高变矮，内容就整体挪一截，人就"被往上弹"。
+// 所以记下视野顶部那一段（.blk）离框顶的距离，重绘、套完样式之后按它重新对齐。
+// 画布上的稿子整体带缩放，屏幕像素要换算回内容像素（跟 scrollBlockInto 一样）。
+function wrAnchor(box){
+  if(!box)return null;
+  const br=box.getBoundingClientRect();
+  const sc=(box.offsetHeight&&br.height/box.offsetHeight)||1;
+  const blk=[...box.querySelectorAll(".blk[data-id]")].find(el=>el.getBoundingClientRect().bottom>br.top+1);
+  return {top:box.scrollTop,sc,id:blk&&blk.dataset.id,off:blk?(blk.getBoundingClientRect().top-br.top)/sc:0};
+}
+function wrRestore(box,a){
+  if(!box||!a)return;
+  box.scrollTop=a.top;
+  const blk=a.id&&box.querySelector('.blk[data-id="'+a.id+'"]');
+  if(!blk)return;
+  const br=box.getBoundingClientRect();
+  const sc=(box.offsetHeight&&br.height/box.offsetHeight)||1;
+  box.scrollTop+=(blk.getBoundingClientRect().top-br.top)/sc-a.off;
+}
 function renderDocs(){
   const box=$("docs");if(!box)return;
   // 重建整页会把 .dbody 的滚动条冲回顶部——新建版本、粘贴、插入这些操作都带着重绘，
@@ -8530,7 +8594,7 @@ function renderDocs(){
   const scrolls=new Map();
   box.querySelectorAll(".doc").forEach(el=>{
     const dbody=el.querySelector(".dbody");
-    if(dbody&&dbody.scrollTop)scrolls.set(el.dataset.id,dbody.scrollTop);
+    if(dbody&&dbody.scrollTop)scrolls.set(el.dataset.id,wrAnchor(dbody));
   });
   box.innerHTML="";
   docs().forEach(d=>{
@@ -8543,7 +8607,7 @@ function renderDocs(){
     // 模式切换、专注、导出这些功能控件放进页面内部的工具栏，跟文字工具栏并排，
     // 不再摆在标题旁边的外侧——外侧只留标题这一样东西。
     el.innerHTML=`<div class="dttl">
-        <span class="dt" spellcheck="false">${esc(d.title)}</span>
+        <span class="dt" spellcheck="false">${esc(d.title)}</span>${d.lock?`<span class="dlk" title="${escA(t("docLockOn"))}">${lockSvg("all")}</span>`:""}
       </div>
       <div class="dwrap">
         <div class="dside">${wrOutlineHTML(list,nums)}</div>
@@ -8569,27 +8633,63 @@ function renderDocs(){
   if(selDoc&&!docs().some(z=>z.id===selDoc))selDoc=null;   // 稿子已被删掉
   paintDocSel();
   applyDocStyles();syncFmtBars();
-  if(scrolls.size)scrolls.forEach((top,id)=>{
+  if(scrolls.size)scrolls.forEach((a,id)=>{
     const dbody=box.querySelector(`.doc[data-id="${id}"] .dbody`);
-    if(dbody)dbody.scrollTop=top;
+    if(dbody)wrRestore(dbody,a);
   });
 }
 function docMenu(x,y,d){
+  const lk=docLk(d);
   menuAt(x,y,[
     {head:d.title},
     {label:t("wrFocus"),on:()=>openWrite(d.id)},
-    {label:t("wrDocRename"),on:()=>{const v=prompt(t("wrDocRename"),d.title);
-      if(v!==null){snap();d.title=v.trim()||d.title;render();save()}}},
+    ...(lk?[]:[{label:t("wrDocRename"),on:()=>{const v=prompt(t("wrDocRename"),d.title);
+      if(v!==null){snap();d.title=v.trim()||d.title;render();save()}}}]),
     "-",
     // 空稿子没有"末尾"可言，菜单上就该只说"粘贴"
-    ...(CLIP?[{label:d.ids.length?t("wrPasteEnd"):t("wrPasteHere"),
+    ...(CLIP&&!lk?[{label:d.ids.length?t("wrPasteEnd"):t("wrPasteHere"),
       on:()=>wrPasteMain(d,d.ids.length)}]:[]),
-    ...(WRCUT?[{label:t("wrCutEnd"),on:()=>wrCutPaste(d,d.ids.length)}]:[]),
+    ...(WRCUT&&!lk?[{label:t("wrCutEnd"),on:()=>wrCutPaste(d,d.ids.length)}]:[]),
     {label:t("wrDocExport"),on:()=>openWrExport(d,x,y)},
     "-",
-    {label:t("wrDocDel"),danger:true,on:()=>{snap();
-      S.docs=docs().filter(z=>z!==d);if(wrId===d.id)closeWrite();render();save()}}
+    {label:t("docDup"),on:()=>docDup(d)},
+    {label:lk?t("docUnlock"):t("docLock"),check:lk,on:()=>docSetLock(d,!lk)},
+    ...(lk?[]:["-",{label:t("wrDocDel"),danger:true,on:()=>{snap();
+      S.docs=docs().filter(z=>z!==d);if(wrId===d.id)closeWrite();render();save()}}])
   ]);
+}
+function docSetLock(d,on){
+  if(!d)return;
+  snap();
+  if(on)d.lock=true;else delete d.lock;      // 解锁时整个字段删掉，没锁过的稿子数据跟从前一样
+  render();if(wrOpenState())drawWrite();save();
+  toast(t(on?"docLockOn":"docLockOff"));
+}
+// 复制整份稿子：段落、各个版本、段内格式、迷你分身、折叠框里的引文分身、折叠开关、标题样式都照原样复制一份，
+// 跟原稿彻底独立（id 全新）。副本不带整稿锁定，可以放手改；段落自己的锁原样保留。
+// 引文分身仍然指向同一张源卡片（它们是投影），迷你分身也一样。放在原稿右边，不压住别的稿子。
+function docDup(d){
+  if(!d)return;
+  snap();
+  const W=DOCW+SIDEW+80;
+  let x=d.x+W;const y=d.y;
+  for(let i=0;i<200&&docs().some(z=>Math.abs(z.x-x)<W-40&&Math.abs(z.y-y)<700);i++)x+=W;
+  const nd={id:uid(),x,y,title:d.title+t("docCopySuffix"),ids:[],mode:d.mode==="ctx"?"ctx":"iter",open:{}};
+  if(d.hs)nd.hs=JSON.parse(JSON.stringify(d.hs));
+  const add=n=>{invalidateIndex();S.cards.push(n)};
+  d.ids.forEach(id=>{
+    const c=card(id);if(!c)return;
+    let n;
+    if(docOnly(c)){n=JSON.parse(JSON.stringify(cleanCard(c)));n.id=uid();n.wrIn=nd.id}
+    else n=wrCloneCard(c,nd);                 // 早期稿子里直接放的画布卡片：照常拷成稿子自己的段落
+    noThink(n);add(n);nd.ids.push(n.id);
+    wrKids(id).forEach(k=>{const m=JSON.parse(JSON.stringify(cleanCard(k)));m.id=uid();m.wrUnder=n.id;m.wrIn=nd.id;noThink(m);add(m)});
+    if(d.open&&d.open[id])nd.open[n.id]=true;
+  });
+  docs().push(nd);
+  selDoc=nd.id;sel=[];render();save();
+  camTo(-(nd.x+W/2)*cam.z,tgt.y,cam.z);
+  toast(t("docDupDone").replace("{t}",nd.title));
 }
 
 /* ---- 版本 ---- */
@@ -8608,6 +8708,7 @@ function verStash(c){
 function verApply(o,v){o.text=v.text;if(v.rich)o.rich=v.rich;else delete o.rich;
   if(v.s)o.s={...v.s};o.bg=v.bg||""}
 function verNew(c,copy){
+  if(docLkStop(docOfCard(c)))return;
   const o=orig(c),vs=verList(o);
   snap();
   if(!vs.length){const f=verSnapshot(o);vs.push(f);o.verOn=f.id}
@@ -8617,10 +8718,12 @@ function verNew(c,copy){
   vs.push(v);o.verOn=v.id;verApply(o,v);save();return v;
 }
 function verUse(c,id){
+  if(docLkStop(docOfCard(c)))return;
   const o=orig(c),v=verList(o).find(z=>z.id===id);if(!v)return;
   snap();verStash(o);o.verOn=v.id;verApply(o,v);save();
 }
 function verDel(c,id){
+  if(docLkStop(docOfCard(c)))return;
   const o=orig(c),vs=verList(o);
   if(vs.length<2)return;
   const i=vs.findIndex(z=>z.id===id);if(i<0)return;
@@ -8651,7 +8754,7 @@ function wrStyleObj(o,lv){
   // 标题字号直接用卡片自己的字号，跟画布上一样大（2026-10 统一）。
   // 从前这里再乘 1.47 / 1.2 / 1.07，可 setLevel 已经按 LVSCALE 放大过一次，一级标题画布 32px、稿子里变成 47px。
   return {fontFamily:famCSS(st.family),fontSize:st.size+"px",
-    fontWeight:String(lv?600:st.weight),lineHeight:String(st.lh),
+    fontWeight:String(lv?(st.hsw?st.weight:600):st.weight),lineHeight:String(st.lh),
     letterSpacing:st.spacing+"em",textAlign:st.align,color:st.color,
     fontStyle:st.italic?"italic":"normal"};
 }
@@ -8839,6 +8942,8 @@ function buildFmtBar(host){
     });
   },null,t("level"));
   lvl.trig.dataset.need="card";
+  // 标题样式：每份稿子一套，紧挨着层级（见 hsBuild）
+  popCell(`<span>${esc(t("hsMenu"))}</span>${car}`,pop=>hsBuild(pop,host),"hs",t("hsMenu"));
 
   // 顺序：先定这一段是什么（层级），再定它怎么摆（对齐），最后才是间距细调
   ["left","center","right"].forEach(v=>btn(alSvg(v),()=>{setAlign(v);syncFmtBars()},t("fmtAlign")));
@@ -8902,7 +9007,7 @@ function buildFmtBar(host){
   // "锁定内容与位置"那一档留给画布上的标准工具栏。
   const lockBtn=btn(`<span id="fmtlock" class="lockic"></span>`,()=>{
     const cs=sel.map(card).filter(Boolean);
-    if(!cs.length)return;
+    if(!cs.length||docLkStop(docOfCard(cs[0])))return;   // 整份稿子锁着时，单段的锁不动
     setCardLock(null,cs.every(z=>z.lock)?null:"text");
     syncFmtBars();
   },t("lockText"));
@@ -9038,6 +9143,7 @@ function wrImport(ids,append,docId){
   const list=(ids&&ids.length?ids.map(card).filter(Boolean):[]);
   if(!list.length){toast(t("wrPickFirst"));return}
   let d=docs().find(z=>z.id===docId)||wrDoc()||docs()[0];
+  if(docLkStop(d))return;
   if(!d)d=addDoc(null,null);
   const seq=wrOrderIds(list.map(c=>c.id));   // 结构连线优先，空间顺序兜底
   snap();
@@ -9145,6 +9251,7 @@ function bindDoc(el,d){
   });
   dt.addEventListener("dblclick",e=>{
     if(lock)return;e.stopPropagation();
+    if(docLkStop(d))return;
     const v=prompt(t("wrDocRename"),d.title);
     if(v!==null){snap();d.title=v.trim()||d.title;save();renderDocs()}
   });
@@ -9241,6 +9348,7 @@ function startDocMove(e,d){
   // 抓住稿子的空白处就等于选中了这份稿子：跟画布上点一张卡片是同一个意思。
   // 没有这一步，稿子永远进不了任何选中状态，按 Z 自然什么都不会发生。
   selectDoc(d.id);
+  if(docLk(d))return;                       // 锁定的稿子：能选中，不能挪
   const sx=e.clientX,sy=e.clientY,ox=d.x,oy=d.y;
   let moved=false;
   const mv=ev=>{
@@ -9262,16 +9370,16 @@ function drawWrite(){
   const list=wrCards();
   const ti=$("wrtitle");
   if(document.activeElement!==ti)ti.textContent=d.title;   // 正在改名时不要把光标顶掉
-  ti.contentEditable=lock?"false":"true";
+  ti.contentEditable=(lock||docLk(d))?"false":"true";
   const nums=wrNums(list);
   $("wrside").innerHTML=wrOutlineHTML(list,nums);
   const main=$("wrmain");
-  const scrollTop=main.scrollTop;      // 重建会把滚动条冲回顶部，记下来重建后补回去
+  const anc=wrAnchor(main);            // 重建会把滚动条冲回顶部，记下眼前那一段，套完样式之后再对齐（wrRestore）
   main.innerHTML=docBodyHTML(d,nums);
-  main.scrollTop=scrollTop;
   wrmainCapNodes.clear();
   main.querySelectorAll(".cap[data-id]").forEach(el=>wrmainCapNodes.set(el.dataset.id,el));
   applyDocStyles(main);
+  wrRestore(main,anc);
   buildFmtBar($("wrfmt"));syncFmtBars();
 }
 
@@ -9389,6 +9497,7 @@ function bindBody(root,getDoc){
     if(lock||e.button!==0)return;
     const ref=e.target.closest(".ref");if(!ref)return;
     if(ref.classList.contains("picking"))return;   // 摘词状态：按下就是划字，不当长按
+    if(docLk(docOfCard(card(ref.dataset.id))))return;   // 锁定的稿子：不调序
     const box=ref.parentElement;
     if(!box||box.querySelectorAll(":scope > .ref").length<2)return;   // 只有一条，没得排
     const sx=e.clientX,sy=e.clientY;
@@ -9679,7 +9788,7 @@ function wrSelToCard(d,c,cap){
 // 新卡片带 wrIn 标记，只活在这份稿子里——早先它会同时摆到画布上，
 // 于是同一段内容在写作框内外各出现一次，看起来就像"重复添加"。
 function wrInsertAt(d,i){
-  if(lock||!d)return;
+  if(lock||!d||docLkStop(d))return;
   snap();
   const n=wrNewBlock(d);
   invalidateIndex();S.cards.push(n);
@@ -9690,7 +9799,7 @@ function wrInsertAt(d,i){
 // 把剪贴板里的卡片粘成分身，挂到某一段下面的折叠引用框里：
 // 只新增分身、不动源卡片的位置，跟"引用和分身"原有的语义一致。
 function wrPasteTwin(hostId,d){
-  if(lock)return;
+  if(lock||docLkStop(d||docOfCard(card(hostId))))return;
   if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
   const host=card(hostId);if(!host)return;
   snap();
@@ -9728,7 +9837,7 @@ function wrClonesFromClip(d){
   });
 }
 function wrPasteMain(d,i){
-  if(lock||!d)return;
+  if(lock||!d||docLkStop(d))return;
   if(!CLIP||!CLIP.items.length){toast(t("clipEmpty"));return}
   snap();
   const made=wrClonesFromClip(d);
@@ -9764,6 +9873,133 @@ function wrPasteAtCaret(d,c,cap){
   if(tailId)focusBlock(tailId,"start");
   toast(t("wrAdded").replace("{n}",made.length).replace("{d}",d.title));
 }
+/* ================= 标题样式（2026-10） =================
+   每份稿子各存一套：d.hs = {1..5: {size, bold, italic, color, family}}。没设过的稿子没有这个字段。
+   打开面板只是读：没设过时默认取这份稿子里该级第一个标题现在的样子（没有就取 levelStyle），不写任何东西。
+   改了某一项才写进 d.hs；「套用到本稿」才改段落：写进每个标题段落（和它的各个版本）的 s，
+   清掉段内局部的字号、颜色、字体（加粗、斜体、高亮、迷你分身都留着），一步撤销。
+   之后在这份稿子里新设成标题的段落由 setLevel 自动套用。
+   s.hsw 标记"粗细由标题样式决定"：写作页里标题原本一律按 600 显示，带这个标记的按它自己的粗细（这样"不加粗"才生效）。
+   只改这份稿子自己的段落（docOnly）；锁定的段落跳过。画布上的「分级统一」不再碰写作页的段落。 */
+// 读文件时校验标题样式：每级只认这五项，坏值丢掉；一级都不剩就当没设过
+function hsNorm(h){
+  if(!h||typeof h!=="object")return null;
+  const out={};let n=0;
+  for(let v=1;v<=LVMAX;v++){
+    const x=h[v];if(!x||typeof x!=="object")continue;
+    const size=+x.size;if(!(size>=8&&size<=120))continue;
+    const col=typeof x.color==="string"&&/^#[0-9a-f]{3,8}$|^rgba?\([\d\s.,%]+\)$/i.test(x.color)?x.color:({...DEF,...S.textDef}).color;
+    out[v]={size:Math.round(size),bold:!!x.bold,italic:!!x.italic,color:col,
+      family:FONTS.some(f=>f[0]===x.family)?x.family:({...DEF,...S.textDef}).family};n++;
+  }
+  return n?out:null;
+}
+function hsDocOf(host){
+  const el=host&&host.closest&&host.closest(".doc[data-id]");
+  return el?docs().find(z=>z.id===el.dataset.id):wrDoc();
+}
+function hsGet(d,lv){
+  if(d&&d.hs&&d.hs[lv])return {...d.hs[lv]};
+  const b={...DEF,...S.textDef};
+  const c=d&&d.ids.map(card).find(z=>z&&wrLevelOf(z)===lv);
+  if(c){const st={...b,...(orig(c).s||{})};
+    return {size:st.size,bold:st.hsw?st.weight>=600:true,italic:!!st.italic,color:st.color,family:st.family}}
+  return {size:levelStyle(lv).size,bold:true,italic:false,color:b.color,family:b.family};
+}
+function hsSet(d,lv,patch){
+  if(docLkStop(d))return;
+  const all={};for(let v=1;v<=LVMAX;v++)all[v]=hsGet(d,v);   // 第一次改动时把五级都定下来，免得以后跟着段落变
+  all[lv]={...all[lv],...patch};
+  d.hs=all;save();
+}
+// 段内局部的字号、颜色、字体清掉；加粗、斜体、下划线、高亮底色、链接、迷你分身都留着
+function hsCleanRich(html){
+  if(!html)return html;
+  const tp=document.createElement("template");tp.innerHTML=html;
+  tp.content.querySelectorAll("*").forEach(el=>{
+    if(el.tagName==="FONT"){["size","color","face"].forEach(a=>el.removeAttribute(a))}
+    if(el.style){el.style.fontSize="";el.style.color="";el.style.fontFamily="";
+      if(!el.getAttribute("style"))el.removeAttribute("style")}
+    if((el.tagName==="SPAN"||el.tagName==="FONT")&&!el.attributes.length)el.replaceWith(...el.childNodes);
+  });
+  const h=tp.innerHTML;
+  return /<(span|a|b|i|u|s|strike|del|strong|em|font)\b/i.test(h)?h:"";
+}
+function hsPut(c,h){
+  const o=orig(c);
+  const patch={size:h.size,weight:h.bold?700:400,italic:!!h.italic,color:h.color,family:h.family,hsw:1};
+  o.s={...DEF,...S.textDef,...(o.s||{}),...patch};
+  if(o.rich){const r=hsCleanRich(o.rich);if(r)o.rich=r;else delete o.rich}
+  // 各个版本也一起改，不然切到另一版，样式又回去了
+  if(Array.isArray(o.vers))o.vers.forEach(v=>{v.s={...(v.s||o.s),...patch};if(v.rich)v.rich=hsCleanRich(v.rich)});
+}
+function hsApply(d){
+  if(!d||docLkStop(d))return;
+  const hs={};for(let v=1;v<=LVMAX;v++)hs[v]=hsGet(d,v);
+  let n=0,skip=0;
+  const list=d.ids.map(card).filter(c=>c&&docOnly(c)&&wrLevelOf(c)>=1);
+  if(!list.length){toast(t("hsNone"));return}
+  snap();
+  d.hs=hs;
+  list.forEach(c=>{if(isLocked(c.id)){skip++;return}hsPut(c,hs[Math.min(wrLevelOf(c),LVMAX)]);n++});
+  save();redrawDocs();syncFmtBars();
+  toast(t("hsApplied").replace("{n}",n)+(skip?t("hsSkipped").replace("{n}",skip):""));
+}
+// Word 导出用：套用过标题样式的标题，带上字号（半磅）、粗细、斜体、颜色、字体
+function hsRun(o,lv){
+  if(!lv||!o.s||!o.s.hsw)return null;
+  const st={...DEF,...S.textDef,...o.s};
+  const r={size:Math.round(st.size*1.5),bold:+st.weight>=600,italics:!!st.italic};
+  const col=hex6(st.color);if(col)r.color=col;
+  const fam=(famCSS(st.family).split(",")[0]||"").replace(/["']/g,"").trim();if(fam)r.font=fam;
+  return r;
+}
+// 面板本体：上面五级预览（点一行选中那一级），下面改选中这一级，最底下套用
+function hsBuild(pop,host){
+  const d=hsDocOf(host);if(!d)return;
+  const draw=()=>{
+    pop.innerHTML="";
+    const lv=host._hsLv||1;
+    const add=(tag,cls,html)=>{const x=document.createElement(tag);if(cls)x.className=cls;if(html!=null)x.innerHTML=html;pop.appendChild(x);return x};
+    add("div","hd2",esc(t("hsHead")));
+    for(let v=1;v<=LVMAX;v++){
+      const h=hsGet(d,v);
+      const b=add("button","hsprev"+(v===lv?" on":""),esc(t("lv"+v)));
+      Object.assign(b.style,{fontSize:Math.min(h.size,24)+"px",fontWeight:h.bold?"700":"400",
+        fontStyle:h.italic?"italic":"normal",color:h.color,fontFamily:famCSS(h.family)});
+      b.addEventListener("click",e=>{e.stopPropagation();host._hsLv=v;draw()});
+    }
+    const h=hsGet(d,lv);
+    const row=label=>{const r=add("div","hsrow");const l=document.createElement("label");l.textContent=label;r.appendChild(l);return r};
+    const key=(r,txt,on,fn,title)=>{const x=document.createElement("button");x.className="k"+(on?" on":"");x.innerHTML=txt;
+      if(title)x.title=title;x.addEventListener("click",e=>{e.stopPropagation();fn();draw()});r.appendChild(x);return x};
+    const r1=row(t("hsSize"));
+    key(r1,"\u2212",false,()=>hsSet(d,lv,{size:clamp(h.size-1,8,120)}),t("fmtSmaller"));
+    const n=document.createElement("span");n.className="n";n.textContent=h.size;r1.appendChild(n);
+    key(r1,"+",false,()=>hsSet(d,lv,{size:clamp(h.size+1,8,120)}),t("fmtBigger"));
+    key(r1,"<b>B</b>",h.bold,()=>hsSet(d,lv,{bold:!h.bold}),t("fmtB"));
+    key(r1,"<i>I</i>",h.italic,()=>hsSet(d,lv,{italic:!h.italic}),t("fmtI"));
+    const r2=row(t("hsColour"));
+    const sws=document.createElement("div");sws.className="sws";r2.appendChild(sws);
+    INK.forEach(col=>{const x=document.createElement("button");x.style.background=col;
+      if(String(h.color).toLowerCase()===col.toLowerCase())x.classList.add("on");
+      x.addEventListener("click",e=>{e.stopPropagation();hsSet(d,lv,{color:col});draw()});sws.appendChild(x)});
+    const r3=row(t("hsFont"));
+    const fb=key(r3,esc(famName(h.family))+' <span class="car">\u25BE</span>',false,()=>{host._hsFont=!host._hsFont});
+    fb.style.flex="1";fb.style.textAlign="left";
+    if(host._hsFont){
+      const sc=add("div","scroll");
+      FONTS.forEach(f=>{const it=document.createElement("button");it.className="item"+(h.family===f[0]?" on":"");
+        it.textContent=famName(f[0]);it.style.fontFamily=f[1];
+        it.addEventListener("click",e=>{e.stopPropagation();host._hsFont=false;hsSet(d,lv,{family:f[0]});draw()});sc.appendChild(it)});
+    }
+    const go=add("button","go",esc(t("hsApply")));
+    go.addEventListener("click",e=>{e.stopPropagation();closeFmtPops();hsApply(d)});
+    add("div","fnote",esc(t("hsNote")));
+  };
+  host._hsFont=false;
+  draw();
+}
 // 写作页里所有右键的入口：按落点决定给哪一份菜单。
 // 折叠框那一块是"看不见但确实存在的粘贴区"——在那里右键就能把剪贴板里的卡片
 // 粘成一个分身投影，这是原来那个"+"按钮的替代。
@@ -9783,6 +10019,7 @@ function wrContextMenu(e,d){
 }
 // 折叠的引用区：这里只放分身投影，所以粘贴一律按分身处理
 function wrFoldMenu(x,y,hostId,d){
+  if(docLk(d)){menuAt(x,y,[{head:t("docLockedNote")}]);return}
   const items=[];
   if(CLIP)items.push({label:t("wrRefPaste"),on:()=>wrPasteTwin(hostId,d)});
   else items.push({head:t("clipEmpty")});
@@ -9811,6 +10048,7 @@ function wrRefMenu(x,y,twinId,d){
     "-",
     ...(CLIP?[{label:t("wrRefPaste"),on:()=>wrPasteTwin(twin.wrUnder,d)}]:[]),
     {label:t("wrRefDrop"),danger:true,on:()=>{
+      if(docLkStop(docOfCard(twin)))return;
       snap();invalidateIndex();S.cards=S.cards.filter(z=>z.id!==twinId);
       save();redrawDocs();toast(t("wrRefDropped"));
     }}
@@ -10081,7 +10319,7 @@ function wrRemoveSel(selBlk){
 // 剪切当下也不改数据：中途反悔什么都没损失。
 let WRCUT=null;                                  // {doc:稿子id, ids:[段落id]}
 function wrCutBlocks(d,ids){
-  if(!d)return;
+  if(!d||docLkStop(d))return;
   const set=new Set(ids||[]);
   const ordered=d.ids.filter(id=>set.has(id));   // 一律按稿子里的先后，不按点选顺序
   if(!ordered.length)return;
@@ -10089,7 +10327,7 @@ function wrCutBlocks(d,ids){
   toast(t("wrCutReady").replace("{n}",ordered.length));
 }
 function wrCutPaste(d,i){
-  if(!WRCUT||!d)return;
+  if(!WRCUT||!d||docLkStop(d))return;
   const ids=WRCUT.ids.filter(id=>card(id));      // 中途被删掉的就不搬了
   if(!ids.length){WRCUT=null;return}
   const from=docs().find(z=>z.id===WRCUT.doc);
@@ -10112,6 +10350,7 @@ function wrCutPaste(d,i){
   toast(t("wrCutMoved").replace("{n}",n));
 }
 function wrDropAt(d,i){
+  if(docLkStop(d))return;
   const id=d.ids[i];if(!id)return;
   const c=card(id);
   snap();d.ids.splice(i,1);
@@ -10223,6 +10462,7 @@ function numCmp(a,b){
   return 0;
 }
 function wrMoveToNumber(d,id,raw){
+  if(docLkStop(d))return;
   const want=numKey(raw);
   if(!numOk(want)){toast(t("numBad"));return}
   const i=d.ids.indexOf(id);
@@ -10426,12 +10666,16 @@ async function wrExportDocx(D,d,opt){
   d.ids.map(card).filter(Boolean).forEach(c=>{
     const o=orig(c),lv=wrLevelOf(c);
     const n=nm.get(c.id),pre=n?n+" ":"";
+    // 套用过「标题样式」的标题：字号、粗细、颜色、斜体、字体也写进 Word，同时仍用 Word 的标题级别（导航、目录认得出）
+    const base=hsRun(o,lv);
     // 带格式的段落走 paraFrom（保住加粗、颜色、荧光笔），编号交给它当前缀插进去
-    const rich=o.rich?paraFrom(o,D,lv?{heading:HL[Math.min(lv,6)]}:null,pre):null;
+    const rich=o.rich?paraFrom(o,D,lv?{heading:HL[Math.min(lv,6)]}:null,pre,base):null;
     if(rich&&rich.length)rich.forEach(p=>kids.push(p));
     else{
       const txt=(o.text||"").split(/\n+/).filter(z=>z.trim());
-      if(lv){kids.push(new Paragraph({text:pre+(txt[0]||""),heading:HL[Math.min(lv,6)]}));
+      if(lv&&base){kids.push(new Paragraph({heading:HL[Math.min(lv,6)],children:[new TextRun({...base,text:pre+(txt[0]||"")})]}));
+        txt.slice(1).forEach(z=>kids.push(new Paragraph({text:z})))}
+      else if(lv){kids.push(new Paragraph({text:pre+(txt[0]||""),heading:HL[Math.min(lv,6)]}));
         txt.slice(1).forEach(z=>kids.push(new Paragraph({text:z})))}
       else txt.forEach(z=>kids.push(new Paragraph({text:z})));
     }
