@@ -277,17 +277,22 @@ group("twins 分身", async (c) => {
   c.ok("分身共享源的文字", (await c.run(() => orig(S.cards.find((z) => z.ref === "a")).text)) === "源卡片 #核心");
   c.ok("分身共享源的标签", (await c.run(() => cardTags(S.cards.find((z) => z.ref === "a")).join(","))) === "核心");
 
-  await c.run(() => {
+  // 2026-10 起：分身永远不能改内容（解锁了也不行），内容只在主卡片上改，改了所有分身一起变
+  const ro = await c.run(() => {
     const tw = S.cards.find((z) => z.ref === "a");
-    sel = [tw.id];
-    render();
+    delete tw.lock; sel = [tw.id]; render();
     editText(tw);
-    const cap = nodes.get(tw.id).querySelector(".cap");
+    return { editing, toast: $("toast").textContent, want: t("twinNoEdit") };
+  });
+  c.ok("分身解锁了也进不去编辑", !ro.editing && ro.toast === ro.want);
+  await c.run(() => {
+    render(); editText(card("a"));
+    const cap = nodes.get("a").querySelector(".cap");
     cap.textContent = "改过的内容 #核心";
-    syncCap(tw, cap);
+    syncCap(card("a"), cap); cap.blur();
   });
   await c.wait(300);
-  c.ok("改分身即改源", (await c.run(() => card("a").text)) === "改过的内容 #核心");
+  c.ok("改主卡片，分身跟着变", (await c.run(() => orig(S.cards.find((z) => z.ref === "a")).text)) === "改过的内容 #核心");
 
   // 剪贴板放置：跨任意距离
   await c.run(() => { sel = ["a"]; paintSel(); clipCards("twin"); });
@@ -319,13 +324,14 @@ group("twins 分身", async (c) => {
   c.ok("分身处也完整呈现内容", (doc.match(/改过的内容/g) || []).length >= 2);
   c.ok("不再产生交叉引用式的指路文字", !/&#9672;|Same entry|同一条目/.test(doc));
 
-  // 删源不丢内容
+  // 2026-10 起：有分身的主卡片不能删（不再"扶正分身"）
   await c.run(() => { sel = ["a"]; del(); });
-  await c.wait(400);
-  c.ok(
-    "删除源后内容由分身继承",
-    await c.run(() => !!S.cards.find((z) => !z.ref && (z.text || "").includes("改过")))
-  );
+  await c.wait(100);
+  c.ok("有分身的主卡片删不掉，并提示", await c.run(() => !!card("a") && $("toast").textContent === t("twinNoDel").replace("{n}", 1)));
+  await c.run(() => { sel = [S.cards.find((z) => z.ref === "a").id]; del(); });
+  c.ok("删分身只删分身，主卡片还在", await c.run(() => !!card("a") && S.cards.filter((z) => z.ref === "a").length === 1));
+  await c.run(() => { S.cards.filter((z) => z.ref === "a").forEach((z) => delete z.lock); sel = ["a", ...S.cards.filter((z) => z.ref === "a").map((z) => z.id)]; del(); });
+  c.ok("主卡片和它全部的分身一起删，可以", await c.run(() => !card("a") && !S.cards.some((z) => z.ref === "a")));
 });
 
 /* =====================================================================
@@ -1248,7 +1254,8 @@ group("mq 迷你分身：摘下再粘贴", async (c) => {
   // 删除保护
   await c.run(() => { sel = ["q"]; del(); }); await c.wait(100);
   c.ok("正文里有迷你分身指着的源卡片删不掉", await c.run(() => !!card("q")));
-  await c.run(() => { sel = ["q", "q2"]; del(); });
+  // q2 在稿子里还有引文分身，按"有分身的主卡片不能删"也会留下；先把那条分身移掉，这里只测摘录的保护
+  await c.run(() => { S.cards = S.cards.filter((z) => z.ref !== "q2"); invalidateIndex(); sel = ["q", "q2"]; del(); });
   c.ok("多选删除时只留下被摘录的那张", await c.run(() => !!card("q") && !card("q2")));
   await c.run(() => applyUndo(undo, redo));
   await c.run(() => delFrame(S.frames.find((f) => f.id === "fq"), true));
@@ -1855,6 +1862,58 @@ group("thinkmark 我想我写：面板放大、卡片标记（2026-10）", async
   await c.run(() => { openThink(100, 100, card("a")); sel = ["a"]; openExport(100, 100); });
   c.ok("下一个弹层不带它的宽度", await c.run(() => !$("pop").classList.contains("tk")));
   await c.run(() => $("pop").classList.remove("on", "wide"));
+});
+
+group("twinro 分身只读、有分身的主卡片不能删（2026-10）", async (c) => {
+  await c.board([
+    { id: "m", x: 0, y: 0, w: 300, text: "Main", role: "bib", tags: ["t"], s: {} },
+    { id: "tb", x: 0, y: 300, w: 240, text: "", tb: { cols: [120, 120], rows: [["A", "B"], ["1", "2"]], head: true } },
+    { id: "im", x: 500, y: 300, w: 200, text: "cap", ih: "x", ar: 0.5, s: {} },
+    { id: "q", x: 500, y: 0, w: 300, text: "quote", bib: "m", s: {} },
+  ], [{ id: "l1", a: "m", b: "q" }], { zoom1: true });
+  const tw = await c.run(() => { const r = {}; ["m", "tb", "im"].forEach((id) => { sel = [id]; makeTwin(); r[id] = sel[0]; delete card(sel[0]).lock; }); render(); return r; });
+  const want = await c.run(() => t("twinNoEdit"));
+  // 表格：格子、行列、粘贴
+  await c.run((t2) => { const td = nodes.get(t2).querySelector("td"); editCell(td); }, tw.tb);
+  c.ok("分身表格的格子进不去编辑", await c.run(() => !editing && $("toast").textContent === t("twinNoEdit")));
+  await c.run((t2) => tbOp(card(t2), (g) => g.rows.push(["x", "y"])), tw.tb);
+  c.ok("分身表格不能加行", await c.run(() => card("tb").tb.rows.length === 2));
+  // 链接、标签、文献信息
+  await c.run((m2) => { sel = [m2]; window.prompt = () => "https://evil.example"; setCardUrl(); }, tw.m);
+  c.ok("分身上不能改链接", await c.run(() => !card("m").url));
+  await c.run((m2) => { sel = [m2]; openTags(10, 10); }, tw.m);
+  c.ok("分身上不能改标签", await c.run(() => !$("pop").classList.contains("on") || !$("tgi")));
+  await c.run((m2) => { $("pop").classList.remove("on"); openBm(10, 10, card(m2)); }, tw.m);
+  c.ok("分身上打开文献信息只能看", await c.run(() => $("bm_title").disabled === true));
+  await c.run(() => $("pop").classList.remove("on", "bm"));
+  // 图片
+  const it = await c.run((i2) => { sel = [i2]; return cardItems(10, 10).filter((z) => z && z.label).map((z) => z.label); }, tw.im);
+  c.ok("分身菜单里没有换图、删图", await c.run((it) => !it.includes(t("imgDrop")) && !it.includes(t("replaceImage")), it));
+  // 模板：只改分身自己的样式，主卡片正文里的格式不动
+  await c.run((m2) => { card("m").rich = 'Ma<span style="font-size: 30px;">in</span>'; sel = [m2]; applyTemplate({ s: { ...DEF, size: 18 } }); }, tw.m);
+  c.ok("对分身套模板，主卡片正文里的格式不动", await c.run((m2) => /font-size: 30px/.test(card("m").rich) && card(m2).s.size === 18, tw.m));
+  // 样式（字号）仍可各自不同
+  await c.run((m2) => { sel = [m2]; setStyle("size", 26); }, tw.m);
+  c.ok("分身自己的字号照样能改，不影响主卡片", await c.run((m2) => card(m2).s.size === 26 && (card("m").s.size || 0) !== 26, tw.m));
+  c.ok("我想我写仍然可以在分身上写（记在主卡片上）", await c.run((m2) => { openThink(10, 10, card(m2)); const ok = !!$("tkin") && !$("tkin").disabled; $("pop").classList.remove("on", "tk"); return ok; }, tw.m));
+
+  // 删除
+  await c.run(() => { sel = ["m", "q"]; del(); });
+  c.ok("多选删除：有分身的主卡片留下，其他照删", await c.run(() => !!card("m") && !card("q")));
+  await c.run(() => applyUndo(undo, redo));
+  c.ok("连线和原文绑定都还在（没有被扶正打断）", await c.run(() => S.links.some((l) => l.a === "m") && card("q").bib === "m"));
+  // 只在写作页里有分身
+  await c.run((m2) => {
+    sel = [m2]; del();
+    S.docs = []; const d = addDoc({ x: 3000, y: 0 }, "D");
+    sel = ["q"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = ["m"]; clipCards("twin"); wrPasteTwin(d.ids[0], d);
+    sel = ["m"]; del();
+  }, tw.m);
+  c.ok("只在写作页里有引文分身，主卡片也删不掉", await c.run(() => !!card("m") && S.cards.some((z) => z.ref === "m" && z.wrUnder)));
+  await c.run(() => { S.frames = [{ id: "f", x: -50, y: -50, w: 400, h: 200, title: "P" }]; render(); delFrame(S.frames[0], true); });
+  c.ok("删页面连同卡片时，有分身的主卡片也留下", await c.run(() => !!card("m") && !S.frames.length));
+  c.ok("中英文案都齐了", await c.run(() => ["twinNoEdit", "twinNoDel"].every((k) => T.en[k] && T.zh[k])));
 });
 
 /* =====================================================================

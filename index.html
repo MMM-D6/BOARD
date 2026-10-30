@@ -1022,6 +1022,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pageNoOverlap:"Pages can't overlap",pageNewMoved:"New page placed in the nearest free space",
   thinkMenu:"I think, I write",thinkPh:"Write whatever comes to mind. Messy and unfinished is fine.",
   thinkHint:"Saved as you type · \u2318/Ctrl+Enter starts a new entry · Click an entry to edit it",
+  twinNoEdit:"A twin's content can't be edited. Edit the source card instead (right-click the twin \u2192 Jump to the source).",
+  twinNoDel:"{n} card(s) still have twins and were not deleted. Delete their twins first.",
   imgDrop:"Remove image, keep text",imgDropped:"Image removed; the text stays",
   bmMenu:"Reference details",bmHead:"Reference details",bmTable:"Bibliography table",bmNoEdit:"Edit this entry with right-click \u2192 Reference details",
   bmNotesRich:"Editing the notes here removes their formatting",
@@ -1247,6 +1249,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pageNoOverlap:"页面不能叠放",pageNewMoved:"新页面放到了旁边的空位",
   thinkMenu:"我想我写",thinkPh:"想到什么就写什么，乱一点、不完整都没关系",
   thinkHint:"打字即保存 · \u2318/Ctrl+Enter 另起一条 · 点已有的一条可以修改",
+  twinNoEdit:"分身不能改内容，请在主卡片上改（右键分身 →「跳到源头」）",
+  twinNoDel:"有 {n} 张卡片还有分身，没有删除；先删掉它们的分身",
   imgDrop:"删除图片，保留文字",imgDropped:"图片已删除，文字留着",
   bmMenu:"文献信息",bmHead:"Reference details",bmTable:"文献表",bmNoEdit:"用右键「文献信息」修改这条文献",
   bmNotesRich:"在这里改备注会去掉其中的格式",
@@ -1357,8 +1361,8 @@ function shortUrl(u){
 }
 function openUrl(u){if(u)window.open(normUrl(u),"_blank","noopener")}
 function setCardUrl(){
-  const cs=targets().filter(z=>!isLocked(z.id));
-  if(!cs.length)return;
+  const cs=targets().filter(z=>!isLocked(z.id)&&!z.ref);
+  if(!cs.length){if(targets().some(z=>z.ref))toast(t("twinNoEdit"));return}
   const cur=orig(cs[0]).url||"";
   const v=prompt(t("linkPrompt"),cur);
   if(v===null)return;
@@ -2729,6 +2733,7 @@ function cellFmt(tb,r,c,make){
 function applyCellFmt(prop,val){
   const r=tbRect();if(!r)return false;
   const c=card(r.id);if(!c||isLocked(c.id))return false;
+  if(c.ref){toast(t("twinNoEdit"));return true}
   const o=orig(c),tb=o.tb;
   snap();
   tbCells().forEach(([i,j])=>{
@@ -2829,11 +2834,13 @@ function syncTable(c){
 }
 function tbOp(c,fn){
   const o=orig(c);
+  if(c.ref){toast(t("twinNoEdit"));return}
   if(isLocked(c.id)){toast(t("lockedNote"));return}
   snap();fn(o.tb);syncTable(o);render();save();
 }
 function editCell(td){
   if(!td)return;
+  {const host=td.closest(".card[data-id]"),hc=host&&card(host.dataset.id);if(hc&&hc.ref){toast(t("twinNoEdit"));return}}
   editing=true;td.contentEditable="true";td.focus();
   const r=document.createRange();r.selectNodeContents(td);
   const sl=getSelection();sl.removeAllRanges();sl.addRange(r);
@@ -3573,7 +3580,7 @@ function addFrame(){
 function delFrame(f,withCards){
   snap();
   if(withCards){
-    const ids=mqProtect(inFrame(f).map(c=>c.id));
+    const ids=twinProtect(mqProtect(inFrame(f).map(c=>c.id)));
     S.links=S.links.filter(l=>!ids.includes(l.a)&&!ids.includes(l.b));
     invalidateIndex();S.cards=S.cards.filter(c=>!ids.includes(c.id));
   }
@@ -3700,6 +3707,7 @@ function measure(){
 }
 function editText(c,ev,elOverride){
   if(lock)return;
+  if(c.ref){toast(t("twinNoEdit"));return}   // 分身永远不能改内容，解锁了也不行（2026-10）：内容只在主卡片上改
   if(isLocked(c.id)){toast(t("lockedNote"));return}
   if(bibShows(c)&&!elOverride){toast(t("bmNoEdit"));return}   // 画布上显示的是标题与 Citation，不是能直接改的那段文字
   c._tg=cardTags(c).join(",");
@@ -4132,7 +4140,7 @@ addEventListener("copy",e=>{
 addEventListener("paste",e=>{
   if(editing||lock)return;
   const selCard=sel.length===1?card(sel[0]):null;
-  if(selCard&&isTable(selCard)&&!isLocked(selCard.id)){
+  if(selCard&&isTable(selCard)&&!isLocked(selCard.id)&&!selCard.ref){
     const dt=e.clipboardData;
     const grid=gridFromHTML(dt.getData("text/html"))||
       (/\t|\n/.test(dt.getData("text/plain"))?parseTSV(dt.getData("text/plain")):null);
@@ -4331,19 +4339,8 @@ function del(){
     if(l0&&isLinkLocked(l0))toast(t("lockedNote"));
     else S.links=S.links.filter(l=>l.id!==selLink);
     selLink=null}
-  const kill0=freeSel(),kill=mqProtect(kill0);   // 正文里有摘录指着的源卡片留下
+  const kill0=freeSel(),kill=twinProtect(mqProtect(kill0));   // 正文里有摘录指着的、还有分身的源卡片都留下
   if(kill.length){
-    // 源被删除时把第一个分身扶正，内容不丢
-    kill.forEach(id=>{
-      const o=S.cards.find(z=>z.id===id);
-      if(!o||o.ref)return;
-      const kids=S.cards.filter(z=>z.ref===o.id&&!kill.includes(z.id));
-      if(!kids.length)return;
-      const heir=kids[0];
-      const n={...o,id:heir.id,x:heir.x,y:heir.y,w:heir.w,s:heir.s};delete n.ref;
-      S.cards[S.cards.indexOf(heir)]=n;
-      kids.slice(1).forEach(z=>z.ref=heir.id);
-    });
     S.links=S.links.filter(l=>!kill.includes(l.a)&&!kill.includes(l.b));
     invalidateIndex();S.cards=S.cards.filter(c=>!kill.includes(c.id));sel=[]}
   else if(sel.length&&kill0.length===kill.length)toast(t("lockedNote"));
@@ -7507,7 +7504,7 @@ function applyTemplate(tpl){
     if(tpl.w)z.w=tpl.w;
     if(tpl.bg)z.bg=tpl.bg;else delete z.bg;
     const o=orig(z);
-    if(o.rich){
+    if(o.rich&&!z.ref){                     // 分身：只换它自己的样式，主卡片正文里的格式不动
       const box=document.createElement("div");box.innerHTML=o.rich;
       box.querySelectorAll("*").forEach(el=>{
         if(!el.style)return;
@@ -7687,6 +7684,7 @@ function clearFmt(){
   const r0=tbRect();
   if(r0){
     const c0=card(r0.id);
+    if(c0&&c0.ref){toast(t("twinNoEdit"));return}
     if(c0&&!isLocked(c0.id)){
       const tb=orig(c0).tb;
       snap();tbCells().forEach(([i,j])=>{if(tb.fmt)delete tb.fmt[i+","+j]});
@@ -8192,8 +8190,8 @@ function setCardTags(c,list){
 }
 function openTags(x,y){
   $("pop").classList.remove("wide");
-  const cs=targets().filter(c=>!isLocked(c.id)&&bibOn(c));
-  if(lock||!cs.length)return;
+  const cs=targets().filter(c=>!isLocked(c.id)&&bibOn(c)&&!c.ref);
+  if(lock||!cs.length){if(targets().some(c=>c.ref))toast(t("twinNoEdit"));return}
   const p=$("pop");
   const cur=cs.length===1?cardTags(cs[0]):[];
   p.innerHTML=`
@@ -8224,7 +8222,7 @@ function openTags(x,y){
    ① 只记在原卡片上（orig）：画布上的分身、写作页折叠框里的引文分身，打开的都是同一份。
    ② 写作页正文段落（docOnly）不提供：它们是独立副本，想法记在那里会和原卡片脱钩。
    ③ 想法不是卡片内容：卡片锁定照样能写。复制卡片（拷贝粘贴、⌘D、拷进稿子、分身脱离）不带走，
-      这是和分身的区别；源卡片被删、分身被扶正时（del 里的 heir）想法跟着内容一起留下。
+      这是和分身的区别；有分身的源卡片不许删（twinProtect），想法自然不会丢。
    ④ 打字即保存，没有"草稿"这一说，所以面板被点外面关掉也不会丢字。
       清空一条已有的记录不会删掉它（离开时恢复原文）；删除只能点"删除"再点"确定删除？"，并且可以撤销。
    ⑤ 画布上不显示任何东西，所以网页快照和截图天然不带；Word/PDF/Markdown 导出默认不带，勾选才带。
@@ -8278,6 +8276,7 @@ function bmNorm(b){
 }
 // 删除图片、保留文字
 function dropImage(c){
+  if(c.ref){toast(t("twinNoEdit"));return}
   const o=orig(c);if(!hasImg(o)||(o.pt&&o.pt.length)||o.pdfbook)return;
   if(isLocked(c.id)){toast(t("lockedNote"));return}
   snap();
@@ -8289,7 +8288,7 @@ function dropImage(c){
 function openBm(x,y,c,onClose){
   const o0=orig(c);if(!o0||!bibOn(c)||lock)return;
   const id=o0.id,src=()=>card(id);
-  const ro=isLocked(c.id);
+  const ro=isLocked(c.id)||!!c.ref;          // 分身上打开只能看
   const p=$("pop");
   const b=o0.bm||{};
   const types=[...new Set(S.cards.filter(z=>bibOn(z)&&!z.ref&&z.bm&&z.bm.type).map(z=>z.bm.type))].sort((a,b2)=>a.localeCompare(b2));
@@ -10555,6 +10554,15 @@ function mqCount(skip){
   });
   return m;
 }
+// 有分身的主卡片不能删（2026-10）：画布上的分身、写作页折叠框里的引文分身都算；同一次一起删掉的分身不算。
+// 早先是"删主卡片、把第一个分身扶正"，但连线、原文绑定、我想我写这些指着主卡片 id 的东西都会断，所以不再这样做。
+function twinProtect(ids){
+  const set=new Set(ids);
+  const keep=ids.filter(id=>{const c=card(id);return c&&!c.ref&&S.cards.some(z=>z.ref===id&&!set.has(z.id))});
+  if(!keep.length)return ids;
+  setTimeout(()=>toast(t("twinNoDel").replace("{n}",keep.length)),0);
+  return ids.filter(id=>!keep.includes(id));
+}
 // 从要删的一组里把"正文里有摘录指着"的源卡片挑出来留下，并说一声
 function mqProtect(ids){
   const q=mqCount(new Set(ids));
@@ -11395,9 +11403,9 @@ function cardItems(x,y){
   if(one&&one.pt&&one.pt.length)items.push({label:t("pdfRead"),check:isPinned(one.id),
     on:()=>setCardLock([one.id],isPinned(one.id)?null:"all")});
   // 删除图片、保留文字：同一张卡片，绑定、分身、连线都不断。PDF 页面不给（文字层是贴在图上的）
-  if(one&&hasImg(orig(one))&&!(orig(one).pt&&orig(one).pt.length)&&!orig(one).pdfbook)
+  if(one&&!one.ref&&hasImg(orig(one))&&!(orig(one).pt&&orig(one).pt.length)&&!orig(one).pdfbook)
     items.push({label:t("imgDrop"),on:()=>dropImage(one)});
-  if(one&&hasImg(one))items.push({label:t("replaceImage"),on:()=>{
+  if(one&&!one.ref&&hasImg(one))items.push({label:t("replaceImage"),on:()=>{
     const inp=document.createElement("input");inp.type="file";inp.accept="image/*";
     inp.onchange=()=>{const f=inp.files[0];if(f)shrink(f,async(d,w,h)=>{snap();
       const r=await putImg(d);one.ih=r.h;if(r.ok)delete one.src;else one.src=d;
