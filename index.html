@@ -236,6 +236,12 @@
   .card .cap a{color:inherit;text-decoration:underline;text-underline-offset:2px;
     text-decoration-thickness:1px;cursor:pointer}
   .card .cap a:hover{text-decoration-thickness:2px}
+  /* 我想我写的标记：右下角卡片外面，跟左下的链接图标对称，比它小、比它淡；点它打开面板 */
+  .card .thk{position:absolute;right:0;bottom:calc(-18px * var(--iz));width:calc(12px * var(--iz));height:calc(12px * var(--iz));
+    opacity:.32;cursor:pointer}
+  .card .thk:hover{opacity:.8}
+  .card .thk svg{display:block;width:100%;height:100%}
+  body.lock .card .thk{display:none}
   .card .lnk{position:absolute;left:0;bottom:calc(-21px * var(--iz));
     width:calc(16px * var(--iz));height:calc(16px * var(--iz));opacity:.45;cursor:pointer;
     display:flex;align-items:center;justify-content:center;pointer-events:auto}
@@ -297,7 +303,9 @@
   .pop .note{font-size:11px;opacity:.42;margin:8px 0 0;line-height:1.5}
   /* 我想我写：只出现在这个面板里，画布上不画任何东西 */
   .pop .tkh{font-size:11px;opacity:.5;margin:-4px 0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pop.tk{width:440px;max-height:calc(100vh - 24px);overflow:auto}   /* 我想我写面板（2026-10 放大） */
   .pop .tk-list{max-height:280px;overflow:auto}
+  .pop.tk .tk-list{max-height:45vh}
   /* 文献表：全屏、只看不改（2026-10） */
   #bibt{position:fixed;inset:0;z-index:86;display:none;flex-direction:column;background:var(--wbg);color:var(--pfg);font-size:12.5px}
   #bibt.on{display:flex}
@@ -338,6 +346,7 @@
   .pop .tk .tm button{margin-left:auto;border:none;background:none;color:inherit;cursor:pointer;font-size:11px;padding:0 2px;opacity:.7}
   .pop .tk .tm button.arm{color:#c0392b;opacity:1}
   .pop .tk .tx{white-space:pre-wrap;word-break:break-word;margin-top:5px;line-height:1.55;cursor:text}
+  .pop.tk textarea.tki{min-height:96px;max-height:45vh;resize:none;overflow-y:auto}
   .pop textarea.tki{display:block;width:100%;min-height:76px;margin-top:8px;padding:6px 8px;box-sizing:border-box;resize:vertical;
     border:1px solid var(--pline);border-radius:6px;background:none;color:inherit;font:inherit;line-height:1.55;outline:none}
   #man{position:fixed;inset:0;z-index:120;display:none;background:rgba(0,0,0,.28);
@@ -3144,6 +3153,7 @@ function makeCard(c){
   cap.addEventListener("pointerdown",e=>{if(cap.isContentEditable)e.stopPropagation()});
   el.appendChild(cap);
 
+  thinkMark(el,c);                          // 有「我想我写」时右下角一个小标记
   const ourl=oc.url;
   if(ourl){
     const lk=document.createElement("div");lk.className="lnk";
@@ -5807,7 +5817,7 @@ async function captureCanvas(scale,list,rect){
   inner.style.transform=`translate(${-b.x+pad}px,${-b.y+pad}px)`;
   inner.style.setProperty("--iz",1);
   inner.querySelectorAll(".card").forEach(el=>el.classList.remove("sel","hit","nomatch"));
-  inner.querySelectorAll(".port,.hnd,.ring,.lvl").forEach(el=>el.remove());
+  inner.querySelectorAll(".port,.hnd,.ring,.lvl,.thk").forEach(el=>el.remove());
   if(keep){
     inner.querySelectorAll(".card").forEach(el=>{if(!keep.has(el.dataset.id))el.remove()});
     const okL=new Set(S.links.filter(l=>keep.has(l.a)&&keep.has(l.b)).map(l=>l.id));
@@ -6534,7 +6544,7 @@ function snapAttr(x){return String(x==null?"":x).replace(/&/g,"&amp;").replace(/
 function snapUrl(u){u=String(u||"").trim();return /^(javascript|vbscript|data):/i.test(u)?"":u}
 function snapClean(w){
   w.removeAttribute("style");                       // 相机由查看脚本重新给
-  w.querySelectorAll(".port,.hnd,.ring,.cgrip,.dbar,.refph,#links .hit,input,textarea,select")
+  w.querySelectorAll(".port,.hnd,.ring,.cgrip,.dbar,.refph,.thk,#links .hit,input,textarea,select")
     .forEach(el=>el.remove());
   w.querySelectorAll("[contenteditable]").forEach(el=>el.removeAttribute("contenteditable"));
   w.querySelectorAll("[spellcheck]").forEach(el=>el.removeAttribute("spellcheck"));
@@ -8219,7 +8229,23 @@ function openTags(x,y){
       清空一条已有的记录不会删掉它（离开时恢复原文）；删除只能点"删除"再点"确定删除？"，并且可以撤销。
    ⑤ 画布上不显示任何东西，所以网页快照和截图天然不带；Word/PDF/Markdown 导出默认不带，勾选才带。
    没写过想法的卡片没有这个字段，数据与从前逐字节相同。 */
-const thinkOf=c=>{const o=c&&orig(c);return o&&Array.isArray(o.think)?o.think:[]};
+const thinkOf=c=>{const o=c&&orig(c);return o&&Array.isArray(o.think)&&o.think.length?o.think:[]};
+const THK_SVG=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg>`;
+// 卡片右下角的小标记：有想法才有；写作页里的段落没有（它们本来就记不了）。演示模式、网页快照、导出的图片里都不出现
+function thinkMark(el,c){
+  if(!el)return;
+  const has=!docOnly(orig(c))&&thinkOf(c).length>0;
+  let m=el.querySelector(":scope > .thk");
+  if(!has){if(m)m.remove();return}
+  if(m)return;
+  m=document.createElement("div");m.className="thk";m.innerHTML=THK_SVG;
+  const st={...S.textDef,...(c.s||{})};m.style.color=st.color;
+  m.addEventListener("pointerdown",e=>{if(lock)return;e.stopPropagation();e.preventDefault()});
+  m.addEventListener("click",e=>{if(lock)return;e.stopPropagation();sel=[c.id];paintSel();openThink(e.clientX,e.clientY,card(c.id)||c)});
+  el.appendChild(m);
+}
+// 想法从无到有、从有到无时，把这张卡片和它在画布上的分身的标记跟着改，不用整张画布重画
+function thinkMarkAll(sid){S.cards.forEach(z=>{if(z.id===sid||z.ref===sid){const el=nodes.get(z.id);if(el)thinkMark(el,z)}})}
 const noThink=n=>{if(n)delete n.think;return n};
 function thinkStamp(ms){const d=new Date(ms),p=v=>String(v).padStart(2,"0");
   return d.getFullYear()+"-"+p(d.getMonth()+1)+"-"+p(d.getDate())+" "+p(d.getHours())+":"+p(d.getMinutes())}
@@ -8446,19 +8472,21 @@ function openThink(x,y,c){
   // 输入框里的按键、粘贴、复制不能漏到画布上（否则 Delete 会删卡片、粘贴会贴进表格）
   const guard=el=>["keydown","paste","copy","cut"].forEach(k=>el.addEventListener(k,e=>{
     e.stopPropagation();
-    if(k==="keydown"&&e.key==="Escape"){e.preventDefault();p.classList.remove("on","wide")}
+    if(k==="keydown"&&e.key==="Escape"){e.preventDefault();p.classList.remove("on","wide","tk")}
   }));
-  const close=()=>p.classList.remove("on","wide");
+  const close=()=>p.classList.remove("on","wide","tk");
   p.innerHTML=`<div class="hd"><b>${esc(t("thinkMenu"))}</b><button id="pcx">\u00D7</button></div>
     <div class="tkh">${esc(snippet(s0,40)||"")}</div>
     <div class="tk-list" id="tkl"></div>
     <textarea class="tki" id="tkin" placeholder="${escA(t("thinkPh"))}" spellcheck="false"></textarea>
     <p class="note">${esc(t("thinkHint"))}</p>`;
-  p.classList.add("wide");
-  place(p,Math.min(x,innerWidth-330),Math.min(y,innerHeight-440));
+  p.classList.remove("wide","bm");p.classList.add("tk");
+  p.dataset.bmNow="1";place(p,Math.max(8,Math.min(x,innerWidth-460)),Math.max(8,Math.min(y,innerHeight-460)));delete p.dataset.bmNow;
   p.classList.add("on");
   p.querySelector("#pcx").onclick=close;
   const box=p.querySelector("#tkl"),inp=p.querySelector("#tkin");
+  // 输入框跟着内容自动变高（到屏幕高度的一半左右再出滚动条），写长一点不用来回滑
+  const grow=ta=>{ta.style.height="auto";ta.style.height=ta.scrollHeight+2+"px"};
   const paintList=()=>{
     const L=thinkOf(src());
     box.style.display=L.length?"":"none";
@@ -8474,18 +8502,21 @@ function openThink(x,y,c){
   inp.addEventListener("input",()=>{
     const o=src();if(!o)return;
     const v=inp.value;
+    grow(inp);
     if(!cur){
       if(!v.trim())return;
       snap();cur={t:Date.now(),x:v};o.think=(Array.isArray(o.think)?o.think:[]).concat(cur);
+      thinkMarkAll(sid);
     }else if(!v.trim()){                     // 正在写的这一条又被删光：当作没写过
       o.think=(o.think||[]).filter(z=>z!==cur);if(!o.think.length)delete o.think;cur=null;
+      thinkMarkAll(sid);
     }else cur.x=v;
     save();
   });
   inp.addEventListener("keydown",e=>{
     if(e.key==="Enter"&&(e.metaKey||e.ctrlKey)){
       e.preventDefault();
-      if(cur){cur=null;inp.value="";paintList()}
+      if(cur){cur=null;inp.value="";grow(inp);paintList()}
     }
   });
   box.addEventListener("click",e=>{
@@ -8500,15 +8531,16 @@ function openThink(x,y,c){
       const ent=o.think[+del.dataset.del];if(!ent)return;
       snap();o.think=o.think.filter(z=>z!==ent);if(!o.think.length)delete o.think;
       if(ent===cur)cur=null;
-      save();paintList();toast(t("thinkDeleted"));
+      save();paintList();thinkMarkAll(sid);toast(t("thinkDeleted"));
       return;
     }
     const tx=e.target.closest(".tx");if(!tx)return;
     const ent=o.think[+tx.parentNode.dataset.i];if(!ent)return;
     const before=ent.x;let snapped=false;
     const ta=document.createElement("textarea");ta.className="tki";ta.value=ent.x;ta.spellcheck=false;
-    guard(ta);tx.replaceWith(ta);ta.focus();
+    guard(ta);tx.replaceWith(ta);grow(ta);ta.focus();
     ta.addEventListener("input",()=>{
+      grow(ta);
       if(!ta.value.trim())return;              // 删光了先不写进去，离开时恢复原文
       if(!snapped){snap();snapped=true}
       ent.x=ta.value;save();
@@ -11131,7 +11163,7 @@ addEventListener("pointermove",e=>{
   if(inside)keepSub();else{clearTimeout(subT);subT=setTimeout(()=>closeFrom(1),320)}
 },true);
 function place(el,x,y){
-  if(el&&el.id==="pop"&&!el.dataset.bmNow)el.classList.remove("bm");   // 文献信息表单的宽度只给它自己用
+  if(el&&el.id==="pop"&&!el.dataset.bmNow)el.classList.remove("bm","tk");   // 文献信息表单的宽度只给它自己用
   el.classList.add("on");el.style.left="0px";el.style.top="0px";el.scrollTop=0;
   const r=el.getBoundingClientRect();
   el.style.left=Math.max(6,Math.min(x,innerWidth-r.width-8))+"px";
@@ -11490,7 +11522,7 @@ function setStyle(k,v){
 }
 addEventListener("pointerdown",e=>{
   if(!e.target.closest("#pop")&&!e.target.closest("#menu")&&!e.target.closest("#submenu"))
-    $("pop").classList.remove("on","bm");     // bm 是文献信息表单自己的宽度，关掉时一起去掉，免得带到下一个弹层
+    $("pop").classList.remove("on","bm","tk");     // bm 是文献信息表单自己的宽度，关掉时一起去掉，免得带到下一个弹层
   if(!e.target.closest("#bar")){endSizeEdit(false);closePops()}
   else if(!e.target.closest("#szi"))endSizeEdit(false);
 },true);

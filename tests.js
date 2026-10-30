@@ -1803,6 +1803,59 @@ group("bib 文献信息、标签、删除图片、文献表（2026-10）", async
   c.ok("中英文案都齐了", await c.run(() => ["imgDrop", "imgDropped", "bmMenu", "bmHead", "bmTable", "bmNoEdit", "bmNotesRich", "btSearch", "btExport", "btEmpty", "btNone", "btGo", "btCount"].every((k) => T.en[k] && T.zh[k])));
 });
 
+group("thinkmark 我想我写：面板放大、卡片标记（2026-10）", async (c) => {
+  await c.board([
+    { id: "a", x: 0, y: 0, w: 300, text: "Note with thoughts", s: {} },
+    { id: "b", x: 500, y: 0, w: 300, text: "Note without", s: {} },
+  ], [], { zoom1: true });
+  c.ok("没写过想法的卡片没有标记", await c.run(() => !nodes.get("a").querySelector(".thk") && !nodes.get("b").querySelector(".thk")));
+  await c.run(() => { sel = ["a"]; paintSel(); openThink(100, 100, card("a")); });
+  await c.wait(100);
+  const pw = await c.run(() => ({ w: $("pop").getBoundingClientRect().width, tk: $("pop").classList.contains("tk") }));
+  c.ok("面板放大到约 440px", pw.tk && Math.abs(pw.w - 440) < 4);
+  const h0 = await c.run(() => $("tkin").getBoundingClientRect().height);
+  await c.page.keyboard.type("first thought");
+  c.ok("写下第一条，卡片右下角马上出现标记", await c.run(() => !!nodes.get("a").querySelector(".thk")));
+  for (let i = 0; i < 8; i++) { await c.page.keyboard.down("Shift"); await c.page.keyboard.press("Enter"); await c.page.keyboard.up("Shift"); await c.page.keyboard.type("line " + i); }
+  const h1 = await c.run(() => { const t2 = $("tkin"); return { h: t2.getBoundingClientRect().height, fits: t2.scrollHeight <= t2.clientHeight + 2 }; });
+  c.ok("输入框跟着内容变高，不用在里面滚动", h1.h > h0 + 60 && h1.fits);
+  await c.page.keyboard.press("Escape"); await c.wait(100);
+  // 标记的位置和样子
+  const mk = await c.run(() => {
+    const el = nodes.get("a"), m = el.querySelector(".thk"), r = m.getBoundingClientRect(), cr = el.getBoundingClientRect();
+    const lk = (() => { card("a").url = "https://x.org"; render(); const l = nodes.get("a").querySelector(".lnk").getBoundingClientRect(); return l; })();
+    const mEl = nodes.get("a").querySelector(".thk"), m2 = mEl.getBoundingClientRect();
+    return { right: Math.abs(r.right - cr.right) < 2, below: r.top >= cr.bottom - 1, smaller: m2.width < lk.width, op: +getComputedStyle(mEl).opacity, noOverlap: m2.left > lk.right };
+  });
+  c.ok("标记在卡片右下角外面", mk.right && mk.below);
+  c.ok("比链接图标小，跟它不重叠", mk.smaller && mk.noOverlap);
+  c.ok("颜色很淡", mk.op > 0 && mk.op < 0.5);
+  // 点标记打开面板
+  const mp = await c.run(() => { $("pop").classList.remove("on", "tk"); const r = nodes.get("a").querySelector(".thk").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; });
+  await c.page.mouse.click(mp.x, mp.y); await c.wait(150);
+  c.ok("点标记打开这张卡片的「我想我写」", await c.run(() => $("pop").classList.contains("on") && $("pop").classList.contains("tk") && document.querySelectorAll("#pop .tk").length === 1));
+  c.ok("点标记不会拖动卡片", await c.run(() => card("a").x === 0 && card("a").y === 0));
+  await c.page.keyboard.press("Escape");
+  // 分身也有标记；写作页段落没有
+  const tw = await c.run(() => { sel = ["a"]; makeTwin(); return sel[0]; });
+  c.ok("画布上的分身也有标记", await c.run((tw) => !!nodes.get(tw).querySelector(".thk"), tw));
+  // 删掉最后一条：标记消失
+  await c.run(() => { openThink(100, 100, card("a")); });
+  await c.run(() => { const b = document.querySelector('#pop button[data-del="0"]'); b.click(); b.click(); });
+  c.ok("最后一条删掉后，卡片和分身的标记都消失", await c.run((tw) => !nodes.get("a").querySelector(".thk") && !nodes.get(tw).querySelector(".thk"), tw));
+  await c.run(() => applyUndo(undo, redo));
+  c.ok("撤销回来，标记也回来", await c.run(() => !!nodes.get("a").querySelector(".thk")));
+  await c.run(() => $("pop").classList.remove("on", "tk"));
+  // 演示模式、快照、导出图片里都不出现
+  c.ok("演示模式里不显示", await c.run(() => { setLock(true); const r = getComputedStyle(nodes.get("a").querySelector(".thk")).display === "none"; setLock(false); return r; }));
+  c.ok("网页快照里没有", await c.run(async () => { const h = await buildWebSnap("t"); return !h.includes('class="thk"'); }));
+  c.ok("导出图片用的克隆里没有", await c.run(() => { const src = captureCanvas.toString(); return /\.lvl,\.thk/.test(src); }));
+  // 面板宽度不会带到下一个弹层
+  await c.run(() => { openThink(100, 100, card("a")); sel = ["a"]; openExport(100, 100); });
+  c.ok("下一个弹层不带它的宽度", await c.run(() => !$("pop").classList.contains("tk")));
+  await c.run(() => $("pop").classList.remove("on", "wide"));
+});
+
 /* =====================================================================
    6. 编组与锁定
    ===================================================================== */
