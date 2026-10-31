@@ -1916,6 +1916,110 @@ group("twinro 分身只读、有分身的主卡片不能删（2026-10）", async
   c.ok("中英文案都齐了", await c.run(() => ["twinNoEdit", "twinNoDel"].every((k) => T.en[k] && T.zh[k])));
 });
 
+group("mapfix 地图、孤儿、页面索引、移到页面（2026-10）", async (c) => {
+  // ---- 页面索引：把一个页面拖过另一个之后，卡片仍然认得出自己属于哪一页 ----
+  await c.board([
+    { id: "a", x: 40, y: 40, w: 200, text: "in A", s: {} },
+    { id: "b", x: 640, y: 40, w: 200, text: "in B", s: {} },
+  ], [], { frames: [{ id: "A", x: 0, y: 0, w: 400, h: 300, title: "A" }, { id: "B", x: 600, y: 0, w: 400, h: 300, title: "B" }], zoom1: true });
+  await c.run(() => {   // 真的走拖动的函数，把 A 拖到 B 右边
+    const A = S.frames[0];
+    startFrameMove({ clientX: 0, clientY: 0 }, A);
+    dispatchEvent(new PointerEvent("pointermove", { clientX: 1200 * cam.z, clientY: 0 }));
+    dispatchEvent(new PointerEvent("pointerup", {}));
+  });
+  c.ok("拖动 A 时甲跟着走", await c.run(() => card("a").x === 1240));
+  c.ok("A 被拖过 B 之后，乙仍然算在 B 里", await c.run(() => (frameOf(card("b")) || {}).id === "B"));
+  await c.run(() => {
+    const B = S.frames.find((f) => f.id === "B");
+    startFrameMove({ clientX: 0, clientY: 0 }, B);
+    dispatchEvent(new PointerEvent("pointermove", { clientX: 0, clientY: 500 * cam.z }));
+    dispatchEvent(new PointerEvent("pointerup", {}));
+  });
+  c.ok("再拖 B，乙跟着走，不会留在原地", await c.run(() => card("b").y === 540));
+
+  // ---- 孤儿：删稿子时一起删；打开文件时清掉已有的；地图不画稿子的段落，画稿子本身 ----
+  const o = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: 3000, y: 2000 }, "Draft");
+    wrInsertAt(d, 0); wrInsertAt(d, 0);
+    sel = ["a"]; clipCards("twin"); wrPasteTwin(d.ids[0], d);
+    const inDraft = S.cards.filter((z) => z.wrIn === d.id).length;
+    docMenu(10, 10, d); [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("wrDocDel"))).click();
+    const left = S.cards.filter((z) => z.wrIn === d.id).length;
+    sel = ["a"]; del();
+    const aGone = !card("a");
+    applyUndo(undo, redo); applyUndo(undo, redo);
+    const back = docs().length === 1 && S.cards.filter((z) => z.wrIn === d.id).length === inDraft;
+    return { inDraft, left, aGone, back };
+  });
+  c.ok("删稿子时，里面的段落和引文分身一起删掉", o.inDraft === 3 && o.left === 0);
+  c.ok("删掉稿子后，主卡片不再被看不见的分身挡着，可以删", o.aGone);
+  c.ok("删稿子可以撤销，段落和分身都回来", o.back);
+  const ld = await c.run(async () => {
+    const b = JSON.parse(JSON.stringify(bundle(null)));
+    b.cards.push({ id: "orph1", x: 9000, y: 9000, w: 300, text: "orphan", wrIn: "gone", s: {} }, { id: "orph2", x: 9000, y: 9000, w: 300, ref: "a", wrUnder: "x", wrIn: "gone", s: {} });
+    await absorb(b, false);
+    const n = S.cards.filter((z) => z.wrIn === "gone").length;
+    const keep = S.cards.filter((z) => z.wrIn && docs().some((d) => d.id === z.wrIn)).length;
+    return { n, keep };
+  });
+  c.ok("打开文件时清掉孤儿", ld.n === 0);
+  c.ok("还在的稿子里的段落不受影响", ld.keep === 3);
+  c.ok("合并文件时，跟着来的稿子段落（成了孤儿）也清掉", await c.run(async () => {
+    const b = { cards: [{ id: "z1", x: 0, y: 0, w: 200, text: "merged", s: {} }, { id: "z2", x: 0, y: 0, w: 200, text: "draft bit", wrIn: "nodoc", s: {} }], links: [] };
+    await absorb(b, true);
+    return S.cards.some((z) => z.text === "merged") && !S.cards.some((z) => z.text === "draft bit");
+  }));
+  await c.run(() => { if (!mapOn) toggleMap(); mapFit(); });
+  await c.wait(300);
+  const mp = await c.run(() => {
+    const docHits = mapHit.filter((h) => h.doc).length;
+    // 地图上稿子段落那个角（稿子左上角）不应该有卡片方块：段落不画
+    const d = docs()[0], m = $("map")._m;
+    return { docHits, title: mapHit.find((h) => h.doc).f.title, k: m.k };
+  });
+  c.ok("地图上画出了写作稿子，可以悬停看名字", mp.docHits === 1 && mp.title === "Draft");
+  c.ok("地图不画稿子里的段落和引文分身", await c.run(() => { const src = drawMap.toString(); return /if\(docOnly\(c\)\)continue/.test(src); }));
+  const dp = await c.run(() => { const h = mapHit.find((z) => z.doc); const r = $("mapc").getBoundingClientRect(); return { x: r.left + h.x + h.w / 2, y: r.top + h.y + h.h / 2 }; });
+  await c.page.mouse.click(dp.x, dp.y); await c.wait(400);
+  c.ok("在地图上点稿子，选中它", await c.run(() => selDoc === docs()[0].id));
+  await c.run(() => toggleMap());
+
+  // ---- 移到页面：整组保持相对位置；先找空位；放不下往下扩、再往右扩；都不行就不搬 ----
+  await c.board([
+    { id: "p1", x: 40, y: 40, w: 200, text: "page one card", s: {} },
+    { id: "s1", x: 2000, y: 2000, w: 150, text: "move me 1", s: {} },
+    { id: "s2", x: 2200, y: 2050, w: 150, text: "move me 2", s: {} },
+  ], [], { frames: [{ id: "P", x: 0, y: 0, w: 800, h: 600, title: "P" }, { id: "Q", x: 0, y: 640, w: 800, h: 300, title: "Q" }], zoom1: true });
+  await c.run(() => { sel = ["s1", "s2"]; sendTo(S.frames[0], "move"); });
+  const r1 = await c.run(() => ({ dx: card("s2").x - card("s1").x, dy: card("s2").y - card("s1").y, inP: ["s1", "s2"].every((id) => (frameOf(card(id)) || {}).id === "P"), P: { ...S.frames[0] } }));
+  c.ok("一组卡片保持原来的相对位置", r1.dx === 200 && r1.dy === 50);
+  c.ok("有空位就放进去，页面大小不变", r1.inP && r1.P.w === 800 && r1.P.h === 600);
+  c.ok("不压在页面里已有的卡片上", await c.run(() => { const a = card("p1"), b = card("s1"); return b.y > a.y + hOf(a) || b.x > a.x + a.w; }));
+  // 塞满 P，再搬：下面贴着 Q 不能往下扩，只能往右扩
+  await c.run(() => {
+    const fill = []; for (let i = 0; i < 6; i++) for (let j = 0; j < 4; j++) fill.push({ id: "f" + i + j, x: 24 + j * 190, y: 30 + i * 95, w: 180, text: "x\nx\nx", s: {} });
+    fill.forEach((z) => { z.h = 90; }); S.cards = S.cards.filter((z) => !["s1", "s2", "p1"].includes(z.id)).concat(fill, [{ id: "s3", x: 3000, y: 3000, w: 300, h: 200, text: "big", s: {} }]);
+    invalidateIndex(); render(); sel = ["s3"]; sendTo(S.frames[0], "move");
+  });
+  const r2 = await c.run(() => { const P = S.frames[0], Q = S.frames[1]; return { P: { ...P }, overlap: frHit(P, Q), inP: (frameOf(card("s3")) || {}).id === "P" }; });
+  c.ok("下面没空间：往右扩，不碰到下面的页面", r2.P.w > 800 && r2.P.h === 600 && !r2.overlap && r2.inP);
+  // 右边也堵上：一张都不搬，给提示
+  await c.run(() => { S.frames.push({ id: "R", x: S.frames[0].x + S.frames[0].w + 10, y: -2000, w: 400, h: 5000, title: "R" }); S.cards.push({ id: "s4", x: 5000, y: 5000, w: 600, h: 400, text: "huge", s: {} }); invalidateIndex(); render(); });
+  const before = await c.run(() => JSON.stringify([S.frames.map((f) => [f.x, f.y, f.w, f.h]), card("s4").x, card("s4").y]));
+  await c.run(() => { sel = ["s4"]; sendTo(S.frames[0], "move"); });
+  c.ok("四周都放不下：一张都不搬、页面不变，并提示", (await c.run(() => JSON.stringify([S.frames.map((f) => [f.x, f.y, f.w, f.h]), card("s4").x, card("s4").y]))) === before && (await c.run(() => $("toast").textContent === t("sendNoRoom"))));
+  c.ok("所有页面互不重叠", await c.run(() => S.frames.every((a, i) => S.frames.every((b, j) => i === j || !frHit(a, b)))));
+  // 位置锁定的页面不扩
+  await c.run(() => { S.frames = S.frames.filter((f) => f.id !== "R"); S.frames[0].fixed = true; render(); sel = ["s4"]; sendTo(S.frames[0], "move"); });
+  c.ok("位置锁定的页面没空位时不扩，提示原因", await c.run(() => card("s4").x === 5000 && $("toast").textContent === t("sendNoRoomFixed")));
+  // 以分身方式送过去也按同样的规矩
+  await c.run(() => { delete S.frames[0].fixed; S.cards.push({ id: "s5", x: 6000, y: 6000, w: 150, h: 60, text: "twin me", s: {} }); invalidateIndex(); render(); sel = ["s5"]; sendTo(S.frames[1], "twin"); });
+  c.ok("以分身方式送到页面：分身落在那一页里，原卡片不动", await c.run(() => { const tw = S.cards.find((z) => z.ref === "s5"); return !!tw && (frameOf(tw) || {}).id === "Q" && card("s5").x === 6000; }));
+  c.ok("中英文案都齐了", await c.run(() => ["sendNoRoom", "sendNoRoomFixed"].every((k) => T.en[k] && T.zh[k])));
+});
+
 /* =====================================================================
    6. 编组与锁定
    ===================================================================== */
@@ -2357,7 +2461,7 @@ group("map 页面地图", async (c) => {
   await c.run(() => toggleMap());
   await c.wait(400);
   c.ok("地图可以打开", await c.run(() => $("map").classList.contains("on")));
-  c.ok("画出全部页面", (await c.run(() => mapHit.length)) === 24);
+  c.ok("画出全部页面", (await c.run(() => mapHit.filter((h) => !h.doc).length)) === 24);   // 地图上的写作稿子另算（2026-10）
   c.ok("显示页面总数", (await c.run(() => $("mapn").textContent)) === "24");
   c.ok("地图里不画标题与序号", await c.run(() => !document.getElementById("mapov")));
   c.ok("页面按真实比例绘制", await c.run(() => {

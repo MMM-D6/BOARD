@@ -1022,6 +1022,8 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   pageNoOverlap:"Pages can't overlap",pageNewMoved:"New page placed in the nearest free space",
   thinkMenu:"I think, I write",thinkPh:"Write whatever comes to mind. Messy and unfinished is fine.",
   thinkHint:"Saved as you type · \u2318/Ctrl+Enter starts a new entry · Click an entry to edit it",
+  sendNoRoom:"Not enough room on that page. Make it bigger, or move the pages around it, then try again.",
+  sendNoRoomFixed:"That page's position is locked and it has no free space for these cards.",
   twinNoEdit:"A twin's content can't be edited. Edit the source card instead (right-click the twin \u2192 Jump to the source).",
   twinNoDel:"{n} card(s) still have twins and were not deleted. Delete their twins first.",
   imgDrop:"Remove image, keep text",imgDropped:"Image removed; the text stays",
@@ -1249,6 +1251,8 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   pageNoOverlap:"页面不能叠放",pageNewMoved:"新页面放到了旁边的空位",
   thinkMenu:"我想我写",thinkPh:"想到什么就写什么，乱一点、不完整都没关系",
   thinkHint:"打字即保存 · \u2318/Ctrl+Enter 另起一条 · 点已有的一条可以修改",
+  sendNoRoom:"目标页面放不下，先把它调大或把旁边的页面挪开",
+  sendNoRoomFixed:"目标页面已锁定位置，里面没有空位放这些卡片",
   twinNoEdit:"分身不能改内容，请在主卡片上改（右键分身 →「跳到源头」）",
   twinNoDel:"有 {n} 张卡片还有分身，没有删除；先删掉它们的分身",
   imgDrop:"删除图片，保留文字",imgDropped:"图片已删除，文字留着",
@@ -1380,27 +1384,51 @@ function setTextLink(){
   else document.execCommand("unlink",false,null);
   afterInline();
 }
-// 在页面里找一块空位，避免叠在已有内容上
-function freeSpotIn(f,w,h){
-  const inside=inFrame(f);
-  const x=f.x+24;
-  let y=f.y+30;
-  if(inside.length)y=Math.max(y,Math.max(...inside.map(z=>z.y+hOf(z)))+36);
-  if(y+h>f.y+f.h){                       // 页面装不下就把页面撑高
-    f.h=Math.round(y+h-f.y+30);
+// 移到页面（2026-10）：选中的几张卡片作为一组搬过去，保持彼此的相对位置。
+// 先在页面里找一块空地；没有就把页面往下扩、再试往右扩，扩的前提是不碰到别的页面（页面不许叠放）；
+// 位置锁定的页面不扩。都不行就一张都不搬，返回 null。返回 {x,y,grow:{w,h}|null}：整组左上角放在哪、页面要扩成多大
+function sendSpot(f,cs){
+  const b=bbox(cs);if(!b)return null;
+  const M=24,G=24,TOP=30;                     // 页边距、与别的卡片的间隔、顶部留白
+  const moving=new Set(cs.map(c=>c.id));
+  const obs=S.cards.filter(c=>!moving.has(c.id)&&!docOnly(c)).map(c=>({x:c.x,y:c.y,w:c.w,h:hOf(c)||100}))
+    .filter(r=>r.x<f.x+f.w&&r.x+r.w>f.x&&r.y<f.y+f.h&&r.y+r.h>f.y);
+  const free=(x,y)=>!obs.some(r=>x-G<r.x+r.w&&x+b.w+G>r.x&&y-G<r.y+r.h&&y+b.h+G>r.y);
+  // 1) 页面里的空地：从上到下、从左到右找第一块放得下的
+  const x0=f.x+M,x1=f.x+f.w-M-b.w,y0=f.y+TOP,y1=f.y+f.h-M-b.h;
+  if(x1>=x0&&y1>=y0){
+    let st=24;while(((x1-x0)/st+1)*((y1-y0)/st+1)>60000)st*=2;
+    for(let y=y0;y<=y1;y+=st)for(let x=x0;x<=x1;x+=st)if(free(x,y))return {x:Math.round(x),y:Math.round(y),grow:null};
   }
-  return {x:Math.round(Math.min(x,f.x+f.w-w-16)),y:Math.round(y)};
+  if(f.fixed)return null;                     // 位置锁定的页面不改大小
+  const skip=frSkip(f);
+  // 2) 往下扩：放在现有内容的下面
+  const bottom=Math.max(f.y+TOP-G,...obs.map(r=>r.y+r.h));
+  const dy=bottom+G,dw=Math.max(f.w,b.w+2*M),dh=Math.max(f.h,dy+b.h+M-f.y);
+  if(!frHitAny({x:f.x,y:f.y,w:dw,h:dh},skip))return {x:Math.round(f.x+M),y:Math.round(dy),grow:{w:Math.round(dw),h:Math.round(dh)}};
+  // 3) 往右扩：放在现有内容的右边
+  const right=Math.max(f.x+M-G,...obs.map(r=>r.x+r.w));
+  const rx=right+G,rw=Math.max(f.w,rx+b.w+M-f.x),rh=Math.max(f.h,TOP+b.h+M);
+  if(!frHitAny({x:f.x,y:f.y,w:rw,h:rh},skip))return {x:Math.round(rx),y:Math.round(f.y+TOP),grow:{w:Math.round(rw),h:Math.round(rh)}};
+  return null;
 }
 function sendTo(target,mode){
   const cs=sel.map(card).filter(Boolean).filter(z=>!isLocked(z.id));
   if(!cs.length)return;
+  let spot=null,b=null;
+  if(target!=="view"){
+    spot=sendSpot(target,cs);
+    if(!spot){toast(t(target.fixed?"sendNoRoomFixed":"sendNoRoom"));return}   // 放不下：一张都不搬
+    b=bbox(cs);
+  }
   snap();
+  if(spot&&spot.grow){target.w=spot.grow.w;target.h=spot.grow.h}
   const ns=[];
   cs.forEach(c=>{
     const h=hOf(c)||120;
     const p=target==="view"
       ? (()=>{const v=toW(innerWidth/2,innerHeight/2);return {x:Math.round(v.x-c.w/2),y:Math.round(v.y-h/2)}})()
-      : freeSpotIn(target,c.w,h);
+      : {x:Math.round(spot.x+(c.x-b.x)),y:Math.round(spot.y+(c.y-b.y))};
     if(mode==="twin"){
       const n={id:uid(),ref:orig(c).id,x:p.x,y:p.y,w:c.w,s:{...(c.s||{})},lock:"text"};
       if(c.bg)n.bg=c.bg;
@@ -2110,6 +2138,7 @@ async function absorb(data,merge){
       frames:Array.isArray(data.frames)?data.frames.filter(Boolean).map(f=>unsafeStr(f.id)?{...f,id:uid()}:f):[],
       links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>{const n=normLinkIn(l);n.id=n.id||uid();return n}),
   };
+    dropOrphans();                        // 所属稿子已经不在的段落、引文分身（孤儿）清掉
     return cards.length;                  // 图片不再在这里全部读进内存，画到哪张读哪张（needImg）
   }
   const map={},b=bbox(),ox=b?b.x+b.w+120:0,oy=b?b.y:0;
@@ -2130,6 +2159,7 @@ async function absorb(data,merge){
     S.frames=(S.frames||[]).concat([{...f,id:uid(),
       x:Math.round((+f.x||0)-nb.x+ox),y:Math.round((+f.y||0)-nb.y+oy),
       w:Math.max(120,+f.w||400),h:Math.max(100,+f.h||300)}])});
+  dropOrphans();                          // 合并不带稿子过来，跟着来的稿子段落和引文分身就成了孤儿，清掉
   // 图片按需加载，不再在这里全部读进内存
   return cards.length;
 }
@@ -2459,7 +2489,7 @@ async function restoreBackup(it){
   snap();
   const d=migrate(bk.data);
   S={...S,...d};invalidateIndex();S.cards=d.cards||[];S.links=d.links||[];
-  S.frames=d.frames||[];
+  S.frames=d.frames||[];dropOrphans();
   sel=[];selLink=null;render();fit(true);save();
   toast(t("bkDone"));
 }
@@ -3312,7 +3342,9 @@ function finishCard(el,c,s){
 }
 let FIDX=null,FIDXsrc=null;
 function frameIndex(){                    // 页面按左边界排序，配合二分缩小候选范围
-  if(FIDX&&FIDXsrc===S.frames)return FIDX;
+  // 拖动页面改的是 f.x 本身，数组还是同一个，所以光比数组不够：顺序乱了（或数量变了）就重排。
+  // 不这样做的话，把一个页面拖过另一个页面之后，后者里的卡片会"认不出"自己属于哪一页，再拖它时卡片就留在原地（2026-10 修）
+  if(FIDX&&FIDXsrc===S.frames&&FIDX.length===S.frames.length&&FIDX.every((f,i)=>!i||FIDX[i-1].x<=f.x))return FIDX;
   FIDX=(S.frames||[]).slice().sort((a,b)=>a.x-b.x);
   FIDXsrc=S.frames;
   return FIDX;
@@ -8647,15 +8679,22 @@ function toggleMap(){
   if(mapOn){drawMap();$("mapq").placeholder=t("mapFind")}else $("mapq").value="";
   save();
 }
+// 写作稿子在画布上的范围：量得到就用实际大小，量不到（专注模式等）就按版式的固定尺寸
+function mapDocRect(d){
+  const el=document.querySelector('#docs .doc[data-id="'+d.id+'"] .dwrap');
+  const h=el&&el.offsetHeight?el.offsetHeight:640;
+  return {x:d.x,y:d.y,w:DOCW+SIDEW,h};
+}
 function mapBounds(){
   const fs=S.frames||[];
-  if(!fs.length)return bbox()||{x:-500,y:-400,w:1000,h:800};
+  if(!fs.length&&!docs().length)return bbox(S.cards.filter(c=>!docOnly(c)))||{x:-500,y:-400,w:1000,h:800};
   let x=Infinity,y=Infinity,x2=-Infinity,y2=-Infinity;
   fs.forEach(f=>{x=Math.min(x,f.x);y=Math.min(y,f.y);
     x2=Math.max(x2,f.x+f.w);y2=Math.max(y2,f.y+f.h)});
-  const b2=bbox();
+  const b2=bbox(S.cards.filter(c=>!docOnly(c)));
   if(b2){x=Math.min(x,b2.x);y=Math.min(y,b2.y);
     x2=Math.max(x2,b2.x+b2.w);y2=Math.max(y2,b2.y+b2.h)}
+  docs().forEach(d=>{const r=mapDocRect(d);x=Math.min(x,r.x);y=Math.min(y,r.y);x2=Math.max(x2,r.x+r.w);y2=Math.max(y2,r.y+r.h)});
   const pad=Math.max(200,(x2-x)*.04);
   return {x:x-pad,y:y-pad,w:x2-x+pad*2,h:y2-y+pad*2};
 }
@@ -8700,10 +8739,24 @@ function drawMap(){
   const step=S.cards.length>20000?Math.ceil(S.cards.length/20000):1;
   for(let i=0;i<S.cards.length;i+=step){
     const c=S.cards[i];
+    if(docOnly(c))continue;                // 稿子里的段落和引文分身不在画布上，不画（它们的坐标只是稿子的左上角）
     const ch=hOf(c)||100;
     if(c.x+c.w<vx||c.x>vx2||c.y+ch<vy||c.y>vy2)continue;
     g.fillRect(X(c.x),Y(c.y),Math.max(1,c.w*k),Math.max(1,ch*k));
   }
+  // 写作稿子：虚线浅框，跟页面（实线）区分开；可以悬停看名字、点击跳过去
+  docs().forEach(d=>{
+    const r=mapDocRect(d),fx=X(r.x),fy=Y(r.y),fw=r.w*k,fh=r.h*k,id="doc:"+d.id;
+    const hit=q&&(d.title||"").toLowerCase().includes(q);
+    if(q&&hit)nHit++;
+    if(q&&!hit)g.globalAlpha=.26;
+    g.fillStyle=dark?"rgba(255,255,255,.04)":"rgba(30,34,40,.035)";g.fillRect(fx,fy,fw,fh);
+    g.setLineDash([4,3]);
+    g.strokeStyle=(mapHov===id||hit)?(dark?"rgba(235,235,230,.85)":"rgba(40,45,52,.75)"):(dark?"rgba(200,200,195,.45)":"rgba(60,66,72,.42)");
+    g.lineWidth=mapHov===id||hit?1.6:1;g.strokeRect(fx,fy,fw,fh);g.setLineDash([]);
+    g.globalAlpha=1;
+    mapHit.push({f:{id,title:d.title,x:r.x,y:r.y,w:r.w,h:r.h},doc:d,x:fx,y:fy,w:fw,h:fh});
+  });
   // 卡片盖住了框线，补画一遍，保证页面边界清晰
   fs.forEach(f=>{
     const hit=q&&(f.title||"").toLowerCase().includes(q);
@@ -8762,7 +8815,9 @@ $("mapc").addEventListener("pointerdown",e=>{
     removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
     box.classList.remove("drag");
     if(moved)return;                       // 拖过就只是平移地图，不跳转
-    if(hit){
+    if(hit&&hit.doc){                       // 点到稿子：镜头对准它并选中
+      mapSel=null;boxTo({x:hit.f.x,y:hit.f.y,w:hit.f.w,h:hit.f.h},120,1.4);selectDoc(hit.doc.id);
+    }else if(hit){
       mapSel=hit.f.id;
       const cs=inFrame(hit.f);
       boxTo({x:hit.f.x,y:hit.f.y,w:hit.f.w,h:hit.f.h},120,1.4);
@@ -8960,8 +9015,19 @@ function docMenu(x,y,d){
     {label:t("docDup"),on:()=>docDup(d)},
     {label:lk?t("docUnlock"):t("docLock"),check:lk,on:()=>docSetLock(d,!lk)},
     ...(lk?[]:["-",{label:t("wrDocDel"),danger:true,on:()=>{snap();
-      S.docs=docs().filter(z=>z!==d);if(wrId===d.id)closeWrite();render();save()}}])
+      S.docs=docs().filter(z=>z!==d);if(wrId===d.id)closeWrite();
+      dropOrphans();                           // 稿子里的段落和引文分身一起删掉，不留看不见的数据（可撤销）
+      render();save()}}])
   ]);
+}
+// 只活在稿子里的数据（段落、折叠框里的引文分身），所属稿子已经不在了，就是"孤儿"：画布上看不到、稿子里也找不到，
+// 却会出现在地图上，还会让主卡片因为一个看不见的分身而删不掉。删稿子时、打开文件时都清掉。返回清掉的条数
+function dropOrphans(){
+  const live=new Set(docs().map(z=>z.id));
+  const n0=S.cards.length;
+  S.cards=S.cards.filter(c=>!c.wrIn||live.has(c.wrIn));
+  if(S.cards.length!==n0){invalidateIndex();const ids=new Set(S.cards.map(c=>c.id));S.links=(S.links||[]).filter(l=>ids.has(l.a)&&ids.has(l.b))}
+  return n0-S.cards.length;
 }
 function docSetLock(d,on){
   if(!d)return;
@@ -12077,6 +12143,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
     (S.links||[]).forEach(l=>{if(l)delete l.dash});S.links=S.links||[];S.frames=S.frames||[];S.sheets=S.sheets||[];
     if(!S.lvMigrated){S.linkView="all";S.lvMigrated=true}
     S.linkDef={...DEFLINK,...(saved.linkDef||{})};S.textDef={...DEF,...(saved.textDef||{})}}
+  if(Array.isArray(S.cards))dropOrphans();   // 打开时清掉孤儿（所属稿子已经删掉的段落和引文分身，2026-10）
   LANG=S.lang||"en";
   await migrateInline(S.cards);
   // 从前这里把全部图片读进内存（loadImgs），图片多了标签页会被撑爆；现在画到哪张读哪张
