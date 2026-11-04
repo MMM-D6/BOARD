@@ -88,7 +88,7 @@ frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
-render 画面导出、archive 存档与分页导出、pageexport 导出本页、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
+render 画面导出、archive 存档与分页导出、pageexport 导出本页、wrboard 稿子导出为画布文件、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
 
 ---
 
@@ -539,10 +539,21 @@ Word 里却是 2.1"这种对不上的事。导出面板里有「标题编号」�
 早先写作页导出无条件拼 `String(i)`，于是每一个导出的文件都叫 `undefined-稿子.docx`。
 现在 `i` 省略时只用标题本身。
 
-**画布文件的部分导出只带点名的页面框（2026-11）。** `bundle(list,frames)` 原来是 `{...S}` 整份照抄，
+**画布文件的部分导出只带点名的页面框和稿子（2026-11）。** `bundle(list,part)` 原来是 `{...S}` 整份照抄，
 只过滤了卡片和连线，于是「导出本页…」得到的 json 里带着全部页面框、标准页和写作页（打开是一排空框和空稿子，合并时叠进别的画布）。
-现在 `list` 不为空时：`frames` 只用调用方传进来的（页面菜单 → `openExport(x,y,null,f)` → `o.page` → `download(list,name,[o.page])`），
-没传就是空；`sheets`、`docs` 一律为空。`list` 为空（保存、另存为、文件夹模式、存档包里的 board.json）完全不变。
+现在 `list` 不为空时：`frames`、`docs` 只用调用方在 `part` 里点名的（页面菜单 → `openExport(x,y,null,f)` → `o.page` → `download(list,name,{frames:[o.page]})`），
+没点名就是空；`sheets` 一律为空。`list` 为空（保存、另存为、文件夹模式、存档包里的 board.json）完全不变。
+`part` 一路经 `download` → `bundleBlob` → `writeBundle` 传到 `bundle`，图片内联、分段写都是同一条路。
+
+**稿子导出为画布文件、合并进别的画布（2026-11）。** 「导出这份稿子…」多一个「画布文件」格式（`wrExportBoard`），
+文件名同面板里其他格式，是 `safeName(稿子标题).json`，不带日期。文件里只有这一份稿子和它的段落（`download(段落,名,{docs:[d的拷贝]})`）：
+版本、格式、层级、表格、标题样式、段落锁照带；摘录用 `plainMq` 变回普通文字（正文和每个版本都变，引号本来在定格文字里）；
+折叠框里的引文分身不带（它们是投影，到了别的画布源卡片不在，只会是空白）；早期直接放进稿子的画布卡片照 `docDup` 用 `wrCloneCard` 拷成段落。
+画布上的原稿一个字不动。选这个格式时面板的三个勾选项藏起来（`#wopts`）：版本本来在数据里，编号是现算的，引文不带。
+合并（`absorb(data,true)`）**只认单份稿子文件**：`docs` 恰好一份、所有卡片的 `wrIn` 都是它。认出来就建一份新 id 的稿子，
+段落换 id 后挂上去，放在现有卡片、页面、标准页、稿子的最右边再空 120，`readJSON` 选中它、镜头移过去（`focusDoc`）而不是 `fit`。
+合并整个画布文件不进这条路，照旧不带稿子。直接「打开」这个文件就是只有这一份稿子的画布，不需要额外代码。`wrboard` 组守着。
+面板多了一行按钮，摆放时预留的高度从 330 改成 390（实际约 380），从菜单贴近屏幕底部打开时不再被切掉一截（原来就切掉十几像素）。
 从「导出本页…」打开面板时，名称框默认是 `stampName(页面名)`，没名字用 `t("pageDefault")`，所有格式共用；其他入口仍用文件名。`pageexport` 组守着。
 
 **层级在写作页里也能设定，用的还是画布那一套 `setLevel()`。** 稿子里的标题层级就是

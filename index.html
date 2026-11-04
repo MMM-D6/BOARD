@@ -1003,6 +1003,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrExpDocxNote:"Tries the real .docx first; falls back to .doc offline.",
   wrExpPdfNote:"Opens the print dialogue; choose Save as PDF there.",
   wrExpFileNote:"Written straight to a file, no network needed.",
+  wrExpBoardNote:"Only this draft, ready to merge into another board. Excerpts become plain text; the cited twins in the fold boxes are left out.",
   mapMenu:"Page map",mapFind:"Find a page",
   scaleAll:"Rescale everything…",scaleDone:"Rescaled to",scaleBad:"Enter a size between 1 and 200",
   scaleAsk:"New base text size (currently {n}). Everything scales by the same ratio: text, card widths, spacing, page frames. Manually adjusted and locked cards scale too, so their relative difference is kept.",
@@ -1233,6 +1234,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrExpDocxNote:"优先导出真正的 .docx，联不上网就退回 .doc",
   wrExpPdfNote:"会打开打印对话框，在那里选「另存为 PDF」",
   wrExpFileNote:"直接写成文件，不需要联网",
+  wrExpBoardNote:"只有这一份稿子，可以合并导入到别的画布。摘录变成普通文字，折叠框里的引文分身不带。",
   mapMenu:"页面地图",mapFind:"查找页面",
   scaleAll:"按比例缩放全部内容…",scaleDone:"已按比例缩放",scaleBad:"请输入 1 到 200 之间的字号",
   scaleAsk:"新的基准字号（当前 {n}）。文字、卡片宽度、间距、页面框都会按同一比例缩放。手动调整过的和锁定的卡片也一并缩放，因此相对差异得以保留。",
@@ -2009,14 +2011,15 @@ function stampName(base,ext){
   return datePrefix()+"-"+b+(ext||"");
 }
 // 整份数据的结构部分（卡片里的图片仍是 ih 引用）。真正写文件时由 writeBundle 把图片逐张内联进去。
-// 只导出一部分（list）时，页面框只带调用方点名的那几个（「导出本页…」就是这一页），
-// 标准页和写作页不带：从前整份照抄，片段文件里会多出别的页面框和空稿子。整份保存（list 为空）不受影响。
-function bundle(list,frames){
+// 只导出一部分（list）时，页面框和稿子只带调用方点名的（part.frames：「导出本页…」就是这一页；
+// part.docs：「导出这份稿子 → 画布文件」就是这一份），标准页不带。
+// 从前整份照抄，片段文件里会多出别的页面框和空稿子。整份保存（list 为空）不受影响。
+function bundle(list,part){
   const cards=(list||S.cards).map(cleanCard);
   const ids=new Set(cards.map(c=>c.id));
   return {...S,v:SCHEMA,cards,
     links:S.links.filter(l=>ids.has(l.a)&&ids.has(l.b)),
-    ...(list?{frames:frames||[],sheets:[],docs:[]}:{}),
+    ...(list?{frames:(part&&part.frames)||[],sheets:[],docs:(part&&part.docs)||[]}:{}),
   };
 }
 // 把整份数据（连同图片）按顺序写出去。从前是 JSON.stringify 拼成一整个字符串：
@@ -2024,8 +2027,8 @@ function bundle(list,frames){
 // 现在一张卡片一张卡片地写，图片逐张从仓库读出来转成 base64，内存里任何时候只有一张图；
 // 每写一段就把主线程让出来，界面不会卡住。输出仍是同一种 JSON（图片内联在 src 里），新旧版本可以互相读。
 // 开始时先把结构拍一份快照，写的过程中继续编辑也不会写出前后不一致的文件。
-async function writeBundle(list,put,frames){
-  const data=bundle(list,frames),cards=data.cards;delete data.cards;
+async function writeBundle(list,put,part){
+  const data=bundle(list,part),cards=data.cards;delete data.cards;
   const keys=Object.keys(data).filter(k=>data[k]!==undefined);
   let out="{\n";
   keys.forEach((k,i)=>{out+=(i?",\n":"")+" "+JSON.stringify(k)+": "+JSON.stringify(data[k],null,1)});
@@ -2055,9 +2058,9 @@ async function writeBundle(list,put,frames){
 }
 // 同样的内容写成一个 Blob（下载、存档包用）。每攒到 32MB 就并进 Blob，交给浏览器自己去管，
 // 不在 JS 里攒一个巨大的字符串
-async function bundleBlob(list,frames){
+async function bundleBlob(list,part){
   let acc=new Blob([]),parts=[],n=0;
-  await writeBundle(list,s=>{parts.push(s);n+=s.length;if(n>32e6){acc=new Blob([acc,...parts]);parts=[];n=0}},frames);
+  await writeBundle(list,s=>{parts.push(s);n+=s.length;if(n>32e6){acc=new Blob([acc,...parts]);parts=[];n=0}},part);
   return new Blob([acc,...parts],{type:"application/json"});
 }
 /* 导入关口的注入防护（2026-10 排查补上，见 NOTES 十点八）。
@@ -2216,6 +2219,23 @@ async function absorb(data,merge){
     S.frames=(S.frames||[]).concat([{...f,id:uid(),
       x:Math.round((+f.x||0)-nb.x+ox),y:Math.round((+f.y||0)-nb.y+oy),
       w:Math.max(120,+f.w||400),h:Math.max(100,+f.h||300)}])});
+  // 单份稿子文件（「导出这份稿子 → 画布文件」）：只有一份稿子、所有卡片都是它的段落，只认这一种。
+  // 稿子换新 id，放在现有内容（卡片、页面、标准页、稿子）的右边，不压住任何东西。
+  // 合并整个画布文件时不进这里，照旧不带稿子。
+  const dd=Array.isArray(data.docs)&&data.docs.length===1?data.docs[0]:null;
+  if(dd&&dd.id&&cards.length&&cards.every(c=>c.wrIn===dd.id)){
+    const mine=new Set(cards);let r=-Infinity,top=Infinity;
+    const grow=b=>{if(b){r=Math.max(r,b.x+b.w);top=Math.min(top,b.y)}};
+    grow(bbox(S.cards.filter(c=>!mine.has(c)&&!docOnly(c))));
+    (S.frames||[]).forEach(grow);(S.sheets||[]).forEach(z=>grow(sheetBox(z)));docs().forEach(z=>grow(mapDocRect(z)));
+    const nx=r>-Infinity?Math.round(r+120):0,ny=top<Infinity?Math.round(top):0;
+    const nd={id:uid(),x:nx,y:ny,title:typeof dd.title==="string"&&dd.title?dd.title:"稿子",
+      ids:(Array.isArray(dd.ids)?dd.ids:[]).map(i=>map[i]).filter(Boolean),
+      mode:dd.mode==="ctx"?"ctx":"iter",open:{},mxMig:1,
+      ...(hsNorm(dd.hs)?{hs:hsNorm(dd.hs)}:{}),...(dd.lock===true?{lock:true}:{})};
+    cards.forEach(c=>{c.wrIn=nd.id;c.x=nx;c.y=ny;delete c.wrUnder});
+    docs().push(nd);
+  }
   dropOrphans();                          // 合并不带稿子过来，跟着来的稿子段落和引文分身就成了孤儿，清掉
   // 图片按需加载，不再在这里全部读进内存
   return cards.length;
@@ -2241,8 +2261,8 @@ async function pickFile(){
   const n=prompt(t("saveNamePrompt"),stampName(fileName||"board"));
   if(!n)return;fileName=/\.json$/i.test(n)?n:n+".json";download();statusBar();
 }
-async function download(list,name,frames){
-  const b=await bundleBlob(list,frames);
+async function download(list,name,part){
+  const b=await bundleBlob(list,part);
   const fn=name||fileName||"board.json";
   const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=fn;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),60000);     // 大文件下载开始得慢，地址多留一会儿
@@ -5591,7 +5611,7 @@ async function doExport(o){
   if(o.fmt==="web"){await exportWebSnap(o);return}
   const list=exportSet(o);
   if(o.scope==="sel"&&!list){toast(t("needSel"));return}
-  if(o.fmt==="json"){await download(list,o.title+".json",o.page?[o.page]:null);return}
+  if(o.fmt==="json"){await download(list,o.title+".json",o.page?{frames:[o.page]}:null);return}
   if(o.fmt==="md"){
     const tree=buildTree(list);
     dl(new Blob([docMD(o,tree)],{type:"text/markdown;charset=utf-8"}),o.title+".md");
@@ -11300,29 +11320,46 @@ async function wrExportDocx(D,d,opt){
 // 而且从头到尾没调 place()，浮层没有定位，所以看起来一团糟、也点不动。
 // 现在改用面板本来就有的那套（.hd/.sec/.pair/.opt/.go），并按坐标定位。
 // 格式上补了 HTML 与 Markdown：Word 依赖 CDN 上的 docx 库，断网时至少还有出路。
+// 「导出这份稿子 → 画布文件」：只有这一份稿子的画布文件，用「合并导入…」并进别的画布（absorb 里认它）。
+// 段落原样带走（版本、格式、层级、表格、段落锁都在），摘录变回普通文字（plainMq，引号本来就在定格文字里）。
+// 折叠框里的引文分身不带：它们是画布卡片的投影，到了别的画布源卡片不在，只会是空白。
+// 早期稿子里直接放的画布卡片照 docDup 的做法拷成稿子自己的段落。
+async function wrExportBoard(d){
+  const list=d.ids.map(card).filter(Boolean).map(c=>{
+    const n=(docOnly(c)&&!c.ref)?JSON.parse(JSON.stringify(cleanCard(c))):wrCloneCard(c,d);
+    noThink(n);
+    if(n.rich)n.rich=plainMq(n.rich);
+    if(Array.isArray(n.vers))n.vers.forEach(v=>{if(v&&v.rich)v.rich=plainMq(v.rich)});
+    return n;
+  });
+  const nd={...JSON.parse(JSON.stringify(d)),ids:list.map(n=>n.id),open:{}};
+  await download(list,safeName(d.title)+".json",{docs:[nd]});
+}
 function openWrExport(d,x,y){
   if(!d)return;
   const p=$("pop");
   p.classList.remove("wide");
-  const FMTS=[["docx","fmtWord"],["pdf","fmtPdfDoc"],["html","fmtHtml"],["md","fmtMd"]];
+  const FMTS=[["docx","fmtWord"],["pdf","fmtPdfDoc"],["html","fmtHtml"],["md","fmtMd"],["json","fmtJson"]];
   p.innerHTML=`
     <div class="hd"><b>${esc(t("wrDocExport"))}</b><button id="wex">\u00D7</button></div>
     <div class="sec">${esc(t("fmt"))}</div>
     <div class="grid" id="wfmt">${FMTS.map(([k,lb],i)=>
       `<button data-f="${k}" class="${i?"":"on"}">${esc(t(lb))}</button>`).join("")}</div>
-    <div class="sec">${esc(t("expOpts"))}</div>
+    <div id="wopts"><div class="sec">${esc(t("expOpts"))}</div>
     <label class="opt"><input type="checkbox" id="wv"> ${esc(t("wrExpVersOpt"))}</label>
     <label class="opt"><input type="checkbox" id="wr2"> ${esc(t("wrExpRefsOpt"))}</label>
-    <label class="opt"><input type="checkbox" id="wn" checked> ${esc(t("wrExpNumsOpt"))}</label>
+    <label class="opt"><input type="checkbox" id="wn" checked> ${esc(t("wrExpNumsOpt"))}</label></div>
     <p class="note" id="wnote"></p>
     <button class="go" id="wgo">${esc(t("expGo"))}</button>`;
   const mx=(x==null?innerWidth/2-126:x),my=(y==null?90:y);
-  place(p,Math.min(mx,innerWidth-268),Math.min(my,Math.max(10,innerHeight-330)));
+  place(p,Math.min(mx,innerWidth-268),Math.min(my,Math.max(10,innerHeight-390)));   // 390：面板实际约 380 高（五种格式两行半按钮）
   p.classList.add("on");
   let fmt="docx";
   const note=p.querySelector("#wnote");
+  // 画布文件没有这几个选项：版本本来就在数据里，编号是现算的，引文分身不带
   const syncNote=()=>{note.textContent=fmt==="docx"?t("wrExpDocxNote")
-    :fmt==="pdf"?t("wrExpPdfNote"):t("wrExpFileNote")};
+    :fmt==="pdf"?t("wrExpPdfNote"):fmt==="json"?t("wrExpBoardNote"):t("wrExpFileNote");
+    p.querySelector("#wopts").style.display=fmt==="json"?"none":""};
   syncNote();
   p.querySelector("#wfmt").onclick=e=>{
     const b=e.target.closest("button[data-f]");if(!b)return;
@@ -11337,6 +11374,7 @@ function openWrExport(d,x,y){
     p.classList.remove("on");
     try{
       if(fmt==="docx")await wrExportWord(d,opt);
+      else if(fmt==="json")await wrExportBoard(d);
       else if(fmt==="pdf")printHTML(wrHTML(d,opt),d.title);
       else if(fmt==="html")dl(new Blob([wrHTML(d,opt)],{type:"text/html;charset=utf-8"}),
         safeName(d.title)+".html");
@@ -12344,11 +12382,15 @@ function readJSON(f,merge){
     let stage="snapshot",n=0;
     try{
       snap();
+      const nDocs=docs().length;
       stage="absorb";      n=await absorb(d,merge);
       stage="select";      sel=[];selLink=null;
+      // 合并进来一份稿子（单份稿子文件）：选中它，镜头移过去，而不是适应整块画布
+      const newDoc=merge&&docs().length>nDocs?docs()[docs().length-1]:null;
+      if(newDoc)selDoc=newDoc.id;
       if(!merge){LANG=S.lang||LANG;fileName=f.name;fileHandle=null;fileOK=false}
       stage="render";      render();
-      stage="fit";         fit(true);
+      stage="fit";         if(newDoc)focusDoc(newDoc,true);else fit(true);
       stage="save";        save();
       toast((merge?t("mergedIn"):t("savedTo"))+" "+n);
     }catch(err){

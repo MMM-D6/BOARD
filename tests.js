@@ -3567,7 +3567,7 @@ group("write 写作页", async (c) => {
       && !p.querySelector('#wfmt button[data-f="docx"]').classList.contains("on");
     const has = !!p.querySelector("#wv") && !!p.querySelector("#wr2") && !!p.querySelector("#wgo");
     p.classList.remove("on");
-    return fs2 === "docx,pdf,html,md" && positioned && onScreen && picked && has;
+    return fs2 === "docx,pdf,html,md,json" && positioned && onScreen && picked && has;
   }));
 
   // 断网也要导得出来：Markdown 不依赖任何外部库
@@ -7813,6 +7813,86 @@ group("pageexport 导出本页", async (c) => {
   c.ok("手动选中导出不带页面框", await c.run(() => { sel = ["a"]; const b = bundle([card("a")]); return b.frames.length === 0 && b.sheets.length === 0 && b.docs.length === 0; }));
   c.ok("整份保存照旧带全部", await c.run(() => { const b = bundle(null); return b.frames.length === 2 && b.sheets.length === 1 && b.docs.length === 1; }));
   c.ok("平常打开导出面板仍用文件名", await c.run(() => { sel = []; fileName = "thesis.json"; openExport(50, 50); const v = $("exn").value; $("pcx").click(); return v === stampName("thesis.json"); }));
+});
+
+// 「导出这份稿子 → 画布文件」与「合并导入…」：只带这份稿子的段落，摘录变普通文字，引文分身不带；
+// 合并时只认单份稿子文件，稿子放在现有内容右边并选中；合并整个画布文件照旧不带稿子
+group("wrboard 稿子导出为画布文件", async (c) => {
+  await c.board([{ id: "src", x: 0, y: 0, w: 300, text: "源卡片原文", s: {} }], [],
+    { frames: [{ id: "f1", x: -50, y: -50, w: 800, h: 600, title: "页" }] });
+  await c.run(() => {
+    S.sheets = []; S.docs = [];
+    const d = addDoc({ x: 0, y: 900 }, "第二章");
+    d.hs = { 1: { size: 28, color: "#1B4F9C" } };
+    const mq = '<span class="mq" data-q="src" contenteditable="false">“原文”</span>';
+    S.cards.push({ id: "h1", x: 0, y: 900, w: 520, text: "标题", level: 1, wrIn: d.id, s: {} });
+    S.cards.push({ id: "p1", x: 0, y: 900, w: 520, text: "正文“原文”", rich: "正文" + mq, wrIn: d.id, s: {},
+      vers: [{ id: "v1", name: "", text: "旧“原文”", rich: "旧" + mq, s: {}, bg: "", t: 1 }, { id: "v2", name: "", text: "正文“原文”", rich: "正文" + mq, s: {}, bg: "", t: 2 }], verOn: "v2" });
+    S.cards.push({ id: "tw", x: 0, y: 900, w: 300, ref: "src", wrUnder: "p1", wrIn: d.id, s: {} });
+    d.ids = ["h1", "p1"];
+    invalidateIndex(); render();
+    window.__dl = [];
+    const mk = URL.createObjectURL.bind(URL), blobs = new Map();
+    URL.createObjectURL = (b) => { const u = mk(b); blobs.set(u, b); return u; };
+    HTMLAnchorElement.prototype.click = function () { window.__dl.push({ name: this.download, blob: blobs.get(this.href) }); };
+  });
+  const ex = await c.run(async () => {
+    const d = docs()[0];
+    openWrExport(d, 50, 50);
+    const shown = $("wopts").style.display !== "none";
+    document.querySelector('#wfmt button[data-f="json"]').click();
+    const hidden = $("wopts").style.display === "none";
+    $("wgo").click();
+    for (let i = 0; i < 50 && !window.__dl.length; i++) await new Promise((r) => setTimeout(r, 100));
+    const f = window.__dl.pop();
+    return { shown, hidden, name: f.name, text: await f.blob.text(), want: safeName(d.title) + ".json" };
+  });
+  const j = JSON.parse(ex.text);
+  c.ok("其他格式照常显示选项，画布文件不显示", ex.shown && ex.hidden);
+  c.ok("文件名是稿子标题", ex.name === ex.want);
+  c.ok("只有这一份稿子", j.docs.length === 1 && j.docs[0].title === "第二章" && j.docs[0].ids.join() === "h1,p1");
+  c.ok("只带稿子的段落，不带画布卡片和引文分身", j.cards.map((z) => z.id).sort().join() === "h1,p1");
+  c.ok("不带页面框和标准页", j.frames.length === 0 && j.sheets.length === 0);
+  c.ok("摘录变成普通文字，引号还在", !ex.text.includes("data-q") && j.cards.find((z) => z.id === "p1").rich === "正文“原文”");
+  c.ok("版本里的摘录也变成普通文字", j.cards.find((z) => z.id === "p1").vers.every((v) => !v.rich.includes("data-q")) && j.cards.find((z) => z.id === "p1").vers.length === 2);
+  c.ok("原稿子没被改动", await c.run(() => card("p1").rich.includes("data-q") && !!card("tw")));
+
+  // 合并进另一个画布
+  await c.board([{ id: "x", x: 0, y: 0, w: 300, text: "别的画布", s: {} }], [],
+    { frames: [{ id: "g1", x: 1000, y: -200, w: 600, h: 500, title: "页" }] });
+  const mg = await c.run(async (text, oldId) => {
+    S.sheets = []; S.docs = []; invalidateIndex(); render();
+    readJSON(new File([text], "第二章.json"), true);
+    for (let i = 0; i < 50 && !docs().length; i++) await new Promise((r) => setTimeout(r, 100));
+    await new Promise((r) => setTimeout(r, 200));
+    const d = docs()[0];
+    if (!d) return null;
+    const ps = d.ids.map(card);
+    return { n: docs().length, title: d.title, x: d.x, y: d.y, sel: selDoc === d.id, hs: !!d.hs,
+      ok: ps.length === 2 && ps.every((p) => p && p.wrIn === d.id) && ps[0].level === 1 && ps[1].vers.length === 2,
+      newIds: !d.ids.includes("h1") && d.id !== oldId, cards: S.cards.length };
+  }, ex.text, j.docs[0].id);
+  c.ok("合并后多出这份稿子", mg && mg.n === 1 && mg.title === "第二章" && mg.hs);
+  c.ok("段落、层级、版本都在，id 全换新", mg && mg.ok && mg.newIds && mg.cards === 3);
+  c.ok("放在现有内容右边，不压住页面", mg && mg.x >= 1600 + 120 && mg.y === -200);
+  c.ok("合并后选中这份稿子", mg && mg.sel);
+
+  c.ok("直接打开这个文件，就是只有这份稿子的画布", await c.run(async (text) => {
+    const data = JSON.parse(text);
+    const S0 = JSON.parse(JSON.stringify(bundle(null)));
+    await absorb(data, false);
+    const d = docs()[0], ok = docs().length === 1 && S.cards.length === 2 && d.ids.every((id) => card(id) && card(id).wrIn === d.id) && S.frames.length === 0;
+    await absorb(S0, false);
+    return ok;
+  }, ex.text));
+
+  // 合并整个画布文件：照旧不带稿子
+  c.ok("合并整个画布文件仍不带稿子", await c.run(async () => {
+    const whole = JSON.parse(JSON.stringify(bundle(null)));
+    const n0 = docs().length;
+    await absorb(whole, true);
+    return docs().length === n0;
+  }));
 });
 
 /* ---------------- 主流程 ---------------- */
