@@ -88,7 +88,7 @@ frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
-render 画面导出、archive 存档与分页导出、pageexport 导出本页、wrboard 稿子导出为画布文件、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
+render 画面导出、archive 存档与分页导出、pageexport 导出本页、wrboard 稿子导出为画布文件、doccut 剪切与粘贴写作页、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
 
 ---
 
@@ -544,6 +544,7 @@ Word 里却是 2.1"这种对不上的事。导出面板里有「标题编号」�
 现在 `list` 不为空时：`frames`、`docs` 只用调用方在 `part` 里点名的（页面菜单 → `openExport(x,y,null,f)` → `o.page` → `download(list,name,{frames:[o.page]})`），
 没点名就是空；`sheets` 一律为空。`list` 为空（保存、另存为、文件夹模式、存档包里的 board.json）完全不变。
 `part` 一路经 `download` → `bundleBlob` → `writeBundle` 传到 `bundle`，图片内联、分段写都是同一条路。
+从「导出本页…」打开面板时，名称框默认是 `stampName(页面名)`，没名字用 `t("pageDefault")`，所有格式共用；其他入口仍用文件名。`pageexport` 组守着。
 
 **稿子导出为画布文件、合并进别的画布（2026-11）。** 「导出这份稿子…」多一个「画布文件」格式（`wrExportBoard`），
 文件名同面板里其他格式，是 `safeName(稿子标题).json`，不带日期。文件里只有这一份稿子和它的段落（`download(段落,名,{docs:[d的拷贝]})`）：
@@ -554,7 +555,16 @@ Word 里却是 2.1"这种对不上的事。导出面板里有「标题编号」�
 段落换 id 后挂上去，放在现有卡片、页面、标准页、稿子的最右边再空 120，`readJSON` 选中它、镜头移过去（`focusDoc`）而不是 `fit`。
 合并整个画布文件不进这条路，照旧不带稿子。直接「打开」这个文件就是只有这一份稿子的画布，不需要额外代码。`wrboard` 组守着。
 面板多了一行按钮，摆放时预留的高度从 330 改成 390（实际约 380），从菜单贴近屏幕底部打开时不再被切掉一截（原来就切掉十几像素）。
-从「导出本页…」打开面板时，名称框默认是 `stampName(页面名)`，没名字用 `t("pageDefault")`，所有格式共用；其他入口仍用文件名。`pageexport` 组守着。
+
+**合并导入落在右键的位置（2026-11）。** 「合并导入…」在画布右键菜单的「文件」里，点它时把右键的世界坐标记进 `mergeAt`，
+经 `readJSON(f,true,at)` → `absorb(data,true,at)` 传下去；单份稿子文件就放在那里（`docSpot`），没有坐标时退回「最右边」。
+整个画布文件的合并不看这个坐标，照旧放在右边。
+
+**剪切与粘贴写作页（2026-11）。** 稿子菜单「剪切这份稿子」只记下 `DOCCUT`（稿子 id），什么都不改；
+画布右键菜单在「新建写作页」下面出现「粘贴写作页「标题」」，`docPasteAt` 跟拖动一样只改 `d.x/d.y`（段落不看自己的坐标），一次 `snap()` 可撤销，粘完清掉 `DOCCUT` 并选中稿子。
+锁定的稿子拖不动，所以也不给剪切（`docCutNow` 对锁定的稿子返回空，剪切后才锁上也粘不出来）。
+落点统一走 `docSpot(x,y,d)`：压到页面、标准页、别的稿子或画布卡片，就挪到压住的东西右边再空 40，直到空地，最多挪 200 次。
+新建、粘贴、合并导入相对右键位置用同一个偏移 `DOC_AT`（-170,-46，原来写死在 `addDoc` 里），三种方式放下的稿子手感一样。`doccut` 组守着。
 
 **层级在写作页里也能设定，用的还是画布那一套 `setLevel()`。** 稿子里的标题层级就是
 卡片的 `c.level`——侧栏目录、正文编号、导出的标题级别全都读它，没有第二份数据

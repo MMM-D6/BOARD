@@ -976,6 +976,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrRemove:"Remove from the draft",
   wrRemoved:"Removed from the draft",wrInsert:"Insert a card here",
   wrRefPaste:"Paste a twin here",
+  docCut:"Cut this draft",docPaste:"Paste draft “{t}”",docCutDone:"“{t}” cut. Right-click where it should go and choose Paste draft.",
   wrCut:"Cut this paragraph",wrCutN:"Cut these {n} paragraphs",
   wrCutBefore:"Move the cut paragraphs above",wrCutAfter:"Move the cut paragraphs below",
   wrCutEnd:"Move the cut paragraphs to the end",
@@ -1207,6 +1208,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrRemove:"从稿子里移除",
   wrRemoved:"已从稿子里移除",wrInsert:"在这里插入一张卡片",
   wrRefPaste:"在这里粘贴分身",
+  docCut:"剪切这份稿子",docPaste:"粘贴写作页「{t}」",docCutDone:"已剪切「{t}」，到要放的位置右键，选「粘贴写作页」",
   wrCut:"剪切这一段",wrCutN:"剪切这 {n} 段",
   wrCutBefore:"把剪切的段落移到上方",wrCutAfter:"把剪切的段落移到下方",
   wrCutEnd:"把剪切的段落移到末尾",
@@ -2167,7 +2169,7 @@ function normCard(c){
   o.tags=Array.isArray(o.tags)?o.tags.filter(x=>typeof x==="string"):[];
   return o;
 }
-async function absorb(data,merge){
+async function absorb(data,merge,at){
   const cards=(data.cards||[]).map(normCard);
   await migrateInline(cards);
   if(!merge){
@@ -2228,7 +2230,8 @@ async function absorb(data,merge){
     const grow=b=>{if(b){r=Math.max(r,b.x+b.w);top=Math.min(top,b.y)}};
     grow(bbox(S.cards.filter(c=>!mine.has(c)&&!docOnly(c))));
     (S.frames||[]).forEach(grow);(S.sheets||[]).forEach(z=>grow(sheetBox(z)));docs().forEach(z=>grow(mapDocRect(z)));
-    const nx=r>-Infinity?Math.round(r+120):0,ny=top<Infinity?Math.round(top):0;
+    let nx=r>-Infinity?Math.round(r+120):0,ny=top<Infinity?Math.round(top):0;
+    if(at){const p=docSpot(at.x+DOC_AT.x,at.y+DOC_AT.y,null);nx=p.x;ny=p.y}   // 从右键菜单合并：落在右键的位置，压到东西就往右让
     const nd={id:uid(),x:nx,y:ny,title:typeof dd.title==="string"&&dd.title?dd.title:"稿子",
       ids:(Array.isArray(dd.ids)?dd.ids:[]).map(i=>map[i]).filter(Boolean),
       mode:dd.mode==="ctx"?"ctx":"iter",open:{},mxMig:1,
@@ -8979,9 +8982,11 @@ const wrOpenState=()=>document.body.classList.contains("wr");
 const wrLevelOf=c=>{const o=orig(c);return o.role==="apx"?1:(o.level||0)};
 const wrKids=id=>S.cards.filter(c=>c.ref&&c.wrUnder===id);
 
+// 稿子相对于右键位置的偏移：新建、粘贴、合并导入都落在同一处（右键的地方大致在标题附近）
+const DOC_AT={x:-170,y:-46};
 function addDoc(p,title){
   const ctr=p||toW(innerWidth/2,innerHeight/2);
-  const d={id:uid(),x:Math.round(ctr.x-170),y:Math.round(ctr.y-46),
+  const d={id:uid(),x:Math.round(ctr.x+DOC_AT.x),y:Math.round(ctr.y+DOC_AT.y),
     title:title||(t("wrDocNew")+" "+(docs().length+1)),ids:[],mode:"iter",open:{},mxMig:1};
   snap();docs().push(d);render();save();return d;
 }
@@ -9096,6 +9101,7 @@ function docMenu(x,y,d){
     ...(WRCUT&&!lk?[{label:t("wrCutEnd"),on:()=>wrCutPaste(d,d.ids.length)}]:[]),
     {label:t("wrDocExport"),on:()=>openWrExport(d,x,y)},
     "-",
+    ...(lk?[]:[{label:t("docCut"),on:()=>{DOCCUT=d.id;toast(t("docCutDone").replace("{t}",d.title))}}]),
     {label:t("docDup"),on:()=>docDup(d)},
     {label:lk?t("docUnlock"):t("docLock"),check:lk,on:()=>docSetLock(d,!lk)},
     ...(lk?[]:["-",{label:t("wrDocDel"),danger:true,on:()=>{snap();
@@ -9813,6 +9819,31 @@ function startDocMove(e,d){
   const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
     if(moved)save()};
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
+}
+// 剪切稿子 → 到别处右键「粘贴写作页」：跟拖动一样只改 d.x/d.y（段落本来就不看自己的坐标），可撤销。
+// 剪切当下什么都不改，粘贴才搬；锁定的稿子不给剪切（跟拖不动是同一条规矩）。
+let DOCCUT=null,mergeAt=null;            // DOCCUT：剪切的稿子 id；mergeAt：「合并导入…」那次右键的世界坐标
+function docCutNow(){const d=DOCCUT&&docs().find(z=>z.id===DOCCUT);return d&&!docLk(d)?d:null}
+function docPasteAt(p){
+  const d=docCutNow();if(!d)return;
+  const q=docSpot(p.x+DOC_AT.x,p.y+DOC_AT.y,d);
+  snap();d.x=q.x;d.y=q.y;DOCCUT=null;
+  selectDoc(d.id);render();save();
+}
+// 稿子落点：左上角放在 (x,y)；压到页面、标准页、别的稿子或画布卡片，就挪到压住的东西右边再空 40，直到空地。
+// 粘贴稿子、合并导入稿子共用。d 是要放的稿子本身（不跟自己比），新稿子传 null，高度按 640 算
+function docSpot(x,y,d){
+  const w=DOCW+SIDEW,h=d?mapDocRect(d).h:640;
+  const rs=[...(S.frames||[]),...(S.sheets||[]).map(sheetBox),...docs().filter(z=>z!==d).map(mapDocRect),
+    ...S.cards.filter(c=>!docOnly(c)).map(c=>({x:c.x,y:c.y,w:c.w,h:hOf(c)}))];
+  x=Math.round(x);y=Math.round(y);
+  for(let i=0;i<200;i++){
+    let e=-Infinity;
+    for(const r of rs)if(x<r.x+r.w&&x+w>r.x&&y<r.y+r.h&&y+h>r.y)e=Math.max(e,r.x+r.w);
+    if(e===-Infinity)break;
+    x=Math.round(e+40);
+  }
+  return {x,y};
 }
 // 专注模式：同一份正文加一个侧栏目录，用于长时间集中写作
 function drawWrite(){
@@ -11653,7 +11684,7 @@ function fileItems(x,y){
     {label:t("newBoard"),on:newBoard},
     {label:t("newWindow"),on:newWindow},
     {label:t("importJSON"),on:()=>$("jsonfile").click()},
-    {label:t("mergeJSON"),on:()=>$("mergefile").click()},
+    {label:t("mergeJSON"),on:()=>{mergeAt=toW(x,y);$("mergefile").click()}},
     "-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
     {label:t("webSnap"),on:()=>openExport(x,y,"web")},   // 走导出面板，密码保护不会被绕过
@@ -11678,6 +11709,7 @@ function boardMenu(x,y){
       on:()=>pasteClip(toW(x,y))}]:[]),
     {label:t("pageAdd"),on:addFrame},
     {label:t("wrDocAdd"),on:()=>addDoc(toW(x,y))},
+    ...(docCutNow()?[{label:t("docPaste").replace("{t}",docCutNow().title),on:()=>docPasteAt(toW(x,y))}]:[]),
     {label:t("docxImport"),on:()=>$("docxfile").click()},
     {head:t("shHead")},
     ...Object.keys(PAPER).map(k=>({label:t("shAdd")+" "+PAPER[k].label,
@@ -12373,7 +12405,7 @@ async function readBoardFile(f,force){
   if(cards)top.cards=cards;
   return top;
 }
-function readJSON(f,merge){
+function readJSON(f,merge,at){
   (async()=>{
     let d;
     try{d=await readBoardFile(f)}
@@ -12383,7 +12415,7 @@ function readJSON(f,merge){
     try{
       snap();
       const nDocs=docs().length;
-      stage="absorb";      n=await absorb(d,merge);
+      stage="absorb";      n=await absorb(d,merge,at);
       stage="select";      sel=[];selLink=null;
       // 合并进来一份稿子（单份稿子文件）：选中它，镜头移过去，而不是适应整块画布
       const newDoc=merge&&docs().length>nDocs?docs()[docs().length-1]:null;
@@ -12402,7 +12434,7 @@ function readJSON(f,merge){
   })();
 }
 $("jsonfile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,false);e.target.value=""};
-$("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.target.value=""};
+$("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true,mergeAt);mergeAt=null;e.target.value=""};
 
 /* ================= boot ================= */
 (async()=>{

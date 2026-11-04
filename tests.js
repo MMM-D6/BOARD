@@ -7886,12 +7886,82 @@ group("wrboard 稿子导出为画布文件", async (c) => {
     return ok;
   }, ex.text));
 
+  // 从右键菜单合并：落在右键的位置；压到页面就往右让开
+  const at = await c.run(async (text) => {
+    const n0 = docs().length;
+    readJSON(new File([text], "第二章.json"), true, { x: 3000, y: 2000 });
+    for (let i = 0; i < 50 && docs().length === n0; i++) await new Promise((r) => setTimeout(r, 100));
+    const a = docs()[docs().length - 1];
+    readJSON(new File([text], "第二章.json"), true, { x: 1100, y: -100 });   // 正落在页面 g1 上
+    for (let i = 0; i < 50 && docs().length === n0 + 1; i++) await new Promise((r) => setTimeout(r, 100));
+    const b = docs()[docs().length - 1];
+    return { a: [a.x, a.y], b: [b.x, b.y] };
+  }, ex.text);
+  c.ok("合并落在右键的位置（跟新建稿子同样的偏移）", at.a[0] === 3000 - 170 && at.a[1] === 2000 - 46);
+  // 1100-170=930 压在页面 g1（1000..1600）上 → 1640，又压在先前合并进来的那份稿子上 → 再往右让开
+  c.ok("落点压到页面和别的稿子就往右让开", at.b[0] === mg.x + 960 + 40 && at.b[1] === -146);
+
   // 合并整个画布文件：照旧不带稿子
   c.ok("合并整个画布文件仍不带稿子", await c.run(async () => {
     const whole = JSON.parse(JSON.stringify(bundle(null)));
     const n0 = docs().length;
     await absorb(whole, true);
     return docs().length === n0;
+  }));
+});
+
+// 剪切稿子 → 别处右键「粘贴写作页」：只改稿子坐标，压到东西往右让开，可撤销；锁定的稿子不给剪切
+group("doccut 剪切与粘贴写作页", async (c) => {
+  await c.board([{ id: "x", x: 0, y: 0, w: 300, text: "卡片", s: {} }], [],
+    { frames: [{ id: "g1", x: 2000, y: 0, w: 600, h: 500, title: "页" }] });
+  await c.run(() => {
+    S.sheets = []; S.docs = [];
+    const d = addDoc({ x: 0, y: 800 }, "第二章");
+    S.cards.push({ id: "p1", x: 0, y: 800, w: 520, text: "正文", wrIn: d.id, s: {} });
+    d.ids = ["p1"]; invalidateIndex(); render();
+  });
+  const items = (fn) => c.run((fn) => { eval(fn); const it = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent); closeMenus(); return it; }, fn);
+  const before = await items("boardMenu(50, 50)");
+  c.ok("没剪切时画布菜单里没有粘贴写作页", !before.some((z) => z.includes("第二章")));
+  await c.run(() => { docMenu(40, 40, docs()[0]); [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("docCut"))).click(); });
+  c.ok("剪切当下稿子不动", await c.run(() => docs()[0].x === -170 && docs()[0].y === 754));
+  const after = await items("boardMenu(50, 50)");
+  const want = await c.run(() => t("docPaste").replace("{t}", "第二章"));
+  c.ok("剪切后画布菜单里有「粘贴写作页「第二章」」", after.includes(want));
+  const r = await c.run(() => {
+    docPasteAt({ x: 5000, y: 3000 });
+    const d = docs()[0], a = [d.x, d.y], sel1 = selDoc === d.id, cleared = !docCutNow();
+    const para = card("p1").wrIn === d.id && d.ids.join() === "p1";
+    applyUndo(undo, redo);
+    const u = [docs()[0].x, docs()[0].y];
+    return { a, sel1, cleared, para, u };
+  });
+  c.ok("粘贴到右键的位置（跟新建稿子同样的偏移）", r.a[0] === 5000 - 170 && r.a[1] === 3000 - 46);
+  c.ok("粘贴后选中这份稿子，剪切状态清掉", r.sel1 && r.cleared);
+  c.ok("段落原样跟着", r.para);
+  c.ok("可以撤销", r.u[0] === -170 && r.u[1] === 754);
+  c.ok("落点压到页面就往右让开", await c.run(() => {
+    DOCCUT = docs()[0].id; docPasteAt({ x: 2270, y: 146 });
+    return docs()[0].x === 2600 + 40 && docs()[0].y === 100;
+  }));
+  c.ok("落点压到画布卡片也让开", await c.run(() => {
+    DOCCUT = docs()[0].id; docPasteAt({ x: 270, y: 46 });
+    return docs()[0].x >= 300 + 40;
+  }));
+  c.ok("锁定的稿子不给剪切", await c.run(() => {
+    const d = docs()[0]; docSetLock(d, true);
+    docMenu(40, 40, d); const it = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent); closeMenus();
+    DOCCUT = d.id; const can = !!docCutNow(); docSetLock(d, false); DOCCUT = null;
+    return !it.some((z) => z.includes(t("docCut"))) && !can;
+  }));
+  c.ok("合并导入记住右键的位置", await c.run(() => {
+    boardMenu(300, 200);
+    const fileMi = [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("fileMenu")));
+    let clicked = false; const inp = $("mergefile"), orig = inp.click; inp.click = () => { clicked = true; };
+    const W = toW(300, 200);
+    fileItems(300, 200).find((z) => z && z.label === t("mergeJSON")).on();
+    inp.click = orig; closeMenus();
+    return clicked && mergeAt && mergeAt.x === W.x && mergeAt.y === W.y;
   }));
 });
 
