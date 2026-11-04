@@ -1103,7 +1103,7 @@ group("mq 迷你分身：摘下再粘贴", async (c) => {
   // count 是新版 puppeteer 的连点次数，clickCount 留给旧版；两边都能真的触发一次双击
   const dblAt = (pt) => c.page.mouse.click(pt.x, pt.y, { count: 2, clickCount: 2 });
   const selWords = (tw, w, root) => c.run(([tw, w, root]) => {
-    const ref = document.querySelector(root + ' .ref[data-id="' + tw + '"]');
+    const ref = document.querySelector(root + ' .ref[data-id="' + tw + '"] .rt');   // 2026-10 起原文在来源行下面的 .rt 里
     const tn = [...ref.childNodes].find((n) => n.nodeType === 3 && n.nodeValue.includes(w)) || ref.firstChild;
     const i = tn.nodeValue.indexOf(w); const r = document.createRange(); r.setStart(tn, i); r.setEnd(tn, i + w.length);
     const s = getSelection(); s.removeAllRanges(); s.addRange(r);
@@ -1144,6 +1144,8 @@ group("mq 迷你分身：摘下再粘贴", async (c) => {
   c.ok("按 Enter 摘下：记下源卡片和带双引号的文字", tk.clip && tk.clip.q === "q" && tk.clip.text === "“digital garments”");
   c.ok("摘下不会往正文里插任何东西", (await chips(ids.p1)) === 0 && (await chips(ids.p2)) === 0);
   c.ok("摘下后退出摘词状态，并提示去正文右键粘贴", !tk.picking && !tk.go && tk.toast.includes(tk.want));
+  c.ok("摘下的词同时出现在这条来源下面（折叠框里）", await c.run((tw) => { const ref = document.querySelector('#docs .ref[data-id="' + tw + '"]'); const m = ref.querySelector(".mx .mxt"); return !!m && m.textContent === "“digital garments”" && card(tw).mx.length === 1 && card(tw).mx[0].a === card("q").text.indexOf("digital garments"); }, ids.tw));
+  c.ok("摘完来源行收回，原文不显示", await c.run((tw) => getComputedStyle(document.querySelector('#docs .ref[data-id="' + tw + '"] .rt')).display === "none", ids.tw));
 
   // 粘贴：插在光标位置
   c.ok("正文右键菜单里有「粘贴迷你分身」", await pasteVia(ids.p1, 5));
@@ -1192,7 +1194,7 @@ group("mq 迷你分身：摘下再粘贴", async (c) => {
   await c.wait(150);
   const tw2 = await c.run(() => S.cards.find((z) => z.ref === "q2").id);
   await c.run((tw2) => mqStart(tw2), tw2);
-  await c.run((tw2) => { const ref = document.querySelector('#docs .ref[data-id="' + tw2 + '"]'); const tn = [...ref.childNodes].find((n) => n.nodeType === 3); const i = tn.nodeValue.indexOf("“"); const r = document.createRange(); r.setStart(tn, i); r.setEnd(tn, tn.nodeValue.indexOf("”") + 1); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }, tw2);
+  await c.run((tw2) => { const ref = document.querySelector('#docs .ref[data-id="' + tw2 + '"] .rt'); const tn = [...ref.childNodes].find((n) => n.nodeType === 3); const i = tn.nodeValue.indexOf("“"); const r = document.createRange(); r.setStart(tn, i); r.setEnd(tn, tn.nodeValue.indexOf("”") + 1); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }, tw2);
   await c.wait(80); await c.page.keyboard.press("Enter"); await c.wait(150);
   c.ok("原文自带引号时只留一层", await c.run(() => MQCLIP.text === "“avatars matter”"));
 
@@ -1208,19 +1210,19 @@ group("mq 迷你分身：摘下再粘贴", async (c) => {
   await c.page.keyboard.down("Control"); await c.page.keyboard.press("z"); await c.page.keyboard.up("Control"); await c.wait(200);
   c.ok("Ctrl+Z 整块撤回来", await c.run((p2) => card(p2).text.includes("“site of design”"), ids.p2));
 
-  // 双击迷你分身：下方对应引文里的那几个词加深约 4 秒
+  // 双击正文里的迷你分身：折叠框里对应的那条迷你分身加深约 4 秒（2026-10 起统一成这一种效果）
   await c.run(() => { camTo(2700, -300, 1, true); redrawDocs(); }); await c.wait(200);
   const chipPt = (pid, root) => c.run(([pid, root]) => { const r = document.querySelector(root + ' .cap[data-id="' + pid + '"] .mq').getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, [pid, root || "#docs"]);
-  const hit = () => c.run(() => { const h = CSS.highlights.get("mqhit"); if (!h) return null; const r = [...h][0]; return { text: r.toString(), ref: r.startContainer.parentElement.closest(".ref") ? r.startContainer.parentElement.closest(".ref").dataset.id : null }; });
+  const hit = (root) => c.run((root) => { const m = document.querySelector((root || "#docs") + " .mx.mxlit"); if (!m) return null; const ref = m.closest(".ref"); return { text: card(ref.dataset.id).mx[+m.dataset.k].x, ref: ref.dataset.id, n: document.querySelectorAll(".mx.mxlit").length }; }, root);
   await dblAt(await chipPt(ids.p1)); await c.wait(150);
   let h = await hit();
-  c.ok("双击：同一段下面那条引文里的「digital garments」被加深", !!h && h.text === "digital garments" && h.ref === ids.tw);
-  c.ok("被加深的那条引文暂时不透明，其他引文不受影响", await c.run((tw) => document.querySelector('#docs .ref[data-id="' + tw + '"]').classList.contains("mqlit") && document.querySelectorAll("#docs .ref.mqlit").length === 1, ids.tw));
+  c.ok("双击：同一段下面那条来源下的「digital garments」迷你分身加深", !!h && h.text === "digital garments" && h.ref === ids.tw && h.n === 1);
+  c.ok("不展开原文", await c.run((tw) => getComputedStyle(document.querySelector('#docs .ref[data-id="' + tw + '"] .rt')).display === "none", ids.tw));
   c.ok("双击不会改动正文", await c.run((p1) => card(p1).text.includes("“digital garments”"), ids.p1));
   await c.wait(2500);
-  c.ok("2.5 秒后还亮着（时间比原来长）", !!(await hit()));
+  c.ok("2.5 秒后还亮着", !!(await hit()));
   await c.wait(1800);
-  c.ok("约 4 秒后自己退掉", !(await hit()) && await c.run(() => !document.querySelector(".ref.mqlit")));
+  c.ok("约 4 秒后自己退掉", !(await hit()));
   // 折叠框关着：先打开再加深
   await c.run((p1) => { docs()[0].open[p1] = false; redrawDocs(); }, ids.p1); await c.wait(150);
   await dblAt(await chipPt(ids.p1)); await c.wait(200);
@@ -1235,14 +1237,15 @@ group("mq 迷你分身：摘下再粘贴", async (c) => {
     S.cards = S.cards.concat(keep); invalidateIndex();
     return { toast: $("toast").textContent, want: t("mqNoRef") };
   }, ids.p2);
-  c.ok("稿子里没有对应引文时给一句提示", nr.toast.includes(nr.want));
+  c.ok("稿子里没有对应的迷你分身时给一句提示", nr.toast.includes(nr.want));
 
-  // 定格：源卡片改了，迷你分身不变；双击时原文里找不到这几个词，就整条闪一下
-  await c.run(() => { CSS.highlights.delete("mqhit"); card("q").text = "Totally rewritten source."; render(); redrawDocs(); });
-  await c.wait(200);
+  // 定格：源卡片改了，两边的迷你分身都不变，双击照样加深
+  await c.run(() => { card("q").text = "Totally rewritten source."; render(); redrawDocs(); });
+  await c.wait(4300);
   c.ok("源卡片改了，正文里的迷你分身文字不变", await c.run((p1) => card(p1).text.includes("digital garments"), ids.p1));
+  c.ok("折叠框里的迷你分身也不变", await c.run((tw) => document.querySelector('#docs .ref[data-id="' + tw + '"] .mx .mxt').textContent === "“digital garments”", ids.tw));
   await dblAt(await chipPt(ids.p1)); await c.wait(150);
-  c.ok("原文里已经找不到这几个词：整条引文闪一下", !(await hit()) && await c.run((tw) => document.querySelector('#docs .ref[data-id="' + tw + '"]').classList.contains("flash"), ids.tw));
+  c.ok("原文改过之后双击照样加深那条迷你分身", !!(await hit()));
 
   // 右键迷你分身：跳到原卡片 / 删除摘录
   const mm = await c.run(() => { const el = document.querySelector("#docs .cap .mq"); mqMenu(50, 50, el); const it = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim()); closeMenus(); return { it, g: t("mqGoto"), d: t("mqDel") }; });
@@ -1335,8 +1338,8 @@ group("mq 迷你分身：摘下再粘贴", async (c) => {
   await pasteVia(ids.p2, 0, "#wrmain"); await c.wait(200);
   c.ok("专注模式里能粘贴到光标处", await c.run((p2) => card(p2).text.startsWith("“the body”") && !!document.querySelector('#wrmain .cap[data-id="' + p2 + '"] .mq'), ids.p2));
   await dblAt(await chipPt(ids.p2, "#wrmain")); await c.wait(150);
-  h = await hit();
-  c.ok("专注模式里双击也能加深对应的词", !!h && h.text === "the body");
+  h = await hit("#wrmain");
+  c.ok("专注模式里双击也能加深对应的迷你分身", !!h && h.text === "the body");
   await c.run(() => closeWrite());
 
   c.ok("中英文案都齐了", await c.run(() => ["mqPick", "mqGo", "mqHint", "mqTaken", "mqPaste", "mqNoRef", "mqGoto", "mqGone", "mqDel", "mqNoDel1", "mqNoDelN"].every((k) => T.en[k] && T.zh[k])));
@@ -1641,7 +1644,7 @@ group("docdup 复制与锁定整份稿子（2026-10）", async (c) => {
   const m2 = await L((d) => { docMenu(40, 40, docs().find((z) => z.id === d)); const it = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent); closeMenus(); return { it, del: t("wrDocDel"), ren: t("wrDocRename"), ul: t("docUnlock"), exp: t("wrDocExport"), dup: t("docDup") }; }, ids.d);
   c.ok("锁定后菜单里没有改名和删除，有解锁、导出、复制", !m2.it.some((z) => z.includes(m2.del)) && !m2.it.some((z) => z.includes(m2.ren)) && m2.it.some((z) => z.includes(m2.ul)) && m2.it.some((z) => z.includes(m2.exp)) && m2.it.some((z) => z.includes(m2.dup)));
   c.ok("锁定的稿子仍能导出", await L((d) => wrHTML(docs().find((z) => z.id === d), {}).includes("Chapter"), ids.d));
-  c.ok("锁定的稿子仍能摘词（只读）", await L((a) => { const tw = S.cards.find((z) => z.ref === "src" && z.wrUnder === a[1]); redrawDocs(); mqStart(tw.id); const ok = !!mqPick; mqStop(); return ok; }, ids.a));
+  c.ok("锁定的稿子不能摘词（2026-10 起摘下会往折叠框里加东西）", await L((a) => { const tw = S.cards.find((z) => z.ref === "src" && z.wrUnder === a[1]); redrawDocs(); mqStart(tw.id); const blocked = !mqPick && $("toast").textContent === t("docLockedNote"); mqStop(); return blocked; }, ids.a));
   c.ok("复制锁定的稿子：副本可以编辑", await L((d) => { docDup(docs().find((z) => z.id === d)); const nd = docs()[docs().length - 1]; redrawDocs(); return !nd.lock && document.querySelector('#docs .cap[data-id="' + nd.ids[0] + '"]').getAttribute("contenteditable") === "true"; }, ids.d));
   // 专注模式里也锁着
   await L((d) => openWrite(d), ids.d); await c.wait(600);
@@ -2018,6 +2021,137 @@ group("mapfix 地图、孤儿、页面索引、移到页面（2026-10）", async
   await c.run(() => { delete S.frames[0].fixed; S.cards.push({ id: "s5", x: 6000, y: 6000, w: 150, h: 60, text: "twin me", s: {} }); invalidateIndex(); render(); sel = ["s5"]; sendTo(S.frames[1], "twin"); });
   c.ok("以分身方式送到页面：分身落在那一页里，原卡片不动", await c.run(() => { const tw = S.cards.find((z) => z.ref === "s5"); return !!tw && (frameOf(tw) || {}).id === "Q" && card("s5").x === 6000; }));
   c.ok("中英文案都齐了", await c.run(() => ["sendNoRoom", "sendNoRoomFixed"].every((k) => T.en[k] && T.zh[k])));
+});
+
+group("mxfold 折叠框按来源分组、迷你分身（2026-10）", async (c) => {
+  await c.board([
+    { id: "bib", x: 0, y: -1800, w: 300, text: "Bib entry", role: "bib", bm: { cite: "(Särmäkari, 2021)" }, s: {} },
+    { id: "q", x: 0, y: -1400, w: 400, text: "Alpha beta gamma delta. Alpha beta again here.", bib: "bib", s: {} },
+    { id: "r", x: 600, y: -1400, w: 400, text: "Unbound source with no citation at all.", s: {} },
+    { id: "a1", x: 0, y: 0, w: 400, text: "First paragraph.", s: {} },
+    { id: "a2", x: 0, y: 100, w: 400, text: "Second paragraph.", s: {} },
+  ], []);
+  const ids = await c.run(() => {
+    S.docs = [];
+    const d = addDoc({ x: -3000, y: 0 }, "稿子");
+    sel = ["a1", "a2"]; clipCards("copy"); wrPasteMain(d, 0);
+    sel = ["q"]; clipCards("twin"); wrPasteTwin(d.ids[0], d);
+    sel = ["r"]; clipCards("twin"); wrPasteTwin(d.ids[0], d);
+    sel = ["q"]; clipCards("twin"); wrPasteTwin(d.ids[1], d);
+    d.open = { [d.ids[0]]: true, [d.ids[1]]: true };
+    sel = []; render(); undo.length = 0; camTo(2700, -300, 1, true);
+    const tq = S.cards.find((z) => z.ref === "q" && z.wrUnder === d.ids[0]).id;
+    const tr = S.cards.find((z) => z.ref === "r").id;
+    const tq2 = S.cards.find((z) => z.ref === "q" && z.wrUnder === d.ids[1]).id;
+    return { d: d.id, p1: d.ids[0], p2: d.ids[1], tq, tr, tq2 };
+  });
+  await c.wait(400);
+  const ref = (id) => `#docs .ref[data-id="${id}"]`;
+  const rtShown = (id) => c.run((s2) => getComputedStyle(document.querySelector(s2 + " .rt")).display !== "none", ref(id));
+  const sel2 = (id, w, nth) => c.run(([s2, w, nth]) => {
+    const rt = document.querySelector(s2 + " .rt"), tn = rt.firstChild; let i = -1; for (let k = 0; k <= (nth || 0); k++) i = tn.nodeValue.indexOf(w, i + 1);
+    const r = document.createRange(); r.setStart(tn, i); r.setEnd(tn, i + w.length); const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  }, [ref(id), w, nth]);
+  const pick = async (id, w, nth) => { await c.run((id) => mqStart(id), id); await sel2(id, w, nth); await c.wait(60); await c.page.keyboard.press("Enter"); await c.wait(120); };
+  const mxs = (id) => c.run((s2) => [...document.querySelectorAll(s2 + " .mx .mxt")].map((z) => z.textContent), ref(id));
+
+  // ---- 来源行 ----
+  const rh = await c.run(([a, b]) => ({ q: document.querySelector(a + " .rh").textContent, r: document.querySelector(b + " .rh").textContent, rc: !!document.querySelector(b + " .rc") }), [ref(ids.tq), ref(ids.tr)]);
+  c.ok("所有引文分身都收成一行来源行，原文不显示", !(await rtShown(ids.tq)) && !(await rtShown(ids.tr)));
+  c.ok("来源行显示绑定文献条目的 Citation 加原文开头", rh.q.includes("(Särmäkari, 2021)") && rh.q.includes("Alpha beta"));
+  c.ok("没绑定文献条目的只显示原文开头", !rh.rc && rh.r.includes("Unbound source"));
+  const rx = await c.run((s2) => { const r = document.querySelector(s2 + " .rx").getBoundingClientRect(); return { x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, ref(ids.tq));
+  await c.page.mouse.click(rx.x, rx.y); await c.wait(100);
+  c.ok("点 › 展开原文", await rtShown(ids.tq));
+  await c.page.mouse.click(rx.x, rx.y); await c.wait(100);
+  c.ok("再点收回", !(await rtShown(ids.tq)));
+  c.ok("展开状态不存进文件", await c.run(() => !JSON.stringify(bundle(null)).includes("REFOPEN")));
+
+  // ---- 摘词：自动展开；摘过的部分标出来；Esc 收回 ----
+  await c.run((id) => mqStart(id), ids.tq);
+  c.ok("右键「摘词」时自动展开原文", await rtShown(ids.tq));
+  await c.page.keyboard.press("Escape"); await c.wait(100);
+  c.ok("Esc 后收回，什么都没加", !(await rtShown(ids.tq)) && (await c.run((id) => !card(id).mx, ids.tq)));
+  await pick(ids.tq, "gamma delta");
+  c.ok("摘下后出现在来源下面，并收回", (await mxs(ids.tq)).join("|") === "“gamma delta”" && !(await rtShown(ids.tq)));
+  await c.run((id) => mqStart(id), ids.tq);
+  c.ok("再摘词时，已经摘过的部分用淡底色标出来", await c.run(() => { const h = CSS.highlights.get("mxtaken"); return !!h && [...h].length === 1 && [...h][0].toString() === "gamma delta"; }));
+  await c.run(() => mqStop());
+  c.ok("退出摘词后标记去掉", await c.run(() => !CSS.highlights.get("mxtaken")));
+
+  // ---- 按位置防重复 ----
+  const clip0 = await c.run(() => MQCLIP.text);
+  await pick(ids.tq, "beta gamma");
+  c.ok("碰到已摘过的部分：不摘，提示", (await mxs(ids.tq)).length === 1 && (await c.run(() => $("toast").textContent === t("mxTaken"))));
+  c.ok("不摘的时候剪贴板也不变", (await c.run(() => MQCLIP.text)) === clip0);
+  await pick(ids.tq, "Alpha beta", 1);
+  await pick(ids.tq, "Alpha beta", 0);
+  c.ok("原文里另一处相同的词可以摘", (await c.run((id) => card(id).mx.filter((m) => m.x === "Alpha beta").length, ids.tq)) === 2);
+  c.ok("按原文先后排，不按摘的先后", (await mxs(ids.tq)).join("|") === "“Alpha beta”|“gamma delta”|“Alpha beta”");
+  c.ok("摘下同时放进剪贴板（贴进正文的流程不变）", (await c.run(() => MQCLIP.text)) === "“Alpha beta”");
+
+  // ---- 迷你分身上不能再摘词；它自己的右键菜单 ----
+  const mm = await c.run((s2) => { const el = document.querySelector(s2 + " .mx"); const r = el.getBoundingClientRect(); return { x: r.x + 10, y: r.y + r.height / 2 }; }, ref(ids.tq));
+  await c.page.mouse.click(mm.x, mm.y, { button: "right" }); await c.wait(120);
+  const mi = await c.run(() => ({ it: [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim()), take: t("mqGo"), del: t("mxDel"), pick: t("mqPick") }));
+  c.ok("迷你分身右键只有「摘下」和「删除」，没有「摘词」", mi.it.length === 2 && mi.it.includes(mi.take) && mi.it.includes(mi.del) && !mi.it.includes(mi.pick));
+  await c.run(() => { [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("mqGo"))).click(); });
+  c.ok("「摘下」重新放进剪贴板", await c.run((id) => MQCLIP.text === "“Alpha beta”" && MQCLIP.q === "q", ids.tq));
+  await c.run((s2) => { const el = document.querySelectorAll(s2 + " .mx")[1]; mxMenu(10, 10, el); [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("mxDel"))).click(); }, ref(ids.tq));
+  c.ok("「删除」删掉那一条", (await mxs(ids.tq)).join("|") === "“Alpha beta”|“Alpha beta”");
+  await c.run(() => applyUndo(undo, redo));
+  c.ok("删除可以撤销", (await mxs(ids.tq)).join("|") === "“Alpha beta”|“gamma delta”|“Alpha beta”");
+
+  // ---- 不同段落各自独立 ----
+  await pick(ids.tq2, "gamma delta");
+  c.ok("同一张原卡片挂在另一段下面，各摘各的", (await mxs(ids.tq2)).join("|") === "“gamma delta”" && (await mxs(ids.tq)).length === 3);
+
+  // ---- 导出「带上引用」 ----
+  const ex = await c.run((d) => wrHTML(docs().find((z) => z.id === d), { refs: true }), ids.d);
+  c.ok("导出：摘过词的来源输出来源行和迷你分身", ex.includes("<div>(Särmäkari, 2021)  Alpha beta") && ex.includes('<div style="padding-left:12pt">“gamma delta”</div>'));
+  c.ok("导出：没摘过词的来源照旧输出原文", ex.includes("Unbound source with no citation at all."));
+  c.ok("Markdown 导出也一样", await c.run((d) => { const m = wrMD(docs().find((z) => z.id === d), { refs: true }); return m.includes("“gamma delta”") && m.includes("Unbound source"); }, ids.d));
+
+  // ---- 复制稿子、移除引文分身 ----
+  c.ok("复制整份稿子时迷你分身跟着复制", await c.run((d) => { docDup(docs().find((z) => z.id === d)); const nd = docs()[docs().length - 1]; const tw = S.cards.find((z) => z.ref === "q" && z.wrIn === nd.id && z.wrUnder === nd.ids[0]); const ok = !!tw && tw.mx.length === 3; applyUndo(undo, redo); return ok; }, ids.d));
+  await c.run((id) => { wrRefMenu(10, 10, id, docs()[0]); [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("wrRefDrop"))).click(); }, ids.tq2);
+  c.ok("从稿子里移除引文分身，它下面的迷你分身一起没了", await c.run((id) => !card(id), ids.tq2));
+  await c.run(() => applyUndo(undo, redo));
+
+  // ---- 锁定的稿子：不能删迷你分身 ----
+  await c.run((d) => { docSetLock(docs().find((z) => z.id === d), true); }, ids.d); await c.wait(150);
+  await c.run((s2) => { const el = document.querySelector(s2 + " .mx"); mxMenu(10, 10, el); [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("mxDel"))).click(); }, ref(ids.tq));
+  c.ok("锁定的稿子里删不了迷你分身", (await mxs(ids.tq)).length === 3);
+  await c.run((d) => { docSetLock(docs().find((z) => z.id === d), false); }, ids.d);
+
+  // ---- 网页快照里原文直接展开 ----
+  c.ok("网页快照里来源行的原文是展开的", await c.run(async () => { const h = await buildWebSnap("t"); const dd = new DOMParser().parseFromString(h, "text/html"); const r = dd.querySelector(".ref"); return !!r && r.classList.contains("open"); }));
+
+  // ---- 读文件：校验；以前贴进正文的迷你分身补进折叠框（每份稿子一次） ----
+  c.ok("读文件时坏的迷你分身数据被清掉", await c.run(() => { const n = normCard({ id: "t", ref: "q", wrUnder: "x", mx: [{ x: "ok", a: 3 }, { x: "" }, null, { x: "no pos", a: -1 }, { y: 1 }] }); const m = normCard({ id: "u", mx: [{ x: "not a twin" }] }); return n.mx.length === 2 && n.mx[0].a === 3 && !("a" in n.mx[1]) && !("mx" in m); }));
+  const mig = await c.run(async (ids) => {
+    const b = JSON.parse(JSON.stringify(bundle(null)));
+    const d = b.docs.find((z) => z.id === ids.d); delete d.mxMig;
+    const p2 = b.cards.find((z) => z.id === ids.p2);
+    p2.rich = 'Second <span class="mq" data-q="q" contenteditable="false">“beta again”</span> and <span class="mq" data-q="q" contenteditable="false">“gone words”</span>.';
+    b.cards.find((z) => z.id === ids.tq2).mx = undefined;
+    await absorb(b, false);
+    const tw = card(ids.tq2);
+    return { mx: tw.mx, flag: docs().find((z) => z.id === ids.d).mxMig };
+  }, ids);
+  c.ok("打开文件时，以前贴进正文的迷你分身补进同一段下的来源", !!mig.mx && mig.mx.some((m) => m.x === "beta again" && Number.isInteger(m.a)));
+  c.ok("原文里找不到的也补进去，只是不记位置", mig.mx.some((m) => m.x === "gone words" && !("a" in m)));
+  await c.run(() => render()); await c.wait(100);
+  c.ok("找不到位置的排在最后", (await mxs(ids.tq2)).join("|") === "“beta again”|“gone words”");
+  c.ok("每份稿子只补一次（记下标记）", mig.flag === 1);
+  const again = await c.run(async (ids) => {
+    const tw = card(ids.tq2); tw.mx = tw.mx.filter((m) => m.x !== "beta again");
+    const b = JSON.parse(JSON.stringify(bundle(null))); await absorb(b, false);
+    return card(ids.tq2).mx.map((m) => m.x).join("|");
+  }, ids);
+  c.ok("删掉的迷你分身不会因为正文里还有而再冒回来", again === "gone words");
+  c.ok("新建的稿子不需要补", await c.run(() => addDoc({ x: 9000, y: 9000 }, "N").mxMig === 1));
+  c.ok("中英文案都齐了", await c.run(() => ["mxTaken", "mxDeleted", "mxDel"].every((k) => T.en[k] && T.zh[k])));
 });
 
 /* =====================================================================
@@ -3919,8 +4053,9 @@ group("wrrefsel 引文可选中、跳转对得准", async (c) => {
 
   // 真鼠标划一遍，确认选得中
   const box = await c.run(() => {
-    const e = document.querySelector("#wrmain .ref"), r2 = e.getBoundingClientRect();
-    return { x1: r2.left + 6, x2: r2.left + r2.width * 0.5, y: r2.top + r2.height / 2 };
+    // 2026-11 起来源行最左边是展开原文的 › 按钮，从按钮上起手不会划字；从文字那一截起手
+    const e = document.querySelector("#wrmain .ref"), r2 = e.getBoundingClientRect(), t2 = (e.querySelector(".rs") || e).getBoundingClientRect();
+    return { x1: t2.left + 4, x2: r2.left + r2.width * 0.5, y: t2.top + t2.height / 2 };
   });
   await c.page.mouse.move(box.x1, box.y);
   await c.page.mouse.down();
@@ -4584,9 +4719,10 @@ group("wrreford 引文长按调序", async (c) => {
   const q2 = await pts();
   await c.page.mouse.click(q2[0].x, q2[0].y);
   c.ok("单击不会动到顺序", await order() === "引文甲|引文丙|引文乙|引文丁");
+  // 2026-11 起来源行最左边是展开原文的 › 按钮，从按钮上起手不会划字；从文字那一截起手
   const p3 = await c.run(() => [...document.querySelectorAll("#wrmain .ref")].map((e) => {
-    const r2 = e.getBoundingClientRect();
-    return { x1: r2.left + 6, x2: r2.left + r2.width * 0.6, y: r2.top + r2.height / 2 };
+    const r2 = e.getBoundingClientRect(), t2 = (e.querySelector(".rs") || e).getBoundingClientRect();
+    return { x1: t2.left + 4, x2: r2.left + r2.width * 0.6, y: t2.top + t2.height / 2 };
   }));
   await c.page.mouse.move(p3[0].x1, p3[0].y);
   await c.page.mouse.down();

@@ -685,6 +685,23 @@
     outline:1px dashed var(--wline);outline-offset:-1px}
   /* 从画布跳过来时闪一下，好认出是哪一条 */
   .blk .ref.flash{animation:refflash 1.3s ease-out}
+  /* 折叠框按来源分组（2026-10）：每条引文分身收成一行来源行，下面列出从它摘下的迷你分身；点 › 展开原文 */
+  .blk .ref .rh{display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden}
+  .blk .ref .rx{flex:none;border:none;background:none;color:inherit;cursor:pointer;padding:0 2px;opacity:.6;
+    font:inherit;line-height:1;transition:transform .14s}
+  .blk .ref.open .rx,.blk .ref.picking .rx{transform:rotate(90deg)}
+  .blk .ref .rc{flex:none;font-weight:500}
+  .blk .ref .rs{overflow:hidden;text-overflow:ellipsis;opacity:.75}
+  .blk .ref .rt{display:none;margin:4px 0 2px 18px}
+  .blk .ref.open .rt,.blk .ref.picking .rt{display:block}
+  .blk .ref .mx{margin:3px 0 0 18px;cursor:default}
+  .blk .ref .mxt{font-family:"Newsreader","Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;
+    background:color-mix(in srgb,currentColor 8%,transparent);border-radius:2px;padding:0 .12em;
+    -webkit-box-decoration-break:clone;box-decoration-break:clone;transition:background-color .3s}
+  .blk .ref.mxon{opacity:1}
+  .blk .ref .mx.mxlit .mxt{background:color-mix(in srgb,currentColor 24%,transparent)}
+  ::highlight(mxtaken){background-color:rgba(0,0,0,.08)}
+  body.isdark ::highlight(mxtaken){background-color:rgba(255,255,255,.14)}
   @keyframes refflash{0%,55%{background:var(--whi);box-shadow:0 0 0 4px var(--whi)}
     100%{background:transparent;box-shadow:none}}
   .blk .rempty{padding:5px 0;opacity:.3;font-size:11.5px}
@@ -697,9 +714,6 @@
     -webkit-box-decoration-break:clone;box-decoration-break:clone;cursor:default}
   /* 摘词状态：这一条引文换一圈虚线，表示"现在在这里划选" */
   .blk .ref.picking{opacity:1;outline:1px dashed var(--frame);outline-offset:3px;border-radius:3px}
-  ::highlight(mqhit){background-color:rgba(0,0,0,.16)}
-  body.isdark ::highlight(mqhit){background-color:rgba(255,255,255,.24)}
-  .blk .ref.mqlit{opacity:1}
   #mqgo{position:fixed;z-index:85;display:none;height:26px;padding:0 11px;border-radius:7px;cursor:pointer;
     border:1px solid var(--pline);background:var(--panel);color:var(--pfg);font:500 12px/1 "IBM Plex Sans",sans-serif;
     box-shadow:0 6px 18px rgba(0,0,0,.14)}
@@ -1038,6 +1052,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   hsApplied:"Applied to {n} heading(s)",hsSkipped:" ({n} locked paragraph(s) left as they were)",hsNone:"This draft has no headings yet",
   hsSize:"Size",hsColour:"Colour",hsFont:"Font",
   hsNote:"Kept with this draft only. Paragraphs change when you click Apply; paragraphs you make headings afterwards use these styles automatically.",
+  mxTaken:"That part has already been picked",mxDeleted:"Mini twin deleted (you can undo this)",mxDel:"Delete",
   mqPick:"Pick words",mqGo:"Take",mqHint:"Select the words you want, then press Enter or click Take. Esc cancels.",
   mqTaken:"Taken. Right-click where you want it in your text and choose Paste mini twin",mqPaste:"Paste mini twin",
   mqGoto:"Go to source card",mqGone:"The source card no longer exists",mqNoRef:"There is no matching citation in this draft",mqDel:"Delete excerpt",
@@ -1267,6 +1282,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   hsApplied:"已套用到 {n} 个标题",hsSkipped:"（{n} 个锁定的段落没有改）",hsNone:"这份稿子里还没有标题",
   hsSize:"字号",hsColour:"颜色",hsFont:"字体",
   hsNote:"设定只存在这份稿子里；点「套用到本稿」才会改动段落。之后新设成标题的段落会自动套用。",
+  mxTaken:"这部分已经摘过了",mxDeleted:"已删除这条迷你分身（可以撤销）",mxDel:"删除",
   mqPick:"摘词",mqGo:"摘下",mqHint:"划选要摘的词，按 Enter 或点「摘下」；Esc 取消",
   mqTaken:"已摘下，到正文里要放的位置右键「粘贴迷你分身」",mqPaste:"粘贴迷你分身",
   mqGoto:"跳到原卡片",mqGone:"原卡片已不存在",mqNoRef:"这份稿子里没有对应的引文",mqDel:"删除摘录",
@@ -1335,6 +1351,7 @@ const DEF={family:"sans",size:15,weight:400,spacing:0.01,lh:1.55,align:"left",it
 const DEFLINK={kind:"curve",arrow:"none",w:1.4,color:"#8A8A85"};
 // 标题层级上限（2026-10 由三级加到五级）。所有"最多几级"的地方都读它，不要再写死数字
 const LVMAX=5;
+const REFOPEN=new Set();   // 写作页折叠框里哪些来源行展开了原文：只在这次打开期间记着，不存（2026-10）
 let S={bg:"#F4F4F2",cards:[],links:[],sheets:[],linkDef:{...DEFLINK},textDef:{...DEF},lang:"en",imgMax:360,work:false,findMode:"all",readOrder:"auto",linkView:"all",linkLabel:"dot"};
 let sel=[], selLink=null, hoverId=null, editing=false, linkFrom=null, lock=false, spaceDown=false, styleMode="sel";
 // 当前选中的稿子（画布上的一份稿子被当作一个整体选中时）。
@@ -2072,6 +2089,11 @@ function normCard(c){
   }
   if(o.verOn&&!(o.vers||[]).some(v=>v.id===o.verOn))delete o.verOn;
   if(o.bm!=null){const b=bmNorm(o.bm);if(b)o.bm=b;else delete o.bm}   // 文献信息：只认这几栏，坏值丢掉
+  if(o.mx!=null){                                   // 折叠框里的迷你分身：只认 {x,a}，只挂在引文分身上
+    o.mx=o.ref&&Array.isArray(o.mx)?o.mx.filter(m=>m&&typeof m==="object"&&typeof m.x==="string"&&m.x.trim())
+      .slice(0,500).map(m=>Number.isInteger(m.a)&&m.a>=0?{x:m.x.slice(0,2000),a:m.a}:{x:m.x.slice(0,2000)}):[];
+    if(!o.mx.length)delete o.mx;
+  }
   if(o.think!=null){                                // 我想我写：只认 {t,x}，坏数据丢掉，空了就整个去掉
     o.think=Array.isArray(o.think)?o.think.filter(e=>e&&typeof e==="object"&&typeof e.x==="string"&&e.x.trim())
       .map(e=>({t:Number.isFinite(+e.t)&&+e.t>0?+e.t:0,x:e.x})):[];
@@ -2130,7 +2152,8 @@ async function absorb(data,merge){
         mode:z.mode==="ctx"?"ctx":"iter",
         open:(z.open&&typeof z.open==="object")?z.open:{},
         ...(hsNorm(z.hs)?{hs:hsNorm(z.hs)}:{}),
-        ...(z.lock===true?{lock:true}:{})}));
+        ...(z.lock===true?{lock:true}:{}),
+        ...(z.mxMig?{mxMig:1}:{})}));
     data.sheets=(data.sheets||[]).filter(z=>z&&PAPER[z.kind])
       .map(z=>({id:(z.id&&!unsafeStr(z.id))?z.id:uid(),kind:z.kind,x:+z.x||0,y:+z.y||0,
         title:typeof z.title==="string"?z.title:""}));
@@ -2139,6 +2162,7 @@ async function absorb(data,merge){
       links:(data.links||[]).filter(l=>l&&ids0.has(l.a)&&ids0.has(l.b)).map(l=>{const n=normLinkIn(l);n.id=n.id||uid();return n}),
   };
     dropOrphans();                        // 所属稿子已经不在的段落、引文分身（孤儿）清掉
+    mxMigrate();                          // 以前贴进正文的迷你分身补进折叠框（每份稿子一次）
     return cards.length;                  // 图片不再在这里全部读进内存，画到哪张读哪张（needImg）
   }
   const map={},b=bbox(),ox=b?b.x+b.w+120:0,oy=b?b.y:0;
@@ -2489,7 +2513,7 @@ async function restoreBackup(it){
   snap();
   const d=migrate(bk.data);
   S={...S,...d};invalidateIndex();S.cards=d.cards||[];S.links=d.links||[];
-  S.frames=d.frames||[];dropOrphans();
+  S.frames=d.frames||[];dropOrphans();mxMigrate();
   sel=[];selLink=null;render();fit(true);save();
   toast(t("bkDone"));
 }
@@ -6581,7 +6605,8 @@ function snapClean(w){
   const drop=(q,cls)=>w.querySelectorAll(q).forEach(el=>el.classList.remove(...cls));
   drop(".card",["sel","multi","hit","nomatch","bibon"]);drop(".frame",["sel"]);drop(".doc",["on"]);
   drop(".blk",["sel","armed"]);drop(".fb",["reorder"]);drop("td",["tsel"]);
-  drop(".bibdot",["act"]);drop(".ref",["flash","lift"]);
+  drop(".bibdot",["act"]);drop(".ref",["flash","lift","picking","mxon"]);drop(".mx",["mxlit"]);
+  w.querySelectorAll(".ref").forEach(el=>el.classList.add("open"));   // 快照里点不了 ›，原文直接展开
   w.querySelectorAll(".num[title]").forEach(el=>el.removeAttribute("title"));
   // 文献条目的小圆点在快照里照样能点：点亮这条文献和归在它名下的卡片（查看脚本里的 bibFocus）。
   // 归属关系是 c.bib 这份数据，不在 DOM 里，所以写到卡片节点上带过去；分身不计入，跟 bibKids 一致
@@ -8898,7 +8923,7 @@ const wrKids=id=>S.cards.filter(c=>c.ref&&c.wrUnder===id);
 function addDoc(p,title){
   const ctr=p||toW(innerWidth/2,innerHeight/2);
   const d={id:uid(),x:Math.round(ctr.x-170),y:Math.round(ctr.y-46),
-    title:title||(t("wrDocNew")+" "+(docs().length+1)),ids:[],mode:"iter",open:{}};
+    title:title||(t("wrDocNew")+" "+(docs().length+1)),ids:[],mode:"iter",open:{},mxMig:1};
   snap();docs().push(d);render();save();return d;
 }
 const DOCW=760;                              // 正文区在世界坐标里的宽度
@@ -9045,7 +9070,7 @@ function docDup(d){
   const W=DOCW+SIDEW+80;
   let x=d.x+W;const y=d.y;
   for(let i=0;i<200&&docs().some(z=>Math.abs(z.x-x)<W-40&&Math.abs(z.y-y)<700);i++)x+=W;
-  const nd={id:uid(),x,y,title:d.title+t("docCopySuffix"),ids:[],mode:d.mode==="ctx"?"ctx":"iter",open:{}};
+  const nd={id:uid(),x,y,title:d.title+t("docCopySuffix"),ids:[],mode:d.mode==="ctx"?"ctx":"iter",open:{},mxMig:1};
   if(d.hs)nd.hs=JSON.parse(JSON.stringify(d.hs));
   const add=n=>{invalidateIndex();S.cards.push(n)};
   d.ids.forEach(id=>{
@@ -9599,11 +9624,7 @@ function docBodyHTML(d,extNums){
       <div class="wrap" style="${wrapS}">${body}</div>
       <div class="fold${kids.length?" has":""}${openF?" on":""}" data-id="${c.id}">
         <button class="fh" data-id="${c.id}"><span class="ar">\u203A</span></button>
-        <div class="fb">${kids.length?kids.map(k=>{
-          const ko=orig(k);
-          return `<div class="ref" data-id="${k.id}" contenteditable="false"
-            >${ko.rich?safeRich(ko.rich):esc(ko.text||"")}</div>`;
-        }).join(""):`<div class="rempty">${esc(t("wrRefsNone"))}</div>`}</div>
+        <div class="fb">${kids.length?kids.map(k=>mxRefHTML(k)).join(""):`<div class="rempty">${esc(t("wrRefsNone"))}</div>`}</div>
       </div>
     </div>`;
   });
@@ -9869,6 +9890,7 @@ function bindBody(root,getDoc){
     const ref=e.target.closest(".ref");if(!ref)return;
     if(ref.classList.contains("picking"))return;   // 摘词状态：按下就是划字，不当长按
     if(docLk(docOfCard(card(ref.dataset.id))))return;   // 锁定的稿子：不调序
+    if(e.target.closest(".rx,.mx"))return;              // 点 › 是展开原文，迷你分身有自己的菜单，都不当长按
     const box=ref.parentElement;
     if(!box||box.querySelectorAll(":scope > .ref").length<2)return;   // 只有一条，没得排
     const sx=e.clientX,sy=e.clientY;
@@ -10007,6 +10029,10 @@ function bindBody(root,getDoc){
   });
   root.addEventListener("click",e=>{
     const d=doc();
+    const rx=e.target.closest(".ref .rx");
+    if(rx){const ref=rx.closest(".ref"),id=ref.dataset.id;
+      if(REFOPEN.has(id))REFOPEN.delete(id);else REFOPEN.add(id);
+      ref.classList.toggle("open",REFOPEN.has(id));return}
     const fh=e.target.closest(".fh");
     if(fh){
       if(!d)return;
@@ -10375,6 +10401,8 @@ function hsBuild(pop,host){
 // 折叠框那一块是"看不见但确实存在的粘贴区"——在那里右键就能把剪贴板里的卡片
 // 粘成一个分身投影，这是原来那个"+"按钮的替代。
 function wrContextMenu(e,d){
+  const mx=e.target.closest(".ref .mx");
+  if(mx){mxMenu(e.clientX,e.clientY,mx);return}
   const mq=e.target.closest(".cap .mq");
   if(mq){mqMenu(e.clientX,e.clientY,mq);return}
   const ref=e.target.closest(".ref");
@@ -10444,7 +10472,7 @@ function mqOffsetNow(cap){
   return r.toString().length;
 }
 function mqSelText(ref){
-  const s=getSelection();
+  const s=getSelection();ref=ref&&(ref.querySelector(".rt")||ref);   // 只认原文那一块里的划选
   if(!ref||!s||!s.rangeCount||s.isCollapsed||!ref.contains(s.anchorNode)||!ref.contains(s.focusNode))return "";
   return s.toString().replace(/\s+/g," ").trim();
 }
@@ -10466,9 +10494,11 @@ function mqRangeAt(cap,off){
 function mqStop(){if(mqPick){mqPick.off();mqPick=null}}
 function mqStart(twinId){
   mqStop();
+  if(docLkStop(docOfCard(card(twinId))))return;    // 锁定的稿子里不能摘词（摘下会往折叠框里加东西）
   const ref=[...document.querySelectorAll('.ref[data-id="'+twinId+'"]')].find(el=>el.getClientRects().length);
   if(!ref)return;
-  ref.classList.add("picking");
+  ref.classList.add("picking");                     // 收起的来源行：摘词时自动展开原文，结束后收回
+  mxShowTaken(ref);
   const go=document.createElement("button");go.id="mqgo";go.type="button";go.textContent=t("mqGo");
   document.body.appendChild(go);
   const placeGo=()=>{
@@ -10491,21 +10521,36 @@ function mqStart(twinId){
     document.removeEventListener("selectionchange",placeGo);
     removeEventListener("keydown",onKey,true);removeEventListener("pointerdown",onDown,true);
     go.remove();ref.classList.remove("picking");
+    if(window.CSS&&CSS.highlights)CSS.highlights.delete("mxtaken");
   }};
   const s=getSelection();if(s)s.removeAllRanges();
   toast(t("mqHint"));
 }
-// 摘下：只记进 MQCLIP，不动正文
+// 摘下：挂到这条来源下面成为一条迷你分身（记下它在原文里的位置），同时放进 MQCLIP，正文不动。
+// 原文里已经摘过的位置不能再摘：新划选只要碰到已摘过的部分就不摘
 function mqCommit(){
   if(!mqPick)return;
-  const {ref,twinId}=mqPick,text=mqSelText(ref);
+  const {ref,twinId}=mqPick,rt=ref.querySelector(".rt");
+  const s=getSelection();
+  const ok=rt&&s&&s.rangeCount&&!s.isCollapsed&&rt.contains(s.anchorNode)&&rt.contains(s.focusNode);
+  const r=ok?s.getRangeAt(0):null,w=ok?mxWalk(rt):null;
   mqStop();
-  const tw=card(twinId);if(!text||!tw)return;
-  // 自动带上双引号（2026-10）：引号在摘录这一整块里面，跟文字一起定格、一起删、一起导出。
-  // 划选时已经带了引号的先去掉，免得变成两层
-  const core=text.replace(/^[\u201C"\u300C\u300E]+|[\u201D"\u300D\u300F]+$/g,"")||text;
+  const tw=card(twinId);if(!r||!tw)return;
+  let a=-1,e=-1;
+  w.map.forEach(([n,i],k)=>{if(r.comparePoint(n,i)===0&&r.comparePoint(n,i+1)===0){if(a<0)a=k;e=k+1}});
+  if(a<0)return;
+  // 自动带上双引号（2026-10）：引号在迷你分身这一整块里面。划选时已经带了引号（或首尾空白）的先去掉，位置跟着挪
+  const raw=w.str.slice(a,e);
+  const lead=(raw.match(/^[\s\u201C"\u300C\u300E]+/)||[""])[0].length,trail=(raw.match(/[\s\u201D"\u300D\u300F]+$/)||[""])[0].length;
+  let core=raw.slice(lead,Math.max(lead,raw.length-trail));
+  if(core){a+=lead}else core=raw.trim();
+  if(!core)return;
+  if(mxPlaced(tw,w.str).some(m=>a<m.a+m.x.length&&m.a<a+core.length)){toast(t("mxTaken"));getSelection().removeAllRanges();return}
+  snap();
+  tw.mx=(Array.isArray(tw.mx)?tw.mx:[]).concat({x:core,a});
   MQCLIP={q:orig(tw).id,text:"\u201C"+core+"\u201D"};
   getSelection().removeAllRanges();
+  save();redrawDocs();
   toast(t("mqTaken"));
 }
 // 粘贴迷你分身：插在这一段第 off 个字的位置。走 execCommand，进浏览器的编辑历史，Ctrl+Z 一步撤回；
@@ -10537,9 +10582,9 @@ function mqMenu(x,y,el){
   ]);
 }
 // 双击摘录：在当前视图里（画布上的稿子或专注模式，不切换）找到下方折叠框里对应的那条引文，
-// 把引文里跟这条摘录对应的那几个词加深约 4 秒（mqLight）；原文里找不到这几个词（源卡片后来改过）就整条闪一下。
-// 优先找挂在同一段下面的；没有就找这份稿子里任意一条指向同一张源卡片的。
-// 折叠框关着就打开（跟 revealRef 一样记进 d.open）；不在视野里才滚过去，免得把正在写的那一段滚走。
+// 双击正文里的迷你分身（2026-10 起统一成一种效果）：稿子折叠框里对应的那条迷你分身加深约 4 秒，不展开原文。
+// 对应 = 指向同一张原卡片、文字相同；优先挂在同一段下面的，没有就找这份稿子里任意一条。
+// 折叠框关着就打开（记进 d.open）；不在视野里才滚过去，免得把正在写的那一段滚走。找不到就提示。
 function mqReveal(el){
   const cap=el.closest(".cap");if(!cap)return;
   const inFocus=!!el.closest("#wrmain"),docEl=el.closest(".doc");
@@ -10549,38 +10594,34 @@ function mqReveal(el){
   // 把光标放到摘录后面，免得双击把摘录里的字选成一片
   if(cap.isContentEditable){const r=document.createRange();r.setStartAfter(el);r.collapse(true);
     const s=getSelection();s.removeAllRanges();s.addRange(r)}
-  const pick=()=>{
-    const root=inFocus?$("wrmain"):(docEl&&docEl.isConnected?docEl:document.querySelector('#docs .doc[data-id="'+d.id+'"]'));
-    if(!root)return null;
-    const refs=[...root.querySelectorAll(".ref[data-id]")].filter(r=>{const c=card(r.dataset.id);return c&&orig(c).id===q});
-    return refs.find(r=>card(r.dataset.id).wrUnder===host)||refs[0]||null;
-  };
-  let ref=pick();
-  if(!ref){toast(t("mqNoRef"));return}
   const core=(el.textContent||"").replace(/^\u201C/,"").replace(/\u201D$/,"").trim();
-  const flash=ref=>{
+  const tws=S.cards.filter(z=>z.ref===q&&z.wrIn===d.id&&Array.isArray(z.mx)&&z.mx.some(m=>m.x===core));
+  const tw=tws.find(z=>z.wrUnder===host)||tws[0];
+  if(!tw){toast(t("mqNoRef"));return}
+  const light=()=>{
+    const root=inFocus?$("wrmain"):(docEl&&docEl.isConnected?docEl:document.querySelector('#docs .doc[data-id="'+d.id+'"]'));
+    const ref=root&&root.querySelector('.ref[data-id="'+tw.id+'"]');if(!ref)return;
+    const m=[...ref.querySelectorAll(".mx")].find(z=>(tw.mx[+z.dataset.k]||{}).x===core);if(!m)return;
     const box=ref.closest(".dbody")||$("wrmain");
-    if(box){const br=box.getBoundingClientRect(),er=ref.getBoundingClientRect();
-      if(er.top<br.top||er.bottom>br.bottom)scrollBlockInto(box,ref)}
-    if(mqLight(ref,core))return;
-    ref.classList.remove("flash");void ref.offsetWidth;ref.classList.add("flash");
-    setTimeout(()=>ref.classList.remove("flash"),1400);
+    if(box){const br=box.getBoundingClientRect(),er=m.getBoundingClientRect();
+      if(er.top<br.top||er.bottom>br.bottom)scrollBlockInto(box,m)}
+    clearTimeout(mxLitT);document.querySelectorAll(".mx.mxlit").forEach(z=>z.classList.remove("mxlit"));
+    document.querySelectorAll(".ref.mxon").forEach(z=>z.classList.remove("mxon"));
+    m.classList.add("mxlit");ref.classList.add("mxon");
+    mxLitT=setTimeout(()=>{m.classList.remove("mxlit");ref.classList.remove("mxon")},4000);
   };
-  const fold=ref.closest(".fold");
-  if(fold&&!fold.classList.contains("on")){
-    const under=card(ref.dataset.id).wrUnder;
-    d.open=d.open||{};d.open[under]=true;save();redrawDocs();
-    requestAnimationFrame(()=>{const r2=pick();if(r2)flash(r2)});
-    return;
-  }
-  flash(ref);
+  if(!(d.open&&d.open[tw.wrUnder])){d.open=d.open||{};d.open[tw.wrUnder]=true;save();redrawDocs();requestAnimationFrame(light);return}
+  light();
 }
-// 在引文里找到这几个词。摘下时空白被压成了一个空格，这里也按同样的规矩把引文的文字拼起来，
-// 同时记下每个字落在哪个文字节点的第几位，找到之后再换算回真实的位置
-function mqWordRange(ref,core){
-  if(!core)return null;
+let mxLitT=null;
+/* ---- 折叠框里的迷你分身（2026-10） ----
+   tw.mx=[{x:定格的文字（不带引号）,a:在原文里的位置}] 记在那一条引文分身上（不是原卡片上）：
+   不同段落下各自独立；从稿子里移除这条引文分身时一起没了；复制整份稿子时跟着复制。正文里的迷你分身是另一份拷贝，互不影响。
+   位置按 mxWalk 的规矩数：原文的文字节点连起来，连续空白压成一个空格。原卡片后来改了字、位置对不上的那一条
+   不再参与防重复（mxPlaced 只认对得上的），文字本身照样留着，排在最后。 */
+function mxWalk(root){
   const map=[];let str="",sp=true,n;
-  const w=document.createTreeWalker(ref,NodeFilter.SHOW_TEXT);
+  const w=document.createTreeWalker(root,NodeFilter.SHOW_TEXT);
   while((n=w.nextNode())){
     const v=n.nodeValue;
     for(let i=0;i<v.length;i++){
@@ -10588,21 +10629,94 @@ function mqWordRange(ref,core){
       else{str+=v[i];map.push([n,i]);sp=false}
     }
   }
-  const at=str.indexOf(core);if(at<0)return null;
-  const a=map[at],b=map[at+core.length-1];
-  const r=document.createRange();r.setStart(a[0],a[1]);r.setEnd(b[0],b[1]+1);
-  return r;
+  return {str,map};
 }
-// 加深那几个词：用浏览器的高亮（CSS.highlights），不改动任何文字和数据，约 4 秒后自己退掉
-let mqHitT=null,mqHitRef=null;
-function mqLight(ref,core){
-  const r=mqWordRange(ref,core);
-  if(!r||!window.CSS||!CSS.highlights||typeof Highlight==="undefined")return false;
-  clearTimeout(mqHitT);if(mqHitRef)mqHitRef.classList.remove("mqlit");
-  CSS.highlights.set("mqhit",new Highlight(r));
-  ref.classList.add("mqlit");mqHitRef=ref;
-  mqHitT=setTimeout(()=>{CSS.highlights.delete("mqhit");ref.classList.remove("mqlit");mqHitRef=null},4000);
-  return true;
+// 原卡片的文字按引文分身里显示的样子拼出来（跟 mxRefHTML 里的原文一模一样）
+function mxSrcStr(o){
+  const tp=document.createElement("template");tp.innerHTML=o.rich?safeRich(o.rich):esc(o.text||"");
+  return mxWalk(tp.content).str;
+}
+// 位置还对得上的迷你分身
+function mxPlaced(tw,str){
+  return (Array.isArray(tw.mx)?tw.mx:[]).filter(m=>Number.isInteger(m.a)&&str.slice(m.a,m.a+m.x.length)===m.x);
+}
+// 显示顺序：位置对得上的按原文先后，对不上的按添加先后排在后面。k 是在 tw.mx 里的下标
+function mxOrdered(tw,str){
+  const L=(Array.isArray(tw.mx)?tw.mx:[]).map((m,k)=>({m,k,ok:Number.isInteger(m.a)&&str.slice(m.a,m.a+m.x.length)===m.x}));
+  return L.filter(z=>z.ok).sort((p,q)=>p.m.a-q.m.a).concat(L.filter(z=>!z.ok));
+}
+// 来源行上的文字：原卡片绑定的文献条目的 Citation（原卡片自己就是文献条目时用它自己的），加原文开头几个字
+function mxCite(src){
+  if(src.role==="bib"&&src.bm&&src.bm.cite)return src.bm.cite;
+  const b=bibOf(src);return b&&b.bm&&b.bm.cite||"";
+}
+// 导出用：{head:来源行文字, items:[迷你分身…]}；没摘过词时 items 为空，照旧输出原文
+function mxExport(k){
+  const ko=orig(k),cite=mxCite(ko);
+  if(!Array.isArray(k.mx)||!k.mx.length)return {head:null,items:[]};
+  return {head:(cite?cite+"  ":"")+snippet(ko,80),items:mxOrdered(k,mxSrcStr(ko)).map(z=>"\u201C"+z.m.x+"\u201D")};
+}
+function mxRefHTML(k){
+  const ko=orig(k),cite=mxCite(ko);
+  const mx=Array.isArray(k.mx)&&k.mx.length?mxOrdered(k,mxSrcStr(ko)):[];
+  return `<div class="ref${REFOPEN.has(k.id)?" open":""}" data-id="${k.id}" contenteditable="false">`
+    +`<div class="rh"><button class="rx" type="button">\u203A</button>${cite?`<span class="rc">${esc(cite)}</span>`:""}`
+    +`<span class="rs">${esc(snippet(ko,80)||"")}</span></div>`
+    +`<div class="rt">${ko.rich?safeRich(ko.rich):esc(ko.text||"")}</div>`
+    +mx.map(z=>`<div class="mx" data-k="${z.k}"><span class="mxt">${esc("\u201C"+z.m.x+"\u201D")}</span></div>`).join("")
+    +`</div>`;
+}
+// 摘词时把原文里已经摘过的部分用很淡的底色标出来
+function mxShowTaken(ref){
+  if(!window.CSS||!CSS.highlights||typeof Highlight==="undefined")return;
+  const tw=card(ref.dataset.id),rt=ref.querySelector(".rt");if(!tw||!rt)return;
+  const w=mxWalk(rt),rs=[];
+  mxPlaced(tw,w.str).forEach(m=>{
+    const p=w.map[m.a],q=w.map[m.a+m.x.length-1];if(!p||!q)return;
+    const r=document.createRange();r.setStart(p[0],p[1]);r.setEnd(q[0],q[1]+1);rs.push(r);
+  });
+  if(rs.length)CSS.highlights.set("mxtaken",new Highlight(...rs));else CSS.highlights.delete("mxtaken");
+}
+// 迷你分身的右键菜单：摘下（重新放进剪贴板，以后贴进正文用）、删除（可撤销）
+function mxMenu(x,y,el){
+  const ref=el.closest(".ref"),tw=ref&&card(ref.dataset.id),k=+el.dataset.k,m=tw&&Array.isArray(tw.mx)&&tw.mx[k];
+  if(!m)return;
+  menuAt(x,y,[
+    {head:("\u201C"+m.x+"\u201D").slice(0,30)},
+    {label:t("mqGo"),on:()=>{MQCLIP={q:orig(tw).id,text:"\u201C"+m.x+"\u201D"};toast(t("mqTaken"))}},
+    {label:t("mxDel"),danger:true,on:()=>{
+      if(docLkStop(docOfCard(tw)))return;
+      const i=tw.mx.indexOf(m);if(i<0)return;
+      snap();tw.mx.splice(i,1);if(!tw.mx.length)delete tw.mx;
+      save();redrawDocs();toast(t("mxDeleted"));
+    }}
+  ]);
+}
+// 以前直接贴进正文、折叠框里没有对应的迷你分身，补进折叠框：优先挂在同一段下指向同一张原卡片的引文分身下面，
+// 没有就挂在这份稿子里任意一条指向它的下面；位置取原文里第一处还没被摘过的地方，找不到就不记位置。
+// 每份稿子只补一次（d.mxMig），之后删掉的迷你分身不会因为正文里还有那一条又冒回来。只加不删。
+function mxMigrate(){
+  let changed=false;
+  docs().forEach(d=>{
+    if(d.mxMig)return;
+    d.ids.forEach(id=>{
+      const c=card(id);if(!c||!c.rich||c.rich.indexOf("data-q")<0)return;
+      const tp=document.createElement("template");tp.innerHTML=c.rich;
+      tp.content.querySelectorAll("[data-q]").forEach(ch=>{
+        const q=ch.getAttribute("data-q"),core=(ch.textContent||"").replace(/^\u201C/,"").replace(/\u201D$/,"").trim();
+        if(!q||!core)return;
+        const tws=S.cards.filter(z=>z.ref===q&&z.wrIn===d.id);
+        const tw=tws.find(z=>z.wrUnder===id)||tws[0];if(!tw)return;
+        if(Array.isArray(tw.mx)&&tw.mx.some(m=>m.x===core))return;
+        const src=card(q),str=src?mxSrcStr(src):"",placed=mxPlaced(tw,str);
+        let a=-1,from=0;
+        while((a=str.indexOf(core,from))>=0&&placed.some(m=>a<m.a+m.x.length&&m.a<a+core.length))from=a+1;
+        tw.mx=(Array.isArray(tw.mx)?tw.mx:[]).concat(a>=0?{x:core,a}:{x:core});changed=true;
+      });
+    });
+    d.mxMig=1;changed=true;
+  });
+  return changed;
 }
 // 导出时把摘录变回普通文字：不带颜色、不带任何标记
 function plainMq(html){
@@ -11015,7 +11129,9 @@ function wrHTML(d,opt){
     if(opt.refs){
       const kids=wrKids(c.id);
       if(kids.length)h+=`<div class="refs"><div class="rh">${esc(t("wrExpRefs"))}</div>`
-        +kids.map(k=>`<div>${esc(snippet(orig(k),500))}</div>`).join("")+`</div>`;
+        +kids.map(k=>{const e=mxExport(k);
+          return e.head?`<div>${esc(e.head)}</div>`+e.items.map(x=>`<div style="padding-left:12pt">${esc(x)}</div>`).join("")
+            :`<div>${esc(snippet(orig(k),500))}</div>`}).join("")+`</div>`;
     }
   });
   return h+`</div></body></html>`;
@@ -11064,8 +11180,11 @@ async function wrExportDocx(D,d,opt){
       kids.push(new Paragraph({indent:{left:420},children:[new TextRun({
         text:verLabel(v,k)+"　"+v.text,italics:true,color:"777777",size:19})]}));
     });
-    if(opt.refs)wrKids(c.id).forEach(k=>kids.push(new Paragraph({indent:{left:560},
-      children:[new TextRun({text:"\u25C8 "+snippet(orig(k),500),color:"888888",size:19})]})));
+    if(opt.refs)wrKids(c.id).forEach(k=>{const e=mxExport(k);
+      kids.push(new Paragraph({indent:{left:560},
+        children:[new TextRun({text:"\u25C8 "+(e.head||snippet(orig(k),500)),color:"888888",size:19})]}));
+      e.items.forEach(x=>kids.push(new Paragraph({indent:{left:800},children:[new TextRun({text:x,color:"888888",size:19})]})));
+    });
   });
   const blob=await Packer.toBlob(new Document({sections:[{children:kids}]}));
   dl(blob,safeName(d.title)+".docx");
@@ -11134,8 +11253,9 @@ function wrMD(d,opt){
       if(v.id===o.verOn||!String(v.text||"").trim())return;
       out+="> **"+verLabel(v,k)+"** "+String(v.text).replace(/\n+/g," ")+"\n\n";
     });
-    if(opt.refs)wrKids(c.id).forEach(k=>{
-      out+="> \u25C8 "+snippet(orig(k),500).replace(/\n+/g," ")+"\n\n";
+    if(opt.refs)wrKids(c.id).forEach(k=>{const e=mxExport(k);
+      out+="> \u25C8 "+(e.head||snippet(orig(k),500)).replace(/\n+/g," ")+"\n\n";
+      e.items.forEach(x=>{out+=">     "+x.replace(/\n+/g," ")+"\n\n"});
     });
   });
   return out;
@@ -12143,7 +12263,7 @@ $("mergefile").onchange=e=>{const f=e.target.files[0];if(f)readJSON(f,true);e.ta
     (S.links||[]).forEach(l=>{if(l)delete l.dash});S.links=S.links||[];S.frames=S.frames||[];S.sheets=S.sheets||[];
     if(!S.lvMigrated){S.linkView="all";S.lvMigrated=true}
     S.linkDef={...DEFLINK,...(saved.linkDef||{})};S.textDef={...DEF,...(saved.textDef||{})}}
-  if(Array.isArray(S.cards))dropOrphans();   // 打开时清掉孤儿（所属稿子已经删掉的段落和引文分身，2026-10）
+  if(Array.isArray(S.cards)){dropOrphans();mxMigrate()}   // 打开时清掉孤儿；以前贴进正文的迷你分身补进折叠框（2026-10）
   LANG=S.lang||"en";
   await migrateInline(S.cards);
   // 从前这里把全部图片读进内存（loadImgs），图片多了标签页会被撑爆；现在画到哪张读哪张
