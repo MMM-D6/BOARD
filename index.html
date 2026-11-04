@@ -2009,11 +2009,14 @@ function stampName(base,ext){
   return datePrefix()+"-"+b+(ext||"");
 }
 // 整份数据的结构部分（卡片里的图片仍是 ih 引用）。真正写文件时由 writeBundle 把图片逐张内联进去。
-function bundle(list){
+// 只导出一部分（list）时，页面框只带调用方点名的那几个（「导出本页…」就是这一页），
+// 标准页和写作页不带：从前整份照抄，片段文件里会多出别的页面框和空稿子。整份保存（list 为空）不受影响。
+function bundle(list,frames){
   const cards=(list||S.cards).map(cleanCard);
   const ids=new Set(cards.map(c=>c.id));
   return {...S,v:SCHEMA,cards,
     links:S.links.filter(l=>ids.has(l.a)&&ids.has(l.b)),
+    ...(list?{frames:frames||[],sheets:[],docs:[]}:{}),
   };
 }
 // 把整份数据（连同图片）按顺序写出去。从前是 JSON.stringify 拼成一整个字符串：
@@ -2021,8 +2024,8 @@ function bundle(list){
 // 现在一张卡片一张卡片地写，图片逐张从仓库读出来转成 base64，内存里任何时候只有一张图；
 // 每写一段就把主线程让出来，界面不会卡住。输出仍是同一种 JSON（图片内联在 src 里），新旧版本可以互相读。
 // 开始时先把结构拍一份快照，写的过程中继续编辑也不会写出前后不一致的文件。
-async function writeBundle(list,put){
-  const data=bundle(list),cards=data.cards;delete data.cards;
+async function writeBundle(list,put,frames){
+  const data=bundle(list,frames),cards=data.cards;delete data.cards;
   const keys=Object.keys(data).filter(k=>data[k]!==undefined);
   let out="{\n";
   keys.forEach((k,i)=>{out+=(i?",\n":"")+" "+JSON.stringify(k)+": "+JSON.stringify(data[k],null,1)});
@@ -2052,9 +2055,9 @@ async function writeBundle(list,put){
 }
 // 同样的内容写成一个 Blob（下载、存档包用）。每攒到 32MB 就并进 Blob，交给浏览器自己去管，
 // 不在 JS 里攒一个巨大的字符串
-async function bundleBlob(list){
+async function bundleBlob(list,frames){
   let acc=new Blob([]),parts=[],n=0;
-  await writeBundle(list,s=>{parts.push(s);n+=s.length;if(n>32e6){acc=new Blob([acc,...parts]);parts=[];n=0}});
+  await writeBundle(list,s=>{parts.push(s);n+=s.length;if(n>32e6){acc=new Blob([acc,...parts]);parts=[];n=0}},frames);
   return new Blob([acc,...parts],{type:"application/json"});
 }
 /* 导入关口的注入防护（2026-10 排查补上，见 NOTES 十点八）。
@@ -2238,8 +2241,8 @@ async function pickFile(){
   const n=prompt(t("saveNamePrompt"),stampName(fileName||"board"));
   if(!n)return;fileName=/\.json$/i.test(n)?n:n+".json";download();statusBar();
 }
-async function download(list,name){
-  const b=await bundleBlob(list);
+async function download(list,name,frames){
+  const b=await bundleBlob(list,frames);
   const fn=name||fileName||"board.json";
   const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=fn;a.click();
   setTimeout(()=>URL.revokeObjectURL(a.href),60000);     // 大文件下载开始得慢，地址多留一会儿
@@ -3707,7 +3710,7 @@ function frameMenu(x,y,f){
         f.w=Math.round(bb.w+140);f.h=Math.round(bb.h+140);renderFrames();save()}}}]),
     "-",
     {label:t("pageExport"),on:()=>{sel=inFrame(f).map(c=>c.id);selFrame=null;
-      render();paintSel();openExport(x,y)}},
+      render();paintSel();openExport(x,y,null,f)}},
     "-",
     {label:t("pageDelete"),on:()=>delFrame(f,false)},
     {label:t("pageDeleteAll"),danger:true,on:()=>{if(confirm(t("pageDelConfirm")))delFrame(f,true)}}
@@ -5385,7 +5388,8 @@ function secTag(n){
   return n.num?("\u00A7"+n.num+" "):(n.sec?("\u00A7"+n.sec+" "):"");
 }
 function refLabel(n){return secTag(n)+snippet(orig(n.c),26)}
-function openExport(x,y,pre){
+// page：从页面菜单「导出本页…」进来时传入这一页。默认名称用页面名，画布文件只带这一个页面框
+function openExport(x,y,pre,page){
   if(lock)return;
   const p=$("pop");
   p.innerHTML=`
@@ -5401,7 +5405,7 @@ function openExport(x,y,pre){
       <button data-v="sel" ${sel.length?"":"disabled"}>${t("scopeSel")}</button>
     </div>
     <div class="sec">${t("expName")}</div>
-    <input class="ti" id="exn" value="${escA(stampName(fileName||"Board"))}" spellcheck="false">
+    <input class="ti" id="exn" value="${escA(stampName(page?(page.title||t("pageDefault")):(fileName||"Board")))}" spellcheck="false">
     <div id="exzip" style="display:none">
       <div class="sec">${t("expOpts")}</div>
       <label class="opt"><input type="checkbox" id="exshot"> ${t("zipShots")}</label>
@@ -5491,7 +5495,7 @@ function openExport(x,y,pre){
       if(pw1.value!==pw2.value){toast(t("snapPwMismatch"));pw2.focus();return}
       pw=snapPw=pw1.value;
     }
-    const o={fmt,scale,scope,pw,webScope,byPage:!!p.querySelector("#exbp")?.checked,
+    const o={fmt,scale,scope,pw,webScope,page,byPage:!!p.querySelector("#exbp")?.checked,
       shots:!!p.querySelector("#exshot")?.checked,
       title:stampName(p.querySelector("#exn").value.trim()||"Board"),
       img:p.querySelector("#ex1").checked,tags:p.querySelector("#ex2").checked,
@@ -5587,7 +5591,7 @@ async function doExport(o){
   if(o.fmt==="web"){await exportWebSnap(o);return}
   const list=exportSet(o);
   if(o.scope==="sel"&&!list){toast(t("needSel"));return}
-  if(o.fmt==="json"){await download(list,o.title+".json");return}
+  if(o.fmt==="json"){await download(list,o.title+".json",o.page?[o.page]:null);return}
   if(o.fmt==="md"){
     const tree=buildTree(list);
     dl(new Blob([docMD(o,tree)],{type:"text/markdown;charset=utf-8"}),o.title+".md");

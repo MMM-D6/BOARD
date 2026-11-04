@@ -7774,6 +7774,47 @@ group("cutout 抠图工具", async (c) => {
   }));
 });
 
+// 「导出本页…」：画布文件只带这一个页面框（不带别的页面、标准页、写作页），默认名称用页面名
+group("pageexport 导出本页", async (c) => {
+  await c.board(
+    [{ id: "a", x: 40, y: 60, w: 200, text: "甲" }, { id: "b", x: 740, y: 60, w: 200, text: "乙" }],
+    [{ id: "l1", a: "a", b: "b" }],
+    { frames: [{ id: "f1", x: 0, y: 0, w: 600, h: 400, title: "第二章 文献综述" }, { id: "f2", x: 700, y: 0, w: 600, h: 400, title: "" }] }
+  );
+  await c.run(() => { S.sheets = [{ id: "s1", kind: "a4", x: 0, y: 900, title: "" }]; S.docs = [{ id: "d1", x: 0, y: 2000, title: "稿子", ids: [], mode: "iter", open: {} }]; render(); });
+  // 拦下下载，拿到文件名和内容
+  await c.run(() => {
+    window.__dl = [];
+    const mk = URL.createObjectURL.bind(URL), blobs = new Map();
+    URL.createObjectURL = (b) => { const u = mk(b); blobs.set(u, b); return u; };
+    HTMLAnchorElement.prototype.click = function () { window.__dl.push({ name: this.download, blob: blobs.get(this.href) }); };
+  });
+  const viaMenu = async (fi) => c.run((fi) => {
+    frameMenu(50, 50, S.frames[fi]);
+    [...document.querySelectorAll("#menu .mi")].find((z) => z.textContent.includes(t("pageExport"))).click();
+    return $("exn").value;
+  }, fi);
+  const want = await c.run(() => ({ p: stampName("第二章 文献综述"), d: stampName(t("pageDefault")) }));
+  const name1 = await viaMenu(0);
+  c.ok("默认名称是日期加页面名", name1 === want.p);
+  const got = await c.run(async () => {
+    document.querySelector('#exf button[data-v="json"]').click();
+    document.querySelector("#exgo").click();
+    for (let i = 0; i < 50 && !window.__dl.length; i++) await new Promise((r) => setTimeout(r, 100));
+    const d = window.__dl.pop();
+    return { name: d.name, j: JSON.parse(await d.blob.text()) };
+  });
+  c.ok("文件名是页面名", got.name === want.p + ".json");
+  c.ok("只带这一页的页面框", got.j.frames.length === 1 && got.j.frames[0].id === "f1");
+  c.ok("只带这一页的卡片", got.j.cards.length === 1 && got.j.cards[0].id === "a");
+  c.ok("不带标准页和写作页", got.j.sheets.length === 0 && got.j.docs.length === 0);
+  c.ok("没名字的页面用「页面」", (await viaMenu(1)) === want.d);
+  await c.run(() => $("pcx").click());
+  c.ok("手动选中导出不带页面框", await c.run(() => { sel = ["a"]; const b = bundle([card("a")]); return b.frames.length === 0 && b.sheets.length === 0 && b.docs.length === 0; }));
+  c.ok("整份保存照旧带全部", await c.run(() => { const b = bundle(null); return b.frames.length === 2 && b.sheets.length === 1 && b.docs.length === 1; }));
+  c.ok("平常打开导出面板仍用文件名", await c.run(() => { sel = []; fileName = "thesis.json"; openExport(50, 50); const v = $("exn").value; $("pcx").click(); return v === stampName("thesis.json"); }));
+});
+
 /* ---------------- 主流程 ---------------- */
 
 (async () => {
