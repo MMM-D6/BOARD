@@ -689,11 +689,11 @@
   .blk .ref .rh{display:flex;align-items:baseline;gap:6px;white-space:nowrap;overflow:hidden}
   .blk .ref .rx{flex:none;border:none;background:none;color:inherit;cursor:pointer;padding:0 2px;opacity:.6;
     font:inherit;line-height:1;transition:transform .14s}
-  .blk .ref.open .rx,.blk .ref.picking .rx{transform:rotate(90deg)}
+  .blk .ref.open .rx{transform:rotate(90deg)}
   .blk .ref .rc{flex:none;font-weight:500}
   .blk .ref .rs{overflow:hidden;text-overflow:ellipsis;opacity:.75}
   .blk .ref .rt{display:none;margin:4px 0 2px 18px}
-  .blk .ref.open .rt,.blk .ref.picking .rt{display:block}
+  .blk .ref.open .rt{display:block}
   .blk .ref .mx{margin:3px 0 0 18px;cursor:default}
   .blk .ref .mxt{font-family:"Newsreader","Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;
     background:color-mix(in srgb,currentColor 8%,transparent);border-radius:2px;padding:0 .12em;
@@ -713,10 +713,38 @@
     background:color-mix(in srgb,currentColor 8%,transparent);border-radius:2px;padding:0 .12em;
     -webkit-box-decoration-break:clone;box-decoration-break:clone;cursor:default}
   /* 摘词状态：这一条引文换一圈虚线，表示"现在在这里划选" */
-  .blk .ref.picking{opacity:1;outline:1px dashed var(--frame);outline-offset:3px;border-radius:3px}
-  #mqgo{position:fixed;z-index:85;display:none;height:26px;padding:0 11px;border-radius:7px;cursor:pointer;
-    border:1px solid var(--pline);background:var(--panel);color:var(--pfg);font:500 12px/1 "IBM Plex Sans",sans-serif;
-    box-shadow:0 6px 18px rgba(0,0,0,.14)}
+  /* 沉浸式摘词（2026-11）：整屏变暗，中间一块阅读面板。点外面不会关，只有 Esc 或 × 关 */
+  #mqp{position:fixed;inset:0;z-index:79;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.32)}
+  #mqp.on{display:flex}
+  #mqp .mqbox{width:min(720px,calc(100vw - 32px));max-height:85vh;display:flex;flex-direction:column;
+    background:var(--panel);color:var(--pfg);border:1px solid var(--pline);border-radius:12px;box-shadow:0 24px 64px rgba(0,0,0,.24)}
+  #mqp .mqh{display:flex;align-items:baseline;gap:8px;padding:14px 18px 10px;border-bottom:1px solid var(--pline);white-space:nowrap;overflow:hidden}
+  #mqp .mqh .rc{flex:none;font-weight:500}
+  #mqp .mqh .rs{overflow:hidden;text-overflow:ellipsis;opacity:.6}
+  #mqp .mqh .x{margin-left:auto;flex:none;border:none;background:none;color:inherit;cursor:pointer;font-size:17px;opacity:.5;padding:0 2px}
+  #mqp .mqtx{flex:1 1 auto;min-height:120px;overflow:auto;padding:18px 22px;line-height:1.75;white-space:pre-wrap;
+    word-break:break-word;user-select:text;-webkit-user-select:text;cursor:text}
+  #mqp .mqbar{display:flex;align-items:center;gap:10px;padding:9px 18px;border-top:1px solid var(--pline);border-bottom:1px solid var(--pline)}
+  #mqp .mqbar .pv{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12.5px;opacity:.7}
+  #mqp .mqbar .go{flex:none;height:28px;padding:0 14px;border:none;border-radius:7px;cursor:pointer;background:var(--pfg);color:var(--panel);font-size:12.5px}
+  #mqp .mqbar .go:disabled{opacity:.3;cursor:default}
+  #mqp .mqlow{max-height:32vh;overflow:auto;padding:4px 18px 14px;font-size:12.5px}
+  #mqp .hd2{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;opacity:.42;margin:12px 0 6px}
+  #mqp .mqli .mx{margin:3px 0;cursor:pointer}
+  #mqp .mqli .mxt{font-family:"Newsreader","Noto Serif SC","Source Han Serif SC","Songti SC","STSong","SimSun",serif;
+    background:color-mix(in srgb,currentColor 8%,transparent);border-radius:2px;padding:0 .12em}
+  #mqp .mqli .mx:hover .mxt{background:color-mix(in srgb,currentColor 16%,transparent)}
+  #mqp .tk-list{max-height:none}
+  #mqp .tk{padding:7px 0;border-bottom:1px solid var(--pline)}
+  #mqp .tk .tm{display:flex;align-items:center;font:400 9.5px/1 "IBM Plex Mono",monospace;opacity:.5}
+  #mqp .tk .tm button{margin-left:auto;border:none;background:none;color:inherit;cursor:pointer;font-size:11px;padding:0 2px;opacity:.7}
+  #mqp .tk .tm button.arm{color:#c0392b;opacity:1}
+  #mqp .tk .tx{white-space:pre-wrap;word-break:break-word;margin-top:5px;line-height:1.55;cursor:text}
+  #mqp textarea.tki{display:block;width:100%;min-height:64px;max-height:24vh;margin-top:8px;padding:6px 8px;box-sizing:border-box;resize:none;overflow-y:auto;
+    border:1px solid var(--pline);border-radius:6px;background:none;color:inherit;font:inherit;line-height:1.55;outline:none}
+  #mqp .note{font-size:11px;opacity:.42;margin:6px 0 0;line-height:1.5}
+  ::highlight(mxfocus){background-color:rgba(0,0,0,.2)}
+  body.isdark ::highlight(mxfocus){background-color:rgba(255,255,255,.3)}
   .blk.ctx .gut{display:none}
   .blk.ctx{margin-bottom:2px}
   .blk .h{font-weight:600;letter-spacing:-.01em}
@@ -1052,6 +1080,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   hsApplied:"Applied to {n} heading(s)",hsSkipped:" ({n} locked paragraph(s) left as they were)",hsNone:"This draft has no headings yet",
   hsSize:"Size",hsColour:"Colour",hsFont:"Font",
   hsNote:"Kept with this draft only. Paragraphs change when you click Apply; paragraphs you make headings afterwards use these styles automatically.",
+  mqWill:"Take: ",mqList:"Mini twins",mqLockedBar:"This draft is locked, so nothing can be taken",
   mxTaken:"That part has already been picked",mxDeleted:"Mini twin deleted (you can undo this)",mxDel:"Delete",
   mqPick:"Pick words",mqGo:"Take",mqHint:"Select the words you want, then press Enter or click Take. Esc cancels.",
   mqTaken:"Taken. Right-click where you want it in your text and choose Paste mini twin",mqPaste:"Paste mini twin",
@@ -1282,6 +1311,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   hsApplied:"已套用到 {n} 个标题",hsSkipped:"（{n} 个锁定的段落没有改）",hsNone:"这份稿子里还没有标题",
   hsSize:"字号",hsColour:"颜色",hsFont:"字体",
   hsNote:"设定只存在这份稿子里；点「套用到本稿」才会改动段落。之后新设成标题的段落会自动套用。",
+  mqWill:"将摘下：",mqList:"已摘的迷你分身",mqLockedBar:"稿子已锁定，不能摘下",
   mxTaken:"这部分已经摘过了",mxDeleted:"已删除这条迷你分身（可以撤销）",mxDel:"删除",
   mqPick:"摘词",mqGo:"摘下",mqHint:"划选要摘的词，按 Enter 或点「摘下」；Esc 取消",
   mqTaken:"已摘下，到正文里要放的位置右键「粘贴迷你分身」",mqPaste:"粘贴迷你分身",
@@ -8523,24 +8553,29 @@ function exportBibCSV(){
 }
 function openThink(x,y,c){
   const s0=c&&orig(c);if(!s0||docOnly(s0))return;
-  const sid=s0.id,src=()=>card(sid);         // 每次现取：撤销会换掉卡片对象
   const p=$("pop");
-  // 输入框里的按键、粘贴、复制不能漏到画布上（否则 Delete 会删卡片、粘贴会贴进表格）
-  const guard=el=>["keydown","paste","copy","cut"].forEach(k=>el.addEventListener(k,e=>{
-    e.stopPropagation();
-    if(k==="keydown"&&e.key==="Escape"){e.preventDefault();p.classList.remove("on","wide","tk")}
-  }));
   const close=()=>p.classList.remove("on","wide","tk");
   p.innerHTML=`<div class="hd"><b>${esc(t("thinkMenu"))}</b><button id="pcx">\u00D7</button></div>
-    <div class="tkh">${esc(snippet(s0,40)||"")}</div>
-    <div class="tk-list" id="tkl"></div>
-    <textarea class="tki" id="tkin" placeholder="${escA(t("thinkPh"))}" spellcheck="false"></textarea>
-    <p class="note">${esc(t("thinkHint"))}</p>`;
+    <div class="tkh">${esc(snippet(s0,40)||"")}</div><div class="tkb"></div>`;
   p.classList.remove("wide","bm");p.classList.add("tk");
   p.dataset.bmNow="1";place(p,Math.max(8,Math.min(x,innerWidth-460)),Math.max(8,Math.min(y,innerHeight-460)));delete p.dataset.bmNow;
   p.classList.add("on");
   p.querySelector("#pcx").onclick=close;
-  const box=p.querySelector("#tkl"),inp=p.querySelector("#tkin");
+  const inp=thinkPane(p.querySelector(".tkb"),s0,close,true);
+  setTimeout(()=>inp.focus(),0);
+}
+// 我想我写的列表 + 输入框，放进 host 里；onEsc 是在输入框里按 Esc 时做的事。ids 为真时带上 #tkl/#tkin（弹层用）
+function thinkPane(host,s0,onEsc,ids){
+  const sid=s0.id,src=()=>card(sid);         // 每次现取：撤销会换掉卡片对象
+  // 输入框里的按键、粘贴、复制不能漏到画布上（否则 Delete 会删卡片、粘贴会贴进表格）
+  const guard=el=>["keydown","paste","copy","cut"].forEach(k=>el.addEventListener(k,e=>{
+    e.stopPropagation();
+    if(k==="keydown"&&e.key==="Escape"){e.preventDefault();onEsc()}
+  }));
+  host.innerHTML=`<div class="tk-list"${ids?' id="tkl"':""}></div>
+    <textarea class="tki"${ids?' id="tkin"':""} placeholder="${escA(t("thinkPh"))}" spellcheck="false"></textarea>
+    <p class="note">${esc(t("thinkHint"))}</p>`;
+  const box=host.querySelector(".tk-list"),inp=host.querySelector("textarea.tki");
   // 输入框跟着内容自动变高（到屏幕高度的一半左右再出滚动条），写长一点不用来回滑
   const grow=ta=>{ta.style.height="auto";ta.style.height=ta.scrollHeight+2+"px"};
   const paintList=()=>{
@@ -8606,7 +8641,7 @@ function openThink(x,y,c){
       paintList();
     });
   });
-  setTimeout(()=>inp.focus(),0);
+  return inp;
 }
 function searchTag(x){
   S.findMode="tag";$("find").classList.add("on");$("findq").value=x;syncFindMode();runFind();
@@ -9888,7 +9923,6 @@ function bindBody(root,getDoc){
   root.addEventListener("pointerdown",e=>{
     if(lock||e.button!==0)return;
     const ref=e.target.closest(".ref");if(!ref)return;
-    if(ref.classList.contains("picking"))return;   // 摘词状态：按下就是划字，不当长按
     if(docLk(docOfCard(card(ref.dataset.id))))return;   // 锁定的稿子：不调序
     if(e.target.closest(".rx,.mx"))return;              // 点 › 是展开原文，迷你分身有自己的菜单，都不当长按
     const box=ref.parentElement;
@@ -10437,12 +10471,12 @@ function wrRefMenu(x,y,twinId,d){
   const src=orig(twin);
   menuAt(x,y,[
     {head:snippet(src,26)||t("wrUntitled")},
+    {label:t("mqPick"),on:()=>mqStart(twin.id)},
     {label:t("wrRefGoto"),on:()=>{
       const id=src.id;
       if(wrOpenState())closeWrite();
       sel=[id];selLink=null;paintSel();focusOn([card(id)]);
     }},
-    {label:t("mqPick"),on:()=>mqStart(twin.id)},
     {label:t("thinkMenu"),on:()=>openThink(x,y,twin)},
     "-",
     ...(CLIP?[{label:t("wrRefPaste"),on:()=>wrPasteTwin(twin.wrUnder,d)}]:[]),
@@ -10471,11 +10505,6 @@ function mqOffsetNow(cap){
   try{r.setEnd(s.focusNode,s.focusOffset)}catch(err){return Infinity}
   return r.toString().length;
 }
-function mqSelText(ref){
-  const s=getSelection();ref=ref&&(ref.querySelector(".rt")||ref);   // 只认原文那一块里的划选
-  if(!ref||!s||!s.rangeCount||s.isCollapsed||!ref.contains(s.anchorNode)||!ref.contains(s.focusNode))return "";
-  return s.toString().replace(/\s+/g," ").trim();
-}
 // 段落里第 off 个字的位置；落在摘录里面就挪到摘录后面；off 超出就放到段末
 function mqRangeAt(cap,off){
   const r=document.createRange();
@@ -10491,67 +10520,140 @@ function mqRangeAt(cap,off){
   }
   r.selectNodeContents(cap);r.collapse(false);return r;
 }
-function mqStop(){if(mqPick){mqPick.off();mqPick=null}}
+/* 沉浸式摘词（2026-11，取代原来在折叠框里就地划选的那一种）：右键来源行「摘词」→ 整屏变暗，中间一块阅读面板：
+   上面是来源（Citation + 原文开头），中间是原文全文（原卡片自己的字体，至少 17px，宽行距，在面板里滚动），
+   下面一条固定的「将摘下：…」预览和「摘下」按钮（Enter 也行），再往下是已摘的迷你分身和这张原卡片的「我想我写」。
+   点外面、在面板里随便点或拖都不会关，只有 Esc 或 × 关；摘下一条面板不关，可以接着摘。
+   面板开着时画布和写作页的快捷键都暂停；Ctrl+Z / Ctrl+Shift+Z 照常撤销、重做，面板跟着刷新。
+   锁定的稿子：能读、能写我想我写，「摘下」变灰，迷你分身删不了。 */
+function mqStop(){
+  if(!mqPick)return;
+  mqPick=null;
+  const p=$("mqp");if(p)p.classList.remove("on");
+  removeEventListener("keydown",mqKey,true);document.removeEventListener("selectionchange",mqPreview);
+  if(window.CSS&&CSS.highlights){CSS.highlights.delete("mxtaken");CSS.highlights.delete("mxfocus")}
+  const s=getSelection();if(s)s.removeAllRanges();
+}
 function mqStart(twinId){
   mqStop();
-  if(docLkStop(docOfCard(card(twinId))))return;    // 锁定的稿子里不能摘词（摘下会往折叠框里加东西）
-  const ref=[...document.querySelectorAll('.ref[data-id="'+twinId+'"]')].find(el=>el.getClientRects().length);
-  if(!ref)return;
-  ref.classList.add("picking");                     // 收起的来源行：摘词时自动展开原文，结束后收回
-  mxShowTaken(ref);
-  const go=document.createElement("button");go.id="mqgo";go.type="button";go.textContent=t("mqGo");
-  document.body.appendChild(go);
-  const placeGo=()=>{
-    if(!mqSelText(ref)){go.style.display="none";return}
-    const rs=getSelection().getRangeAt(0).getClientRects(),r=rs[rs.length-1];if(!r)return;
-    go.style.display="block";
-    go.style.left=Math.min(innerWidth-go.offsetWidth-8,Math.max(8,r.right-go.offsetWidth/2))+"px";
-    go.style.top=Math.min(innerHeight-34,r.bottom+8)+"px";
-  };
-  const onKey=e=>{
-    if(e.key==="Escape"){e.preventDefault();e.stopPropagation();mqStop();return}
-    if(e.key==="Enter"&&mqSelText(ref)){e.preventDefault();e.stopPropagation();mqCommit()}
-  };
-  const onDown=e=>{if(e.target===go||ref.contains(e.target))return;mqStop()};   // 点别处：退出，什么都不改
-  go.addEventListener("pointerdown",e=>{e.preventDefault();e.stopPropagation()});   // 别让按下把选区弄丢
-  go.addEventListener("click",e=>{e.stopPropagation();mqCommit()});
-  document.addEventListener("selectionchange",placeGo);
-  addEventListener("keydown",onKey,true);addEventListener("pointerdown",onDown,true);
-  mqPick={ref,twinId,off:()=>{
-    document.removeEventListener("selectionchange",placeGo);
-    removeEventListener("keydown",onKey,true);removeEventListener("pointerdown",onDown,true);
-    go.remove();ref.classList.remove("picking");
-    if(window.CSS&&CSS.highlights)CSS.highlights.delete("mxtaken");
-  }};
-  const s=getSelection();if(s)s.removeAllRanges();
-  toast(t("mqHint"));
+  const tw=card(twinId);if(!tw||!tw.ref)return;
+  let p=$("mqp");
+  if(!p){
+    p=document.createElement("div");p.id="mqp";
+    p.innerHTML=`<div class="mqbox"><div class="mqh"></div><div class="mqtx"></div>
+      <div class="mqbar"><span class="pv"></span><button class="go" type="button"></button></div>
+      <div class="mqlow"><div class="hd2 mqlh"></div><div class="mqli"></div><div class="hd2 mqth"></div><div class="mqtk"></div></div></div>`;
+    document.body.appendChild(p);
+    // 面板里的按下、滚轮、双击、右键都不往画布上冒（框选、拖动、缩放、画布菜单）
+    p.addEventListener("pointerdown",e=>e.stopPropagation());
+    p.addEventListener("wheel",e=>e.stopPropagation(),{passive:true});
+    p.addEventListener("dblclick",e=>e.stopPropagation());
+    p.addEventListener("contextmenu",e=>{
+      e.preventDefault();e.stopPropagation();
+      const mx=e.target.closest(".mqli .mx");if(mx)mxMenu(e.clientX,e.clientY,mx);
+    });
+    p.querySelector(".go").addEventListener("pointerdown",e=>e.preventDefault());   // 按下按钮不把划选弄丢
+    p.querySelector(".go").addEventListener("click",()=>mqCommit());
+    p.querySelector(".mqli").addEventListener("click",e=>{const mx=e.target.closest(".mx");if(mx)mqFocus(+mx.dataset.k)});
+  }
+  mqPick={twinId};
+  sel=[];selLink=null;paintSel();closeMenus();$("pop").classList.remove("on","wide","tk","bm");
+  const ko=orig(tw),st={...DEF,...S.textDef,...(ko.s||{})},cite=mxCite(ko);
+  p.querySelector(".mqh").innerHTML=(cite?`<span class="rc">${esc(cite)}</span>`:"")
+    +`<span class="rs">${esc(snippet(ko,80)||"")}</span><button class="x" type="button" title="Esc">×</button>`;
+  p.querySelector(".mqh .x").onclick=()=>mqStop();
+  const tx=p.querySelector(".mqtx");
+  // 原文跟折叠框里 .rt 的写法一模一样，位置（mxWalk）才对得上
+  tx.innerHTML=ko.rich?safeRich(ko.rich):esc(ko.text||"");
+  Object.assign(tx.style,{fontFamily:famCSS(st.family),fontSize:Math.max(17,st.size)+"px",
+    fontWeight:String(st.weight),fontStyle:st.italic?"italic":"normal"});
+  tx.scrollTop=0;
+  p.querySelector(".go").textContent=t("mqGo");
+  p.querySelector(".mqlh").textContent=t("mqList");
+  p.querySelector(".mqth").textContent=t("thinkMenu");
+  thinkPane(p.querySelector(".mqtk"),ko,()=>mqStop(),false);
+  p.classList.add("on");
+  mqRefresh();
+  addEventListener("keydown",mqKey,true);document.addEventListener("selectionchange",mqPreview);
 }
-// 摘下：挂到这条来源下面成为一条迷你分身（记下它在原文里的位置），同时放进 MQCLIP，正文不动。
+// 已摘的迷你分身、已摘过的底色、预览条：摘下、删除、撤销之后都刷新一遍
+function mqRefresh(){
+  if(!mqPick)return;
+  const tw=card(mqPick.twinId),p=$("mqp");
+  if(!tw||!p){mqStop();return}                     // 撤销把这条引文分身撤掉了
+  const str=mxWalk(p.querySelector(".mqtx")).str;
+  p.querySelector(".mqli").innerHTML=(Array.isArray(tw.mx)&&tw.mx.length?mxOrdered(tw,str):[])
+    .map(z=>`<div class="mx" data-k="${z.k}"><span class="mxt">${esc("“"+z.m.x+"”")}</span></div>`).join("");
+  mxShowTaken(p.querySelector(".mqtx"),tw);
+  mqPreview();
+}
+// 把当前划选换算成原文里的位置和去掉首尾引号的文字；不在原文里就返回 null
+function mqSel(){
+  const tx=$("mqp")&&$("mqp").querySelector(".mqtx"),s=getSelection();
+  if(!tx||!s||!s.rangeCount||s.isCollapsed||!tx.contains(s.anchorNode)||!tx.contains(s.focusNode))return null;
+  const r=s.getRangeAt(0),w=mxWalk(tx);
+  let a=-1,e=-1;
+  w.map.forEach(([n,i],k)=>{if(r.comparePoint(n,i)===0&&r.comparePoint(n,i+1)===0){if(a<0)a=k;e=k+1}});
+  if(a<0)return null;
+  // 自动带上双引号（2026-10）：引号在迷你分身这一整块里面。划选时已经带了引号（或首尾空白）的先去掉，位置跟着挪
+  const raw=w.str.slice(a,e);
+  const lead=(raw.match(/^[\s“"「『]+/)||[""])[0].length,trail=(raw.match(/[\s”"」』]+$/)||[""])[0].length;
+  let core=raw.slice(lead,Math.max(lead,raw.length-trail));
+  if(core)a+=lead;else core=raw.trim();
+  return core?{a,core,str:w.str}:null;
+}
+function mqPreview(){
+  const p=$("mqp");if(!mqPick||!p)return;
+  const tw=card(mqPick.twinId),lk=docLk(docOfCard(tw)),m=lk?null:mqSel();
+  p.querySelector(".pv").textContent=lk?t("mqLockedBar"):m?t("mqWill")+"“"+m.core+"”":t("mqHint");
+  p.querySelector(".go").disabled=!m;
+}
+// 摘下：挂到这条来源下面成为一条迷你分身（记下位置），同时放进 MQCLIP，正文不动；面板不关，可以接着摘。
 // 原文里已经摘过的位置不能再摘：新划选只要碰到已摘过的部分就不摘
 function mqCommit(){
   if(!mqPick)return;
-  const {ref,twinId}=mqPick,rt=ref.querySelector(".rt");
-  const s=getSelection();
-  const ok=rt&&s&&s.rangeCount&&!s.isCollapsed&&rt.contains(s.anchorNode)&&rt.contains(s.focusNode);
-  const r=ok?s.getRangeAt(0):null,w=ok?mxWalk(rt):null;
-  mqStop();
-  const tw=card(twinId);if(!r||!tw)return;
-  let a=-1,e=-1;
-  w.map.forEach(([n,i],k)=>{if(r.comparePoint(n,i)===0&&r.comparePoint(n,i+1)===0){if(a<0)a=k;e=k+1}});
-  if(a<0)return;
-  // 自动带上双引号（2026-10）：引号在迷你分身这一整块里面。划选时已经带了引号（或首尾空白）的先去掉，位置跟着挪
-  const raw=w.str.slice(a,e);
-  const lead=(raw.match(/^[\s\u201C"\u300C\u300E]+/)||[""])[0].length,trail=(raw.match(/[\s\u201D"\u300D\u300F]+$/)||[""])[0].length;
-  let core=raw.slice(lead,Math.max(lead,raw.length-trail));
-  if(core){a+=lead}else core=raw.trim();
-  if(!core)return;
-  if(mxPlaced(tw,w.str).some(m=>a<m.a+m.x.length&&m.a<a+core.length)){toast(t("mxTaken"));getSelection().removeAllRanges();return}
+  const tw=card(mqPick.twinId);if(!tw)return;
+  if(docLkStop(docOfCard(tw)))return;
+  const m=mqSel();if(!m)return;
+  const {a,core,str}=m;
+  if(mxPlaced(tw,str).some(z=>a<z.a+z.x.length&&z.a<a+core.length)){toast(t("mxTaken"));return}
   snap();
   tw.mx=(Array.isArray(tw.mx)?tw.mx:[]).concat({x:core,a});
-  MQCLIP={q:orig(tw).id,text:"\u201C"+core+"\u201D"};
+  MQCLIP={q:orig(tw).id,text:"“"+core+"”"};
   getSelection().removeAllRanges();
-  save();redrawDocs();
+  save();redrawDocs();mqRefresh();
   toast(t("mqTaken"));
+}
+// 点面板里的一条迷你分身：原文滚到它所在的位置，那几个词加深一下（位置对不上的就不动）
+function mqFocus(k){
+  const p=$("mqp"),tw=mqPick&&card(mqPick.twinId);if(!p||!tw||!Array.isArray(tw.mx))return;
+  const m=tw.mx[k],tx=p.querySelector(".mqtx"),w=mxWalk(tx);
+  if(!m||!mxPlaced(tw,w.str).includes(m))return;
+  const s0=w.map[m.a],s1=w.map[m.a+m.x.length-1];if(!s0||!s1)return;
+  const r=document.createRange();r.setStart(s0[0],s0[1]);r.setEnd(s1[0],s1[1]+1);
+  const rr=r.getBoundingClientRect(),br=tx.getBoundingClientRect();
+  tx.scrollTop+=rr.top-br.top-tx.clientHeight/3;
+  if(window.CSS&&CSS.highlights&&typeof Highlight!=="undefined"){
+    CSS.highlights.set("mxfocus",new Highlight(r));
+    clearTimeout(mqFocusT);mqFocusT=setTimeout(()=>CSS.highlights.delete("mxfocus"),1600);
+  }
+}
+let mqFocusT=null;
+// 面板开着时的按键：在我想我写的输入框里照常打字（那里自己会拦住，不往外漏）；
+// 别处：Esc 关、Enter 摘下、Ctrl+Z / Ctrl+Shift+Z 撤销重做，其余一律不让画布和写作页收到
+function mqKey(e){
+  if(!mqPick)return;
+  const p=$("mqp"),tg=e.target;
+  if(p&&tg&&p.contains(tg)&&/^(TEXTAREA|INPUT)$/.test(tg.tagName))return;
+  e.stopPropagation();
+  const k=(e.key||"").toLowerCase();
+  if(e.key==="Escape"){e.preventDefault();mqStop();return}
+  if(e.key==="Enter"){e.preventDefault();mqCommit();return}
+  if((e.metaKey||e.ctrlKey)&&(k==="z"||k==="y")){
+    e.preventDefault();
+    (k==="y"||e.shiftKey)?applyUndo(redo,undo):applyUndo(undo,redo);
+    mqRefresh();
+  }
 }
 // 粘贴迷你分身：插在这一段第 off 个字的位置。走 execCommand，进浏览器的编辑历史，Ctrl+Z 一步撤回；
 // 插入会触发 input，正文的 input 处理会把 rich/text 同步回卡片并保存
@@ -10666,10 +10768,10 @@ function mxRefHTML(k){
     +mx.map(z=>`<div class="mx" data-k="${z.k}"><span class="mxt">${esc("\u201C"+z.m.x+"\u201D")}</span></div>`).join("")
     +`</div>`;
 }
-// 摘词时把原文里已经摘过的部分用很淡的底色标出来
-function mxShowTaken(ref){
+// 摘词面板里把原文里已经摘过的部分用很淡的底色标出来
+function mxShowTaken(rt,tw){
   if(!window.CSS||!CSS.highlights||typeof Highlight==="undefined")return;
-  const tw=card(ref.dataset.id),rt=ref.querySelector(".rt");if(!tw||!rt)return;
+  if(!tw||!rt)return;
   const w=mxWalk(rt),rs=[];
   mxPlaced(tw,w.str).forEach(m=>{
     const p=w.map[m.a],q=w.map[m.a+m.x.length-1];if(!p||!q)return;
@@ -10679,7 +10781,8 @@ function mxShowTaken(ref){
 }
 // 迷你分身的右键菜单：摘下（重新放进剪贴板，以后贴进正文用）、删除（可撤销）
 function mxMenu(x,y,el){
-  const ref=el.closest(".ref"),tw=ref&&card(ref.dataset.id),k=+el.dataset.k,m=tw&&Array.isArray(tw.mx)&&tw.mx[k];
+  const ref=el.closest(".ref"),id=ref?ref.dataset.id:(el.closest("#mqp")&&mqPick?mqPick.twinId:null);
+  const tw=id&&card(id),k=+el.dataset.k,m=tw&&Array.isArray(tw.mx)&&tw.mx[k];
   if(!m)return;
   menuAt(x,y,[
     {head:("\u201C"+m.x+"\u201D").slice(0,30)},
@@ -10688,7 +10791,7 @@ function mxMenu(x,y,el){
       if(docLkStop(docOfCard(tw)))return;
       const i=tw.mx.indexOf(m);if(i<0)return;
       snap();tw.mx.splice(i,1);if(!tw.mx.length)delete tw.mx;
-      save();redrawDocs();toast(t("mxDeleted"));
+      save();redrawDocs();mqRefresh();toast(t("mxDeleted"));
     }}
   ]);
 }
