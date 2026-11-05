@@ -88,7 +88,7 @@ frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
-render 画面导出、archive 存档与分页导出、pageexport 导出本页、wrboard 稿子导出为画布文件、doccut 剪切与粘贴写作页、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
+render 画面导出、archive 存档与分页导出、pageexport 导出本页、wrboard 稿子导出为画布文件、doccut 剪切与粘贴写作页、docxcolor Word 导入保留颜色、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
 
 ---
 
@@ -565,6 +565,13 @@ Word 里却是 2.1"这种对不上的事。导出面板里有「标题编号」�
 锁定的稿子拖不动，所以也不给剪切（`docCutNow` 对锁定的稿子返回空，剪切后才锁上也粘不出来）。
 落点统一走 `docSpot(x,y,d)`：压到页面、标准页、别的稿子或画布卡片，就挪到压住的东西右边再空 40，直到空地，最多挪 200 次。
 新建、粘贴、合并导入相对右键位置用同一个偏移 `DOC_AT`（-170,-46，原来写死在 `addDoc` 里），三种方式放下的稿子手感一样。`doccut` 组守着。
+
+**Word 导入保留颜色（2026-11）。** 原来 `docxItems` 的 `processRun` 只读加粗、斜体、下划线、删除线。现在多读手动刷在文字上的三样：
+文字颜色（`w:color`）照搬原色，`auto` 与近黑（三个通道都低于 0x30）不写，跟着画布默认文字色走，换深色底色才不会黑底黑字；
+荧光笔（`w:highlight`，按 `WORD_HL` 换成十六进制）与底纹（`w:shd` 的 `fill`）经 `wordHL` 换成荧光笔色板 `HLS` 里色相最近的那支淡色
+（`HL_HUE` 是前七支的色相，近灰给第八支灰色，近白不写），所以 Word 的纯黄纯绿进来是程序自己的淡黄淡绿，跟手动标的一致。
+写成跟工具栏同样的 `<span style>`，放在最里层紧贴文字，`collapseAdjacentTags` 顺手把同色相邻的 run 并成一段（Word 常把一句话切成很多 run）。
+样式自带的颜色、字号、字体、对齐都不读，标题样子仍由稿子的标题样式决定，免得跟「所见即所得」打架。`docxcolor` 组守着。
 
 **层级在写作页里也能设定，用的还是画布那一套 `setLevel()`。** 稿子里的标题层级就是
 卡片的 `c.level`——侧栏目录、正文编号、导出的标题级别全都读它，没有第二份数据

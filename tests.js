@@ -7914,6 +7914,36 @@ group("wrboard 稿子导出为画布文件", async (c) => {
   }));
 });
 
+// Word 导入保留颜色：文字颜色照搬（近黑与 auto 不写），荧光笔与底纹换成程序色板里色相最近的淡色（近白不写）；
+// 同色相邻的 run 并成一段；字号、字体等仍不读
+group("docxcolor Word 导入保留颜色", async (c) => {
+  const r = await c.run(() => {
+    const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+    const run = (pr, tx) => `<w:r>${pr ? `<w:rPr>${pr}</w:rPr>` : ""}<w:t xml:space="preserve">${tx}</w:t></w:r>`;
+    const xml = (paras) => `<?xml version="1.0"?><w:document xmlns:w="${W}"><w:body>${paras.map((p) => `<w:p>${p}</w:p>`).join("")}</w:body></w:document>`;
+    const items = docxItems(xml([
+      run('<w:color w:val="C00000"/>', "红字") + run("", "普通"),
+      run('<w:color w:val="auto"/>', "自动") + run('<w:color w:val="000000"/>', "黑") + run('<w:color w:val="262626"/>', "近黑"),
+      run('<w:highlight w:val="yellow"/>', "黄") + run('<w:highlight w:val="green"/>', "绿") + run('<w:highlight w:val="cyan"/>', "青") + run('<w:highlight w:val="blue"/>', "蓝") + run('<w:highlight w:val="magenta"/>', "品") + run('<w:highlight w:val="lightGray"/>', "灰") + run('<w:highlight w:val="none"/>', "无"),
+      run('<w:shd w:val="clear" w:color="auto" w:fill="D9E2F3"/>', "浅蓝底") + run('<w:shd w:val="clear" w:color="auto" w:fill="E2EFD9"/>', "浅绿底") + run('<w:shd w:val="clear" w:color="auto" w:fill="FFFFFF"/>', "白底") + run('<w:shd w:val="clear" w:color="auto" w:fill="auto"/>', "自动底"),
+      run('<w:b/><w:color w:val="1F4E79"/><w:highlight w:val="yellow"/>', "又粗又蓝") + run('<w:b/><w:color w:val="1F4E79"/><w:highlight w:val="yellow"/>', "还是一段"),
+      run('<w:sz w:val="40"/><w:rFonts w:ascii="Arial"/>', "大字"),
+    ]), {});
+    const rich = items.map((z) => z.rich);
+    const kept = safeRich(rich[4]);
+    return { rich, kept, hls: HLS.slice() };
+  });
+  const [p0, p1, p2, p3, p4, p5] = r.rich, H = r.hls;
+  c.ok("文字颜色照搬原色", p0 === '<span style="color:#C00000">红字</span>普通');
+  c.ok("auto、黑、近黑不写颜色", p1 === "自动黑近黑");
+  c.ok("Word 荧光笔换成程序里最近的淡色（黄→黄、绿→绿、青和蓝→蓝（同色并成一段）、品红→粉、灰→灰）",
+    p2 === `<span style="background-color:${H[0]}">黄</span><span style="background-color:${H[6]}">绿</span><span style="background-color:${H[5]}">青蓝</span><span style="background-color:${H[3]}">品</span><span style="background-color:${H[7]}">灰</span>无`);
+  c.ok("底纹同样换成淡色，白色和 auto 不写", p3 === `<span style="background-color:${H[5]}">浅蓝底</span><span style="background-color:${H[6]}">浅绿底</span>白底自动底`);
+  c.ok("颜色、底色与加粗同时保留，同格式的相邻片段并成一段", p4 === `<b><span style="color:#1F4E79;background-color:${H[0]}">又粗又蓝还是一段</span></b>`);
+  c.ok("字号、字体照旧不读", p5 === "大字");
+  c.ok("显示时的过滤保留颜色", r.kept === p4);
+});
+
 // 剪切稿子 → 别处右键「粘贴写作页」：只改稿子坐标，压到东西往右让开，可撤销；锁定的稿子不给剪切
 group("doccut 剪切与粘贴写作页", async (c) => {
   await c.board([{ id: "x", x: 0, y: 0, w: 300, text: "卡片", s: {} }], [],

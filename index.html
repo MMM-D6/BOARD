@@ -11993,6 +11993,26 @@ async function loadJSZip(){
   throw last||new Error("jszip");
 }
 
+/* ---- Word 的颜色（2026-11）----
+   只读手动刷在文字上的三样：文字颜色照搬原色，近黑与 auto 不写（跟着画布默认文字色走，换深色底色才不会黑底黑字）；
+   荧光笔与底纹换成程序荧光笔色板 HLS 里色相最近的那支淡色，近白不写。样式自带的颜色、字号、字体、对齐都不读，
+   标题的样子仍由稿子自己的标题样式决定。写成跟工具栏一样的 <span style>，导入后能直接改，导出 Word 也认。 */
+const WORD_HL={yellow:"FFFF00",green:"00FF00",cyan:"00FFFF",magenta:"FF00FF",blue:"0000FF",red:"FF0000",
+  darkBlue:"000080",darkCyan:"008080",darkGreen:"008000",darkMagenta:"800080",darkRed:"800000",
+  darkYellow:"808000",darkGray:"808080",lightGray:"C0C0C0",black:"000000"};
+const HL_HUE=[55,30,0,315,280,215,125];        // HLS 前七支（黄、橙、红、粉、紫、蓝、绿）的色相，第八支是灰
+const rgbOf=hex=>/^[0-9a-f]{6}$/i.test(hex||"")?[0,2,4].map(i=>parseInt(hex.slice(i,i+2),16)):null;
+function wordInk(hex){const c=rgbOf(hex);return c&&Math.max(...c)>=0x30?"#"+hex.toUpperCase():""}
+function wordHL(hex){
+  const c=rgbOf(hex);if(!c)return"";
+  const [r,g,b]=c,mx=Math.max(r,g,b),mn=Math.min(r,g,b);
+  if(mn>=0xF5)return"";                       // 近白：等于没涂
+  if(mx-mn<=12)return HLS[7];                 // 灰
+  let h=(mx===r?(g-b)/(mx-mn):mx===g?2+(b-r)/(mx-mn):4+(r-g)/(mx-mn))*60;if(h<0)h+=360;
+  let best=0,bd=999;
+  HL_HUE.forEach((u,i)=>{const d=Math.min(Math.abs(h-u),360-Math.abs(h-u));if(d<bd){bd=d;best=i}});
+  return HLS[best];
+}
 /* ---- 解析 word/document.xml ---- */
 // 返回一组 item：
 //   {type:"text", rich, level}    普通段落 / 标题 / 列表
@@ -12072,6 +12092,13 @@ function docxItems(xmlStr,rels,styleHeadMap){
     }
     if(!text)return"";
     if(rPr){
+      // 颜色放在最里层，紧贴文字：相邻 run 颜色相同时下面 collapseAdjacentTags 才能把它们并成一段
+      const co=rPr.getElementsByTagNameNS(W,"color")[0],hl=rPr.getElementsByTagNameNS(W,"highlight")[0],
+        sh=rPr.getElementsByTagNameNS(W,"shd")[0];
+      const ink=co?wordInk(atW(co,"val")):"";
+      const bg=hl?wordHL(WORD_HL[atW(hl,"val")]):(sh?wordHL(atW(sh,"fill")):"");
+      const st=(ink?"color:"+ink:"")+(ink&&bg?";":"")+(bg?"background-color:"+bg:"");
+      if(st)text='<span style="'+st+'">'+text+"</span>";
       if(hasProp(rPr,"b"))text="<b>"+text+"</b>";
       if(hasProp(rPr,"i"))text="<i>"+text+"</i>";
       if(hasProp(rPr,"u"))text="<u>"+text+"</u>";
@@ -12103,6 +12130,8 @@ function docxItems(xmlStr,rels,styleHeadMap){
     let prev;
     do{prev=html;
       for(const t of tags)html=html.replace(new RegExp("<\/"+t+"><"+t+">","g"),"");
+      // 同色的相邻片段并成一段：只认里面只有文字和 <br> 的 span（颜色 span 都在最里层）
+      html=html.replace(/<span style="([^"]+)">((?:[^<]|<br>)*)<\/span><span style="\1">/g,'<span style="$1">$2');
     }while(html!==prev);
     return html;
   }
