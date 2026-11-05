@@ -5425,14 +5425,16 @@ group("zoomfocus 聚焦与渲染", async (c) => {
     const before = { doc: el.getBoundingClientRect().top, cam: { ...cam } };
     const navs = document.querySelectorAll("#docs .doc .dside .wrnav");
     navs[navs.length - 1].click();
+    const now = el.querySelector(".dbody").scrollTop;           // 点完不等：直接跳到位，不是慢慢滑过去
     await new Promise((r) => setTimeout(r, 500));
-    return { before,
+    return { before, now,
       docTop: el.getBoundingClientRect().top,
       camSame: cam.x === before.cam.x && cam.y === before.cam.y && cam.z === before.cam.z,
       stage: $("stage").scrollTop,
       dbody: el.querySelector(".dbody").scrollTop };
   });
   c.ok("点大纲条目会滚动稿子正文", nav.dbody > 100);
+  c.ok("点大纲条目直接跳到位，不平滑滚动", nav.now === nav.dbody);
   c.ok("画布不会跟着错位", nav.docTop === nav.before.doc && nav.camSame && nav.stage === 0);
 
   // 兜底：就算别处误用 scrollIntoView（或元素 focus）把 #stage 滚起来，也要立刻归零
@@ -5730,9 +5732,11 @@ group("websnap 网页快照", async (c) => {
   c.ok("翻稿子时画布不动", (await tf()) === t2);
 
   // 目录跳转与折叠框
-  await R(() => { document.querySelector(".dbody").scrollTop = 0; document.querySelectorAll(".wrnav")[3].click(); });
+  const jumpNow = await R(() => { document.querySelector(".dbody").scrollTop = 0; document.querySelectorAll(".wrnav")[3].click(); return document.querySelector(".dbody").scrollTop; });
   await c.wait(900);
-  c.ok("点目录跳到对应标题", (await R(() => document.querySelector(".dbody").scrollTop)) > 200);
+  const jumpEnd = await R(() => document.querySelector(".dbody").scrollTop);
+  c.ok("点目录跳到对应标题", jumpEnd > 200);
+  c.ok("快照里点目录也是直接跳到位", jumpNow === jumpEnd);
   const fold = await R(() => {
     const f = document.querySelector(".blk .fold"), a = f.classList.contains("on");
     f.querySelector(".fh").click();

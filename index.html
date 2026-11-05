@@ -7237,7 +7237,7 @@ function snapViewer(){
     if(!body||!blk)return;
     var br=body.getBoundingClientRect(),er=blk.getBoundingClientRect();
     var k=(body.offsetHeight&&br.height/body.offsetHeight)||1;   // 画布整体带缩放，换算回内容像素
-    body.scrollTo({top:Math.max(0,body.scrollTop+(er.top-br.top)/k-12),behavior:"smooth"});
+    body.scrollTop=Math.max(0,body.scrollTop+(er.top-br.top)/k-12);   // 直接跳到位，跟程序里一样
   });
 
   /* ---- 页面地图：跟程序里的 drawMap 同一套画法与手势，数据换成快照自己的 ---- */
@@ -9781,6 +9781,7 @@ function commitRefOrder(box){
 // 实测点一次大纲条目就把 #stage 滚了 236px，整张画布连同稿子一起错位，
 // 表现就是"点左侧条目之后写作页跳成另一种布局"。
 // 这里只改目标容器的 scrollTop，别的一概不碰。
+// 直接跳到位，不做平滑滚动（2026-11）：稿子一长，点目录要看着整页滑好一会儿，晕。
 function scrollBlockInto(box,el){
   if(!box||!el)return;
   const br=box.getBoundingClientRect(),er=el.getBoundingClientRect();
@@ -9788,7 +9789,7 @@ function scrollBlockInto(box,el){
   const sc=(box.offsetHeight&&br.height/box.offsetHeight)||1;
   const top=box.scrollTop+(er.top-br.top)/sc-12;
   const max=Math.max(0,box.scrollHeight-box.clientHeight);
-  box.scrollTo({top:Math.max(0,Math.min(top,max)),behavior:"smooth"});
+  box.scrollTop=Math.max(0,Math.min(top,max));
 }
 // 选中一份稿子（并清掉卡片/连线的选中，三者互斥）
 function selectDoc(id){
