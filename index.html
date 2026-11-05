@@ -494,6 +494,9 @@
     cursor:pointer;color:inherit;padding:5px 10px;border-radius:6px;font-size:12.5px;
     line-height:1.45;align-items:baseline}
   .wrnav:hover{background:var(--whi)}
+  .wrnav.hid{display:none}
+  .wrnav .fd{position:absolute;margin-left:-11px;width:11px;text-align:center;font-size:9px;opacity:.4;cursor:pointer}
+  .wrnav .fd:hover{opacity:.9}
   .wrnav .n{flex:none;font:400 10px/1.6 "IBM Plex Mono",monospace;opacity:.35;min-width:26px}
   .wrnav .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .wrnav.l1{font-weight:600}
@@ -977,6 +980,7 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   wrRemoved:"Removed from the draft",wrInsert:"Insert a card here",
   wrRefPaste:"Paste a twin here",
   docCut:"Cut this draft",docPaste:"Paste draft “{t}”",docCutDone:"“{t}” cut. Right-click where it should go and choose Paste draft.",
+  wrCopy:"Copy this paragraph",wrCopyN:"Copy these {n} paragraphs",
   wrCut:"Cut this paragraph",wrCutN:"Cut these {n} paragraphs",
   wrCutBefore:"Move the cut paragraphs above",wrCutAfter:"Move the cut paragraphs below",
   wrCutEnd:"Move the cut paragraphs to the end",
@@ -1209,6 +1213,7 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   wrRemoved:"已从稿子里移除",wrInsert:"在这里插入一张卡片",
   wrRefPaste:"在这里粘贴分身",
   docCut:"剪切这份稿子",docPaste:"粘贴写作页「{t}」",docCutDone:"已剪切「{t}」，到要放的位置右键，选「粘贴写作页」",
+  wrCopy:"复制这一段",wrCopyN:"复制这 {n} 段",
   wrCut:"剪切这一段",wrCutN:"剪切这 {n} 段",
   wrCutBefore:"把剪切的段落移到上方",wrCutAfter:"把剪切的段落移到下方",
   wrCutEnd:"把剪切的段落移到末尾",
@@ -2191,6 +2196,7 @@ async function absorb(data,merge,at){
         open:(z.open&&typeof z.open==="object")?z.open:{},
         ...(hsNorm(z.hs)?{hs:hsNorm(z.hs)}:{}),
         ...(z.lock===true?{lock:true}:{}),
+        ...(z.fold&&typeof z.fold==="object"?{fold:z.fold}:{}),
         ...(z.mxMig?{mxMig:1}:{})}));
     data.sheets=(data.sheets||[]).filter(z=>z&&PAPER[z.kind])
       .map(z=>({id:(z.id&&!unsafeStr(z.id))?z.id:uid(),kind:z.kind,x:+z.x||0,y:+z.y||0,
@@ -3769,6 +3775,7 @@ function syncCards(){
     const el=makeCard(c);frag.appendChild(el);nodes.set(c.id,el);
   });
   if(frag.childNodes.length)box.appendChild(frag);
+  syncDocs();                                       // 稿子跟着一起：进入视野附近的空框换成完整的
 }
 let mapT;
 function mapSoon(){clearTimeout(mapT);mapT=setTimeout(drawMap,90)}
@@ -6628,6 +6635,9 @@ const SNAP_CSS=`
   body.snap .card .lnk,body.snap .card .bibdot{cursor:pointer}
   /* 点卡片上不是文字的地方（图片、留白）就放大到这张卡片，跟编辑页图片上的放大镜同一个意思 */
   body.snap .card img{cursor:zoom-in}
+  /* 目录的折叠是写给编辑者的：快照里点不了三角，收起的条目全部亮出来，三角不显示 */
+  body.snap .wrnav.hid{display:flex}
+  body.snap .wrnav .fd{display:none}
   /* 占位提示是写给编辑者的，快照里不出现 */
   body.snap .card .cap:empty:before,body.snap .blk .cap:empty:before{content:"" !important}
   /* 快照里没有"选中"这回事，PDF 页面上的字一律可以划选 */
@@ -9004,12 +9014,19 @@ function wrNums(list){
   return nums;
 }
 // 大纲侧栏的 HTML：专注模式与非专注的画布内嵌视图都用它，不再各写一份
-function wrOutlineHTML(list,nums){
-  let sh="";
-  list.forEach((c,i)=>{
-    const lv=wrLevelOf(c);if(!lv)return;
-    sh+=`<button class="wrnav l${Math.min(lv,LVMAX)}" data-i="${i}">
-      <span class="n">${nums[i]}</span><span class="t">${esc(snippet(orig(c),40)||t("wrUntitled"))}</span></button>`;
+// 目录可以折叠（2026-11）：有下级标题的标题左边一个小三角，点它收起/展开下面的小节，只动目录，正文不变。
+// 收起的记在 d.fold[标题段落 id]（跟 d.open 同一种做法，随文件保存）。被收起的条目照样输出、只加 .hid 藏起来，
+// 网页快照（只读、点不了三角）里 body.snap 会把它们全部亮出来。
+function wrOutlineHTML(list,nums,d){
+  const fold=(d&&d.fold)||{},hs=[];
+  list.forEach((c,i)=>{const lv=wrLevelOf(c);if(lv)hs.push({c,i,lv})});
+  let sh="",hide=0;                          // hide：正被收起的那个标题的层级，比它低的都藏
+  hs.forEach((h,k)=>{
+    if(hide&&h.lv<=hide)hide=0;
+    const kids=k+1<hs.length&&hs[k+1].lv>h.lv,shut=kids&&fold[h.c.id];
+    sh+=`<button class="wrnav l${Math.min(h.lv,LVMAX)}${hide?" hid":""}" data-i="${h.i}">${kids?`<span class="fd" data-id="${escA(h.c.id)}">${shut?"\u25B8":"\u25BE"}</span>`:""}
+      <span class="n">${nums[h.i]}</span><span class="t">${esc(snippet(orig(h.c),40)||t("wrUntitled"))}</span></button>`;
+    if(shut&&!hide)hide=h.lv;
   });
   return sh||`<div class="wrempty">${esc(t("wrNoHead"))}</div>`;
 }
@@ -9035,18 +9052,63 @@ function wrRestore(box,a){
   const sc=(box.offsetHeight&&br.height/box.offsetHeight)||1;
   box.scrollTop+=(blk.getBoundingClientRect().top-br.top)/sc-a.off;
 }
+// 稿子的剔除（2026-11）：跟卡片同一个办法，只完整画视野附近（viewRect，含 CULL.m 的余量）的稿子，
+// 远处的只画标题加一个同样大小的空框（docShell，.doc.lite），镜头移过去时 syncDocs 再换成完整的。
+// 从前每次 render() 都把所有稿子整份重建，稿子一多，改个层级都要几百毫秒。
+// 导出图片、网页快照会先把 CULL.m 放到极大再 syncCards()，syncDocs 挂在它后面，所以导出时全部稿子都会画出来。
+// 每份稿子的滚动位置记在 DOCSCROLL 里（按稿子 id），变成空框再画回来也还停在原处。
+const DOCSCROLL=new Map();
+const docNear=(d,r)=>d.x+DOCW+SIDEW>r.x&&d.x<r.x2&&d.y+640>r.y&&d.y-40<r.y2;
+function docTitleHTML(d){
+  return `<div class="dttl">
+        <span class="dt" spellcheck="false">${esc(d.title)}</span>${d.lock?`<span class="dlk" title="${escA(t("docLockOn"))}">${lockSvg("all")}</span>`:""}
+      </div>`;
+}
+function docShell(d){
+  const el=document.createElement("div");el.className="doc lite";el.dataset.id=d.id;
+  Object.assign(el.style,{left:d.x+"px",top:d.y+"px",width:(DOCW+SIDEW)+"px"});
+  el.innerHTML=docTitleHTML(d)+'<div class="dwrap"></div>';
+  return el;
+}
 function renderDocs(){
   const box=$("docs");if(!box)return;
   // 重建整页会把 .dbody 的滚动条冲回顶部——新建版本、粘贴、插入这些操作都带着重绘，
   // 稿子一长，用户就会被弹回最前面，体验很差。重建前先按 id 记下每份稿子当前的
   // 滚动位置，重建完再照原样补回去。
-  const scrolls=new Map();
-  box.querySelectorAll(".doc").forEach(el=>{
+  box.querySelectorAll(".doc:not(.lite)").forEach(el=>{
     const dbody=el.querySelector(".dbody");
-    if(dbody&&dbody.scrollTop)scrolls.set(el.dataset.id,wrAnchor(dbody));
+    if(dbody&&dbody.scrollTop)DOCSCROLL.set(el.dataset.id,wrAnchor(dbody));else DOCSCROLL.delete(el.dataset.id);
   });
   box.innerHTML="";
-  docs().forEach(d=>{
+  const r=viewRect();
+  docs().forEach(d=>box.appendChild(docNear(d,r)?buildDoc(d):docShell(d)));
+  docsCapNodes.clear();
+  box.querySelectorAll(".cap[data-id]").forEach(el=>docsCapNodes.set(el.dataset.id,el));
+  box.querySelectorAll(".fmtbar").forEach(h=>buildFmtBar(h));
+  if(selDoc&&!docs().some(z=>z.id===selDoc))selDoc=null;   // 稿子已被删掉
+  paintDocSel();
+  applyDocStyles();syncFmtBars();
+  box.querySelectorAll(".doc:not(.lite)").forEach(el=>{
+    const a=DOCSCROLL.get(el.dataset.id),dbody=a&&el.querySelector(".dbody");
+    if(dbody)wrRestore(dbody,a);
+  });
+}
+// 镜头移动后（挂在 syncCards 末尾）：进入视野附近的空框换成完整的稿子，只动这几份，别的稿子一概不碰
+function syncDocs(){
+  const box=$("docs");if(!box)return;
+  const r=viewRect();
+  box.querySelectorAll(".doc.lite").forEach(sh=>{
+    const d=docs().find(z=>z.id===sh.dataset.id);if(!d||!docNear(d,r))return;
+    const el=buildDoc(d);sh.replaceWith(el);
+    el.querySelectorAll(".cap[data-id]").forEach(c=>docsCapNodes.set(c.dataset.id,c));
+    el.querySelectorAll(".fmtbar").forEach(h=>buildFmtBar(h));
+    applyDocStyles(el);
+    const a=DOCSCROLL.get(d.id),dbody=a&&el.querySelector(".dbody");
+    if(dbody)wrRestore(dbody,a);
+  });
+  if(box.querySelector(".doc:not(.lite)"))paintDocSel(),syncFmtBars();
+}
+function buildDoc(d){
     const el=document.createElement("div");el.className="doc";el.dataset.id=d.id;
     Object.assign(el.style,{left:d.x+"px",top:d.y+"px",width:(DOCW+SIDEW)+"px"});
     const list=d.ids.map(card).filter(Boolean);
@@ -9055,11 +9117,9 @@ function renderDocs(){
     // 卡片数与字数不再占用顶上的空间：需要时侧栏的大纲已经说明了结构。
     // 模式切换、专注、导出这些功能控件放进页面内部的工具栏，跟文字工具栏并排，
     // 不再摆在标题旁边的外侧——外侧只留标题这一样东西。
-    el.innerHTML=`<div class="dttl">
-        <span class="dt" spellcheck="false">${esc(d.title)}</span>${d.lock?`<span class="dlk" title="${escA(t("docLockOn"))}">${lockSvg("all")}</span>`:""}
-      </div>
+    el.innerHTML=docTitleHTML(d)+`
       <div class="dwrap">
-        <div class="dside">${wrOutlineHTML(list,nums)}</div>
+        <div class="dside">${wrOutlineHTML(list,nums,d)}</div>
         <div class="dmain">
           <div class="dbar">
             <div class="fmtbar"></div>
@@ -9074,18 +9134,7 @@ function renderDocs(){
         </div>
       </div>`;
     bindDoc(el,d);
-    box.appendChild(el);
-  });
-  docsCapNodes.clear();
-  box.querySelectorAll(".cap[data-id]").forEach(el=>docsCapNodes.set(el.dataset.id,el));
-  box.querySelectorAll(".fmtbar").forEach(h=>buildFmtBar(h));
-  if(selDoc&&!docs().some(z=>z.id===selDoc))selDoc=null;   // 稿子已被删掉
-  paintDocSel();
-  applyDocStyles();syncFmtBars();
-  if(scrolls.size)scrolls.forEach((a,id)=>{
-    const dbody=box.querySelector(`.doc[data-id="${id}"] .dbody`);
-    if(dbody)wrRestore(dbody,a);
-  });
+    return el;
 }
 function docMenu(x,y,d){
   const lk=docLk(d);
@@ -9146,6 +9195,7 @@ function docDup(d){
     noThink(n);add(n);nd.ids.push(n.id);
     wrKids(id).forEach(k=>{const m=JSON.parse(JSON.stringify(cleanCard(k)));m.id=uid();m.wrUnder=n.id;m.wrIn=nd.id;noThink(m);add(m)});
     if(d.open&&d.open[id])nd.open[n.id]=true;
+    if(d.fold&&d.fold[id])(nd.fold=nd.fold||{})[n.id]=true;
   });
   docs().push(nd);
   selDoc=nd.id;sel=[];render();save();
@@ -9195,6 +9245,21 @@ function verDel(c,id){
 // 把某一版复制成独立卡片放进剪贴板，可以粘到任何平铺页面。
 // 只在明确点了菜单时发生，不做任何默认行为。
 function verToClip(c,vid){
+  CLIP={mode:"copy",items:[verClipItem(c,vid)]};
+  toast(t("wrVerCopied"));
+}
+// 多选的段落一起复制（2026-11）：每一段跟「复制当前版本」完全一样（只取当前版本，不带版本、折叠框里的引文），
+// 按稿子里的先后，不按点选顺序；粘到画布空白处时竖着排开（dy 按段落实际高度累加），不叠在一起
+function wrCopyBlocks(d,ids){
+  const set=new Set(ids||[]);
+  const list=d.ids.filter(id=>set.has(id)).map(card).filter(Boolean);
+  if(!list.length)return;
+  let y=0;
+  CLIP={mode:"copy",items:list.map(c=>{const it=verClipItem(c,orig(c).verOn);it.dy=y;
+    const el=hostCap(c.id);y+=((el&&el.offsetHeight)||60)+16;return it})};
+  toast(t("clipCopy")+" "+list.length);
+}
+function verClipItem(c,vid){
   const o=orig(c),v=verList(o).find(z=>z.id===vid)
     ||{text:o.text,rich:o.rich,s:o.s,bg:o.bg};
   const sn={...o,id:uid(),text:v.text||"",rich:v.rich||"",
@@ -9206,9 +9271,7 @@ function verToClip(c,vid){
   if(!sn.rich)delete sn.rich;
   // 剪贴板条目要跟 clipCards 生成的形状一致：少了 w/s/bg，pasteClip 会拿 undefined
   // 去建卡片，粘出来的宽度和样式都是坏的。
-  CLIP={mode:"copy",items:[{src:o.id,snap:sn,dx:0,dy:0,
-    w:o.w||520,s:{...(sn.s||{})},bg:sn.bg||""}]};
-  toast(t("wrVerCopied"));
+  return {src:o.id,snap:sn,dx:0,dy:0,w:o.w||520,s:{...(sn.s||{})},bg:sn.bg||""};
 }
 function wrStyleObj(o,lv){
   const st={...DEF,...S.textDef,...(o.s||{})};
@@ -9751,6 +9814,7 @@ function bindDoc(el,d){
   if(side){
     side.addEventListener("pointerdown",e=>{if(e.target.closest(".wrnav"))e.stopPropagation()});
     side.addEventListener("click",e=>{
+      const f=e.target.closest(".fd");if(f){wrFold(d,f.dataset.id,side);return}
       const b=e.target.closest(".wrnav");if(!b)return;
       scrollBlockInto(el.querySelector(".dbody"),
         el.querySelector(`.dbody .blk[data-i="${b.dataset.i}"]`));
@@ -9855,7 +9919,7 @@ function drawWrite(){
   if(document.activeElement!==ti)ti.textContent=d.title;   // 正在改名时不要把光标顶掉
   ti.contentEditable=(lock||docLk(d))?"false":"true";
   const nums=wrNums(list);
-  $("wrside").innerHTML=wrOutlineHTML(list,nums);
+  $("wrside").innerHTML=wrOutlineHTML(list,nums,d);
   const main=$("wrmain");
   const anc=wrAnchor(main);            // 重建会把滚动条冲回顶部，记下眼前那一段，套完样式之后再对齐（wrRestore）
   main.innerHTML=docBodyHTML(d,nums);
@@ -9876,7 +9940,17 @@ function drawSide(){
   if(!wrOpenState())return;
   const d=wrDoc();if(!d)return;
   const list=wrCards();
-  $("wrside").innerHTML=wrOutlineHTML(list,wrNums(list));
+  $("wrside").innerHTML=wrOutlineHTML(list,wrNums(list),d);
+}
+// 点目录里的小三角：收起/展开，只重画这一栏目录（不碰正文，也不进撤销栈，跟折叠框开合一样）
+function wrFold(d,id,box){
+  if(!d||!box)return;
+  d.fold=d.fold||{};
+  if(d.fold[id])delete d.fold[id];else d.fold[id]=true;
+  if(!Object.keys(d.fold).length)delete d.fold;
+  save();
+  const list=d.ids.map(card).filter(Boolean);
+  box.innerHTML=wrOutlineHTML(list,wrNums(list),d);
 }
 // 正文块的交互，画布上的稿子与专注模式共用同一套。
 // 单击只选中这一段（跟画布上单击选中一张卡片一样，不进入编辑）；
@@ -10925,6 +10999,7 @@ function refreshDocMeta(){
 function wrBind(){
   bindBody($("wrmain"),()=>wrDoc());
   $("wrside").addEventListener("click",e=>{
+    const f=e.target.closest(".fd");if(f){wrFold(wrDoc(),f.dataset.id,$("wrside"));return}
     const b=e.target.closest(".wrnav");if(!b)return;
     scrollBlockInto($("wrmain"),$("wrmain").querySelector(`.blk[data-i="${b.dataset.i}"]`));
   });
@@ -11049,7 +11124,8 @@ function wrBlockMenu(x,y,c,i,d){
   items.push("-",{label:t("wrVerCopy"),on:()=>verToClip(c,o.verOn)});
   // 剪切：右键落在一个已经多选的段落上，就整批剪；否则只剪这一段
   const cutIds=(sel.length>1&&sel.includes(c.id))?sel.slice():[c.id];
-  if(d)items.push("-",{label:cutIds.length>1
+  if(d)items.push("-",{label:cutIds.length>1?t("wrCopyN").replace("{n}",cutIds.length):t("wrCopy"),
+    on:()=>wrCopyBlocks(d,cutIds)},{label:cutIds.length>1
       ?t("wrCutN").replace("{n}",cutIds.length):t("wrCut"),
     on:()=>wrCutBlocks(d,cutIds)});
   if(WRCUT&&d)items.push(

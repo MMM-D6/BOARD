@@ -88,7 +88,7 @@ frameown 页面归属、wrnum 用编号调位置、wrenter 回车是段内换行
 pages 页面与层级、levelmark 层级标记、outline 结构连线、outdir 结构方向与批量转换、
 lock 锁定、templates 模板、search 检索与链接、table 表格、tablemove 表格移动与删除、
 tablesize 表格尺寸、cells 单元格选择、excel 与 Excel 互通、map 页面地图、
-render 画面导出、archive 存档与分页导出、pageexport 导出本页、wrboard 稿子导出为画布文件、doccut 剪切与粘贴写作页、docxcolor Word 导入保留颜色、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
+render 画面导出、archive 存档与分页导出、pageexport 导出本页、wrboard 稿子导出为画布文件、doccut 剪切与粘贴写作页、docxcolor Word 导入保留颜色、docull 稿子只画视野附近的、wrcopyfold 段落复制与目录折叠、importsafe 导入关口与 2026-10 的几处修复、websnap 网页快照、websnaplock 快照的密码保护、filesafe 绑定文件写回失败的提示、gbscale 大容量、pdfimport 导入 PDF 页面、imgorig 图片原尺寸、safety 注入排查、scale 整体缩放、data 数据安全、static 静态检查。
 
 ---
 
@@ -566,6 +566,17 @@ Word 里却是 2.1"这种对不上的事。导出面板里有「标题编号」�
 落点统一走 `docSpot(x,y,d)`：压到页面、标准页、别的稿子或画布卡片，就挪到压住的东西右边再空 40，直到空地，最多挪 200 次。
 新建、粘贴、合并导入相对右键位置用同一个偏移 `DOC_AT`（-170,-46，原来写死在 `addDoc` 里），三种方式放下的稿子手感一样。`doccut` 组守着。
 
+**写作页多选段落复制（2026-11）。** 段落右键菜单在「剪切」前面多一项「复制这一段 / 复制这 N 段」（`wrCopyBlocks`），只在菜单里，没有快捷键
+（光标在段落里时 ⌘C 是复制文字，两者会打架）。每一段跟「复制当前版本」完全一样：两者共用 `verClipItem`（原来 `verToClip` 里那几行抽出来），
+只取当前版本，`vers`、`wrIn`、`wrUnder` 等一律去掉，折叠框里的引文不带。按稿子里的先后，不按点选顺序。
+粘贴走现成的路：别的稿子里「粘贴到前面/后面/光标处」（`wrClonesFromClip`），画布空白处（`pasteClip`，`dy` 按段落实际高度累加，竖着排开）。
+
+**目录折叠（2026-11）。** `wrOutlineHTML(list,nums,d)` 给有下级标题的标题加一个小三角（`.fd`，摆在左边留白里，不挪动文字），
+点它走 `wrFold`：切换 `d.fold[标题段落 id]`、`save()`、只重画这一栏目录，不碰正文，不进撤销栈（跟 `d.open` 一样）。
+收起的条目照样输出，只加 `.hid` 藏起来；网页快照点不了三角，`SNAP_CSS` 里把 `.hid` 全部亮出来、三角藏掉。
+画布上的稿子与专注模式共用。读文件时 `absorb` 保留 `fold`（原来稿子字段是逐个列出来的，不加就丢），`docDup` 跟 `open` 一样把它换到新 id 上。
+合并导入的单份稿子不带收起状态（跟 `open` 一样从空开始）。`wrcopyfold` 组守着这两件事。
+
 **Word 导入保留颜色（2026-11）。** 原来 `docxItems` 的 `processRun` 只读加粗、斜体、下划线、删除线。现在多读手动刷在文字上的三样：
 文字颜色（`w:color`）照搬原色，`auto` 与近黑（三个通道都低于 0x30）不写，跟着画布默认文字色走，换深色底色才不会黑底黑字；
 荧光笔（`w:highlight`，按 `WORD_HL` 换成十六进制）与底纹（`w:shd` 的 `fill`）经 `wordHL` 换成荧光笔色板 `HLS` 里色相最近的那支淡色
@@ -995,6 +1006,16 @@ HTML 与 Markdown（`wrMD`）。画面类导出对这种版式没有意义，所
 哪些卡片进入 DOM。用 `nodes.get(id)` 取卡片节点，**不要用 querySelector**，
 因为视野外的节点根本不存在。另有 `NODE_CAP`（900）限制同时存在的节点数，
 缩得很远时只渲染靠近视野中心的部分。
+
+**稿子也只完整画视野附近的（2026-11）。** 原来每次 `render()` 都把所有稿子整份重建（正文、目录、工具栏），
+稿子一多改个层级就要几百毫秒（实测 20 份 × 60 段：改一次层级 211ms，改后约 30ms，跟稿子总数无关）。
+现在 `renderDocs` 用同一个 `viewRect()`（含 `CULL.m` 余量）判断：附近的走 `buildDoc(d)`（原来循环体原样抽出来），
+远处的只画 `docShell(d)`（`.doc.lite`：标题加同样 640 高的空 `.dwrap`，所以 `mapDocRect`、`docSpot` 量出来的大小不变）。
+`syncDocs()` 挂在 `syncCards()` 末尾，镜头移动时只把进入附近的空框换成完整稿子，**已经画好的一概不碰**（正在写的光标不会丢），
+所以导出图片、网页快照（先把 `CULL.m` 放到极大再 `syncCards()`）时全部稿子自动画出，不用改导出代码。
+滚动位置存在 `DOCSCROLL`（按稿子 id，一直记着），变成空框再画回来还停在原处。
+空框里没有段落，`docsCapNodes` 里也就没有它们；会去屏幕上找稿子内容的地方都从眼前那份出发，或者先移镜头（检索、地图），到了自然画出来。
+写测试时要让镜头真的对着稿子（`focusDoc(d,true);cam={...tgt};applyCam()`），否则拿到的是空框。`docull` 组守着。
 
 **剔除必须是节流，绝不能是防抖。** `cullSoon()` 里那个 `if(cullT)return`
 是这一节最要紧的一行：它保证"最多每 90ms 跑一次，但连续输入期间一定会跑"。

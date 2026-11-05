@@ -1626,8 +1626,8 @@ group("docdup 复制与锁定整份稿子（2026-10）", async (c) => {
   c.ok("一步撤销就把副本撤掉", await c.run((n0) => { applyUndo(undo, redo); return docs().length === 1 && S.cards.length === n0; }, before));
   await c.run(() => applyUndo(redo, undo));
 
-  // 锁定
-  await c.run((d) => docSetLock(docs().find((z) => z.id === d), true), ids.d);
+  // 锁定（复制完镜头跟去了副本，先回到原稿：稿子只在视野附近才完整画出）
+  await c.run((d) => { const o = docs().find((z) => z.id === d); focusDoc(o, true); cam = { ...tgt }; applyCam(); docSetLock(o, true); }, ids.d);
   await c.wait(200);
   const L = (fn, arg) => c.run(fn, arg);
   c.ok("锁定后段落不能打字", await L((a) => document.querySelector('#docs .cap[data-id="' + a[0] + '"]').getAttribute("contenteditable") === "false", ids.a));
@@ -1657,13 +1657,13 @@ group("docdup 复制与锁定整份稿子（2026-10）", async (c) => {
     const n0 = (tw.mx || []).length; mqCommit();
     const ok = p.classList.contains("on") && p.querySelector(".go").disabled && p.querySelector(".pv").textContent === t("mqLockedBar") && (tw.mx || []).length === n0;
     mqStop(); return ok; }, ids.a));
-  c.ok("复制锁定的稿子：副本可以编辑", await L((d) => { docDup(docs().find((z) => z.id === d)); const nd = docs()[docs().length - 1]; redrawDocs(); return !nd.lock && document.querySelector('#docs .cap[data-id="' + nd.ids[0] + '"]').getAttribute("contenteditable") === "true"; }, ids.d));
+  c.ok("复制锁定的稿子：副本可以编辑", await L((d) => { docDup(docs().find((z) => z.id === d)); const nd = docs()[docs().length - 1]; cam = { ...tgt }; applyCam(); redrawDocs(); return !nd.lock && document.querySelector('#docs .cap[data-id="' + nd.ids[0] + '"]').getAttribute("contenteditable") === "true"; }, ids.d));
   // 专注模式里也锁着
   await L((d) => openWrite(d), ids.d); await c.wait(600);
   c.ok("专注模式里锁定的稿子：段落和标题都不能编辑", await L((a) => document.querySelector('#wrmain .cap[data-id="' + a[0] + '"]').getAttribute("contenteditable") === "false" && $("wrtitle").contentEditable === "false", ids.a));
   await L(() => closeWrite());
   // 解锁
-  await L((d) => docSetLock(docs().find((z) => z.id === d), false), ids.d); await c.wait(150);
+  await L((d) => { const o = docs().find((z) => z.id === d); focusDoc(o, true); cam = { ...tgt }; applyCam(); docSetLock(o, false); }, ids.d); await c.wait(150);
   c.ok("解锁后字段删掉、段落恢复可编辑", await L(([d, a]) => !("lock" in docs().find((z) => z.id === d)) && document.querySelector('#docs .cap[data-id="' + a[0] + '"]').getAttribute("contenteditable") === "true", [ids.d, ids.a]));
   c.ok("锁定、解锁都能撤销", await L((d) => { applyUndo(undo, redo); const on = docs().find((z) => z.id === d).lock === true; applyUndo(redo, undo); return on; }, ids.d));
   c.ok("锁定状态随文件保存，读回来还是锁着", await L(async (d) => { docSetLock(docs().find((z) => z.id === d), true); const b = JSON.parse(JSON.stringify(bundle(null))); if (b.docs.find((z) => z.id === d).lock !== true) return false; await absorb(b, false); return docs().find((z) => z.id === d).lock === true; }, ids.d));
@@ -3605,7 +3605,7 @@ group("wredit 写作页自由编辑", async (c) => {
     invalidateIndex(); render();
     const d = addDoc({ x: 1200, y: 0 }, "自由编辑测试");
     wrImport(["h1", "p1", "p2"], false, d.id);
-    camTo(1200, 0, 1, true);
+    focusDoc(d, true); cam = { ...tgt }; applyCam(); render();   // 镜头真正对着这份稿子（稿子只在视野附近才完整画出）
   });
   await c.wait(500);
 
@@ -7916,6 +7916,161 @@ group("wrboard 稿子导出为画布文件", async (c) => {
 
 // Word 导入保留颜色：文字颜色照搬（近黑与 auto 不写），荧光笔与底纹换成程序色板里色相最近的淡色（近白不写）；
 // 同色相邻的 run 并成一段；字号、字体等仍不读
+// 稿子的剔除：只完整画视野附近的稿子，远处的是同样大小的空框；镜头移过去才画，已画好的不重建；
+// 滚动位置记得住；导出（放大 CULL.m 再 syncCards）时全部画出；检索、地图跳过去之后稿子是完整的
+group("docull 稿子只画视野附近的", async (c) => {
+  await c.run(async () => {
+    S.cards = []; S.links = []; S.frames = []; S.sheets = []; S.docs = [];
+    for (let k = 0; k < 6; k++) {
+      const d = { id: "D" + k, x: k * 4000, y: 0, title: "稿" + k, ids: [], mode: "iter", open: {}, mxMig: 1 };
+      S.docs.push(d);
+      for (let i = 0; i < 40; i++) { const id = "q" + k + "_" + i; S.cards.push({ id, x: d.x, y: 0, w: 520, text: (k === 5 && i === 30 ? "独一无二的句子" : "第" + k + "份稿子第" + i + "段，写一点长一些的文字。"), wrIn: d.id, s: newStyle() }); d.ids.push(id); }
+    }
+    invalidateIndex(); render();
+    focusDoc(S.docs[0], true); cam = { ...tgt }; applyCam(); render();
+    await new Promise((r) => setTimeout(r, 200));
+  });
+  const st = () => c.run(() => [...document.querySelectorAll("#docs .doc")].map((el) => (el.classList.contains("lite") ? "-" : "+")).join(""));
+  c.ok("只有视野附近的稿子完整画出，其余是空框", (await st()) === "+-----");
+  c.ok("空框跟完整的稿子一样大，标题照样显示", await c.run(() => {
+    const sh = document.querySelector('#docs .doc[data-id="D3"]'), full = document.querySelector('#docs .doc[data-id="D0"]');
+    return sh.querySelector(".dwrap").offsetHeight === full.querySelector(".dwrap").offsetHeight && sh.querySelector(".dt").textContent === "稿3" && mapDocRect(S.docs[3]).h === 640;
+  }));
+  c.ok("空框里的段落不算画在屏幕上", await c.run(() => !docsCapNodes.has("q3_0") && docsCapNodes.has("q0_0")));
+  // 在第一份稿子里滚一段、放上光标，再把镜头移到第二份：第一份原封不动，第二份画出来
+  const mv = await c.run(async () => {
+    const el0 = document.querySelector('#docs .doc[data-id="D0"]'), body = el0.querySelector(".dbody");
+    body.scrollTop = 600; const top0 = body.scrollTop;
+    const cap = el0.querySelector(".cap"); cap.focus();
+    focusDoc(S.docs[1], true); cam = { ...tgt }; applyCam(); syncCards();
+    const same = document.querySelector('#docs .doc[data-id="D0"]') === el0 && document.activeElement === cap;
+    body.scrollTop = 600; const top1 = body.scrollTop;   // 放光标时浏览器会把正文滚回光标处，这里重新滚一次再记
+    return { same, top0: top1, st: [...document.querySelectorAll("#docs .doc")].map((el) => (el.classList.contains("lite") ? "-" : "+")).join(""), caps: docsCapNodes.has("q1_0") };
+  });
+  c.ok("镜头移过去，那份稿子画出来，段落也登记上", mv.st.startsWith("++") && mv.caps);
+  c.ok("已经画好的稿子不重建，正在写的光标不丢", mv.same);
+  c.ok("滚动位置记得住：变成空框再画回来，还停在原处", await c.run(async (top0) => {
+    render();                                        // 第一份此刻在视野外，变成空框
+    const lite = document.querySelector('#docs .doc[data-id="D0"]').classList.contains("lite");
+    focusDoc(S.docs[0], true); cam = { ...tgt }; applyCam(); syncCards();
+    const b = document.querySelector('#docs .doc[data-id="D0"] .dbody');
+    return lite && b && Math.abs(b.scrollTop - top0) < 40;
+  }, mv.top0));
+  c.ok("导出时（放大剔除范围）全部稿子都画出来", await c.run(() => {
+    render(); const m = CULL.m; CULL.m = 1e9; syncCards(); CULL.m = m;
+    return !document.querySelector("#docs .doc.lite") && document.querySelectorAll("#docs .cap[data-id]").length === 240;
+  }));
+  c.ok("检索跳到远处稿子的段落，到了那份稿子是完整的", await c.run(async () => {
+    render(); focusDoc(S.docs[0], true); cam = { ...tgt }; applyCam(); render();
+    const lite0 = document.querySelector('#docs .doc[data-id="D5"]').classList.contains("lite");
+    showFind(true); $("findq").value = "独一无二"; runFind(); stepHit(1);
+    await new Promise((r) => setTimeout(r, 900));
+    const el = document.querySelector('#docs .doc[data-id="D5"]');
+    const ok = lite0 && !el.classList.contains("lite") && el.textContent.includes("独一无二的句子");
+    $("findq").value = ""; runFind(); showFind(false);
+    return ok;
+  }));
+  c.ok("从地图跳到稿子（镜头移过去），稿子是完整的", await c.run(async () => {
+    render(); focusDoc(S.docs[0], true); cam = { ...tgt }; applyCam(); render();
+    const lite0 = document.querySelector('#docs .doc[data-id="D3"]').classList.contains("lite");
+    focusDoc(S.docs[3], true); await new Promise((r) => setTimeout(r, 900));
+    return lite0 && !document.querySelector('#docs .doc[data-id="D3"]').classList.contains("lite");
+  }));
+  await c.run(() => { S.docs = []; S.cards = []; invalidateIndex(); render(); });
+});
+
+// 写作页多选段落复制（只取当前版本，不带版本和折叠框里的引文，按稿子里的先后）；目录折叠（只动目录，记在 d.fold）
+group("wrcopyfold 段落复制与目录折叠", async (c) => {
+  const ids = await c.run(async () => {
+    S.cards = [{ id: "src", x: 0, y: -2000, w: 300, text: "源卡片", s: newStyle() }]; S.links = []; S.frames = []; S.sheets = []; S.docs = [];
+    const A = { id: "A", x: 0, y: 0, title: "甲", ids: [], mode: "iter", open: {}, mxMig: 1 };
+    const B = { id: "B", x: 1200, y: 0, title: "乙", ids: [], mode: "iter", open: {}, mxMig: 1 };
+    S.docs.push(A, B);
+    const P = (id, d, text, extra) => { S.cards.push({ id, x: d.x, y: 0, w: 520, text, wrIn: d.id, s: newStyle(), ...(extra || {}) }); d.ids.push(id); };
+    P("a1", A, "第一段"); P("a2", A, "第二段");
+    P("a3", A, "第三段新版", { vers: [{ id: "v1", name: "", text: "第三段旧版", rich: "", s: {}, bg: "", t: 1 }, { id: "v2", name: "", text: "第三段新版", rich: "", s: {}, bg: "", t: 2 }], verOn: "v2" });
+    P("a4", A, "第四段"); P("a5", A, "第五段");
+    S.cards.push({ id: "tw", x: 0, y: 0, w: 300, ref: "src", wrUnder: "a3", wrIn: "A", s: {} });
+    P("b1", B, "乙的第一段");
+    invalidateIndex(); render(); focusDoc(A, true); cam = { ...tgt }; applyCam(); render();
+    await new Promise((r) => setTimeout(r, 200));
+    return { A: "A", B: "B" };
+  });
+  const menu = await c.run(() => {
+    sel = ["a4", "a1", "a3"];                                  // 点选顺序故意打乱
+    const d = docs()[0], c3 = card("a4");
+    wrBlockMenu(40, 40, c3, d.ids.indexOf("a4"), d);
+    const it = [...document.querySelectorAll("#menu .mi")];
+    const want = t("wrCopyN").replace("{n}", 3), mi = it.find((z) => z.textContent.includes(want));
+    const has = !!mi; if (mi) mi.click(); closeMenus();
+    sel = ["a2"]; wrBlockMenu(40, 40, card("a2"), 1, d);
+    const one = [...document.querySelectorAll("#menu .mi")].some((z) => z.textContent.trim() === t("wrCopy")); closeMenus();
+    return { has, one, n: CLIP && CLIP.items.length, texts: CLIP.items.map((z) => z.snap.text) };
+  });
+  c.ok("多选段落后右键有「复制这 3 段」，单段是「复制这一段」", menu.has && menu.one);
+  c.ok("按稿子里的先后复制，只取当前版本", menu.n === 3 && menu.texts.join() === "第一段,第三段新版,第四段");
+  const pasted = await c.run(() => {
+    const B = docs()[1], n0 = S.cards.length;
+    wrPasteMain(B, 1);
+    const cs = B.ids.map(card);
+    return { texts: cs.map((z) => z.text).join(), allIn: cs.every((z) => z.wrIn === "B"), noVers: cs.every((z) => !(z.vers || []).length), newIds: !B.ids.some((id) => /^a\d$/.test(id)),
+      noTwin: !S.cards.some((z) => z.ref && z.wrIn === "B"), added: S.cards.length - n0, orig: docs()[0].ids.join() === "a1,a2,a3,a4,a5" && card("a3").vers.length === 2 };
+  });
+  c.ok("粘到另一份稿子：顺序对、是那份稿子自己的新段落", pasted.texts === "乙的第一段,第一段,第三段新版,第四段" && pasted.allIn && pasted.newIds && pasted.added === 3);
+  c.ok("不带版本、不带折叠框里的引文，原稿不变", pasted.noVers && pasted.noTwin && pasted.orig);
+  c.ok("粘到画布空白处是普通卡片，竖着排开不叠在一起", await c.run(() => {
+    const n0 = S.cards.length; pasteClip({ x: 3000, y: 3000 });
+    const cs = S.cards.slice(n0);
+    return cs.length === 3 && cs.every((z) => !z.wrIn && !docOnly(z)) && cs[0].y < cs[1].y && cs[1].y < cs[2].y && cs.every((z) => z.x === 3000);
+  }));
+
+  // 目录折叠：一 / 1.1 / 1.1.1 / 1.2 / 二（没有下级）
+  await c.run(async () => {
+    S.cards = []; S.docs = [];
+    const D = { id: "D", x: 0, y: 0, title: "折叠", ids: [], mode: "iter", open: {}, mxMig: 1 }; S.docs.push(D);
+    [["h1", 1], ["x1", 0], ["h11", 2], ["h111", 3], ["x2", 0], ["h12", 2], ["h2", 1], ["x3", 0]].forEach(([id, lv]) => {
+      S.cards.push({ id, x: 0, y: 0, w: 520, text: "段" + id, wrIn: "D", s: newStyle(), ...(lv ? { level: lv } : {}) }); D.ids.push(id); });
+    invalidateIndex(); render(); focusDoc(D, true); cam = { ...tgt }; applyCam(); render();
+    await new Promise((r) => setTimeout(r, 200));
+  });
+  const nav = () => c.run(() => [...document.querySelectorAll("#docs .doc .dside .wrnav")].map((b) => (b.classList.contains("hid") ? "-" : "+") + (b.querySelector(".fd") ? b.querySelector(".fd").textContent : "")).join(" "));
+  c.ok("有下级的标题才有小三角", (await nav()) === "+▾ +▾ + + +");
+  await c.run(() => document.querySelector('#docs .dside .fd[data-id="h1"]').click());
+  c.ok("收起第一章：它下面的小节都藏起来，第二章不受影响", (await nav()) === "+▸ -▾ - - +");
+  c.ok("只动目录，正文一段不少；收起状态记在稿子里", await c.run(() => document.querySelectorAll("#docs .doc .dbody .blk").length === 8 && docs()[0].fold.h1 === true));
+  await c.run(() => { document.querySelector('#docs .dside .fd[data-id="h1"]').click(); document.querySelector('#docs .dside .fd[data-id="h11"]').click(); });
+  c.ok("展开第一章、收起 1.1：只藏 1.1.1", (await nav()) === "+▾ +▸ - + +");
+  c.ok("点三角不会跳转正文", await c.run(() => document.querySelector("#docs .dbody").scrollTop === 0));
+  c.ok("重画之后、存文件再打开之后，收起状态还在", await c.run(async () => {
+    redrawDocs();
+    const a = !!document.querySelector('#docs .dside .wrnav.hid');
+    const b = JSON.parse(JSON.stringify(bundle(null))); await absorb(b, false);
+    return a && docs()[0].fold && docs()[0].fold.h11 === true;
+  }));
+  c.ok("专注模式的目录同样收起，也能点三角", await c.run(async () => {
+    openWrite("D"); await new Promise((r) => setTimeout(r, 200));
+    const hid1 = [...document.querySelectorAll("#wrside .wrnav")].map((b) => b.classList.contains("hid")).join();
+    document.querySelector('#wrside .fd[data-id="h11"]').click();
+    const hid2 = [...document.querySelectorAll("#wrside .wrnav")].some((b) => b.classList.contains("hid"));
+    closeWrite();
+    return hid1 === "false,false,true,false,false" && !hid2 && !docs()[0].fold;
+  }));
+  c.ok("网页快照里收起的条目全部亮出来、不显示三角", await c.run(() => {
+    document.querySelector('#docs .dside .fd[data-id="h1"]').click();
+    const st = document.createElement("style"); st.textContent = SNAP_CSS; document.head.appendChild(st);   // 快照专用的样式只写进快照文件，这里临时装上
+    document.body.classList.add("snap");
+    const el = document.querySelector('#docs .dside .wrnav.hid'), fd = document.querySelector('#docs .dside .fd');
+    const ok = getComputedStyle(el).display === "flex" && getComputedStyle(fd).display === "none";
+    document.body.classList.remove("snap"); st.remove();
+    return ok;
+  }));
+  c.ok("复制这份稿子时收起状态一起复制", await c.run(() => {
+    docDup(docs()[0]); const nd = docs()[1];
+    return nd.fold && nd.fold[nd.ids[0]] === true && Object.keys(nd.fold).length === 1;
+  }));
+  await c.run(() => { S.docs = []; S.cards = []; invalidateIndex(); render(); });
+});
+
 group("docxcolor Word 导入保留颜色", async (c) => {
   const r = await c.run(() => {
     const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
