@@ -8,23 +8,10 @@
   "theme_color": "#F4F4F2",
   "shortcuts": [
     {
-      "name": "Grid paper",
-      "short_name": "纸",
-      "description": "Grid paper for handwriting and sketching",
-      "url": "./纸.html",
-      "icons": [
-        {
-          "src": "icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
-    },
-    {
-      "name": "X",
-      "short_name": "X",
-      "description": "Priority machine: what to do now and how to start",
-      "url": "./X.html",
+      "name": "Fold",
+      "short_name": "Fold",
+      "description": "Split A4 PDF pages in half and shift them for an A5 folder",
+      "url": "./Fold.html",
       "icons": [
         {
           "src": "icon-192.png",

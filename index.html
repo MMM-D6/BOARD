@@ -908,6 +908,10 @@ save:"Save",saveAs:"Save as…",importJSON:"Import file…",
   toolbox:"Toolbox",toolboxHead:"Open tool in a new tab",
   gridPaperTool:"Grid paper",gridPaperHint:"Grid paper for handwriting and sketching",gridPaperBlocked:"The browser blocked the new tab. Open 纸.html by hand.",
   xTool:"X",xHint:"Priority machine: what to do now and how to start",xBlocked:"The browser blocked the new tab. Open X.html by hand.",
+  foldTool:"Fold",foldHint:"Split A4 PDF pages in half and shift them for an A5 folder",foldBlocked:"The browser blocked the new tab. Open Fold.html by hand.",
+  roTag:"Read only",roOn:"Enable editing",roOff:"Back to read only",roHint:"Read only: this change is not saved. Right-click the canvas → Enable editing.",
+  roEditOn:"Editing is on. Changes are saved automatically.",roBackOn:"Read only. Changes will not be saved.",
+  roDirty:"The canvas changed while it was read only, and those changes are not saved.\n\nOK: keep these changes, turn on editing and save them.\nCancel: discard them (the page reloads), then turn on editing.",
   readOrder:"Reading order",roAuto:"Automatic",roCol:"Column by column",roRow:"Row by row",
   autoNum:"Auto numbering",apxLabel:"Appendix",asideTag:"\u00B7",
   bibShow:"Show what is filed under this entry",
@@ -1141,6 +1145,10 @@ save:"保存",saveAs:"另存为…",importJSON:"导入文件…",
   toolbox:"工具箱",toolboxHead:"在新标签页里打开",
   gridPaperTool:"格纸",gridPaperHint:"手写与草图用的格纸",gridPaperBlocked:"新标签被浏览器拦住了，请手动打开 纸.html",
   xTool:"X",xHint:"优先机器：现在做什么、怎么开始",xBlocked:"新标签被浏览器拦住了，请手动打开 X.html",
+  foldTool:"Fold",foldHint:"把 A4 PDF 每页切半、推半页，装进 A5 文件夹",foldBlocked:"新标签被浏览器拦住了，请手动打开 Fold.html",
+  roTag:"只读",roOn:"开启编辑",roOff:"回到只读",roHint:"只读：这次改动不会保存。画布右键 → 开启编辑",
+  roEditOn:"已开启编辑，改动会自动保存",roBackOn:"已回到只读，改动不会保存",
+  roDirty:"只读期间画布上有改动，这些改动没有保存。\n\n确定：保留这些改动，开启编辑并保存。\n取消：丢掉这些改动（页面会重新载入），再开启编辑。",
   readOrder:"阅读顺序",roAuto:"自动判断",roCol:"按列（推荐）",roRow:"按行",
   autoNum:"自动编号",apxLabel:"附录",asideTag:"\u00B7",
   bibShow:"显示归在这条文献下的原文",
@@ -1994,7 +2002,31 @@ async function retireLegacyLS(){
     if(await kvPut("lsold:"+Date.now(),l))localStorage.removeItem(LSK);
   }catch(e){}
 }
-let st,storeWarnT=0;const save=()=>{clearTimeout(st);st=setTimeout(async()=>{
+// 只读（2026-11）：每次打开（包括刷新）都默认只读，画布右键「开启编辑」之后才会写回。
+// 只在写出去的口子上拦：save()（浏览器存储、自动备份、自动写回文件）、手动保存、另存为、新建、清空。
+// 画布上的操作全部照常，所以任何编辑功能都不用动；只读期间的改动只留在屏幕上，不进存储，关掉就没了。
+// 打开别的画布文件不算改动：openRecent / openFolder 用 roPass 放行那一次 save，
+// 浏览器里存的内容和绑定的文件才对得上（否则下次打开会把旧内容挂在新文件名下）。
+let RO=true,roPass=false,roDirty=false,roHintT=0;
+try{if(sessionStorage.getItem("board:rw")){RO=false;sessionStorage.removeItem("board:rw")}}catch(e){}
+function roBlock(dirty){
+  if(!RO)return false;
+  if(dirty)roDirty=true;
+  if(Date.now()-roHintT>4000){roHintT=Date.now();toast(t("roHint"))}   // 拖动等连续操作只提示一次
+  return true;
+}
+function setRO(v){
+  if(v){RO=true;roDirty=false;statusBar();toast(t("roBackOn"));return}
+  if(roDirty&&!confirm(t("roDirty"))){
+    try{sessionStorage.setItem("board:rw","1")}catch(e){}   // 重新载入后直接进编辑，只管这一次
+    location.reload();return;
+  }
+  RO=false;statusBar();toast(t("roEditOn"));
+  if(roDirty){roDirty=false;save()}         // 选了保留：把只读期间没写出去的补写
+}
+let st,storeWarnT=0;const save=()=>{if(RO&&!roPass){roBlock(1);return}
+  if(roPass){roPass=false;roDirty=false}    // 刚打开的文件替换了整个画布，之前没存的改动已经不在了
+  clearTimeout(st);st=setTimeout(async()=>{
   const plain=JSON.parse(JSON.stringify({...S,cards:S.cards.map(cleanCard)}));
   const ok=await kvPut(KEY,plain);
   autoBackup(false);
@@ -2252,9 +2284,10 @@ async function absorb(data,merge,at){
 function statusBar(){
   fileState();
   const z=Math.round(cam.z*100)+"%";
-  $("status").innerHTML=(S.work&&!lock&&fileName?esc(fileName)+"<br>":"")+z;
+  $("status").innerHTML=(RO?esc(t("roTag"))+"<br>":"")+(S.work&&!lock&&fileName?esc(fileName)+"<br>":"")+z;
 }
 async function pickFile(){
+  if(roBlock())return;
   if(window.showSaveFilePicker){
     try{
       const opt={suggestedName:stampName(fileName||"board",".json"),
@@ -2280,6 +2313,7 @@ async function download(list,name,part){
 // 写文件排队：大文件一次要写好几秒，期间再触发的自动写回只排一次，不会两次同时写同一个文件
 let fileQ=Promise.resolve(),fileQueued=false,lastWriteMs=0;
 function writeFile(quiet){
+  if(RO&&!quiet){roBlock();return Promise.resolve(false)}   // 手动保存；自动写回只会由放行过的 save() 排出来
   if(!fileHandle)return Promise.resolve(false);
   if(quiet&&fileQueued)return fileQ;
   if(quiet)fileQueued=true;
@@ -2374,7 +2408,7 @@ async function openRecent(id,newWin){
     fileHandle=h;fileName=f.name;fileOK=true;
     LANG=S.lang||LANG;sel=[];selLink=null;
     await kvPut(FH,h);
-    render();fit(true);save();
+    render();fit(true);roPass=RO;save();
     pushRecent(h,f.name);
   }catch(e){alert(t("errImport")+"\n"+((e&&e.message)||e))}
 }
@@ -2389,6 +2423,7 @@ function openCutout(){openSideTool("cutout.html","cutoutHint","cutoutBlocked")}
 function openTiler(){openSideTool("Tiler.html","tilerHint","tilerBlocked")}
 function openGridPaper(){openSideTool("纸.html","gridPaperHint","gridPaperBlocked")}
 function openX(){openSideTool("X.html","xHint","xBlocked")}
+function openFold(){openSideTool("Fold.html","foldHint","foldBlocked")}
 // 格纸工具同理——三个工具都只是链接过去，代码互不干扰。
 // 每次都带一个时间戳参数，避开浏览器缓存，刚传上去的新版本刷新就能看到
 function openSideTool(file,hintKey,blockKey){
@@ -2404,6 +2439,7 @@ async function unbind(quiet){
   statusBar();if(!quiet)toast(t("unbound"));
 }
 async function newBoard(){
+  if(roBlock())return;
   if(S.cards.length&&!confirm(t("confirmNew")))return;
   if(fileHandle&&S.cards.length)await writeFile(true);
   snap();
@@ -2465,6 +2501,7 @@ async function folderImg(h){
 }
 // 另存为文件夹：选一个（最好是空的）文件夹，之后自动写回都写到这里
 async function pickFolder(){
+  if(roBlock())return;
   if(!window.showDirectoryPicker){toast(t("folderNoSupport"));return}
   let dir;
   try{dir=await showDirectoryPicker({mode:"readwrite",id:"board-folder"})}catch(e){return}
@@ -2499,7 +2536,7 @@ async function openFolder(dir){
     await absorb(d,false);
     LANG=S.lang||LANG;sel=[];selLink=null;
     await kvPut(FH,dir);
-    render();fit(true);save();
+    render();fit(true);roPass=RO;save();
     pushRecent(dir,dir.name);fileState();
     folderWarm(dir);
   }catch(e){alert(t("errImport")+"\n"+((e&&e.message)||e))}
@@ -11765,7 +11802,7 @@ function fileItems(x,y){
     "-",
     {label:t("exportDoc"),on:()=>openExport(x,y)},
     {label:t("webSnap"),on:()=>openExport(x,y,"web")},   // 走导出面板，密码保护不会被绕过
-    {label:t("clearAll"),danger:true,on:async()=>{if(confirm(t("clearConfirm"))){
+    {label:t("clearAll"),danger:true,on:async()=>{if(!roBlock()&&confirm(t("clearConfirm"))){
       snap();invalidateIndex();S.cards=[];S.links=[];sel=[];await unbind(true);render();save();toast(t("unbound"))}}}
   ];
 }
@@ -11776,7 +11813,8 @@ function boardMenu(x,y){
       {label:t("cutoutTool"),on:openCutout},
       {label:t("tilerTool"),on:openTiler},
       {label:t("gridPaperTool"),on:openGridPaper},
-      {label:t("xTool"),on:openX}]},
+      {label:t("xTool"),on:openX},
+      {label:t("foldTool"),on:openFold}]},
     {label:t("importPDF"),on:()=>$("pdffile").click()},
     {label:t("insertText"),key:t("dbl"),on:()=>addText(toW(x,y))},
     {label:t("insertTable"),sub:[{head:t("tbSize")},
@@ -11804,6 +11842,7 @@ function boardMenu(x,y){
     {label:t("viewMenu"),sub:viewItems(x,y)},
     "-",
     {label:t("presentation"),on:()=>setLock(true)},
+    {label:RO?t("roOn"):t("roOff"),on:()=>setRO(!RO)},
     {label:isFS()?t("exitFullscreen"):t("fullscreen"),key:FS_KEY,on:toggleFS},
     {label:t("language"),sub:langItems()},
     ...(LANG==="zh"?[{label:t("manual"),on:openManual}]:[])

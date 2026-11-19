@@ -7603,7 +7603,7 @@ group("toolbox 工具箱入口", async (c) => {
   await c.board([], []);
   const r = await c.run(() => {
     const real = window.open;
-    let urlCut = null, urlTile = null, urlGrid = null;
+    let urlCut = null, urlTile = null, urlGrid = null, urlFold = null;
     boardMenu(60, 60);
     const topLabels = [...document.querySelectorAll("#menu .mi")].map((z) => z.textContent.trim());
     // hover 子菜单
@@ -7624,11 +7624,12 @@ group("toolbox 工具箱入口", async (c) => {
     clickTool("cutoutTool",   (u) => { urlCut  = u; });
     clickTool("tilerTool",    (u) => { urlTile = u; });
     clickTool("gridPaperTool",(u) => { urlGrid = u; });
+    clickTool("foldTool",     (u) => { urlFold = u; });
     closeMenus();
     return { topLabels,
       tbInTop: topLabels.some((z) => z.includes(t("toolbox"))),
       cutNotTop: !topLabels.some((z) => z.includes(t("cutoutTool"))),
-      urlCut, urlTile, urlGrid,
+      urlCut, urlTile, urlGrid, urlFold,
       inline: !!document.querySelector("iframe,embed,object") ||
         /id="(ndx|nudge|libs)"/.test(document.documentElement.innerHTML) };
   });
@@ -7638,10 +7639,12 @@ group("toolbox 工具箱入口", async (c) => {
   c.ok("子菜单里能开抠图工具", !!r.urlCut && /cutout\.html/.test(r.urlCut));
   c.ok("子菜单里能开拼版工具", !!r.urlTile && /Tiler\.html/.test(r.urlTile));
   c.ok("子菜单里能开格纸工具", !!r.urlGrid && /纸\.html/.test(decodeURI(r.urlGrid)));
+  c.ok("子菜单里能开 Fold", !!r.urlFold && /Fold\.html/.test(r.urlFold));
   c.ok("都是绝对地址", !!(r.urlCut && r.urlCut.startsWith("file://")));
   c.ok("中英文案都齐了", await c.run(() => [
     "cutoutTool","cutoutHint","cutoutBlocked","tilerTool","tilerHint","tilerBlocked",
     "gridPaperTool","gridPaperHint","gridPaperBlocked","toolbox","toolboxHead",
+    "foldTool","foldHint","foldBlocked",
   ].every((k) => T.en[k] && T.zh[k])));
   const bust = await c.run(() => {
     const real = window.open; let u = null;
@@ -7654,10 +7657,8 @@ group("toolbox 工具箱入口", async (c) => {
   c.ok("index 挂着 manifest", await c.run(() => !!document.querySelector('link[rel="manifest"]')));
   await c.page.goto("file://" + require("path").resolve(__dirname, "manifest.json"));
   const mf = JSON.parse(await c.run(() => document.body.innerText));
-  c.ok("manifest 里有三条快捷方式（抠图、拼版、格纸）",
-    Array.isArray(mf.shortcuts) && mf.shortcuts.some((z) => /cutout\.html$/.test(z.url || "")) &&
-    mf.shortcuts.some((z) => /Tiler\.html$/.test(z.url || "")) &&
-    mf.shortcuts.some((z) => /纸\.html$/.test(z.url || "")));
+  c.ok("manifest 的快捷方式只有 Fold 一条",
+    Array.isArray(mf.shortcuts) && mf.shortcuts.length === 1 && /Fold\.html$/.test(mf.shortcuts[0].url || ""));
   c.ok("快捷方式落在 scope 之内", mf.scope === "./" && mf.shortcuts.every((s) => /^\.\/./.test(s.url)));
   c.ok("图标与主应用共用", mf.shortcuts.every((s) => s.icons.every((z) => mf.icons.some((m) => m.src === z.src))));
 });
@@ -8154,6 +8155,76 @@ group("doccut 剪切与粘贴写作页", async (c) => {
   }));
 });
 
+group("readonly 打开默认只读", async (c) => {
+  // 换一页、不带 board:rw，看真正打开时的样子
+  const pg = await c.page.browser().newPage();
+  const errs = [], dialogs = [];
+  pg.on("pageerror", (e) => errs.push(e.message));
+  pg.on("dialog", async (d) => { dialogs.push(d.message()); await d.accept(); });
+  await pg.goto(FILE);
+  await c.wait(1400);
+  const R = (fn, ...a) => pg.evaluate(fn, ...a);
+  const a = await R(() => ({ ro: RO, dirty: roDirty, status: $("status").textContent, toast: $("toast").classList.contains("on") ? $("toast").textContent : "" }));
+  c.ok("打开就是只读", a.ro === true);
+  c.ok("打开过程本身不算改动，也不弹提示", a.dirty === false && !/只读|Read only/.test(a.toast));
+  c.ok("右下角写着只读", /只读|Read only/.test(a.status));
+  const b = await R(async () => {
+    const before = JSON.stringify(await kvGet(KEY));
+    S.cards.push({ id: "roX", x: 0, y: 0, w: 200, text: "accidental", s: { ...DEF } });
+    invalidateIndex(); render(); save();
+    await new Promise((r) => setTimeout(r, 700));
+    const after = JSON.stringify(await kvGet(KEY));
+    const wf = await writeFile(false);
+    return { same: before === after, dirty: roDirty, wf, hint: $("toast").textContent };
+  });
+  c.ok("只读时改动不写进浏览器存储", b.same);
+  c.ok("记下有没写出去的改动", b.dirty === true);
+  c.ok("只读时手动保存不写文件", b.wf === false);
+  c.ok("改动时提示只读", /只读|Read only/.test(b.hint));
+  const m = await R(() => {
+    boardMenu(60, 60);
+    const has = [...document.querySelectorAll("#menu .mi")].some((z) => z.textContent.includes(t("roOn")));
+    closeMenus(); return has;
+  });
+  c.ok("画布右键里有「开启编辑」", m);
+  // 有改动时开启编辑：对话框确定 = 保留并保存
+  const k = await R(async () => {
+    setRO(false);
+    await new Promise((r) => setTimeout(r, 700));
+    const v = await kvGet(KEY);
+    return { ro: RO, saved: !!(v && v.cards.some((z) => z.id === "roX")), status: $("status").textContent };
+  });
+  c.ok("开启编辑前先问只读期间的改动怎么处理", dialogs.length === 1);
+  c.ok("选保留：开启编辑并补写", k.ro === false && k.saved);
+  c.ok("右下角不再写只读", !/只读|Read only/.test(k.status));
+  const back = await R(async () => {
+    setRO(true);
+    const before = JSON.stringify(await kvGet(KEY));
+    S.cards = S.cards.filter((z) => z.id !== "roX"); invalidateIndex(); render(); save();
+    await new Promise((r) => setTimeout(r, 700));
+    return { ro: RO, same: before === JSON.stringify(await kvGet(KEY)), menu: (boardMenu(60, 60), [...document.querySelectorAll("#menu .mi")].some((z) => z.textContent.includes(t("roOn")))) };
+  });
+  await R(() => closeMenus());
+  c.ok("可以回到只读，之后的改动又不写了", back.ro === true && back.same && back.menu);
+  // 刷新之后仍是只读
+  await pg.reload(); await c.wait(1400);
+  c.ok("刷新后仍是只读", await pg.evaluate(() => RO === true));
+  // 选丢掉：重新载入后直接进编辑，只管这一次
+  await pg.evaluate(() => { S.cards.push({ id: "roY", x: 0, y: 0, w: 200, text: "x", s: { ...DEF } }); invalidateIndex(); render(); save(); });
+  pg.removeAllListeners("dialog");
+  pg.on("dialog", async (d) => { await d.dismiss(); });
+  await Promise.all([pg.waitForNavigation().catch(() => {}), pg.evaluate(() => setRO(false))]);
+  await c.wait(1400);
+  const d = await pg.evaluate(() => ({ ro: RO, hasY: S.cards.some((z) => z.id === "roY"), flag: sessionStorage.getItem("board:rw") }));
+  c.ok("选丢掉：重新载入，改动没了，直接是编辑状态", d.ro === false && !d.hasY && d.flag === null);
+  await pg.reload(); await c.wait(1400);
+  c.ok("那一次之后再刷新又是只读", await pg.evaluate(() => RO === true));
+  c.ok("中英文案都齐了", await pg.evaluate(() =>
+    ["roTag","roOn","roOff","roHint","roEditOn","roBackOn","roDirty"].every((k) => T.en[k] && T.zh[k])));
+  c.ok("只读这一页没有控制台错误", !errs.length);
+  await pg.close();
+});
+
 /* ---------------- 主流程 ---------------- */
 
 (async () => {
@@ -8179,6 +8250,8 @@ group("doccut 剪切与粘贴写作页", async (c) => {
       Object.defineProperty(navigator, "platform", { get: () => "MacIntel" });
       Object.defineProperty(navigator, "userAgentData", { get: () => ({ platform: "macOS" }) });
     });
+    // 程序打开默认只读（2026-11）；已有各组测的是编辑功能，所以照旧在编辑状态下跑。只读另有一组单独测
+    await page.evaluateOnNewDocument(() => { try { sessionStorage.setItem("board:rw", "1"); } catch (e) {} });
     const errs = [];
     page.on("pageerror", (e) => errs.push(e.message));
     page.on("dialog", async (d) => { await d.accept("报告正文"); });

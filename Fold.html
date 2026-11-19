@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fold</title>
+<style>
+  /* 视觉语言跟 Tiler.html 一致：浅灰底、顶部玻璃工具栏、等宽小标签 */
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  html,body{height:100%;margin:0;
+    font-family:"IBM Plex Sans","Noto Sans SC",system-ui,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  body{background:#F4F4F2;color:#111;
+    --panel:#fff;--pfg:#111;--pline:rgba(0,0,0,.12);--phi:rgba(0,0,0,.05);
+    --glass:rgba(255,255,255,.62);--glassSoft:rgba(255,255,255,.3);
+    --glassline:rgba(0,0,0,.08);--acc:#2D6CDF;--warn:#D2691E}
+  button{font:inherit;color:inherit}
+  .mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+
+  /* ---------- 顶部工具栏 ---------- */
+  #bar{position:fixed;left:50%;top:14px;transform:translateX(-50%);z-index:60;
+    display:flex;align-items:center;gap:1px;padding:4px 5px;border-radius:10px;
+    background:var(--glass);border:1px solid var(--glassline);
+    backdrop-filter:blur(10px) saturate(1.3);-webkit-backdrop-filter:blur(10px) saturate(1.3);
+    white-space:nowrap;font-size:12.5px;max-width:calc(100vw - 24px)}
+  .cell{position:relative;display:flex;align-items:center}
+  .ctl{height:26px;display:flex;align-items:center;gap:5px;padding:0 8px;border:none;
+    background:none;border-radius:7px;cursor:pointer;font-size:12.5px;line-height:1}
+  .ctl:hover{background:var(--phi)}
+  .ctl.on{background:var(--pfg);color:var(--panel)}
+  .ctl.go2{background:var(--acc);color:#fff;padding:0 12px}
+  .ctl.go2:hover{background:#2560c8}
+  .ctl:disabled{opacity:.3;cursor:default;background:none;color:inherit}
+  .ctl .car{font-size:7px;opacity:.4;margin-left:1px}
+  .ctl b{font-weight:400;opacity:.5}
+  .ctl:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+  .div{width:1px;height:15px;background:var(--pline);margin:0 5px;flex:none;opacity:.7}
+  .pp{position:absolute;top:100%;left:0;margin-top:7px;z-index:6;display:none;padding:8px;
+    border-radius:10px;background:var(--panel);border:1px solid var(--pline);
+    box-shadow:0 16px 40px rgba(0,0,0,.2);min-width:248px;white-space:normal}
+  .pp.on{display:block}
+  .pp.right{left:auto;right:0}
+  .hd2{font:400 9.5px/1 "IBM Plex Mono",monospace;letter-spacing:.14em;text-transform:uppercase;
+    opacity:.4;padding:7px 4px 3px}
+  .seg2{display:flex;margin:3px 3px 6px}
+  .seg2 button{flex:1;height:26px;border:1px solid var(--pline);background:none;cursor:pointer;
+    font-size:11.5px;margin-left:-1px;white-space:nowrap}
+  .seg2 button:first-child{border-radius:6px 0 0 6px;margin-left:0}
+  .seg2 button:last-child{border-radius:0 6px 6px 0}
+  .seg2 button.on{background:var(--pfg);color:var(--panel);border-color:var(--pfg)}
+  .note2{font-size:11px;opacity:.55;padding:4px 4px 2px;line-height:1.6}
+  #help{width:300px}
+  #help p{margin:0;padding:5px 4px;font-size:12px;line-height:1.65}
+  #help p b{font-weight:500}
+
+  /* ---------- 状态与预览 ---------- */
+  #info{position:fixed;left:16px;top:16px;z-index:50;max-width:28vw;
+    font:400 10.5px/1.7 "IBM Plex Mono",monospace;opacity:.45;pointer-events:none;white-space:pre-line}
+  #info.err{opacity:.9;color:var(--warn)}
+  #stage{position:fixed;inset:0;overflow:auto;padding:72px 24px 32px}
+  #grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:22px;
+    max-width:1200px;margin:0 auto}
+  .sheet{display:flex;flex-direction:column;gap:7px}
+  .sheet canvas{width:100%;height:auto;display:block;background:#fff;border-radius:3px;
+    box-shadow:0 1px 2px rgba(0,0,0,.08),0 6px 18px rgba(0,0,0,.06)}
+  .sheet span{display:flex;justify-content:space-between;gap:8px;
+    font:400 10.5px/1 "IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+  .sheet span i{font-style:normal;opacity:.4}
+  #empty{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:8px;color:#8A8A85;font-size:13px;pointer-events:none;text-align:center}
+  #empty b{font-size:15px;color:#5A5A55;font-weight:500}
+  #drop{position:fixed;inset:10px;z-index:70;border:2px dashed var(--acc);border-radius:14px;
+    background:rgba(45,108,223,.05);display:none;pointer-events:none}
+  #drop.on{display:block}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div id="stage"><div id="grid"></div></div>
+
+<div id="empty">
+  <b>Fold</b>
+  <div>把 A4 PDF 拖进来，或点上方「打开」</div>
+</div>
+
+<div id="bar">
+  <button class="ctl" id="open">打开 PDF</button>
+  <span class="div"></span>
+  <div class="cell">
+    <button class="ctl" id="firstBtn">首页 <b id="firstVal">右半</b><span class="car">▼</span></button>
+    <div class="pp" id="firstPP">
+      <div class="hd2">第 1 页的半页内容在</div>
+      <div class="seg2" id="firstSeg">
+        <button data-v="right" class="on">右半</button>
+        <button data-v="left">左半</button>
+        <button data-v="none">都保留</button>
+      </div>
+    </div>
+  </div>
+  <button class="ctl" id="midline" aria-pressed="false">中线</button>
+  <button class="ctl" id="holes" aria-pressed="false">孔位</button>
+  <span class="div"></span>
+  <button class="ctl go2" id="dl" disabled>下载 PDF</button>
+  <div class="cell">
+    <button class="ctl" id="helpBtn" title="说明">?</button>
+    <div class="pp right" id="help">
+      <div class="hd2">怎么用</div>
+      <p>每页 A4 沿竖中线切成左右两半，整体往前推半页，再两两拼回整张 A4。</p>
+      <p><b>折法：</b>印刷面朝外，沿中线对折，有孔的折边放在文件夹书脊一侧。右半是正面，先读；左半是背面。</p>
+      <p><b>首页：</b>原稿第 1 页只设计了半页，选它在哪一半，另一半会被去掉。「都保留」不丢任何半页。</p>
+      <p><b>孔位：</b>推完后在中线两侧，离中线各 10 mm，上下孔距 80 mm，直径 5 mm。设计原稿时，每张 A4 的中线两侧要留出孔位。</p>
+      <p><b>中线：</b>中灰色细线，方便对折或裁切。</p>
+      <p>末尾整张空白会自动删掉。打印时选实际尺寸（100%）。</p>
+    </div>
+  </div>
+</div>
+
+<div id="info"></div>
+<div id="drop"></div>
+<input type="file" id="file" accept="application/pdf,.pdf" hidden>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc =
+  'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+const MM = 72 / 25.4;
+const opt = { first:'right', midline:false, holes:false };
+let srcBytes = null, srcName = 'output', srcInfo = '', outUrl = null, runId = 0;
+
+function setInfo(t, err){ $('info').textContent = t; $('info').className = err ? 'err' : ''; }
+
+/* 半页序列：每页拆成 左、右；按选项去掉第 1 页的一半；再两两配成一张 */
+function planSheets(pageCount, first){
+  const halves = [];
+  for (let i = 0; i < pageCount; i++) halves.push({ i, part:'left' }, { i, part:'right' });
+  if (first === 'right') halves.splice(0, 1);
+  else if (first === 'left') halves.splice(1, 1);
+  const sheets = [];
+  for (let k = 0; k < halves.length; k += 2) sheets.push([halves[k], halves[k + 1] || null]);
+  return sheets;
+}
+const label = h => h ? `P${h.i + 1}${h.part === 'left' ? '左' : '右'}` : '空白';
+
+/* 判断某个半页是不是全白：把原页渲染成小图，看这一半有没有深色像素 */
+async function isBlankHalf(jsDoc, cache, h){
+  if (!cache[h.i]) {
+    const page = await jsDoc.getPage(h.i + 1), vp = page.getViewport({ scale: 0.4 });
+    const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    cache[h.i] = ctx;
+  }
+  const ctx = cache[h.i], W = ctx.canvas.width, hw = Math.floor(W / 2);
+  const d = ctx.getImageData(h.part === 'left' ? 0 : hw, 0, h.part === 'left' ? hw : W - hw, ctx.canvas.height).data;
+  for (let k = 0; k < d.length; k += 4) if (d[k] < 245 || d[k + 1] < 245 || d[k + 2] < 245) return false;
+  return true;
+}
+
+async function loadFile(f){
+  if (!f) return;
+  if (f.type !== 'application/pdf' && !/\.pdf$/i.test(f.name)) { setInfo('这不是 PDF 文件，请换一个。', true); return; }
+  const bytes = new Uint8Array(await f.arrayBuffer());
+  try {
+    const d = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption:true });
+    const p = d.getPage(0).getSize();
+    srcBytes = bytes; srcName = f.name.replace(/\.pdf$/i, '');
+    srcInfo = `${f.name} · ${d.getPageCount()} 页 · ${Math.round(p.width/MM)}×${Math.round(p.height/MM)} mm`;
+    run();
+  } catch(e){ setInfo('读取失败：文件可能损坏或加密。', true); }
+}
+
+async function build(){
+  const { PDFDocument, rgb } = PDFLib;
+  const src = await PDFDocument.load(srcBytes, { ignoreEncryption:true });
+  const out = await PDFDocument.create();
+  const pages = src.getPages();
+  const sheets = planSheets(pages.length, opt.first);
+  /* 删掉末尾完全空白的张 */
+  let dropped = 0;
+  if (window.pdfjsLib) {
+    const jsDoc = await pdfjsLib.getDocument({ data: srcBytes.slice() }).promise, cache = {};
+    while (sheets.length > 1) {
+      let blank = true;
+      for (const h of sheets[sheets.length - 1]) if (h && !(await isBlankHalf(jsDoc, cache, h))) { blank = false; break; }
+      if (!blank) break;
+      sheets.pop(); dropped++;
+    }
+  }
+  const rotated = pages.some(p => p.getRotation().angle % 360 !== 0);
+
+  for (const pair of sheets) {
+    const ref = pages[pair[0].i].getMediaBox();
+    const W = ref.width, H = ref.height;
+    const op = out.addPage([W, H]);
+    /* 印刷面朝外沿中线对折、折边放书脊侧：右半是正面（先读），左半是背面 */
+    for (const [h, slot] of [[pair[0], 'right'], [pair[1], 'left']]) {
+      if (!h) continue;
+      const pg = pages[h.i], m = pg.getMediaBox(), hw = m.width / 2;
+      const box = h.part === 'left'
+        ? { left:m.x,      bottom:m.y, right:m.x + hw,      top:m.y + m.height }
+        : { left:m.x + hw, bottom:m.y, right:m.x + m.width, top:m.y + m.height };
+      const emb = await out.embedPage(pg, box);
+      op.drawPage(emb, { x: slot === 'left' ? 0 : W / 2, y:0 });
+    }
+    if (opt.midline)
+      op.drawLine({ start:{x:W/2,y:0}, end:{x:W/2,y:H}, thickness:0.3, color:rgb(.5,.5,.5) });
+    if (opt.holes)
+      for (const dx of [-10, 10]) for (const dy of [-40, 40])
+        op.drawCircle({ x:W/2 + dx*MM, y:H/2 + dy*MM, size:2.5*MM, borderColor:rgb(.7,.7,.7), borderWidth:0.4 });
+  }
+  return { bytes: await out.save(), sheets, dropped, rotated };
+}
+
+async function renderPreview(bytes, sheets, id){
+  const grid = $('grid'); grid.innerHTML = '';
+  if (!window.pdfjsLib) return;
+  const doc = await pdfjsLib.getDocument({ data: bytes.slice() }).promise;
+  for (let n = 1; n <= doc.numPages; n++) {
+    if (id !== runId) return;
+    const page = await doc.getPage(n);
+    const vp = page.getViewport({ scale: 0.75 });
+    const c = document.createElement('canvas'); c.width = vp.width; c.height = vp.height;
+    const box = document.createElement('div'); box.className = 'sheet';
+    const s = sheets[n - 1];
+    box.innerHTML = `<span><span>${String(n).padStart(2, '0')}　${label(s[1])} | ${label(s[0])}</span><i>正面 ${label(s[0])}</i></span>`;
+    box.prepend(c); grid.appendChild(box);
+    await page.render({ canvasContext: c.getContext('2d'), viewport: vp }).promise;
+  }
+}
+
+/* 选项一变就重新生成，不需要单独的“生成”按钮 */
+async function run(){
+  if (!srcBytes) return;
+  const id = ++runId;
+  $('dl').disabled = true; $('empty').hidden = true;
+  setInfo(srcInfo + '\n处理中…');
+  try {
+    const { bytes, sheets, dropped, rotated } = await build();
+    if (id !== runId) return;
+    if (outUrl) URL.revokeObjectURL(outUrl);
+    outUrl = URL.createObjectURL(new Blob([bytes], { type:'application/pdf' }));
+    $('dl').disabled = false;
+    setInfo(`${srcInfo}\n→ ${sheets.length} 张` + (dropped ? ` · 末尾 ${dropped} 张空白已删` : '') +
+      (rotated ? '\n原文件有旋转页，请检查结果' : ''));
+    await renderPreview(bytes, sheets, id);
+  } catch(e){ console.error(e); if (id === runId) setInfo('处理出错：' + e.message, true); }
+}
+
+$('dl').onclick = () => {
+  if (!outUrl) return;
+  const a = document.createElement('a'); a.href = outUrl; a.download = `${srcName}-fold.pdf`;
+  document.body.appendChild(a); a.click(); a.remove();
+};
+
+/* ---------- 工具栏 ---------- */
+$('open').onclick = () => $('file').click();
+$('file').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
+for (const k of ['midline', 'holes']) $(k).onclick = () => {
+  opt[k] = !opt[k]; $(k).classList.toggle('on', opt[k]); $(k).setAttribute('aria-pressed', opt[k]); run();
+};
+$('firstSeg').onclick = e => {
+  const b = e.target.closest('button'); if (!b) return;
+  opt.first = b.dataset.v;
+  [...$('firstSeg').children].forEach(x => x.classList.toggle('on', x === b));
+  $('firstVal').textContent = b.textContent; closePops(); run();
+};
+const pops = { firstBtn:'firstPP', helpBtn:'help' };
+function closePops(){ Object.values(pops).forEach(p => $(p).classList.remove('on')); }
+for (const [btn, pp] of Object.entries(pops)) $(btn).onclick = e => {
+  e.stopPropagation(); const was = $(pp).classList.contains('on'); closePops(); if (!was) $(pp).classList.add('on');
+};
+Object.values(pops).forEach(p => $(p).addEventListener('click', e => e.stopPropagation()));
+document.addEventListener('click', closePops);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePops(); });
+
+/* ---------- 拖入整个窗口 ---------- */
+let dragN = 0;
+addEventListener('dragenter', e => { e.preventDefault(); dragN++; $('drop').classList.add('on'); });
+addEventListener('dragleave', () => { if (--dragN <= 0) { dragN = 0; $('drop').classList.remove('on'); } });
+addEventListener('dragover', e => e.preventDefault());
+addEventListener('drop', e => { e.preventDefault(); dragN = 0; $('drop').classList.remove('on'); loadFile(e.dataTransfer.files[0]); });
+</script>
+</body>
+</html>
