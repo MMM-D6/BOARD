@@ -39,8 +39,8 @@
   #ov circle.an.on{fill:var(--acc);stroke:#fff;stroke-width:calc(2.4px * var(--iz))}
   #ov circle.an.dim{opacity:.4}
   #ov circle.hit{fill:transparent;stroke:none;cursor:move;pointer-events:all}
-  #ov line.hl{stroke:var(--acc);stroke-width:1px;vector-effect:non-scaling-stroke;pointer-events:none}
-  #ov circle.hdot{fill:#fff;stroke:var(--acc);stroke-width:1.4px;vector-effect:non-scaling-stroke;pointer-events:none}
+  #ov line.hl{stroke:var(--acc);stroke-width:calc(1px * var(--iz));stroke-opacity:.8;pointer-events:none}
+  #ov circle.hdot{fill:#fff;stroke:var(--acc);stroke-width:calc(1.2px * var(--iz));pointer-events:none}
   #ov circle.hd{fill:transparent;stroke:none;cursor:pointer;pointer-events:all}
   #ov path.seg{fill:none;stroke:transparent;stroke-width:calc(18px * var(--iz));
     cursor:copy;pointer-events:stroke}
@@ -262,6 +262,7 @@ const opt={
   fillHoles:true, biggest:true,
   outMode:"native", outScale:1, outLong:1600, outInvert:false,
   follow:true, autoOrder:true, wander:0.55, edgePull:2.6, count:0,
+  showHandles:false,            // 编辑模式里选中曲线点时显示手柄
   insCorner:true                // 新加的点（卡点、编辑模式里插点）：true = 直线点，false = 曲线点
 };
 let seeds=[];                 // 手动取样的背景点（图片坐标）
@@ -932,10 +933,10 @@ function fastDraw(pi,keys){
 }
 /* ---- 手柄 ---- */
 function handlesMarkup(){
-  if(mode!=="edit"||sel.i<0||multi.size>1)return "";
+  if(!opt.showHandles||mode!=="edit"||sel.i<0||multi.size>1)return "";   // 默认不显示，要用时打开
   const p=paths[sel.p];if(!p)return "";
   const c=p.pts[sel.i];if(!c||c.corner)return "";
-  const r=4/cam.z,hr=10/cam.z;
+  const r=3/cam.z,hr=9/cam.z;
   let s="";
   [[1,c.h1x,c.h1y],[2,c.h2x,c.h2y]].forEach(([k,hx,hy])=>{
     const x=c.x+hx,y=c.y+hy;
@@ -944,6 +945,10 @@ function handlesMarkup(){
        `<circle class="hd" cx="${x}" cy="${y}" r="${hr}" data-p="${sel.p}" data-i="${sel.i}" data-h="${k}"/>`;
   });
   return s;
+}
+function toggleHandles(){
+  opt.showHandles=!opt.showHandles;buildBar();drawHandles();
+  toast(opt.showHandles?"手柄已打开：选中曲线点就能拖手柄":"手柄已关闭");
 }
 function drawHandles(){const g=document.getElementById("hg");if(g)g.innerHTML=handlesMarkup()}
 // 按两边邻点重新算这个曲线点的手柄（和生成时同一个算法）；手动拖过手柄的点不动
@@ -1425,6 +1430,7 @@ addEventListener("keydown",e=>{
   if(k==="v")setMode("edit");
   if(k==="p")setMode("pen");
   if(k==="c"&&(mode==="edit"||mode==="pen"))setInsType(!opt.insCorner);
+  if(k==="h"&&mode==="edit")toggleHandles();
 });
 addEventListener("keyup",e=>{
   if(e.code==="Space"){spaceDown=false;$("stage").classList.remove("canpan")}
@@ -2079,6 +2085,7 @@ function buildBar(){
     btn(b,"■ 直线点",()=>setInsType(true),opt.insCorner?"on":"");
     btn(b,"● 曲线点",()=>setInsType(false),opt.insCorner?"":"on");
   }
+  if(mode==="edit")btn(b,"手柄",()=>toggleHandles(),opt.showHandles?"on":"");
   const gen=cellWith(genLabel(),(pop,close)=>{
     pop.appendChild(Object.assign(document.createElement("div"),
       {className:"hd2",textContent:"由卡点生成"}));
@@ -2213,7 +2220,7 @@ function buildBar(){
       ["编辑模式 V","拖控点调形，控点判定范围更大了"],
       ["点曲线","在该处插一个控点，按住可以直接拖"],
       ["直线点 / 曲线点 C","卡点和插点前先选好类型，C 键来回切"],
-      ["拖手柄","选中曲线点会出现两根手柄，拖它调弯度，Alt 拖只动一边"],
+      ["手柄 H","编辑模式里点「手柄」或按 H 打开，再选中曲线点拖手柄调弯度，Alt 拖只动一边"],
       ["再点一下控点","直线点与曲线点互换，Alt 点同样"],
       ["Shift 拖空白","框选多个控点，一起拖"],
       ["存入素材库","抠好一块收进左栏，图还留着，接着抠下一块"],
