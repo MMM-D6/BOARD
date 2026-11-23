@@ -9,7 +9,9 @@
   *{box-sizing:border-box}
   html,body{height:100%;margin:0;overflow:hidden;
     font-family:"IBM Plex Sans","Noto Sans SC",system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased}
+    -webkit-font-smoothing:antialiased;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+  input{-webkit-user-select:text;user-select:text}
   body{background:#F4F4F2;color:#111;
     --panel:#fff;--pfg:#111;--pline:rgba(0,0,0,.12);--phi:rgba(0,0,0,.05);
     --glass:rgba(255,255,255,.62);--glassSoft:rgba(255,255,255,.3);
@@ -37,7 +39,10 @@
   #ov circle.an.on{fill:var(--acc);stroke:#fff;stroke-width:calc(2.4px * var(--iz))}
   #ov circle.an.dim{opacity:.4}
   #ov circle.hit{fill:transparent;stroke:none;cursor:move;pointer-events:all}
-  #ov path.seg{fill:none;stroke:transparent;stroke-width:calc(9px * var(--iz));
+  #ov line.hl{stroke:var(--acc);stroke-width:1px;vector-effect:non-scaling-stroke;pointer-events:none}
+  #ov circle.hdot{fill:#fff;stroke:var(--acc);stroke-width:1.4px;vector-effect:non-scaling-stroke;pointer-events:none}
+  #ov circle.hd{fill:transparent;stroke:none;cursor:pointer;pointer-events:all}
+  #ov path.seg{fill:none;stroke:transparent;stroke-width:calc(18px * var(--iz));
     cursor:copy;pointer-events:stroke}
   #ov path.draft{fill:rgba(210,105,30,.08);stroke:var(--warn);
     stroke-width:calc(1.6px * var(--iz));stroke-dasharray:calc(5px * var(--iz)) calc(4px * var(--iz));
@@ -118,6 +123,16 @@
     cursor:pointer;display:none;padding:0}
   .thumb:hover .x{display:block}
   #libe{font-size:10.5px;opacity:.4;padding:2px 10px;line-height:1.7}
+  #libs .gh{font-size:10.5px;opacity:.6;padding:8px 1px 5px;white-space:nowrap;overflow:hidden;
+    text-overflow:ellipsis;cursor:text}
+  #libs .gh span{opacity:.6;font:400 9.5px/1 "IBM Plex Mono",monospace;margin-left:3px}
+  .thumb .nm{position:absolute;left:0;right:0;bottom:0;padding:2px 5px;font-size:9.5px;line-height:1.3;
+    background:rgba(255,255,255,.82);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none}
+  #libx{margin:6px 10px 12px;height:28px;border:1px solid var(--pline);border-radius:7px;background:none;
+    cursor:pointer;font-size:11.5px;display:none}
+  #libx:hover{background:var(--phi)}
+  #ov path.ghost{fill:rgba(20,20,20,.22);stroke:rgba(255,255,255,.9);stroke-width:1px;
+    stroke-dasharray:4 3;vector-effect:non-scaling-stroke;pointer-events:none}
 
   /* ---------- 拼贴板 ---------- */
   #board{position:fixed;left:112px;right:0;top:0;bottom:0;z-index:20;display:none;
@@ -192,7 +207,8 @@
 <div id="lib">
   <div class="lh">素材库</div>
   <div id="libs"></div>
-  <div id="libe">抠好的图存进来，<br>拖到拼贴板上用，<br>双击可以回去改</div>
+  <div id="libe">抠好的图存进来，<br>同一张图的归成一组，<br>拖到拼贴板上用，<br>双击可以回去改</div>
+  <button id="libx" title="每张图一个文件夹，文件名是 名字-1、名字-2…">打包导出</button>
 </div>
 
 <div id="board">
@@ -244,8 +260,9 @@ const opt={
   tol:34, detail:2.0, smooth:1.0, corner:62,
   feather:0.6, edge:0, mode:"auto", invert:false,
   fillHoles:true, biggest:true,
-  outMode:"native", outScale:1, outLong:1600,
-  follow:true, autoOrder:true, wander:0.55, edgePull:2.6, count:0
+  outMode:"native", outScale:1, outLong:1600, outInvert:false,
+  follow:true, autoOrder:true, wander:0.55, edgePull:2.6, count:0,
+  insCorner:true                // 新加的点（卡点、编辑模式里插点）：true = 直线点，false = 曲线点
 };
 let seeds=[];                 // 手动取样的背景点（图片坐标）
 
@@ -315,10 +332,10 @@ $("stage").addEventListener("pointerdown",e=>{
   }
   if(e.button!==0)return;
   if(mode==="pick"){ pickBackground(e); return; }
-  if(mode==="pen"){ penClick(e); return; }
+  if(mode==="pen"){ e.preventDefault(); penClick(e); return; }
   // edit 模式：控点和曲线由 #ov 接管；差一点点没点中的，就近抓最近的控点
   const t=e.target;
-  if(t.classList&&(t.classList.contains("hit")||t.classList.contains("seg")))return;
+  if(t.classList&&(t.classList.contains("hit")||t.classList.contains("seg")||t.classList.contains("hd")))return;
   const near=nearestAnchor(e.clientX,e.clientY,18);
   if(near){beginAnchorDrag(near.p,near.i,e);return}
   if(e.shiftKey){startMarquee(e);return}          // 框选要按住 Shift，免得和选点打架
@@ -390,24 +407,37 @@ function loadImage(src,name){
     $("ov").setAttribute("width",IW);$("ov").setAttribute("height",IH);
     $("empty").style.display="none";
     paths=[];draft=[];draftPath=-1;dsel=-1;lastDraft=[];lastPath=-1;seeds=[];multi.clear();sel={p:-1,i:-1};hist=[];hi=-1;
-    GRAD=null;
+    GRAD=null;opt.outInvert=false;     // 换新图时反选回到默认，回炉的素材下面会恢复它自己的设置
     fit();buildBar();draw();buildGrad();
     if(pendingWork){
       paths=pendingWork.paths||[];draft=pendingWork.draft||[];
       lastDraft=pendingWork.lastDraft||[];
       const o=pendingWork.out;
       if(o){opt.outMode=o.mode;opt.outScale=o.scale;opt.outLong=o.long;
-        opt.feather=o.feather;opt.edge=o.edge}
+        opt.feather=o.feather;opt.edge=o.edge;opt.outInvert=!!o.invert}
+      const gid=pendingWork.group;          // 回到原来那个组
+      if(gid&&groups[gid])curGroup=gid;
+      else{curGroup=nid();groups[curGroup]={name:defaultName(name),src}}
+      if(!groups[curGroup].src)groups[curGroup].src=src;
+      ghostSvg=null;
       pendingWork=null;
       setMode("edit");draw();updatePreview();buildBar();renderLib();
       toast(editingLibId?"回到这件素材的抠图，改完再存一次就会覆盖它":"接着上次的进度");
     }else{
+      const dn=defaultName(name);           // 新图：先起名，这张图抠出来的素材都用这个名字
+      const nm=prompt("给这张图起个名字\n从它抠出来的素材会叫「名字-1」「名字-2」…",dn);
+      curGroup=nid();groups[curGroup]={name:(nm&&nm.trim())||dn,src};
+      ghostSvg=null;
       setMode("pen");
-      toast("已载入。卡点模式：沿边缘随便点，点够了按 Enter 生成曲线");
+      toast("「"+groups[curGroup].name+"」已载入。卡点模式：沿边缘随便点，点够了按 Enter 生成曲线");
     }
   };
   im.onerror=()=>toast("这张图片打不开");
   im.src=src;
+}
+function defaultName(n){
+  const s=(n||"").replace(/\.[^.]+$/,"").trim();
+  return (!s||/^image$/i.test(s))?"图片"+(Object.keys(groups).length+1):s;
 }
 function readFile(f){
   if(!f)return;
@@ -424,6 +454,7 @@ addEventListener("dragover",e=>{
   if(e.dataTransfer&&[...(e.dataTransfer.types||[])].includes("Files"))e.preventDefault();
 });
 addEventListener("dragstart",e=>e.preventDefault());
+addEventListener("selectstart",e=>{if(e.target.tagName!=="INPUT")e.preventDefault()});   // 快速连点时不选中文字、不弹复制框
 addEventListener("drop",e=>{
   const f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];
   if(!f)return;                       // 画布上随手拖一下不算，别弹提示
@@ -637,6 +668,14 @@ function traceContour(m,w,h){
   }while(!(cx===sx&&cy===sy)&&steps<maxSteps);
   return out;
 }
+// 不闭合的一段：首尾不动，只把中间的折线磨圆
+function chaikinOpen(a){
+  const b=[a[0]];
+  for(let i=0;i<a.length-1;i++){const p=a[i],n=a[i+1];
+    b.push({x:p.x*0.75+n.x*0.25,y:p.y*0.75+n.y*0.25},{x:p.x*0.25+n.x*0.75,y:p.y*0.25+n.y*0.75})}
+  b.push(a[a.length-1]);
+  return b;
+}
 function chaikin(pts,times){
   let a=pts;
   for(let t=0;t<times;t++){
@@ -792,6 +831,7 @@ function draw(){
   if(!IW){ov.innerHTML="";return}
   let out="";
   const showP=sel.p>=0&&paths[sel.p]?sel.p:(paths.length===1?0:-1);
+  out+=ghostMarkup();          // 这张图上已经抠走存进素材库的部分，灰色垫在最底下
   // 第一层：曲线本身
   paths.forEach((p,pi)=>{
     const d=pathD(p);
@@ -804,6 +844,8 @@ function draw(){
     const n=p.pts.length,last=p.closed?n:n-1;
     for(let i=0;i<last;i++)out+=`<path class="seg" d="${segD(p,i)}" data-p="${pi}" data-i="${i}"/>`;
   });
+  // 手柄：选中一个曲线点时出现，压在控点下面，离控点太近时优先抓控点
+  out+=`<g id="hg">${handlesMarkup()}</g>`;
   // 第三层：控点，永远在最上面，外面套一圈看不见的大命中区
   paths.forEach((p,pi)=>{
     const active=(showP<0||pi===showP);
@@ -817,8 +859,15 @@ function draw(){
         `id="an${pi}_${i}" cx="${c.x}" cy="${c.y}" r="${(on?6.4:5)/cam.z}"/>`;
     });
   });
-  // 卡点：点就是点，不连线
-  if(mode==="pen")draft.forEach((p,i)=>{
+  // 卡点单独放一层，加点、拖点时只重画这一层
+  out+=`<g id="dg">${draftMarkup()}</g>`;
+  ov.innerHTML=out;
+}
+// 卡点：点就是点，不连线
+function draftMarkup(){
+  if(mode!=="pen")return "";
+  let out="";
+  draft.forEach((p,i)=>{
     const on=(dsel===i);
     const cls="dp"+(on?" first":"");
     const r=(on?6.4:5)/cam.z;
@@ -827,7 +876,37 @@ function draw(){
     else
       out+=`<circle class="${cls}" cx="${p.x}" cy="${p.y}" r="${r}" data-d="${i}"/>`;
   });
-  ov.innerHTML=out;
+  return out;
+}
+function drawDraft(){
+  const g=document.getElementById("dg");
+  if(!g){draw();return}
+  g.innerHTML=draftMarkup();
+}
+// 拖卡点时每帧只挪那一个元素
+let dRaf=0,dIdx=-1;
+function moveDraftSoon(i){
+  dIdx=i;
+  if(dRaf)return;
+  dRaf=requestAnimationFrame(()=>{
+    dRaf=0;
+    const p=draft[dIdx];if(!p)return;
+    const el=document.querySelector(`#dg [data-d="${dIdx}"]`);
+    if(!el){drawDraft();return}
+    if(el.tagName==="rect"){const r=+el.getAttribute("width")/2;
+      el.setAttribute("x",p.x-r);el.setAttribute("y",p.y-r)}
+    else{el.setAttribute("cx",p.x);el.setAttribute("cy",p.y)}
+  });
+}
+let ghostSvg=null;             // 缓存起来，素材库变了才重算
+function ghostMarkup(){
+  if(ghostSvg!==null)return ghostSvg;
+  let s="";
+  if(curGroup)library.forEach(it=>{
+    if(it.groupId!==curGroup||it.id===editingLibId||!it.origin)return;
+    (it.origin.paths||[]).forEach(p=>{const d=pathD(p);if(d)s+=`<path class="ghost" d="${d}"/>`});
+  });
+  return ghostSvg=s;
 }
 let fullId=0;
 function drawSoon(){if(fullId)return;fullId=requestAnimationFrame(()=>{fullId=0;draw()})}
@@ -848,7 +927,59 @@ function fastDraw(pi,keys){
       const el=document.getElementById("an"+x+"_"+y);
       if(el){el.setAttribute("cx",c.x);el.setAttribute("cy",c.y)}
     });
+    drawHandles();
   });
+}
+/* ---- 手柄 ---- */
+function handlesMarkup(){
+  if(mode!=="edit"||sel.i<0||multi.size>1)return "";
+  const p=paths[sel.p];if(!p)return "";
+  const c=p.pts[sel.i];if(!c||c.corner)return "";
+  const r=4/cam.z,hr=10/cam.z;
+  let s="";
+  [[1,c.h1x,c.h1y],[2,c.h2x,c.h2y]].forEach(([k,hx,hy])=>{
+    const x=c.x+hx,y=c.y+hy;
+    s+=`<line class="hl" x1="${c.x}" y1="${c.y}" x2="${x}" y2="${y}"/>`+
+       `<circle class="hdot" cx="${x}" cy="${y}" r="${r}"/>`+
+       `<circle class="hd" cx="${x}" cy="${y}" r="${hr}" data-p="${sel.p}" data-i="${sel.i}" data-h="${k}"/>`;
+  });
+  return s;
+}
+function drawHandles(){const g=document.getElementById("hg");if(g)g.innerHTML=handlesMarkup()}
+// 按两边邻点重新算这个曲线点的手柄（和生成时同一个算法）；手动拖过手柄的点不动
+function autoHandle(p,i){
+  const n=p.pts.length,c=p.pts[i];
+  if(!c||c.manual||n<3)return;
+  const a=p.pts[(i-1+n)%n],b=p.pts[(i+1)%n];
+  let tx=b.x-a.x,ty=b.y-a.y;const tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
+  const l1=Math.hypot(c.x-a.x,c.y-a.y),l2=Math.hypot(b.x-c.x,b.y-c.y);
+  const k=(opt.smooth||1)/3;
+  c.h1x=-tx*l1*k;c.h1y=-ty*l1*k;c.h2x=tx*l2*k;c.h2y=ty*l2*k;
+}
+function beginHandleDrag(pi,i,k,e){
+  dragging=true;
+  const c=paths[pi].pts[i];let pushed=false;
+  const mv=ev=>{
+    if(!pushed){push();pushed=true}
+    const q=toImg(ev.clientX,ev.clientY);
+    const hx=q.x-c.x,hy=q.y-c.y;
+    if(k===1){c.h1x=hx;c.h1y=hy}else{c.h2x=hx;c.h2y=hy}
+    if(!ev.altKey){                      // 另一根手柄反方向跟着转，长度不变，保持圆顺
+      const L=Math.hypot(hx,hy)||1;
+      if(k===1){const l=Math.hypot(c.h2x,c.h2y);c.h2x=-hx/L*l;c.h2y=-hy/L*l}
+      else{const l=Math.hypot(c.h1x,c.h1y);c.h1x=-hx/L*l;c.h1y=-hy/L*l}
+    }
+    c.manual=true;
+    fastDraw(pi,[pi+":"+i]);
+  };
+  const up=()=>{
+    dragging=false;
+    removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    removeEventListener("pointercancel",up);
+    if(pushed){draw();updatePreview()}
+  };
+  addEventListener("pointermove",mv);addEventListener("pointerup",up);
+  addEventListener("pointercancel",up);
 }
 
 /* ================= 编辑交互 ================= */
@@ -858,13 +989,7 @@ function toggleCorner(pi,i){
   const c=p.pts[i],n=p.pts.length;
   push();
   c.corner=!c.corner;
-  if(!c.corner){
-    const a=p.pts[(i-1+n)%n],b=p.pts[(i+1)%n];
-    let tx=b.x-a.x,ty=b.y-a.y;const tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
-    const l1=Math.hypot(c.x-a.x,c.y-a.y),l2=Math.hypot(b.x-c.x,b.y-c.y);
-    const k=(opt.smooth||1)/3;
-    c.h1x=-tx*l1*k;c.h1y=-ty*l1*k;c.h2x=tx*l2*k;c.h2y=ty*l2*k;
-  }
+  if(!c.corner){c.manual=false;autoHandle(p,i)}
   const el=document.getElementById("an"+pi+"_"+i);
   if(el)el.classList.toggle("corner",c.corner);
   fastDraw(pi,[pi+":"+i]);
@@ -883,6 +1008,7 @@ function paintSel(){
   };
   if(sel.i>=0)mark(sel.p+":"+sel.i);
   multi.forEach(mark);
+  drawHandles();
 }
 // 在屏幕坐标附近找最近的控点，找不到返回 null
 function nearestAnchor(cx,cy,rad){
@@ -911,7 +1037,7 @@ function beginAnchorDrag(pi,i,e,fresh){
   if(e.altKey){toggleCorner(pi,i);return}
   const wasSel=(preSel.p===pi&&preSel.i===i&&!e.shiftKey);
 
-  let pushed=false;
+  let pushed=!!fresh,movedAny=false;    // 插点时已经记过撤销，拖动不用再记一次
   const start=toImg(e.clientX,e.clientY);
   const c=paths[pi].pts[i];
   const o={x:c.x,y:c.y};
@@ -921,9 +1047,14 @@ function beginAnchorDrag(pi,i,e,fresh){
     return cc?{k,c:cc,x:cc.x,y:cc.y}:null;
   }).filter(Boolean):null;
   const keys=group?group.map(g=>g.k):[key];
+  // 拖动时，被拖的点和它两边的邻点手柄跟着重算，曲线不会被挤得很逼仄
+  const reAuto=[];
+  keys.forEach(kk=>{const [a,b]=kk.split(":").map(Number);const pp=paths[a];if(!pp)return;
+    const n=pp.pts.length;[b-1,b,b+1].forEach(j=>reAuto.push([pp,(j+n)%n]))});
 
   const mv=ev=>{
     if(!pushed){push();pushed=true}
+    movedAny=true;
     const q=toImg(ev.clientX,ev.clientY);
     const dx=q.x-start.x,dy=q.y-start.y;
     if(group)group.forEach(g=>{g.c.x=g.x+dx;g.c.y=g.y+dy});
@@ -931,6 +1062,7 @@ function beginAnchorDrag(pi,i,e,fresh){
       const np={x:o.x+dx,y:o.y+dy};
       c.x=np.x;c.y=np.y;
     }
+    reAuto.forEach(([pp,j])=>autoHandle(pp,j));
     fastDraw(pi,keys);
   };
   const up=ev=>{
@@ -939,7 +1071,8 @@ function beginAnchorDrag(pi,i,e,fresh){
     removeEventListener("pointercancel",up);
     const moved=ev&&Math.hypot(ev.clientX-e.clientX,ev.clientY-e.clientY)>3;
     if(wasSel&&!moved&&!pushed){toggleCorner(pi,i);return}
-    if(pushed||fresh){draw();updatePreview()}
+    if(movedAny)draw();                  // 没拖动就不用再整棵重画（插点时已经画过）
+    if(movedAny||fresh)updatePreview();
   };
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
   addEventListener("pointercancel",up);
@@ -950,6 +1083,11 @@ $("ov").addEventListener("pointerdown",e=>{
   if(mode!=="edit")return;
   const t=e.target;
 
+  if(t.classList.contains("hd")){
+    e.stopPropagation();
+    beginHandleDrag(+t.dataset.p,+t.dataset.i,+t.dataset.h,e);
+    return;
+  }
   if(t.classList.contains("hit")){
     e.stopPropagation();
     beginAnchorDrag(+t.dataset.p,+t.dataset.i,e);
@@ -981,7 +1119,7 @@ $("ov").addEventListener("pointerdown",e=>{
     const mid=L(p012,p123,bt);
     if(!a.corner){a.h2x=p01.x-a.x;a.h2y=p01.y-a.y}
     if(!b.corner){b.h1x=p23.x-b.x;b.h1y=p23.y-b.y}
-    p.pts.splice(si+1,0,{x:mid.x,y:mid.y,corner:false,
+    p.pts.splice(si+1,0,{x:mid.x,y:mid.y,corner:!!opt.insCorner,   // 按工具栏选的类型
       h1x:p012.x-mid.x,h1y:p012.y-mid.y,h2x:p123.x-mid.x,h2y:p123.y-mid.y});
     multi.clear();sel={p:pi,i:si+1};draw();
     beginAnchorDrag(pi,si+1,e,true);      // 插完就接着拖，不用松手再来一次
@@ -999,7 +1137,7 @@ function setMode(m){
   mode=m;
   $("stage").classList.toggle("pen",m==="pen");
   $("stage").classList.toggle("pick",m==="pick");
-  if(m==="pen")hint("随便点，顺序不用管。点错了拖开或选中按 Delete。点够了按 Enter 生成曲线，切去别的功能这些点会作废");
+  if(m==="pen")hint("随便点，顺序不用管。工具栏或 C 键切直线点 / 曲线点。点错了拖开或选中按 Delete。点够了按 Enter 生成曲线，切去别的功能这些点会作废");
   else if(m==="pick")hint("点一下背景取样，Shift 点可以多取几处");
   else hint("");
   buildBar();draw();
@@ -1010,33 +1148,40 @@ function penClick(e){
     e.stopPropagation();
     const i=+t.dataset.d;
     const wasSel=(dsel===i);
-    dsel=i;draw();
-    if(e.altKey){draft.splice(i,1);dsel=-1;draw();buildBar();return}
+    dsel=i;drawDraft();
+    if(e.altKey){draft.splice(i,1);dsel=-1;drawDraft();updateGenBtn();return}
     const mv=ev=>{
       const q=toImg(ev.clientX,ev.clientY);
-      const np=q;
-      draft[i].x=np.x;draft[i].y=np.y;
-      draw();
+      draft[i].x=q.x;draft[i].y=q.y;
+      moveDraftSoon(i);
     };
     const up=ev=>{
       removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+      removeEventListener("pointercancel",up);
       const moved=ev&&Math.hypot(ev.clientX-e.clientX,ev.clientY-e.clientY)>3;
-      if(wasSel&&!moved){                        // 点第二次：直线点与曲线点互换
-        draft[i].corner=!draft[i].corner;draw();
+      if(wasSel&&!moved&&ev.type==="pointerup"){   // 点第二次：直线点与曲线点互换
+        draft[i].corner=!draft[i].corner;drawDraft();
       }
     };
     addEventListener("pointermove",mv);addEventListener("pointerup",up);
+    addEventListener("pointercancel",up);
     return;
   }
   const raw=toImg(e.clientX,e.clientY);
-  draft.push({x:raw.x,y:raw.y,corner:false});
+  draft.push({x:raw.x,y:raw.y,corner:!!opt.insCorner});   // 按工具栏选的类型落点
   dsel=draft.length-1;
-  draw();buildBar();
+  drawDraft();updateGenBtn();
   const i=dsel;                          // 落点后不松手，可以直接微调位置
   const mv=ev=>{const q=toImg(ev.clientX,ev.clientY);
-    draft[i].x=q.x;draft[i].y=q.y;draw()};
-  const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up)};
+    draft[i].x=q.x;draft[i].y=q.y;moveDraftSoon(i)};
+  const up=()=>{removeEventListener("pointermove",mv);removeEventListener("pointerup",up);
+    removeEventListener("pointercancel",up)};
   addEventListener("pointermove",mv);addEventListener("pointerup",up);
+  addEventListener("pointercancel",up);
+}
+function setInsType(corner){
+  opt.insCorner=corner;buildBar();
+  toast("新加的点："+(corner?"直线点":"曲线点"));
 }
 
 /* ---- 把散点排成一个环：最近邻起手，再用 2-opt 解开交叉 ---- */
@@ -1137,35 +1282,49 @@ async function generateFromDraft(again){
   await new Promise(r=>setTimeout(r,20));
   try{
     const ring=opt.autoOrder?orderLoop(draft):draft.slice();
-    let dense=[];
-    for(let i=0;i<ring.length;i++){
-      const a=ring[i], b=ring[(i+1)%ring.length];
+    const segOf=(a,b)=>{                   // 两个卡点之间的那一段，首尾就是卡点本身
       let seg=opt.follow?livewire(a,b):null;
       if(!seg){                            // 直线补齐
         const n=Math.max(2,Math.round(Math.hypot(b.x-a.x,b.y-a.y)/3));
-        seg=[];for(let k=0;k<n;k++)seg.push({x:a.x+(b.x-a.x)*k/n,y:a.y+(b.y-a.y)*k/n});
+        seg=[];for(let k=0;k<=n;k++)seg.push({x:a.x+(b.x-a.x)*k/n,y:a.y+(b.y-a.y)*k/n});
       }
-      seg.forEach((p,k)=>{if(k<seg.length-1)dense.push(p)});
+      seg[0]={x:a.x,y:a.y};seg[seg.length-1]={x:b.x,y:b.y};
+      return seg;
+    };
+    let pts,at=null;                       // at[j]：第 j 个卡点在 pts 里的位置
+    if(opt.count>=3){                      // 指定了控点数：整圈重新取样
+      let dense=[];
+      for(let i=0;i<ring.length;i++){
+        const seg=segOf(ring[i],ring[(i+1)%ring.length]);
+        seg.forEach((p,k)=>{if(k<seg.length-1)dense.push(p)});
+      }
+      dense=dense.filter((p,i)=>i===0||Math.hypot(p.x-dense[i-1].x,p.y-dense[i-1].y)>0.4);
+      if(opt.follow)dense=chaikin(dense,1);
+      pts=opt.count<dense.length?resample(dense,opt.count):simplify(dense,Math.max(0.4,opt.detail));
+    }else{
+      // 一段一段简化：卡点永远保留在原位，首尾也不会多出一个点
+      pts=[];at=[];
+      for(let i=0;i<ring.length;i++){
+        let seg=segOf(ring[i],ring[(i+1)%ring.length]);
+        if(opt.follow&&seg.length>2)seg=chaikinOpen(seg);
+        seg=simplify(seg,Math.max(0.4,opt.detail));
+        at.push(pts.length);
+        seg.forEach((p,k)=>{if(k<seg.length-1)pts.push(p)});
+      }
     }
-    // 去掉重复点
-    dense=dense.filter((p,i)=>i===0||Math.hypot(p.x-dense[i-1].x,p.y-dense[i-1].y)>0.4);
-    if(dense.length<4){toast("生成失败，点之间离得太近了");busy(false);return}
-    if(opt.follow)dense=chaikin(dense,1);
-    let pts;
-    if(opt.count>=3&&opt.count<dense.length)pts=resample(dense,opt.count);
-    else{
-      pts=simplify(dense,Math.max(0.4,opt.detail));
-      if(pts.length>600)pts=pts.filter((p,i)=>i%Math.ceil(pts.length/600)===0);
-    }
-    if(pts.length<3)pts=ring.slice();
+    if(pts.length<3){pts=ring.map(d=>({x:d.x,y:d.y}));at=ring.map((d,j)=>j)}
     push();
     const np={pts:makeSmooth(pts,opt.smooth,opt.corner,true),closed:true};
-    // 你标成直线点的那几个卡点，在生成的曲线上依然是尖角
-    draft.filter(d=>d.corner).forEach(d=>{
-      let bi=-1,bd=1e18;
-      np.pts.forEach((c,i)=>{const dd=(c.x-d.x)**2+(c.y-d.y)**2;if(dd<bd){bd=dd;bi=i}});
-      if(bi>=0)np.pts[bi].corner=true;
-    });
+    if(at){
+      // 卡点是什么类型，生成后就是什么类型，不再被「保留转角」自动改掉
+      ring.forEach((d,j)=>{const c=np.pts[at[j]];if(c)c.corner=!!d.corner});
+    }else{
+      draft.filter(d=>d.corner).forEach(d=>{
+        let bi=-1,bd=1e18;
+        np.pts.forEach((c,i)=>{const dd=(c.x-d.x)**2+(c.y-d.y)**2;if(dd<bd){bd=dd;bi=i}});
+        if(bi>=0)np.pts[bi].corner=true;
+      });
+    }
     if(draftPath>=0&&paths[draftPath])paths[draftPath]=np;   // 重来一次就替换上一条
     else {paths.push(np);draftPath=paths.length-1}
     lastPath=draftPath;
@@ -1221,7 +1380,7 @@ addEventListener("keydown",e=>{
     if(e.key==="Backspace"||e.key==="Delete"){
       e.preventDefault();
       if(dsel>=0){draft.splice(dsel,1);dsel=-1}else draft.pop();
-      draw();buildBar();return;
+      drawDraft();updateGenBtn();return;
     }
     if(e.key==="Escape"){dsel=-1;draw();setMode("edit");return}
     if(e.key.startsWith("Arrow")&&dsel>=0){
@@ -1230,7 +1389,7 @@ addEventListener("keydown",e=>{
       const c=draft[dsel];
       c.x+=e.key==="ArrowLeft"?-s:e.key==="ArrowRight"?s:0;
       c.y+=e.key==="ArrowUp"?-s:e.key==="ArrowDown"?s:0;
-      draw();return;
+      moveDraftSoon(dsel);return;
     }
   }
   if((e.key==="Backspace"||e.key==="Delete")&&mode==="edit"){
@@ -1265,6 +1424,7 @@ addEventListener("keydown",e=>{
   if(k==="f")fit();
   if(k==="v")setMode("edit");
   if(k==="p")setMode("pen");
+  if(k==="c"&&(mode==="edit"||mode==="pen"))setInsType(!opt.insCorner);
 });
 addEventListener("keyup",e=>{
   if(e.code==="Space"){spaceDown=false;$("stage").classList.remove("canpan")}
@@ -1292,9 +1452,18 @@ function maskCanvas(k){
     const bg=b.getContext("2d");
     bg.filter=`blur(${opt.feather*k}px)`;
     bg.drawImage(m,0,0);
-    return b;
+    return invertMask(b,W,H);
   }
-  return m;
+  return invertMask(m,W,H);
+}
+// 反选：整张图留着，把轮廓里面挖掉
+function invertMask(m,W,H){
+  if(!opt.outInvert)return m;
+  const r=document.createElement("canvas");r.width=W;r.height=H;
+  const g=r.getContext("2d");
+  g.fillStyle="#fff";g.fillRect(0,0,W,H);
+  g.globalCompositeOperation="destination-out";g.drawImage(m,0,0);
+  return r;
 }
 function makeCutout(k){
   k=k||1;
@@ -1309,6 +1478,7 @@ function makeCutout(k){
   return cv;
 }
 function bboxOfPaths(){
+  if(opt.outInvert&&paths.length)return {x:0,y:0,w:IW,h:IH};   // 反选时成品就是整张图
   let x1=1e18,y1=1e18,x2=-1e18,y2=-1e18;
   paths.forEach(p=>p.pts.forEach(c=>{
     const ex=Math.max(Math.abs(c.h1x),Math.abs(c.h2x));
@@ -1360,7 +1530,9 @@ function updatePreview(){
   clearTimeout(prevT);
   prevT=setTimeout(()=>{
     if(!paths.length){$("prev").classList.remove("on");return}
-    const cv=croppedCutout(1);
+    // 预览框只有 260 宽，按小图渲染就够了；原图尺寸渲染会让每次加点都卡一下
+    const bb=bboxOfPaths();
+    const cv=croppedCutout(bb?Math.min(1,600/Math.max(bb.w,bb.h)):1);
     $("prev").classList.add("on");
     const c=$("prevc"),g=c.getContext("2d");
     const W=c.width=Math.max(2,(c.clientWidth||260))*2, H=c.height=190*2;
@@ -1402,6 +1574,8 @@ let dragging=false;  // 有拖动在进行中
 let csel=-1;
 let uid=1;
 let editingLibId=null;   // 正在回炉重修的素材
+let groups={};           // 一张图一个组：{组id:{name,src}}，原图只在组里存一份
+let curGroup=null;       // 当前画布上这张图属于哪个组
 const nid=()=>"i"+(uid++)+"_"+Date.now().toString(36);
 
 function setView(v){
@@ -1411,16 +1585,44 @@ function setView(v){
   hint(v==="collage"?"拖素材到板上，右键调整叠放顺序，选中后拖右下角缩放":"");
   buildBar();
 }
+// 素材名：组名-序号，序号按组里的先后自动排，删掉一件后面的会往前补
+function itemName(it){
+  const g=it.groupId&&groups[it.groupId];
+  if(!g)return it.name||"素材";
+  return g.name+"-"+(library.filter(x=>x.groupId===it.groupId).indexOf(it)+1);
+}
 function renderLib(){
+  ghostSvg=null;
   const box=$("libs");box.innerHTML="";
+  const order=[],byKey=new Map();        // 同一组的排在一起，组按第一次出现的先后
   library.forEach((it,i)=>{
+    const k=(it.groupId&&groups[it.groupId])?it.groupId:"_"+it.id;
+    if(!byKey.has(k)){byKey.set(k,[]);order.push(k)}
+    byKey.get(k).push(i);
+  });
+  order.forEach(k=>{
+    const g=groups[k];
+    if(g){
+      const h=document.createElement("div");h.className="gh";h.title="双击改组名";
+      h.textContent=g.name;
+      const n=document.createElement("span");n.textContent=byKey.get(k).length;h.appendChild(n);
+      h.addEventListener("dblclick",()=>{
+        const nm=prompt("改这组的名字（素材会跟着改成 新名字-1、新名字-2…）",g.name);
+        if(nm&&nm.trim()){g.name=nm.trim();renderLib()}
+      });
+      box.appendChild(h);
+    }
+    byKey.get(k).forEach(i=>{
+    const it=library[i];
     const d=document.createElement("div");
     d.className="thumb"+(it.id===editingLibId?" editing":"");
-    d.title=(it.name||"素材")+(it.origin?"，双击继续调整":"");
+    d.title=itemName(it)+(it.origin?"，双击继续调整":"");
     d.dataset.i=i;
     d.innerHTML=`<img src="${it.src}" alt="">`+
       (it.origin?`<button class="e" title="回到抠图，继续调整控点">✎</button>`:"")+
       `<button class="x" title="从素材库删掉">×</button>`;
+    const nmEl=document.createElement("span");nmEl.className="nm";nmEl.textContent=itemName(it);
+    d.appendChild(nmEl);
     if(it.origin){
       d.querySelector(".e").onclick=ev=>{ev.stopPropagation();editLibItem(i)};
       d.addEventListener("dblclick",()=>editLibItem(i));
@@ -1431,11 +1633,14 @@ function renderLib(){
       library.splice(i,1);
       collage=collage.filter(c=>c.item!==id);
       renderLib();renderCollage();
+      if(IW)draw();
     };
     d.addEventListener("pointerdown",ev=>startLibDrag(ev,i));
     box.appendChild(d);
+    });
   });
   $("libe").style.display=library.length?"none":"block";
+  $("libx").style.display=library.length?"block":"none";
 }
 function addToLibrary(src,w,h,name,origin){
   const it={id:nid(),name:name||("素材 "+(library.length+1)),src,w,h,origin:origin||null};
@@ -1444,42 +1649,55 @@ function addToLibrary(src,w,h,name,origin){
 }
 // 抠图不是抠死的：素材里连原图和那条曲线一起收着
 function currentOrigin(){
-  return {src:$("img").src,
+  return {src:$("img").src,group:curGroup,
     paths:JSON.parse(JSON.stringify(paths)),
     draft:JSON.parse(JSON.stringify(draft)),
     lastDraft:JSON.parse(JSON.stringify(lastDraft)),
     out:{mode:opt.outMode,scale:opt.outScale,long:opt.outLong,
-      feather:opt.feather,edge:opt.edge}};
+      feather:opt.feather,edge:opt.edge,invert:!!opt.outInvert}};
 }
 function stashCutout(){
   if(!paths.length){toast("还没有抠出东西");return}
   const cv=croppedCutout();     // 按当前输出设置渲染
   const src=cv.toDataURL("image/png");
   const org=currentOrigin();
+  if(curGroup&&groups[curGroup])delete org.src;   // 原图在组里存过了，每件素材不再各存一份
   const old=library.find(x=>x.id===editingLibId);
+  let it;
   if(old){
     old.src=src;old.w=cv.width;old.h=cv.height;old.origin=org;
-    renderLib();renderCollage();
-    clearWork();
-    toast("素材已更新，拼贴里用到它的地方也一起换了");
-    return;
+    if(curGroup)old.groupId=curGroup;
+    it=old;
+  }else{
+    it=addToLibrary(src,cv.width,cv.height,null,org);
+    it.groupId=curGroup;
   }
-  addToLibrary(src,cv.width,cv.height,null,org);
-  clearWork();
-  toast("已存入素材库，之后双击缩略图还能回来改");
+  editingLibId=null;
+  renderLib();renderCollage();
+  clearCut();
+  toast((old?"已更新「":"已存入「")+itemName(it)+"」，接着在这张图上抠下一块");
+}
+// 只清掉当前这块的轮廓，图片留着继续抠
+function clearCut(){
+  push();
+  paths=[];draft=[];draftPath=-1;dsel=-1;lastDraft=[];lastPath=-1;multi.clear();sel={p:-1,i:-1};
+  opt.outInvert=false;
+  $("prev").classList.remove("on");
+  setMode("pen");
 }
 function editLibItem(i){
   const it=library[i];
-  if(!it||!it.origin){toast("这件素材没存原图，改不了");return}
+  const src=it&&it.origin&&(it.origin.src||(groups[it.groupId]&&groups[it.groupId].src));
+  if(!src){toast("这件素材没存原图，改不了");return}
   if(IW&&paths.length&&it.id!==editingLibId&&
      !confirm("当前还有没存进素材库的抠图，继续会丢掉，确定吗？"))return;
   editingLibId=it.id;
-  pendingWork=it.origin;
+  pendingWork=Object.assign({},it.origin,{group:it.groupId||it.origin.group});
   setView("cut");
-  loadImage(it.origin.src,it.name);
+  loadImage(src,groups[it.groupId]?groups[it.groupId].name:it.name);
 }
 function clearWork(){
-  editingLibId=null;
+  editingLibId=null;curGroup=null;ghostSvg=null;
   IMG=null;IW=0;IH=0;paths=[];draft=[];draftPath=-1;dsel=-1;
   lastDraft=[];lastPath=-1;seeds=[];multi.clear();sel={p:-1,i:-1};hist=[];hi=-1;GRAD=null;
   $("img").removeAttribute("src");
@@ -1655,8 +1873,11 @@ function dateName(){
   return `${z(d.getFullYear()%100)}-${z(d.getMonth()+1)}-${z(d.getDate())}`;
 }
 async function saveProject(){
+  const gs={};                       // 只存还有素材在用的组，外加当前这张图的组
+  library.forEach(x=>{if(x.groupId&&groups[x.groupId])gs[x.groupId]=groups[x.groupId]});
+  if(curGroup&&groups[curGroup])gs[curGroup]=groups[curGroup];
   const data={app:"cutout",v:1,saved:new Date().toISOString(),
-    library,collage,
+    library,collage,groups:gs,
     work:IMG?Object.assign(currentOrigin(),{editing:editingLibId}):null};
   const blob=new Blob([JSON.stringify(data)],{type:"application/json"});
   const name=dateName()+" sketch.cutout";
@@ -1674,12 +1895,79 @@ async function saveProject(){
   setTimeout(()=>URL.revokeObjectURL(a.href),2000);
   toast("已保存 "+n2);
 }
+/* ---- 打包导出：一张图一个文件夹，文件名 组名-序号.png，打成 zip ---- */
+const CRC_T=(()=>{const t=new Uint32Array(256);
+  for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}
+  return t})();
+function crc32(u){let c=0xFFFFFFFF;for(let i=0;i<u.length;i++)c=CRC_T[(c^u[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function dataURLBytes(u){
+  const b=atob(u.slice(u.indexOf(",")+1)),a=new Uint8Array(b.length);
+  for(let i=0;i<b.length;i++)a[i]=b.charCodeAt(i);
+  return a;
+}
+// 不压缩的 zip（PNG 本来就压过），文件名用 UTF-8，中文名不会乱码
+function makeZip(files){
+  const enc=new TextEncoder(),parts=[],central=[];let off=0;
+  const d=new Date();
+  const dt=((d.getFullYear()-1980)<<9)|((d.getMonth()+1)<<5)|d.getDate();
+  const tm=(d.getHours()<<11)|(d.getMinutes()<<5)|(d.getSeconds()>>1);
+  files.forEach(f=>{
+    const nm=enc.encode(f.name),crc=crc32(f.data),sz=f.data.length;
+    const h=new DataView(new ArrayBuffer(30));
+    h.setUint32(0,0x04034b50,true);h.setUint16(4,20,true);h.setUint16(6,0x0800,true);
+    h.setUint16(10,tm,true);h.setUint16(12,dt,true);h.setUint32(14,crc,true);
+    h.setUint32(18,sz,true);h.setUint32(22,sz,true);h.setUint16(26,nm.length,true);
+    parts.push(h.buffer,nm,f.data);
+    const c=new DataView(new ArrayBuffer(46));
+    c.setUint32(0,0x02014b50,true);c.setUint16(4,20,true);c.setUint16(6,20,true);c.setUint16(8,0x0800,true);
+    c.setUint16(12,tm,true);c.setUint16(14,dt,true);c.setUint32(16,crc,true);
+    c.setUint32(20,sz,true);c.setUint32(24,sz,true);c.setUint16(28,nm.length,true);c.setUint32(42,off,true);
+    central.push(c.buffer,nm);
+    off+=30+nm.length+sz;
+  });
+  const csz=central.reduce((n,b)=>n+b.byteLength,0);
+  const e=new DataView(new ArrayBuffer(22));
+  e.setUint32(0,0x06054b50,true);e.setUint16(8,files.length,true);e.setUint16(10,files.length,true);
+  e.setUint32(12,csz,true);e.setUint32(16,off,true);
+  return new Blob([...parts,...central,e.buffer],{type:"application/zip"});
+}
+async function exportAll(){
+  if(!library.length){toast("素材库是空的");return}
+  busy(true,"正在打包…");
+  await new Promise(r=>setTimeout(r,20));
+  try{
+    const safe=t=>String(t).replace(/[\\/:*?"<>|]/g,"_").trim()||"素材";
+    const root=dateName()+" 素材";
+    const folders=new Map(),usedF=new Set(),usedP=new Set(),files=[];
+    library.forEach(it=>{
+      const g=it.groupId&&groups[it.groupId];
+      const key=g?it.groupId:"_none";
+      if(!folders.has(key)){            // 两组同名时第二个文件夹加 (2)
+        const base=g?safe(g.name):"未分组";let n=base,k=2;
+        while(usedF.has(n))n=base+" ("+(k++)+")";
+        usedF.add(n);folders.set(key,n);
+      }
+      const base=root+"/"+folders.get(key)+"/"+safe(itemName(it));
+      let p=base+".png",k=2;
+      while(usedP.has(p))p=base+" ("+(k++)+").png";
+      usedP.add(p);
+      files.push({name:p,data:dataURLBytes(it.src)});
+    });
+    const a=document.createElement("a");
+    a.href=URL.createObjectURL(makeZip(files));a.download=root+".zip";a.click();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    toast("已打包 "+files.length+" 件素材，"+folders.size+" 个文件夹");
+  }catch(err){toast("打包失败："+err.message)}
+  busy(false);
+}
+$("libx").onclick=()=>exportAll();
+
 let pendingWork=null;
 function loadProject(txt,fname){
   let o;
   try{o=JSON.parse(txt)}catch(err){toast("这个文件读不了");return}
   if(!o||o.app!=="cutout"){toast("这不是 cutout 存档");return}
-  library=o.library||[];collage=o.collage||[];csel=-1;
+  library=o.library||[];collage=o.collage||[];csel=-1;groups=o.groups||{};curGroup=null;
   uid=library.length+collage.length+2;
   renderLib();renderCollage();
   if(o.work&&o.work.src){
@@ -1701,8 +1989,17 @@ $("pfile").onchange=e=>{
 /* ================= 工具栏 ================= */
 let closeBar=()=>{};
 addEventListener("pointerdown",e=>{if(!e.target.closest("#bar"))closeBar()});
+let genTrig=null;
+const genLabel=()=>"生成曲线 <b style='opacity:.5;font-weight:400'>"+
+  (draft.length>=1?draft.length:"")+"</b><span class=\"car\">▾</span>";
+// 加点时只刷新「生成曲线」上的数字，不重建整条工具栏
+function updateGenBtn(){
+  if(!genTrig||!genTrig.isConnected){buildBar();return}
+  genTrig.innerHTML=genLabel();
+  genTrig.disabled=(draft.length<3&&lastDraft.length<3);
+}
 function buildBar(){
-  const b=$("bar");b.innerHTML="";
+  const b=$("bar");b.innerHTML="";genTrig=null;
   const car='<span class="car">▾</span>';
   const btn=(host,html,fn,cls)=>{
     const x=document.createElement("button");
@@ -1777,8 +2074,12 @@ function buildBar(){
   div();
   btn(b,"卡点",()=>setMode(mode==="pen"?"edit":"pen"),mode==="pen"?"on":"");
   btn(b,"编辑",()=>setMode("edit"),mode==="edit"?"on":"");
-  const gen=cellWith("生成曲线 <b style='opacity:.5;font-weight:400'>"+
-    (draft.length>=1?draft.length:"")+"</b>"+car,(pop,close)=>{
+  if(mode==="edit"||mode==="pen"){       // 卡点和编辑模式下：新加的点是直线点还是曲线点
+    div();
+    btn(b,"■ 直线点",()=>setInsType(true),opt.insCorner?"on":"");
+    btn(b,"● 曲线点",()=>setInsType(false),opt.insCorner?"":"on");
+  }
+  const gen=cellWith(genLabel(),(pop,close)=>{
     pop.appendChild(Object.assign(document.createElement("div"),
       {className:"hd2",textContent:"由卡点生成"}));
     chk(pop,"沿图像边界走（贴着边连点）","follow");
@@ -1807,6 +2108,7 @@ function buildBar(){
     pop.appendChild(n);
   });
   gen.trig.disabled=(draft.length<3&&lastDraft.length<3);
+  genTrig=gen.trig;
   div();
   cellWith("自动识别"+car,(pop,close)=>{
     pop.appendChild(Object.assign(document.createElement("div"),
@@ -1855,6 +2157,9 @@ function buildBar(){
     n.textContent="圆顺调大曲线更饱满，转角角度越小越容易保留尖角。单个点可以 Alt 点一下切换尖角。";
     pop.appendChild(n);
   });
+  btn(b,"反选",()=>{if(!paths.length){toast("还没有轮廓");return}
+    opt.outInvert=!opt.outInvert;buildBar();updatePreview();
+    toast(opt.outInvert?"已反选：保留背景，挖掉轮廓里面":"已取消反选：保留轮廓里面")},opt.outInvert?"on":"");
   cellWith("输出"+car,(pop)=>{
     pop.appendChild(Object.assign(document.createElement("div"),
       {className:"hd2",textContent:"分辨率"}));
@@ -1906,16 +2211,22 @@ function buildBar(){
       ["Enter","按现有的点生成曲线，随后自动进编辑"],
       ["Delete","删掉选中的卡点"],
       ["编辑模式 V","拖控点调形，控点判定范围更大了"],
-      ["点曲线","在该处插一个控点，形状不变"],
+      ["点曲线","在该处插一个控点，按住可以直接拖"],
+      ["直线点 / 曲线点 C","卡点和插点前先选好类型，C 键来回切"],
+      ["拖手柄","选中曲线点会出现两根手柄，拖它调弯度，Alt 拖只动一边"],
       ["再点一下控点","直线点与曲线点互换，Alt 点同样"],
       ["Shift 拖空白","框选多个控点，一起拖"],
-      ["存入素材库","抠好收进左栏，页面清空换下一张"],
+      ["存入素材库","抠好一块收进左栏，图还留着，接着抠下一块"],
+      ["灰色区域","这张图上已经存进素材库的部分"],
+      ["打包导出","左栏底部，一张图一个文件夹，名字-1.png…"],
+      ["双击组名","给这张图的这组素材改名"],
       ["拼贴板","拖素材进去，右键调叠放顺序"],
       ["方向键","微调，Shift 加速"],
       ["空格 / 中键 / 右键拖","平移画面"],
       ["滚轮","缩放"],
       ["Ctrl / Cmd + Z","撤销"],
       ["Ctrl / Cmd + S","导出 PNG"],
+      ["反选","导出背景，把轮廓里面挖空，再点一下取消"],
       ["输出面板","设导出分辨率，倍数或长边像素"],
     ];
     pop.appendChild(Object.assign(document.createElement("div"),
