@@ -1720,7 +1720,7 @@ group("bib 文献信息、标签、删除图片、文献表（2026-10）", async
   await c.run(() => { sel = ["b1"]; paintSel(); openBm(200, 120, card("b1")); });
   await c.wait(120);
   const type = async (id, txt) => { await c.run((id) => { const el = $("bm_" + id); el.focus(); el.select && el.select(); }, id); await c.page.keyboard.type(txt); };
-  c.ok("表单打开，栏名是英文", await c.run(() => [...document.querySelectorAll("#pop .bmf label")].map((z) => z.textContent).join("|") === "Type|Title|Name(s)|Year|Citation|Cited by|Link|Notes"));
+  c.ok("表单打开，栏名是英文", await c.run(() => [...document.querySelectorAll("#pop .bmf label")].filter((z) => z.style.display !== "none").map((z) => z.textContent).join("|") === "Type|Title|Name(s)|Year|Citation|Cited by|Link|Notes"));
   c.ok("备注里就是卡片原来的文字", await c.run(() => $("bm_notes").value === "Scholar screenshot notes"));
   await type("title", "Digital 3D fashion designers");
   await c.page.keyboard.press("Backspace");      // 退格只删字，不会删卡片
@@ -1754,7 +1754,7 @@ group("bib 文献信息、标签、删除图片、文献表（2026-10）", async
   c.ok("检索能搜到标题、作者、Citation", await c.run(() => { S.findMode = "all"; showFind(true); const r = ["3d fashion", "smelik", "2021)"].map((q) => { $("findq").value = q; runFind(); return hits.some((z) => z.id === "b1"); }); $("findq").value = ""; runFind(); showFind(false); return r.every(Boolean); }));
   // 类型建议来自别的条目
   await c.run(() => { card("b2").bm = { type: "Book" }; openBm(200, 120, card("b3")); });
-  c.ok("Type 的建议列表来自其他条目已经用过的类型", await c.run(() => [...document.querySelectorAll("#bm_types option")].map((z) => z.value).join() === "Book,Journal article"));
+  c.ok("Type 的建议列表：内置的 Book、Book section，加上其他条目已经用过的类型", await c.run(() => [...document.querySelectorAll("#bm_types option")].map((z) => z.value).join() === "Book,Book section,Journal article"));
   await c.run(() => { $("pop").classList.remove("on", "bm"); });
   // 撤销
   await c.run(() => applyUndo(undo, redo)); 
@@ -8155,6 +8155,108 @@ group("doccut 剪切与粘贴写作页", async (c) => {
   }));
 });
 
+group("booksec Book 与 Book section、打开文件、层级菜单（2026-11）", async (c) => {
+  await c.board([
+    { id: "bk1", x: 0, y: 0, w: 300, text: "near book", role: "bib", bm: { type: "Book", title: "Near Book" }, s: {} },
+    { id: "bk2", x: 3000, y: 0, w: 300, text: "far book", role: "bib", bm: { type: "Book", title: "Far Book" }, s: {} },
+    { id: "sc1", x: 100, y: 400, w: 300, text: "a chapter", role: "bib", bm: { title: "Chapter One" }, s: {} },
+    { id: "q1", x: 100, y: 800, w: 300, text: "quote in chapter", bib: "sc1", s: {} },
+    { id: "n1", x: 1500, y: 800, w: 300, text: "plain", s: {} },
+  ], [], { zoom1: true });
+  // 层级菜单：文献条目在最上
+  c.ok("层级子菜单第一项是「文献条目」", await c.run(() => {
+    sel = ["n1"]; const lv = cardItems(10, 10).find((z) => z && z.label === t("level"));
+    return !!lv && lv.sub[0].label === t("roleBib") && lv.sub.filter((z) => z && z.label === t("roleBib")).length === 1;
+  }));
+  // 文件菜单里有「打开画布文件…」
+  c.ok("文件菜单里有「打开画布文件…」", await c.run(() => fileItems(10, 10).some((z) => z && z.label === t("openFile"))));
+  // 文献信息表单
+  const f = await c.run(() => {
+    openBm(200, 120, card("sc1"));
+    const p = $("pop"), vis = (sel) => p.querySelector(sel).style.display !== "none";
+    const opts = [...p.querySelectorAll("#bm_datalist, #bm_types option")].map((o) => o.value);
+    const r = { builtin: opts.includes("Book") && opts.includes("Book section"), edsHidden: !vis("#bm_eds"), inHidden: !vis("#bm_in") };
+    const ty = p.querySelector("#bm_type"); ty.value = "Book section"; ty.dispatchEvent(new Event("input"));
+    r.inShown = vis("#bm_in"); r.auto = card("sc1").bm.in; r.sel = p.querySelector("#bm_in").value;
+    r.order = [...p.querySelectorAll("#bm_in option")].map((o) => o.value);
+    return r;
+  });
+  c.ok("Type 下拉里内置 Book 与 Book section", f.builtin);
+  c.ok("不是 Book / Book section 时不显示 Editor(s) 和 In", f.edsHidden && f.inHidden);
+  c.ok("改成 Book section：自动绑定最近的那本书", f.inShown && f.auto === "bk1" && f.sel === "bk1");
+  c.ok("In 下拉按远近排", f.order.join() === ",bk1,bk2");
+  const g = await c.run(() => {
+    const p = $("pop"), el = p.querySelector("#bm_in"); el.value = "bk2"; el.dispatchEvent(new Event("change"));
+    const a = card("sc1").bm.in;
+    $("pcx").click();
+    card("sc1").x = 3050; render();           // 挪到另一本书旁边
+    return { a, b: card("sc1").bm.in };
+  });
+  c.ok("可以在 In 里换一本", g.a === "bk2");
+  await c.run(() => { card("sc1").bm.in = "bk1"; card("sc1").x = 100; render(); });
+  c.ok("挪动卡片不改绑定", await c.run(() => { card("sc1").x = 3050; render(); const v = card("sc1").bm.in; card("sc1").x = 100; render(); return v === "bk1"; }));
+  const e = await c.run(() => {
+    openBm(200, 120, card("bk1"));
+    const p = $("pop"), shown = p.querySelector("#bm_eds").style.display !== "none";
+    const ed = p.querySelector("#bm_eds"); ed.value = "Ann Editor\nBo Editor"; ed.dispatchEvent(new Event("input"));
+    $("pcx").click();
+    return { shown, eds: (card("bk1").bm.eds || []).join("|") };
+  });
+  c.ok("Book 有 Editor(s)，一行一个", e.shown && e.eds === "Ann Editor|Bo Editor");
+  c.ok("文献信息校验保留 eds 与 in，丢掉坏的 in", await c.run(() => {
+    const a = bmNorm({ type: "Book section", in: "bk1", eds: [" X ", ""] }), b = bmNorm({ in: 5 }), d = bmNorm({ in: "a<b" });
+    return a.in === "bk1" && a.eds.join() === "X" && b === null && (!d || !d.in);
+  }));
+  // 点书的圆点：章节和章节下的原文一起亮
+  const h = await c.run(() => { fit(true); render(); setBibFocus("bk1"); const on = (id) => !!nodes.get(id) && nodes.get(id).classList.contains("bibon");
+    const r = { bk: on("bk1"), sc: on("sc1"), q: on("q1"), far: on("bk2"), n: on("n1") }; setBibFocus("bk1"); return r; });
+  c.ok("点书：书、章节、章节下的原文都亮，别的不亮", h.bk && h.sc && h.q && !h.far && !h.n);
+  // 文献表
+  const tb = await c.run(() => {
+    openBibTable(); BT.q = "near book"; drawBibTable();
+    const ids = [...document.querySelectorAll("#bibt tr[data-id]")].map((r) => r.dataset.id).sort().join();
+    const inb = !!document.querySelector('#bibt tr[data-id="sc1"] .inb');
+    BT.q = ""; closeBibTable(); return { ids, inb };
+  });
+  c.ok("文献表搜书名：书和它的章节一起出来，章节下写 In", tb.ids === "bk1,sc1" && tb.inb);
+  // 删掉书：章节留着，绑定当作没有
+  c.ok("书删了，章节留着，不再算它的章节", await c.run(() => {
+    const keep = S.cards; S.cards = S.cards.filter((z) => z.id !== "bk1"); invalidateIndex();
+    const r = !!card("sc1") && bookOf(card("sc1")) === null; S.cards = keep; invalidateIndex(); render(); return r;
+  }));
+  // 合并进来的书与章节：绑定跟着换 id
+  c.ok("合并文件时章节的 In 跟着换成新 id", await c.run(async () => {
+    const n0 = S.cards.length;
+    await absorb({ cards: [
+      { id: "mb", x: 0, y: 0, w: 200, text: "m", role: "bib", bm: { type: "Book", title: "Merged" } },
+      { id: "ms", x: 0, y: 300, w: 200, text: "s", role: "bib", bm: { type: "Book section", in: "mb" } },
+      { id: "mo", x: 0, y: 600, w: 200, text: "o", role: "bib", bm: { type: "Book section", in: "gone" } }] }, true);
+    const add = S.cards.slice(n0), b = add.find((z) => z.bm && z.bm.title === "Merged"), sct = add.find((z) => z.text === "s"), o = add.find((z) => z.text === "o");
+    return b && sct.bm.in === b.id && bookOf(sct) === b && !o.bm.in;
+  }));
+  // 空画布提示
+  const em = await c.run(async () => {
+    const keep = { cards: S.cards, frames: S.frames, sheets: S.sheets, docs: S.docs };
+    S.cards = []; S.frames = []; S.sheets = []; S.docs = []; invalidateIndex(); render();
+    const el = $("emptyHint"), shown = !el.hidden || !window.showOpenFilePicker, hasBtn = !window.showOpenFilePicker || !!el.querySelector('button[data-a="f"]');
+    Object.assign(S, keep); invalidateIndex(); render();
+    return { shown, hasBtn, gone: el.hidden };
+  });
+  c.ok("空画布时下方提示怎么打开已有的画布", em.shown && em.hasBtn);
+  c.ok("画布上有东西时提示收起", em.gone);
+  // 导入文件：存储里的绑定一起清掉
+  c.ok("导入文件（不合并）会清掉存储里的旧绑定", await c.run(async () => {
+    const keepS = JSON.parse(JSON.stringify(S));
+    await kvPut(FH, "fake-old-handle");
+    const f = new File([JSON.stringify({ cards: [{ id: "im1", x: 0, y: 0, w: 200, text: "imported", s: {} }] })], "other.json", { type: "application/json" });
+    readJSON(f, false);
+    await new Promise((r) => setTimeout(r, 900));
+    const v = await kvGet(FH), ok = v == null && fileHandle === null && card("im1");
+    await absorb(keepS, false); render(); save();
+    return !!ok;
+  }));
+});
+
 group("readonly 打开默认只读", async (c) => {
   // 换一页、不带 board:rw，看真正打开时的样子
   const pg = await c.page.browser().newPage();
@@ -8187,6 +8289,11 @@ group("readonly 打开默认只读", async (c) => {
     closeMenus(); return has;
   });
   c.ok("画布右键里有「开启编辑」", m);
+  c.ok("只读时「导入文件…」被拦住", await R(() => {
+    let clicked = false; const inp = $("jsonfile"), o = inp.click; inp.click = () => { clicked = true; };
+    const it = fileItems(10, 10).find((z) => z && z.label === t("importJSON")); it.on();
+    inp.click = o; return !clicked;
+  }));
   // 有改动时开启编辑：对话框确定 = 保留并保存
   const k = await R(async () => {
     setRO(false);
